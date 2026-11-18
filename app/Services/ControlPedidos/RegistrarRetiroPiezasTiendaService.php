@@ -126,13 +126,24 @@ final class RegistrarRetiroPiezasTiendaService
                 $json['revision_disponibilidad']['ciclo_id'] = $ciclo;
             }
             if (is_array($json['revision_disponibilidad'] ?? null)) {
-                $pedido->solicitud_preparacion_json = $json;
-                $json['revision_disponibilidad']['aceptacion_vigente'] = $retiradas !== [] && ! $pedido->tieneAjusteTiendaPendiente();
+                $json['revision_disponibilidad']['aceptacion_vigente'] = ! ActualizacionConsulta::requiereRespuesta($json);
+                if ($json['revision_disponibilidad']['aceptacion_vigente'] && ! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists()) {
+                    $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+                }
             }
             ActualizacionConsulta::solicitar($json);
-            $json = ConsultaMunicipal::abrirPorAjuste($json);
-            $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
-                'estatus_envio' => $municipal ? $pedido->estatus_envio : (($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio)]);
+            $exigeRespuesta = ActualizacionConsulta::requiereRespuesta($json);
+            if ($exigeRespuesta) {
+                $json = ConsultaMunicipal::abrirPorAjuste($json);
+            }
+            $pedido->update([
+                'solicitud_preparacion_json' => $json,
+                'consulta_actualizacion_pendiente' => $exigeRespuesta,
+                ...($exigeRespuesta ? ['consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null] : []),
+                'estatus_envio' => ($municipal || ! $exigeRespuesta)
+                    ? $pedido->estatus_envio
+                    : (($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio),
+            ]);
 
             $area = $municipal
                 ? (string) data_get($json, 'consulta_municipal.area')

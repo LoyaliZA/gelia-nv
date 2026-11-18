@@ -9,9 +9,9 @@
 - [verificado] Consulta inicial y actualización comparten servicio, con contratos distintos de evidencia/ciclo: `app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php`.
 - [verificado] Se registran excepciones; la respuesta no aparta, traslada ni paga. `persistir_unidad` guarda una unidad sin cerrar la consulta ni tocar a las hermanas.
 - [verificado] Cada captura o SKU revisable tiene `unidad_id` estable en `solicitud_preparacion_json`; `documentos_soporte` y `documentos_peticion` no son unidades. El índice del array no es identidad.
-- [verificado] «Retiro revisado» es documental. No marca `aplicada`, no aparta, no pesa ni cambia etapa.
+- [verificado] El retiro se informa; no pide reconfirmación ni recaptura. Cerrar consulta se habilita, no se dispara solo; Ventas puede seguir anexando o retirando.
 - [verificado] `AjustePiezas` consume adaptadores. Tienda conserva sus rutas. Municipal usa el mismo editor sin pedido relacionado ni pesaje: `PersistenciaAdjuntosConsulta`.
-- [verificado] La captura vigente del conjunto vive al final del seguimiento de Ventas (`CapturaConjuntoPedido`), no duplicada en la tarjeta de respuesta. Nacional permanece como contrato, sin interfaz.
+- [verificado] Ventas ve respuestas del almacén desplegadas y anexos/retiros contraídos. CEDIS y Tienda ven el ciclo pedido desplegado y lo anterior contraído. Captura vigente al final del seguimiento de Ventas. Nacional sin interfaz.
 
 ## Reglas que no se rompen
 - [verificado] Rechazar actualización obsoleta y pedidos ya pagados/remisionados, empacados o salidos: `app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php:54`.
@@ -36,6 +36,6 @@
 - [verificado] «Registrar detalle» trata productos; «Reportar error» trata datos/proceso. Claves internas de incidencia se conservan: `gestion-pedidos-docs/DISPONIBILIDAD_ACCIONES_RAPIDAS.md:69`.
 - [verificado] Corregir una unidad abierta archiva el resultado anterior en `unidades[].historial`; no usa comentarios de texto como `origen_unidad_id`.
 - Archivos de consulta: PHP efectivo `sail` UID 1000. Si un directorio `storage/app/public/pedidos_bma/{id}` quedó `root:root`, `chown` solo esos ids en pruebas. Receta: `gestion-pedidos-docs/CONSULTAS_COMPARTIDAS_IMPLEMENTACION_Y_AUTOEVALUACION.md`.
-- [por verificar] Retirar un faltante en CEDIS sigue solicitando actualización (`AccionesDisponibilidadTiendaService`); el cierre espera esa ronda. No se cambió en 3.1.
+- [verificado] `ActualizacionConsulta::solicitar` no marca ronda si solo hay retiro; la reapertura sí (`forzar`). Anexos sí exigen respuesta y captura nueva.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd847` + cambios locales etapa 3.1.
+- Última verificación: 2026-11-18, `develop` @ `c63dd847` + cambios locales etapa 3.1 / retiro-informe.

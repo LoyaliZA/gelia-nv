@@ -128,8 +128,8 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
     const autorizado = (tarea.puede_preparar || tarea.puede_responder)
         ?? (Number(tarea.responsable?.id) === Number(auth?.user?.id) && (auth?.user?.roles?.includes('Super Admin') || permisos.includes('control_pedidos.tienda.responder') || permisos.includes('control_pedidos.tienda.apartado.separar')));
     const consulta = tarea.pedido?.area_revision === 'preparacion_tienda';
-    const actualizacion = consulta && Boolean(tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente || tarea.pedido?.anexos_pendientes?.length);
-    const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []} />;
+    const actualizacion = consulta && Boolean(tarea.pedido?.anexos_pendientes?.length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente);
+    const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []} vista="revision" />;
     if (!autorizado || !['EN_ATENCION', 'RESPONDIDA'].includes(tarea.estado)) return resumen;
     return <div className="gelia-preparacion-ajustes grid gap-4">
         {!actualizacion && resumen}

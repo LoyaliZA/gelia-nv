@@ -87,7 +87,7 @@ it('una pieza retirada deja de contarse como actual y conserva acceso a su evide
     expect(verDoc).toHaveBeenCalledWith(foto);
 });
 it('la consulta presenta cliente una vez, folios compactos, departamento arriba y omite piezas extra', async () => {
- await renderTarjeta({estatus_envio:'pendiente_pesaje',vendedor:{name:'Solicitante de ejemplo',departamento:{nombre:'Ventas'}},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones',actualizacion_pendiente:true}},documentos:[{tipo:'anexo_piezas',url:'/anexo.pdf'}]});
+ await renderTarjeta({estatus_envio:'pendiente_pesaje',vendedor:{name:'Solicitante de ejemplo',departamento:{nombre:'Ventas'}},solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones'},anexo_sin_remision:[{entrada:'documento'}]},documentos:[{tipo:'anexo_piezas',url:'/anexo.pdf'}]});
  expect(container.querySelector('.gelia-cedis-tipo-departamento').textContent).toContain('Ventas');
  expect(container.querySelector('.gelia-cedis-solicitante').textContent).toBe('Solicitante de ejemplo');
  expect(container.textContent.match(/Cliente de prueba/g)).toHaveLength(1);

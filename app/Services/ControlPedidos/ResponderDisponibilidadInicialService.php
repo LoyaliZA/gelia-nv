@@ -167,7 +167,7 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte la evidencia de la revisión.']);
             }
 
-            if ($actualizacion && $archivos === []) {
+            if ($actualizacion && $archivos === [] && ActualizacionConsulta::requiereRespuesta($json)) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte una nueva captura del pedido actualizado.']);
             }
             $documentosAntes = $pedido->documentos()->pluck('id')->all();
@@ -271,7 +271,7 @@ class ResponderDisponibilidadInicialService
                         $usuario->name
                     );
                 }
-                foreach (['anexo_sin_remision' => 'anexo', 'retiro_piezas' => 'retiro'] as $clave => $tipo) {
+                foreach (['anexo_sin_remision' => 'anexo'] as $clave => $tipo) {
                     foreach ($json[$clave] ?? [] as $indice => $linea) {
                         if (! is_array($linea) || UnidadesRevisionConsulta::lineaYaAtendida($tipo, $linea)) {
                             continue;
@@ -306,6 +306,9 @@ class ResponderDisponibilidadInicialService
             }
             $evidenciaActual = $pedido->documentos()->whereNotIn('id', $documentosAntes)
                 ->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->pluck('id')->all();
+            if ($evidenciaActual === [] && $actualizacion) {
+                $evidenciaActual = $guardada['evidencia_actual_ids'] ?? [];
+            }
             $json['revision_disponibilidad'] = [
                 'respuesta_id' => (string) Str::uuid(),
                 'actualizacion_pendiente' => false,
@@ -324,6 +327,7 @@ class ResponderDisponibilidadInicialService
             $cambios = [
                 'solicitud_preparacion_json' => $json,
                 'tiene_observaciones_fisicas' => $estado === 'excepciones_pendientes',
+                'consulta_actualizacion_pendiente' => false,
             ];
             if ($esMunicipal && $estado === 'sin_excepciones' && $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE) {
                 $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);

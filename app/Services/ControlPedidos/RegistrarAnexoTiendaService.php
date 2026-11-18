@@ -90,6 +90,7 @@ final class RegistrarAnexoTiendaService
             ActualizacionConsulta::solicitar($json);
             $json = ConsultaMunicipal::abrirPorAjuste($json);
             $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
+                'consulta_actualizacion_pendiente' => ActualizacionConsulta::pendiente($json),
                 'estatus_envio' => $municipal
                     ? $pedido->estatus_envio
                     : (($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio)]);

@@ -12,10 +12,11 @@ import { adaptadorConsultaMunicipal } from '../Partials/adaptadoresConsulta';
 import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
 import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import { anexosPendientesRevision } from '../Partials/cambiosDisponibilidad';
 
-function etiquetaConsulta(consulta, revision) {
+function etiquetaConsulta(consulta, revision, solicitud) {
     if (consulta?.estado === 'cerrada') return { texto: 'Consulta cerrada', tono: 'gelia-estado-vivo--exito' };
-    if (revision?.actualizacion_pendiente || revision?.vigente === false || revision?.sustituida_at || revision?.aceptacion_vigente === false) {
+    if (anexosPendientesRevision(solicitud) || revision?.actualizacion_pendiente || revision?.vigente === false || revision?.sustituida_at) {
         return { texto: 'Excepciones pendientes', tono: 'gelia-estado-vivo--aviso' };
     }
     if (revision?.estado === 'excepciones_pendientes' || consulta?.estado === 'excepciones_pendientes') {
@@ -46,10 +47,10 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
     const consulta = solicitud.consulta_municipal;
     const revision = solicitud.revision_disponibilidad;
     if (!consulta && !revision) return null;
-    const etiqueta = etiquetaConsulta(consulta, revision);
+    const etiqueta = etiquetaConsulta(consulta, revision, solicitud);
     const cerrada = consulta?.estado === 'cerrada' || Boolean(pedido?.consulta_cerrada);
-    const pendiente = Boolean(revision?.actualizacion_pendiente || revision?.vigente === false || revision?.sustituida_at || revision?.aceptacion_vigente === false);
-    const excepciones = revision?.estado === 'excepciones_pendientes' || consulta?.estado === 'excepciones_pendientes' || pendiente;
+    const pendiente = anexosPendientesRevision(solicitud) || Boolean(revision?.actualizacion_pendiente) || revision?.vigente === false || Boolean(revision?.sustituida_at);
+    const excepciones = pendiente;
     const respondida = consulta?.estado === 'respondida' || ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'].includes(revision?.estado);
     const origen = consulta?.area === 'tienda' ? 'Tienda' : 'CEDIS';
     const documentos = (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && !String(d.comentario || '').startsWith('Evidencia petición'));
@@ -65,7 +66,7 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
         documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
     }));
     const bloqueo = pedido?.motivo_bloqueo_cierre;
-    const puedeCerrar = respondida && !cerrada && !excepciones && pedido?.puede_cerrar_consulta !== false && !bloqueo;
+    const puedeCerrar = respondida && !cerrada && !pendiente && pedido?.puede_cerrar_consulta !== false && !bloqueo;
     const adaptador = adaptadorConsultaMunicipal({ pedidoId: pedido.id, pedido: { ...pedido, solicitud_preparacion: solicitud } });
     const puedeAjustar = !cerrada && (adaptador.capacidades.anexar || adaptador.capacidades.retirar);
 
@@ -110,7 +111,7 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
             <AvisoOperativoPedido tono="info">
                 CEDIS o Tienda confirman mercancía. Ventas registra el cierre con el cliente. Una respuesta positiva no cierra ni autoriza el pago.
             </AvisoOperativoPedido>
-            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || []} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || []} vista="ventas" onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
             <CapturaConjuntoPedido pedido={{ ...pedido, solicitud_preparacion: solicitud }} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
             {aviso && <p className="text-sm theme-text-main m-0" role="status">{aviso}</p>}
             {puedeAjustar && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar((actual) => !actual)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}

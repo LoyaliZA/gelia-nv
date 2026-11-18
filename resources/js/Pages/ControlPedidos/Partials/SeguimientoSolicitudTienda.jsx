@@ -12,6 +12,7 @@ import { adaptadorConsultaTienda } from './adaptadoresConsulta';
 
 export { AjustePiezas };
 import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
+import { anexosPendientesRevision } from './cambiosDisponibilidad';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -214,11 +215,10 @@ export default function SeguimientoSolicitudTienda({
     }, [pedido, marcaRespuesta]);
     const emitida = respuestaDeTiendaEmitida({ ...pedido, solicitud_preparacion: solicitud });
     const estado = solicitud?.revision_disponibilidad?.estado;
-    const ajustePendiente = solicitud?.revision_disponibilidad?.aceptacion_vigente === false || (solicitud?.retiro_piezas || []).some(r => (r.estado || 'pendiente') === 'pendiente');
+    const ajustePendiente = anexosPendientesRevision(solicitud);
     const puedeConfirmar = !ajustePendiente && !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
     const causaCierre = visto?.motivo_bloqueo_cierre
-        || (solicitud?.revision_disponibilidad?.aceptacion_vigente === false ? 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.' : '')
-        || ((solicitud?.retiro_piezas || []).some((retiro) => (retiro?.estado || 'pendiente') === 'pendiente') ? 'Hay un retiro pendiente de atención por el auxiliar.' : '');
+        || (ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : '');
 
     if (!pedidoId) return null;
     if (!emitida) {
@@ -246,7 +246,7 @@ export default function SeguimientoSolicitudTienda({
                 accionesDePieza={accionesDePieza}
                 onVer={(documentos, indice) => setVista({ documentos, indice })}
             />
-            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={visto?.documentos || []} onVer={(documentos, indice) => setVista({ documentos, indice })} />
+            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={visto?.documentos || []} vista="ventas" onVer={(documentos, indice) => setVista({ documentos, indice })} />
             <CapturaConjuntoPedido pedido={{ ...visto, solicitud_preparacion: solicitud }} tarea={visto?.tarea_preparacion} onVer={(documentos, indice) => setVista({ documentos, indice })} />
             {!soloLectura && !cerrada && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar(!modificar)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}
             {!soloLectura && !cerrada && (

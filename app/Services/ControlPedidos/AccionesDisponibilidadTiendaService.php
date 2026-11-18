@@ -98,6 +98,12 @@ final class AccionesDisponibilidadTiendaService
                 $evento['alternativa'] = $nueva;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
             }
+            if ($accion === 'retirar' && ! ActualizacionConsulta::requiereRespuesta($json)) {
+                $json['revision_disponibilidad']['aceptacion_vigente'] = true;
+                if (! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists()) {
+                    $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+                }
+            }
             if ($accion !== 'confirmar') {
                 ActualizacionConsulta::solicitar($json);
             }
@@ -109,6 +115,7 @@ final class AccionesDisponibilidadTiendaService
                 $json['consulta_municipal']['estado'] = ActualizacionConsulta::pendiente($json) ? 'excepciones_pendientes' : 'respondida';
             }
             $pedido->update(['solicitud_preparacion_json' => $json,
+                'consulta_actualizacion_pendiente' => ActualizacionConsulta::pendiente($json),
                 'estatus_envio' => ! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido) && ($json['area_revision'] ?? '') === 'control_pedidos' && ActualizacionConsulta::pendiente($json) ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
             app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id, $pedido->catalogo_estatus_pedido_id,
                 $pedido->catalogo_estatus_pedido_id, match ($accion) {

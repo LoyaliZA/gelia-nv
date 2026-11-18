@@ -82,7 +82,7 @@ class CerrarConsultaPedidoBmaService
 
         $actor = \App\Models\User::find($usuarioId);
         if (! $actor || ! VisibilidadPedidoBma::puedeMutarComoVendedora($actor, $pedido)) {
-            throw new \RuntimeException('Solo la vendedora del pedido puede cerrar la consulta.');
+            throw new \RuntimeException('Solo Ventas del pedido puede cerrar la consulta.');
         }
 
         if (! $pedido->puedeCerrarConsulta()) {

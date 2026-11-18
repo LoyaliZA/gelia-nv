@@ -585,9 +585,10 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $fresco = $pedido->fresh();
         $this->assertSame('retirar', $faltante->fresh()->resolucion);
         $this->assertFalse($fresco->tieneSinExistenciaAbierta());
-        $this->assertTrue($fresco->tieneAjusteTiendaPendiente());
+        $this->assertFalse($fresco->tieneAjusteTiendaPendiente());
         $this->assertSame('aplicada', $fresco->solicitud_preparacion_json['retiro_piezas'][0]['estado']);
-        $this->assertFalse($fresco->puedeCerrarConsulta());
+        $this->assertTrue($fresco->puedeCerrarConsulta());
+        $this->assertFalse($fresco->consultaCerrada());
         $this->assertEquals(899, $fresco->total_mercancia);
         $this->assertNull($fresco->pago_validado_at);
         $this->assertNull($fresco->numero_remision);
@@ -606,8 +607,9 @@ class SolicitudRegistrarTiendaTest extends TestCase
         ]])->assertOk();
         $fresco = $pedido->fresh();
         $this->assertSame('retirar', $otro->fresh()->resolucion);
-        $this->assertTrue($fresco->tieneAjusteTiendaPendiente());
-        $this->assertFalse($fresco->puedeCerrarConsulta());
+        $this->assertFalse($fresco->tieneAjusteTiendaPendiente());
+        $this->assertTrue($fresco->puedeCerrarConsulta());
+        $this->assertFalse($fresco->consultaCerrada());
         $this->assertSame('APARTADO', $fresco->solicitud_preparacion_json['retiro_piezas'][1]['piezas'][0]['sku']);
     }
 
@@ -1710,7 +1712,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(1, $fresco->revisionesProducto()->where('descripcion_producto', 'Frasco golpeado')->count());
     }
 
-    public function test_retiro_revisado_no_aplica_el_retiro_fisico(): void
+    public function test_retiro_documental_no_exige_reconfirmacion_ni_aplica_el_retiro_fisico(): void
     {
         $pedido = $this->consultaConExcepcion();
         $this->post('/control-pedidos/'.$pedido->id.'/retiro-piezas-tienda', [
@@ -1720,25 +1722,13 @@ class SolicitudRegistrarTiendaTest extends TestCase
             'solicitud_id' => (string) Str::uuid(),
             'documentos' => [UploadedFile::fake()->createWithContent('retiro.pdf', 'retiro-doc')],
         ], ['Accept' => 'application/json'])->assertOk();
-        $pedido->refresh();
-        $retiro = $pedido->solicitud_preparacion_json['retiro_piezas'][0];
-        $docId = $retiro['documentos_piezas'][0]['id'];
-        $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
-            'persistir_unidad' => 1,
-            'actualizacion_id' => $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'],
-            'cambios_revisados' => [[
-                'tipo' => 'retiro',
-                'unidad_id' => 'retiro:'.$retiro['solicitud_id'].':doc:'.$docId,
-                'documento_id' => $docId,
-                'resultado' => 'correcto',
-            ]],
-        ], ['Accept' => 'application/json'])->assertOk();
         $fresco = $pedido->fresh();
         $linea = $fresco->solicitud_preparacion_json['retiro_piezas'][0];
-        $this->assertSame('correcto', $linea['unidades'][0]['resultado']);
         $this->assertSame('pendiente', $linea['estado']);
-        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, $fresco->estatus_envio);
+        $this->assertArrayNotHasKey('actualizacion_id', $fresco->solicitud_preparacion_json['revision_disponibilidad']);
+        $this->assertFalse(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($fresco->solicitud_preparacion_json));
         $this->assertNull($fresco->consulta_cerrada_at);
+        $this->assertFalse($fresco->puedeCerrarConsulta());
         $this->assertSame(0, $fresco->tareasPreparacion()->count());
     }
 
@@ -1815,9 +1805,14 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame($historial, $pedido->historial()->count());
         $this->assertSame('retirar', $pieza->fresh()->resolucion);
         $this->assertFalse($pedido->fresh()->tieneSinExistenciaAbierta());
+        $this->assertTrue($pedido->fresh()->puedeCerrarConsulta());
+        $this->assertFalse($pedido->fresh()->consultaCerrada());
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'evidencia' => UploadedFile::fake()->image('despues-retiro.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
         $this->assertFalse($pedido->fresh()->puedeCerrarConsulta());
-        $this->responderActualizacion($pedido);
-        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->assertFalse($pedido->fresh()->consultaCerrada());
     }
 
     public function test_sustitucion_por_sku_espera_respuesta_cedis_y_conserva_el_cambio_al_leer(): void

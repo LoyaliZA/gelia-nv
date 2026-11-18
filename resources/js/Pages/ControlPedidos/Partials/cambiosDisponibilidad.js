@@ -22,9 +22,48 @@ function persistidaDe(linea, unidadId) {
     return (linea.unidades || []).find((unidad) => unidad?.unidad_id === unidadId);
 }
 
+function anexoPendienteRevision(anexo) {
+    if (!anexo || anexo.respondida_at || anexo.pendiente_revision === false) return false;
+    return !['disponible', 'con_detalle', 'rechazado'].includes(anexo.estado);
+}
+
+export function anexosPendientesRevision(solicitud = {}) {
+    return (solicitud.anexo_sin_remision || []).some(anexoPendienteRevision);
+}
+
+/** El ciclo vigente es lo pedido después de la última respuesta; lo anterior queda en historial. */
+export function cambioDelCicloActual(cambio, solicitud = {}) {
+    const corte = solicitud.revision_disponibilidad?.respondida_at;
+    if (!corte) return true;
+    const fecha = cambio.solicitado_at || cambio.fecha || null;
+    if (cambio.tipo === 'retiro' || cambio.tipo === 'confirmacion') {
+        return !fecha || fecha >= corte;
+    }
+    if (cambio.pendiente || !cambio.respondida_at) return true;
+    return Boolean(fecha && fecha >= corte);
+}
+
+export function esRespuestaAlmacen(cambio) {
+    if (cambio.tipo === 'confirmacion') return true;
+    if (cambio.tipo === 'retiro') return false;
+    return Boolean(!cambio.pendiente && (cambio.resultado || cambio.respondida_at));
+}
+
+/** Ventas ve respuestas abiertas y solicitudes contraídas; CEDIS/Tienda ve el ciclo pedido abierto. */
+export function particionarCambiosConsulta(cambios, solicitud = {}, vista = 'ventas') {
+    if (vista === 'revision') {
+        const actuales = cambios.filter((cambio) => cambioDelCicloActual(cambio, solicitud));
+        return { actuales, anteriores: cambios.filter((cambio) => !cambioDelCicloActual(cambio, solicitud)) };
+    }
+    const actuales = cambios.filter(esRespuestaAlmacen);
+    return { actuales, anteriores: cambios.filter((cambio) => !esRespuestaAlmacen(cambio)) };
+}
+
 function ficha(linea, extra) {
     const guardada = persistidaDe(linea, extra.unidad_id);
-    const atendida = linea.pendiente_revision === false
+    const retiro = extra.tipo === 'retiro';
+    const atendida = retiro
+        || linea.pendiente_revision === false
         || ['disponible', 'con_detalle', 'rechazado'].includes(linea.estado)
         || (Boolean(linea.respondida_at) && linea.pendiente_revision !== true && !(linea.unidades || []).some((unidad) => unidad?.unidad_id && !unidad.resultado));
     const resultado = guardada?.resultado || extra.resultado || (atendida && !guardada ? (linea.estado === 'con_detalle' || linea.respuesta_cambio === 'incidencia' ? 'incidencia' : 'correcto') : null);
@@ -33,7 +72,7 @@ function ficha(linea, extra) {
         ...extra,
         resultado,
         persistida: Boolean(guardada?.resultado) || (atendida && !guardada),
-        pendiente: !resultado,
+        pendiente: retiro ? false : !resultado,
         respuesta_cambio: resultado || linea.respuesta_cambio,
         respondida_at: guardada?.respondida_at || (resultado ? linea.respondida_at : null),
         respondida_por: guardada?.respondida_por,

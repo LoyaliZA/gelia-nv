@@ -222,7 +222,7 @@ it('precarga SKU repetidos como solicitudes distintas y reporta el faltante sin 
   {entrada:'catalogo',sku:'SKU-A',descripcion:'Aroma nuevo',cantidad:1},
  ]}}});
  expect(container.querySelector('input[type=radio]')).toBeNull();
- expect(container.querySelectorAll('[data-tipo="anexo"]')).toHaveLength(2);
+ expect(container.querySelectorAll('article[data-tipo="anexo"]')).toHaveLength(2);
  await pulsarIndice(0,'Sin existencias');
  await pulsarIndice(1,'Todo OK');
  await foto();await click('Enviar respuesta');
@@ -264,7 +264,7 @@ it('persiste la incidencia de una captura cuando el detalle queda completo', asy
 it('permite marcar Todo OK desde la captura abierta y exige revisar cada documento pendiente', async () => {
  await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{documentos:[{id:21,url:'/captura.png',mime_type:'image/png',nombre_original:'captura.png'}],solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento',documento_id:21}]}}});
  await foto();await click('Enviar respuesta');expect(onEnviar).not.toHaveBeenCalled();
- await click('Abrir captura');
+ await act(() => container.querySelector('.consulta-cambio-miniatura').click());
  expect(document.querySelector('[aria-label="Visor de evidencia"]')).not.toBeNull();
  await act(()=>[...document.querySelector('[aria-label="Visor de evidencia"]').querySelectorAll('button')].find(b=>b.textContent==='Todo OK').click());
  expect(document.querySelector('[aria-label="Visor de evidencia"]')).toBeNull();
@@ -314,12 +314,38 @@ it('cancelar la selección rápida conserva el pedido sin piezas agregadas ni re
  await foto();await click('Enviar respuesta');
  expect(onEnviar).not.toHaveBeenCalled();expect(container.textContent).toContain('Revise cada captura');
 });
+it('un retiro informado no exige recaptura ni reconfirmación', async () => {
+ await montar({revision:{estado:'sin_excepciones'},pedido:{documentos:[{id:50,tipo:'evidencia_condicion',relacion_tipo:'revision_general',url:'/conjunto.jpg',mime_type:'image/jpeg'}],solicitud_preparacion:{retiro_piezas:[{estado:'aplicada',piezas:[{descripcion:'Faltante retirado',sku:'SKU-8',cantidad:1}]}]}}});
+ expect(container.textContent).toContain('Consulta respondida');
+ expect(container.textContent).not.toContain('Actualización de consulta');
+ expect(container.textContent).not.toContain('Retiro revisado');
+ expect(container.querySelector('.consulta-cambios-actuales').textContent).toContain('Faltante retirado');
+ expect(container.querySelector('.consulta-cambios-historial')).toBeNull();
+});
+
 it('los cambios respondidos se muestran con Mostrar todos los cambios y la primera consulta no usa incidencia', async () => {
- await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'catalogo',sku:'ANT',descripcion:'Pieza anterior',respondida_at:'2026-11-06T10:00:00Z'}]}}});
- expect(container.querySelector('summary').textContent).toBe('Mostrar todos los cambios (1)');
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{revision_disponibilidad:{estado:'sin_excepciones',respondida_at:'2026-11-06T10:00:00Z'},anexo_sin_remision:[{entrada:'catalogo',sku:'ANT',descripcion:'Pieza anterior',solicitado_at:'2026-11-06T09:00:00Z',respondida_at:'2026-11-06T10:00:00Z'}]}}});
+ expect(container.querySelector('summary').textContent).toBe('Movimientos (1)');
  await montar({revision:null,pedido:{}});
  expect(container.textContent).toContain('Todo OK');
  expect(container.textContent.toLowerCase()).not.toMatch(/\bincidencias?\b/);
+});
+
+it('despliega los cambios del ciclo actual y deja los anteriores en Movimientos', async () => {
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{
+  revision_disponibilidad:{estado:'sin_excepciones',respondida_at:'2026-11-06T10:00:00Z',actualizacion_pendiente:true},
+  anexo_sin_remision:[
+   {entrada:'catalogo',sku:'ANT',descripcion:'Pieza anterior',solicitado_at:'2026-11-06T09:00:00Z',respondida_at:'2026-11-06T10:00:00Z'},
+   {entrada:'catalogo',sku:'NUE',descripcion:'Pieza nueva',solicitado_at:'2026-11-06T11:00:00Z'},
+  ],
+  retiro_piezas:[{estado:'pendiente',solicitado_at:'2026-11-06T11:05:00Z',piezas:[{descripcion:'Retiro nuevo',sku:'R',cantidad:1}]}],
+ }}});
+ const actuales = container.querySelector('.consulta-cambios-actuales').textContent;
+ expect(actuales).toContain('Pieza nueva');
+ expect(actuales).toContain('Retiro nuevo');
+ expect(actuales).not.toContain('Pieza anterior');
+ expect(container.querySelector('summary').textContent).toBe('Movimientos (1)');
+ expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Pieza anterior');
 });
 
 it('reutiliza fotos guardadas de la revisión inicial de tienda y exige captura nueva al actualizar', async () => {

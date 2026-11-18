@@ -6,7 +6,7 @@ import RutaPedidoTienda from './RutaPedidoTienda';
 import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from './ModalSeleccionProductosDetalle';
-import { cambiosDisponibilidad } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, cambiosDisponibilidad } from './cambiosDisponibilidad';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
@@ -31,7 +31,7 @@ function formDataDe({ confirmacion, excepciones, archivos }) {
 
 export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, evidenciasGuardadas = [], onDirtyChange, avisoActualizacion = '', puedeLeerDocumentos = true, onEnviar }) {
     const solicitud = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
-    const actualizacion = Boolean(revision?.actualizacion_pendiente || (solicitud.anexo_sin_remision || []).some(a => !a.respondida_at));
+    const actualizacion = anexosPendientesRevision(solicitud) || Boolean(revision?.actualizacion_pendiente);
     const cambios = cambiosDisponibilidad(solicitud, pedido.documentos || documentos);
     const [respuestasCambios, setRespuestasCambios] = useState({});
     const [origenIncidencia, setOrigenIncidencia] = useState(null);
@@ -226,12 +226,12 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         </header>
         <div className="gelia-preparacion-workspace" data-pedido-visible="false">
             <div className="gelia-preparacion-captura space-y-4">
-                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} interactivo={editable} puedeVerDocumentos={puedeLeerDocumentos}
+                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} vista="revision" interactivo={editable} puedeVerDocumentos={puedeLeerDocumentos}
                     respuestas={respuestasCambios} onResponder={responderCambio} onIncidencia={reportarCambio} disabled={guardando}
                     onVer={(documentos, indice) => setVista({ documentos, indice })} />
                     : mostrarCambios && <AlternativasDisponibilidadCedis pedido={pedido} puedeVerDocumentos={puedeLeerDocumentos} onVer={(documentos, indice) => setVista({ documentos, indice })} />}
 
-                {actualizacion && !respondida && <p className="text-sm theme-text-main m-0" role="status">Revise las capturas y use las acciones de cada solicitud. Al terminar, tome una nueva captura del pedido completo.</p>}
+                {actualizacion && !respondida && <p className="text-sm theme-text-main m-0" role="status">Revise las capturas de los anexos. Los retiros ya quedaron informados. Al terminar, tome una nueva captura del pedido completo.</p>}
                 {respondida ? <div className="grid gap-3" role="status">
                     <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Consulta respondida</span>
                     <p className="text-sm theme-text-muted m-0">Ventas confirma las piezas con el cliente.</p>
@@ -275,11 +275,11 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         </footer>
         {capturaRapida && <ModalSeleccionProductosDetalle almacenId={almacenId} origen={capturaRapida.origen} onClose={() => setCapturaRapida(null)} onAgregar={agregarSeleccionDetalle} />}
         <ModalVistaPreviaDocumento abierto={Boolean(vista)} {...vista} onClose={() => setVista(null)} accionesDocumento={actualizacion && editable ? documento => {
-            const cambio = cambios.find(c => c.pendiente && c.documentos.some(d => d.id === documento.id));
+            const cambio = cambios.find(c => c.pendiente && c.tipo !== 'retiro' && c.documentos.some(d => d.id === documento.id));
             if (!cambio) return null;
             return <div className="consulta-visor-acciones">
-                <button type="button" className={GELIA_BTN_OUTLINE} data-respuesta="correcto" onClick={() => { responderCambio(cambio, 'correcto'); setVista(null); }}><CheckCircle2 size={16} aria-hidden />{cambio.tipo === 'retiro' ? 'Retiro revisado' : 'Todo OK'}</button>
-                {cambio.tipo !== 'retiro' && <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => { reportarCambio(cambio, 'detalle'); setVista(null); }}><AlertTriangle size={16} aria-hidden />Registrar detalle</button>}
+                <button type="button" className={GELIA_BTN_OUTLINE} data-respuesta="correcto" onClick={() => { responderCambio(cambio, 'correcto'); setVista(null); }}><CheckCircle2 size={16} aria-hidden />Todo OK</button>
+                <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => { reportarCambio(cambio, 'detalle'); setVista(null); }}><AlertTriangle size={16} aria-hidden />Registrar detalle</button>
             </div>;
         } : null} />
     </section>;

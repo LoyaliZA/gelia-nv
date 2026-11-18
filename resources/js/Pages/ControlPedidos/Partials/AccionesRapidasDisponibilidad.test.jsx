@@ -43,14 +43,35 @@ it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste
     expect(container.textContent).toContain('Consulta cerrada con piezas sin existencias');
     await act(() => boton('Reabrir consulta').click());
     expect(axios.post.mock.calls[0][0]).toContain('reabrir-consulta'); expect(boton('Retirar')).toBeDefined();
-    expect(container.querySelector('[aria-label="Ajuste de piezas"]')).toBeNull();
-    await act(() => boton('Modificar pedido').click()); expect(container.querySelector('[aria-label="Ajuste de piezas"]')).not.toBeNull();
+    expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
+    await act(() => boton('Modificar pedido').click()); expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('true');
 });
 it('los ajustes guardados permanecen visibles cuando la captura avanzada está plegada', async () => {
     const pedido = { id: 1, solicitud_preparacion: { revision_disponibilidad: { estado: 'excepciones_pendientes' }, anexo_sin_remision: [{ descripcion: 'Alternativa enviada', entrada: 'documento' }] } };
     await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos" />));
-    expect(container.textContent).toContain('Alternativa enviada'); expect(container.textContent).toContain('Cambios guardados del pedido');
-    expect(container.querySelector('[aria-label="Ajuste de piezas"]')).toBeNull();
+    expect(container.textContent).toContain('Alternativa enviada'); expect(container.textContent).toContain('Cambios del pedido');
+    expect(container.querySelector('.consulta-cambios-actuales')).toBeNull();
+    expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Alternativa enviada');
+    expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
+});
+
+it('en Ventas despliega la respuesta del almacén y contrae anexos y retiros pedidos', async () => {
+ const pedido={id:1,solicitud_preparacion:{
+  revision_disponibilidad:{estado:'sin_excepciones',respondida_at:'2026-11-06T10:00:00Z'},
+  anexo_sin_remision:[
+   {entrada:'catalogo',sku:'ANT',descripcion:'Pieza respondida',solicitado_at:'2026-11-06T09:00:00Z',respondida_at:'2026-11-06T10:00:00Z',respuesta_cambio:'correcto'},
+   {entrada:'catalogo',sku:'NUE',descripcion:'Anexo pedido',solicitado_at:'2026-11-06T11:00:00Z'},
+  ],
+  retiro_piezas:[{estado:'pendiente',solicitado_at:'2026-11-06T11:05:00Z',piezas:[{descripcion:'Retiro pedido',sku:'R',cantidad:1}]}],
+ }};
+ await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos"/>));
+ const abiertos=container.querySelector('.consulta-cambios-actuales').textContent;
+ expect(abiertos).toContain('Pieza respondida');
+ expect(abiertos).not.toContain('Anexo pedido');
+ expect(abiertos).not.toContain('Retiro pedido');
+ expect(container.querySelector('summary').textContent).toBe('Movimientos (2)');
+ expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Anexo pedido');
+ expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Retiro pedido');
 });
 
 it('genera la clave contra duplicados cuando el acceso HTTP no ofrece randomUUID', () => {
@@ -78,6 +99,20 @@ it('el menú compacto conserva el ID de la segunda unidad con SKU repetido y ado
  expect(container.textContent).not.toContain('Resolver el faltante original');
 });
 
+it('al confirmar el retiro deja Cerrar consulta disponible y Modificar pedido, sin cerrar sola', async () => {
+ const pedido={id:1,puede_cerrar_consulta:false,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'excepciones_pendientes'}},revisiones_producto:[faltante],motivo_bloqueo_cierre:'Hay piezas sin existencias: retírelas o solicite su sustitución antes de cerrar la consulta.'};
+ await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={[faltante]} area="control_pedidos"/>));
+ expect(boton('Cerrar consulta')).toBeUndefined();
+ expect(boton('Modificar pedido')).toBeDefined();
+ axios.post.mockResolvedValue({data:{id:1,puede_cerrar_consulta:true,motivo_bloqueo_cierre:null,consulta_cerrada:false,revisiones_producto:[{...faltante,resolucion:'retirar'}],solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'decision_registrada',aceptacion_vigente:true},retiro_piezas:[{estado:'aplicada',piezas:[{descripcion:'Aroma agotado',sku:'SKU-8',cantidad:1}]}]}}});
+ await act(()=>boton('Retirar').click());
+ await act(()=>boton('Confirmar retiro').click());
+ expect(axios.post.mock.calls.every(c => !String(c[0]).includes('cerrar-consulta'))).toBe(true);
+ expect(boton('Cerrar consulta')).toBeDefined();
+ expect(boton('Modificar pedido')).toBeDefined();
+ expect(container.textContent).not.toContain('Consulta cerrada');
+});
+
 it('un agregado nuevo conserva el historial y bloquea el cierre anterior hasta recibir respuesta', async () => {
  const pedido={id:1,puede_cerrar_consulta:true,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'sin_excepciones'}}};
  vi.spyOn(URL,'createObjectURL').mockReturnValue('blob:ajuste');vi.spyOn(URL,'revokeObjectURL').mockImplementation(()=>{});
@@ -89,7 +124,8 @@ it('un agregado nuevo conserva el historial y bloquea el cierre anterior hasta r
  axios.post.mockResolvedValue({data:{solicitud_preparacion:{...pedido.solicitud_preparacion,revision_disponibilidad:{estado:'sin_excepciones',aceptacion_vigente:false},anexo_sin_remision:[{descripcion:'Agregado nuevo',entrada:'documento'}]}}});
  await act(()=>boton('Solicitar agregado').click());
  expect(boton('Cerrar consulta')).toBeUndefined();expect(container.textContent).toContain('Agregado nuevo');
- expect(container.textContent).toContain('Hay un ajuste pendiente');
+ expect(container.textContent).toContain('Hay un anexo pendiente de respuesta');
+ expect(boton('Modificar pedido')).toBeDefined();
  vi.restoreAllMocks();
 });
 

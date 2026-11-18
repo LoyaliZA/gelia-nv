@@ -35,7 +35,7 @@ export const TONO_ESTADO_TIENDA = {
 };
 
 export function accionPrincipalTienda(tarea, puedeTomar = false) {
-    if (tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
+    if ((tarea.pedido?.anexos_pendientes || []).length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
     const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);
     if (atender) return { label: 'Atender pedido', atender: true };
     if (tarea.estado === 'EN_ATENCION') {
@@ -93,7 +93,7 @@ export function fmtVencimiento(iso) {
 }
 
 export function avisoParaTarea(t, venc) {
-    if (t.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', tono: 'warning', icon: Package, texto: 'Revise los cambios de Ventas y envíe una nueva captura del pedido.' };
+    if ((t.pedido?.anexos_pendientes || []).length || t.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', tono: 'warning', icon: Package, texto: 'Revise los anexos de Ventas y envíe una nueva captura del pedido.' };
     if (t.estado === 'CON_INCIDENCIA' || t.estado === 'RECHAZADA_CEDIS') {
         return {
             label: t.estado === 'RECHAZADA_CEDIS' ? 'Rechazo CEDIS' : 'Error reportado',

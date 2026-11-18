@@ -4,6 +4,7 @@ import {
     Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale, History, Undo2, User,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
+import { anexosPendientesRevision } from '../../Partials/cambiosDisponibilidad';
 import {
     badgeEmpaqueSemantico,
     badgeEstatusEnvio,
@@ -66,8 +67,9 @@ function TarjetaPedido({
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const revision = pedido.solicitud_preparacion?.revision_disponibilidad;
     const esConsultaDisponibilidad = pedido.solicitud_preparacion?.area_revision === 'control_pedidos';
-    const actualizacionMercanciaPendiente = Boolean(pedido.consulta_actualizacion_pendiente || revision?.actualizacion_pendiente
-        || (pedido.solicitud_preparacion?.anexo_sin_remision || []).some(a => !a.respondida_at));
+    const actualizacionMercanciaPendiente = anexosPendientesRevision(pedido.solicitud_preparacion)
+        || Boolean(revision?.actualizacion_pendiente)
+        || Boolean(pedido.consulta_actualizacion_pendiente);
     const consultaRespondida = !actualizacionMercanciaPendiente && Boolean(revision?.estado || !pendientePesaje && (pedido.pesaje_respondido_at || pedido.estatus_envio === 'pesaje_listo'));
     const mostrarAvisoConsulta = esConsultaDisponibilidad || pendientePesaje || actualizacionMercanciaPendiente;
     const mensajeConsulta = actualizacionMercanciaPendiente || pendientePesaje && (revision?.estado || pedido.motivo_repesaje)
@@ -233,7 +235,7 @@ function TarjetaPedido({
                 )}
                 {pendientePesaje && !consultaMunicipalCedis && (
                     <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
-                        <Scale className="w-4 h-4" aria-hidden="true" /> {pedido.solicitud_preparacion?.area_revision === 'control_pedidos' ? (pedido.solicitud_preparacion?.revision_disponibilidad?.actualizacion_pendiente || (pedido.solicitud_preparacion?.anexo_sin_remision || []).some(a => !a.respondida_at) ? 'Actualización de consulta' : pedido.solicitud_preparacion?.revision_disponibilidad?.estado ? 'Ver disponibilidad' : 'Nueva consulta') : (soloMercancia ? 'Responder consulta' : 'Responder pesaje')}
+                        <Scale className="w-4 h-4" aria-hidden="true" /> {pedido.solicitud_preparacion?.area_revision === 'control_pedidos' ? (actualizacionMercanciaPendiente ? 'Actualización de consulta' : pedido.solicitud_preparacion?.revision_disponibilidad?.estado ? 'Ver disponibilidad' : 'Nueva consulta') : (soloMercancia ? 'Responder consulta' : 'Responder pesaje')}
                     </button>
                 )}
                 {puedeMarcarEnviado && (

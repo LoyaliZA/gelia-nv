@@ -38,7 +38,7 @@ class ReabrirConsultaPedidoBmaService
                     throw new \RuntimeException('El pedido ya tiene pago verificado o remisión.');
                 }
                 unset($json['consulta_municipal']['cerrada_at'], $json['consulta_municipal']['cerrada_por_id']);
-                \App\Support\ControlPedidos\ActualizacionConsulta::solicitar($json);
+                \App\Support\ControlPedidos\ActualizacionConsulta::solicitar($json, true);
                 $json['consulta_municipal']['estado'] = 'excepciones_pendientes';
             }
             $estatus = $pedido->estatus;
@@ -47,6 +47,7 @@ class ReabrirConsultaPedidoBmaService
                 'estatus_envio' => $tienda && ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio,
                 'consulta_cerrada_at' => null,
                 'consulta_cerrada_por_id' => null,
+                'consulta_actualizacion_pendiente' => (bool) ($json['revision_disponibilidad']['actualizacion_pendiente'] ?? false),
             ]);
 
             $label = $pedido->consultaCedisModoRevisionMercancia() ? 'Consulta de mercancía' : 'Consulta de pesaje';

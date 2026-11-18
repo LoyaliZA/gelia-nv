@@ -53,8 +53,9 @@ final class ConsultaMunicipal
         }
         $revision = self::revision($pedido);
         $estadoRevision = $revision['estado'] ?? null;
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
         if (($revision['vigente'] ?? true) === false || filled($revision['sustituida_at'] ?? null)
-            || ($revision['actualizacion_pendiente'] ?? false) || ($revision['aceptacion_vigente'] ?? true) === false) {
+            || ActualizacionConsulta::pendiente($json)) {
             return self::EXCEPCIONES;
         }
         if ($estadoRevision === 'excepciones_pendientes') {
@@ -105,8 +106,8 @@ final class ConsultaMunicipal
             return null;
         }
         $revision = self::revision($pedido);
-        if ($pedido->consulta_actualizacion_pendiente || ($revision['actualizacion_pendiente'] ?? false)) {
-            return 'Hay una actualización de la consulta pendiente de respuesta.';
+        if (ActualizacionConsulta::pendiente(is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [])) {
+            return 'Hay un anexo pendiente de respuesta. El retiro solicitado no exige reconfirmación.';
         }
         if (($revision['vigente'] ?? true) === false || filled($revision['sustituida_at'] ?? null)) {
             return 'La respuesta vigente fue sustituida. No se cierra ni se cubre con la versión anterior.';
@@ -121,11 +122,8 @@ final class ConsultaMunicipal
         if ($pedido->revisionesProducto()->whereIn('estado_fisico', ['regular', 'malo', 'danado'])->whereNull('resolucion')->exists()) {
             return 'Confirme el estado de las piezas con detalle, retírelas o solicite su sustitución antes de cerrar la consulta.';
         }
-        if (($revision['aceptacion_vigente'] ?? true) === false) {
-            return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
-        }
-        if ($estado === 'excepciones_pendientes') {
-            return 'Hay excepciones pendientes. La consulta no puede cerrarse.';
+        if (($revision['aceptacion_vigente'] ?? true) === false && ActualizacionConsulta::pendiente(is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [])) {
+            return 'Hay un anexo pendiente de respuesta. El retiro solicitado no exige reconfirmación.';
         }
 
         return null;

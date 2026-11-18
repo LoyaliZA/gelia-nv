@@ -15,6 +15,7 @@ use App\Models\Sucursal;
 use App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido;
 use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\ApartadoT01;
+use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Database\Eloquent\Model;
@@ -1197,8 +1198,8 @@ class PedidoBma extends Model
         if ($this->revisionesProducto()->whereIn('estado_fisico', ['regular', 'malo', 'danado'])->whereNull('resolucion')->exists()) {
             return 'Confirme el estado de las piezas con detalle, retírelas o solicite su sustitución antes de cerrar la consulta.';
         }
-        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
-            return 'Hay un ajuste pendiente. La aceptación de esta versión no sigue vigente.';
+        if (ActualizacionConsulta::pendiente($json)) {
+            return 'Hay un anexo pendiente de respuesta. El retiro solicitado no exige reconfirmación.';
         }
 
         return null;
@@ -1216,8 +1217,8 @@ class PedidoBma extends Model
         if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
             return 'No se confirma la separación: falta la respuesta de disponibilidad.';
         }
-        if (($revision['aceptacion_vigente'] ?? true) === false || $this->tieneAjusteTiendaPendiente()) {
-            return 'No se confirma la separación: hay un ajuste pendiente o la aceptación de esta versión no sigue vigente.';
+        if ($this->tieneAjusteTiendaPendiente()) {
+            return 'No se confirma la separación: hay un anexo pendiente de respuesta.';
         }
 
         return null;
@@ -1225,20 +1226,9 @@ class PedidoBma extends Model
 
     public function tieneAjusteTiendaPendiente(): bool
     {
-        if (!empty($this->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_pendiente'])) return true;
         $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
-        foreach ((array) ($json['retiro_piezas'] ?? []) as $retiro) {
-            if (is_array($retiro) && ($retiro['estado'] ?? 'pendiente') === 'pendiente') {
-                return true;
-            }
-        }
-        foreach ((array) ($json['anexo_sin_remision'] ?? []) as $anexo) {
-            if (is_array($anexo) && ! isset($anexo['respondida_at'])) {
-                return true;
-            }
-        }
 
-        return false;
+        return \App\Support\ControlPedidos\ActualizacionConsulta::pendiente($json);
     }
 
     public function motivoBloqueoEntregaTienda(): ?string
