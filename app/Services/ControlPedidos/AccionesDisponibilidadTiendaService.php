@@ -15,9 +15,13 @@ use Illuminate\Validation\ValidationException;
 /** Decisiones sobre excepciones de la consulta. Nunca confirma pago ni libera stock. */
 final class AccionesDisponibilidadTiendaService
 {
+    public function __construct(private PersistenciaAdjuntosConsulta $persistencia) {}
+
     public function ejecutar(PedidoBma $pedido, User $actor, array $datos): PedidoBma
     {
-        return DB::transaction(function () use ($pedido, $actor, $datos) {
+        $nuevos = [];
+        try {
+            return DB::transaction(function () use ($pedido, $actor, $datos, &$nuevos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             abort_unless($actor->can('control_pedidos.crear') && (int) $pedido->vendedor_id === (int) $actor->id, 403);
             $json = $pedido->solicitud_preparacion_json ?? [];
@@ -55,12 +59,17 @@ final class AccionesDisponibilidadTiendaService
                     $nueva = ['entrada' => 'catalogo', 'producto_id' => $producto->id, 'sku' => $producto->sku,
                         'descripcion' => $producto->descripcion, 'cantidad' => $revision->cantidad_solicitada ?: 1, 'pendiente_revision' => true];
                 } else {
-                    $archivo = $datos['evidencia'];
-                    $documento = $pedido->documentos()->create(['tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
-                        'ruta_archivo' => $archivo->store('pedidos_bma/'.$pedido->id.'/sustitucion', 'public'),
-                        'nombre_original' => $archivo->getClientOriginalName(), 'mime_type' => $archivo->getMimeType(),
-                        'tamano_bytes' => $archivo->getSize(), 'orden' => 1, 'activo' => true, 'comentario' => 'Alternativa solicitada por Ventas']);
-                    $nueva = ['entrada' => 'documento', 'documento_id' => $documento->id, 'pendiente_identificacion' => true,
+                    $docs = $this->persistencia->guardar($pedido, [$datos['evidencia']], [
+                        'carpeta' => 'sustitucion',
+                        'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
+                        'comentario' => 'Alternativa solicitada por Ventas',
+                    ]);
+                    $nuevos = array_column($docs, 'ruta');
+                    $documentoId = (int) ($docs[0]['id'] ?? 0);
+                    if ($documentoId < 1) {
+                        throw ValidationException::withMessages(['evidencia' => 'No se pudo guardar la alternativa.']);
+                    }
+                    $nueva = ['entrada' => 'documento', 'documento_id' => $documentoId, 'pendiente_identificacion' => true,
                         'descripcion' => 'Alternativa en documento', 'cantidad' => $revision->cantidad_solicitada ?: 1, 'pendiente_revision' => true];
                 }
             }
@@ -109,7 +118,11 @@ final class AccionesDisponibilidadTiendaService
             $this->notificar($pedido, $actor, 'Ventas registró cambios en las piezas de la consulta.');
 
             return $pedido->fresh();
-        });
+            });
+        } catch (\Throwable $e) {
+            $this->persistencia->limpiar($nuevos);
+            throw $e;
+        }
     }
 
     public function notificar(PedidoBma $pedido, User $actor, string $texto): void

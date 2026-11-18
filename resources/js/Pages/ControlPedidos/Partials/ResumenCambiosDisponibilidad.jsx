@@ -12,20 +12,24 @@ export default function ResumenCambiosDisponibilidad({ solicitud = {}, documento
     const ficha = cambio => {
         const retiro = cambio.tipo === 'retiro';
         const confirmacion = cambio.tipo === 'confirmacion';
-        const estado = respuestas[cambio.clave] || (!cambio.esDocumento && !retiro ? 'correcto' : 'pendiente');
-        const revisar = interactivo && cambio.pendiente && !confirmacion;
-        return <article key={cambio.clave} className="consulta-cambio" data-tipo={retiro ? 'retiro' : confirmacion ? 'confirmacion' : 'anexo'} data-cambio={cambio.clave}>
+        const estado = respuestas[cambio.clave] || cambio.resultado || 'pendiente';
+        const revisar = interactivo && cambio.pendiente && !confirmacion && !cambio.persistida;
+        return <article key={cambio.clave} className="consulta-cambio" data-tipo={retiro ? 'retiro' : confirmacion ? 'confirmacion' : 'anexo'} data-cambio={cambio.clave} data-indice={cambio.indice} data-clase={cambio.clase || ''}>
             {cambio.retirada && <div className="consulta-cambio-retirada"><PackageMinus size={17} aria-hidden /><div><strong>Pieza retirada</strong><p>{cambio.retirada.descripcion}</p><span>{cambio.retirada.sku}</span></div></div>}
             <div className="consulta-cambio-cuerpo">
                 <header className="consulta-cambio-titulo">
                     {retiro ? <PackageMinus size={19} aria-hidden /> : confirmacion ? <CheckCircle2 size={19} aria-hidden /> : cambio.retirada ? <ArrowRightLeft size={19} aria-hidden /> : <PackagePlus size={19} aria-hidden />}
                     <strong>{retiro ? 'Retiro solicitado' : confirmacion ? 'Estado confirmado' : cambio.retirada ? 'Nueva pieza solicitada' : 'Anexo solicitado'}</strong>
-                    <span className="consulta-cambio-formato">{cambio.esDocumento ? 'Captura / PDF' : cambio.sku ? 'SKU' : 'Piezas'}</span>
+                    <span className="consulta-cambio-formato">{retiro ? 'Retiro' : cambio.clase === 'captura' ? 'Captura / PDF' : cambio.sku ? 'SKU' : 'Piezas'}</span>
                 </header>
-                {(!cambio.esDocumento || !cambio.documentos.length || !puedeVerDocumentos) && <div className="consulta-cambio-identidad"><strong>{cambio.descripcion || 'Piezas en captura'}</strong>{cambio.sku && <span>{cambio.sku}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</span>}</div>}
+                {(cambio.sku || cambio.descripcion || !cambio.documentos?.length) && <div className="consulta-cambio-identidad"><strong>{cambio.descripcion || 'Piezas en captura'}</strong>{cambio.sku && <span>{cambio.sku}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</span>}</div>}
                 {puedeVerDocumentos && cambio.documentos.length > 0 && <div className="consulta-cambio-documentos">{cambio.documentos.map((d, i) => <div key={d.id || i} className="consulta-cambio-documento">
                     <MiniaturaDocumento documento={d} onVer={() => onVer?.(cambio.documentos, i)} className="consulta-cambio-miniatura" />
                     <button type="button" className={GELIA_BTN_OUTLINE} disabled={!onVer} onClick={() => onVer?.(cambio.documentos, i)}><Eye size={16} aria-hidden />Abrir captura</button>
+                </div>)}</div>}
+                {puedeVerDocumentos && cambio.documentosPeticion?.length > 0 && <div className="consulta-cambio-documentos"><p className="text-xs theme-text-muted m-0">Evidencia de la petición</p>{cambio.documentosPeticion.map((d, i) => <div key={d.id || i} className="consulta-cambio-documento">
+                    <MiniaturaDocumento documento={d} onVer={() => onVer?.(cambio.documentosPeticion, i)} className="consulta-cambio-miniatura" />
+                    <button type="button" className={GELIA_BTN_OUTLINE} disabled={!onVer} onClick={() => onVer?.(cambio.documentosPeticion, i)}><Eye size={16} aria-hidden />Abrir captura</button>
                 </div>)}</div>}
                 {revisar ? <>
                     <div className="consulta-cambio-acciones">
@@ -33,8 +37,8 @@ export default function ResumenCambiosDisponibilidad({ solicitud = {}, documento
                         {!retiro && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'detalle')}><AlertTriangle size={16} aria-hidden />{cambio.esDocumento ? 'Registrar detalle' : 'Con detalle'}</button>}
                         {!retiro && !cambio.esDocumento && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'faltante')}><PackageX size={16} aria-hidden />Sin existencias</button>}
                     </div>
-                    <p className="consulta-cambio-estado" role="status">{estado === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' ? retiro ? 'Retiro revisado' : 'Todo OK' : 'Pendiente de revisar'}</p>
-                </> : <p className="consulta-cambio-estado">{cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : cambio.respondida_at || cambio.estado === 'aplicada' ? 'Respuesta registrada' : 'Pendiente de revisión'}{cambio.resultado && !cambio.respuesta_cambio ? ` · ${cambio.resultado}` : ''}</p>}
+                    <p className="consulta-cambio-estado" role="status">{estado === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' ? retiro ? 'Retiro revisado' : 'Todo OK' : 'Pendiente de revisar'}{cambio.persistida ? ' · Guardado' : estado !== 'pendiente' ? ' · Sin guardar' : ''}</p>
+                </> : <p className="consulta-cambio-estado">{cambio.resultado === 'correcto' || cambio.respuesta_cambio === 'correcto' ? retiro ? 'Retiro revisado' : 'Todo OK' : cambio.resultado === 'incidencia' || cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : cambio.respondida_at || cambio.estado === 'aplicada' ? 'Respuesta registrada' : 'Pendiente de revisión'}</p>}
             </div>
         </article>;
     };

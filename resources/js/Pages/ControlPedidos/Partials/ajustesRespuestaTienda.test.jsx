@@ -3,8 +3,13 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
-import { AjustePiezas } from './SeguimientoSolicitudTienda';
+import SeguimientoSolicitudTienda, { AjustePiezas } from './SeguimientoSolicitudTienda';
 vi.mock('../../../Components/Almacenes/SelectorProducto', () => ({ default: ({ onChange }) => <button onClick={() => onChange(1, { id: 1, sku: 'SKU-1', descripcion: 'Perfume del catálogo' })}>Elegir perfume</button> }));
+vi.mock('./ModalVistaPreviaDocumento', () => ({
+    default: () => null,
+    MiniaturaDocumento: ({ documento }) => <img alt="" src={documento.url} />,
+    esPdf: () => false,
+}));
 let root, container;
 beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -51,4 +56,28 @@ it('ofrece el faltante sin SKU desde la respuesta para retirarlo sin buscar inve
     expect(cantidad.value).toBe('2');
     await act(() => container.querySelector('input[type=checkbox]').click());
     expect(cantidad.disabled).toBe(false);
+});
+it('conserva la nota al plegar modificar pedido', async () => {
+    const pedido = { id: 1, solicitud_preparacion: { revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } };
+    await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="preparacion_tienda" />));
+    await click('Modificar pedido');
+    const nota = container.querySelector('#ajuste-nota');
+    await act(() => {
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(nota, 'Aroma distinto');
+        nota.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click('Modificar pedido');
+    expect(container.querySelector('#ajuste-nota').value).toBe('Aroma distinto');
+    expect(container.querySelector('[aria-label="Ajuste de piezas"]')).toBeTruthy();
+});
+it('muestra la captura vigente una sola vez al final del seguimiento de Ventas', async () => {
+    const documentos = [{ id: 9, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.jpg', mime_type: 'image/jpeg', activo: true }];
+    const pedido = {
+        id: 1, documentos,
+        solicitud_preparacion: { revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true, evidencia_actual_ids: [9] } },
+    };
+    await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos" />));
+    expect(container.querySelectorAll('[aria-label="Captura del pedido"]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Resultado de la consulta en CEDIS"]')?.querySelector('[aria-label="Captura del pedido"]')).toBeNull();
 });

@@ -22,6 +22,7 @@ function formDataDe({ confirmacion, excepciones, archivos }) {
             form.append(`excepciones[${indice}][${campo}]`, String(pieza[campo] || ''));
         }
         for (const atributo of ['unica_pieza', 'mejor_ejemplar']) form.append(`excepciones[${indice}][${atributo}]`, pieza[atributo] ? '1' : '0');
+        if (pieza.origen_cambio) form.append(`excepciones[${indice}][origen_unidad_id]`, String(pieza.origen_cambio));
         if (pieza.condicion === 'detalle') (pieza.archivos || []).forEach(archivo => form.append(`excepciones[${indice}][evidencias][]`, archivo));
     });
     archivos.forEach(archivo => form.append('evidencias[]', archivo));
@@ -34,6 +35,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const cambios = cambiosDisponibilidad(solicitud, pedido.documentos || documentos);
     const [respuestasCambios, setRespuestasCambios] = useState({});
     const [origenIncidencia, setOrigenIncidencia] = useState(null);
+    const persistidasRef = useRef({});
     const [capturaRapida, setCapturaRapida] = useState(null);
     const [estado, setEstado] = useState('');
     const [excepciones, setExcepciones] = useState([]);
@@ -88,14 +90,51 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     }, [ciclo, guardando, tieneCaptura, cicloEnviado, actualizacion, pedido.documentos, revision?.evidencia_actual_ids, puedeLeerDocumentos]);
     const editable = tomada && puedeResponder && !respondida;
     const dialogo = usePedidoDialog({ abierto: modo === 'dialogo' && abierto, onClose, bloqueado: guardando });
-    const cambiar = (indice, cambios) => setExcepciones(actual => actual.map((fila, i) => {
-        if (i !== indice) return fila;
-        if (cambios.condicion === 'faltante') liberarPreviews(fila.previews);
-        return { ...fila, ...cambios, ...(cambios.condicion ? {
-            detalle: cambios.condicion === 'faltante' ? 'Sin existencias' : fila.detalle === 'Sin existencias' ? '' : fila.detalle,
-            ...(cambios.condicion === 'faltante' ? { archivos: [], previews: [], unica_pieza: false, mejor_ejemplar: false } : {}),
-        } : {}) };
-    }));
+    const persistirUnidad = async (cambio, resultado, afectadas = []) => {
+        const firma = `${resultado}:${afectadas.map(pieza => `${pieza.descripcion}|${pieza.condicion}|${pieza.cantidad}`).join(';')}`;
+        if (persistidasRef.current[cambio.clave] === firma || (cambio.persistida && cambio.resultado === resultado && afectadas.length === 0)) return;
+        const form = formDataDe({ confirmacion: false, excepciones: afectadas.map(pieza => ({ ...pieza, origen_cambio: cambio.unidad_id || cambio.clave })), archivos: [] });
+        form.append('persistir_unidad', '1');
+        form.append('cambios_revisados[0][tipo]', cambio.tipo);
+        form.append('cambios_revisados[0][indice]', String(cambio.indice ?? 0));
+        form.append('cambios_revisados[0][unidad_id]', cambio.unidad_id || cambio.clave);
+        if (cambio.documento_id) form.append('cambios_revisados[0][documento_id]', String(cambio.documento_id));
+        form.append('cambios_revisados[0][resultado]', resultado);
+        if (revision?.actualizacion_id) form.append('actualizacion_id', revision.actualizacion_id);
+        persistidasRef.current[cambio.clave] = firma;
+        try {
+            await onEnviar?.(form);
+        } catch (e) {
+            delete persistidasRef.current[cambio.clave];
+            const errores = e?.response?.data?.errors;
+            setError(errores ? Object.values(errores).flat().join(' ') : e?.response?.data?.message || 'No se pudo guardar la revisión.');
+        }
+    };
+    const piezasCompletasDe = (clave, filas) => {
+        const de = filas.filter(fila => fila.origen_cambio === clave);
+        if (!de.length) return [];
+        if (de.some(pieza => !String(pieza.descripcion || '').trim())) return [];
+        if (de.some(pieza => pieza.condicion === 'detalle' && !pieza.unica_pieza && !pieza.mejor_ejemplar && !String(pieza.detalle || '').trim())) return [];
+        if (de.some(pieza => pieza.condicion === 'detalle' && !pieza.archivos?.length)) return [];
+        return de;
+    };
+    const persistirSiCompleta = (clave, filas) => {
+        const cambio = cambios.find(c => c.clave === clave);
+        const completas = clave ? piezasCompletasDe(clave, filas) : [];
+        if (cambio && completas.length) persistirUnidad(cambio, 'incidencia', completas);
+    };
+    const cambiar = (indice, cambiosPieza) => setExcepciones(actual => {
+        const siguiente = actual.map((fila, i) => {
+            if (i !== indice) return fila;
+            if (cambiosPieza.condicion === 'faltante') liberarPreviews(fila.previews);
+            return { ...fila, ...cambiosPieza, ...(cambiosPieza.condicion ? {
+                detalle: cambiosPieza.condicion === 'faltante' ? 'Sin existencias' : fila.detalle === 'Sin existencias' ? '' : fila.detalle,
+                ...(cambiosPieza.condicion === 'faltante' ? { archivos: [], previews: [], unica_pieza: false, mejor_ejemplar: false } : {}),
+            } : {}) };
+        });
+        persistirSiCompleta(siguiente[indice]?.origen_cambio, siguiente);
+        return siguiente;
+    });
     const quitar = indice => {
         liberarPreviews(excepciones[indice]?.previews);
         setExcepciones(actual => actual.filter((_, i) => i !== indice));
@@ -107,17 +146,17 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             return actual.filter(f => f.origen_cambio !== cambio.clave);
         });
         if (origenIncidencia?.clave === cambio.clave) setOrigenIncidencia(null);
+        if (respuesta === 'correcto') persistirUnidad(cambio, 'correcto');
     };
     const reportarCambio = (cambio, condicion) => {
         if (cambio.esDocumento) { setCapturaRapida({ origen: cambio }); return; }
+        const pieza = { descripcion: cambio.descripcion || '', sku: cambio.sku || '', cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
+            clave: ++secuencia.current, origen_cambio: cambio.clave, condicion, detalle: condicion === 'faltante' ? 'Sin existencias' : '',
+            unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] };
         setOrigenIncidencia(cambio);
         setRespuestasCambios(actual => ({ ...actual, [cambio.clave]: 'incidencia' }));
-        setExcepciones(actual => {
-            if (actual.some(f => f.origen_cambio === cambio.clave)) return actual;
-            return [...actual, { descripcion: cambio.descripcion || '', sku: cambio.sku || '', cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
-                clave: ++secuencia.current, origen_cambio: cambio.clave, condicion, detalle: condicion === 'faltante' ? 'Sin existencias' : '',
-                unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] }];
-        });
+        setExcepciones(actual => actual.some(f => f.origen_cambio === cambio.clave) ? actual : [...actual, pieza]);
+        if (condicion === 'faltante') persistirUnidad(cambio, 'incidencia', [pieza]);
     };
     const agregarSeleccionDetalle = (seleccionadas, origen) => {
         setExcepciones(actual => [...actual, ...seleccionadas.map(pieza => ({
@@ -144,9 +183,9 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         const afectadas = actualizacion || estado === 'detalle' ? excepciones : [];
         if (!actualizacion && !estado) return setError('Indica el estado del pedido.');
         if (!actualizacion && estado === 'detalle' && !afectadas.length) return setError('Agrega las piezas con detalle o faltante.');
-        const pendientes = cambios.filter(c => c.pendiente && c.esDocumento && !respuestasCambios[c.clave]);
+        const pendientes = cambios.filter(c => c.pendiente && !respuestasCambios[c.clave] && !c.persistida);
         if (actualizacion && pendientes.length) return setError('Revise cada captura: marque Todo OK o registre las piezas con detalle.');
-        if (actualizacion && cambios.some(c => c.pendiente && respuestasCambios[c.clave] === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
+        if (actualizacion && cambios.some(c => (respuestasCambios[c.clave] || c.resultado) === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave) && !(c.persistida && c.resultado === 'incidencia'))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
         if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.archivos?.length)) return setError('Adjunta una foto de cada producto con detalle.');
@@ -155,10 +194,12 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         try {
             const form = formDataDe({ confirmacion: actualizacion ? afectadas.length === 0 : estado === 'correcto', excepciones: afectadas, archivos });
             if (!actualizacion) evidenciasGuardadas.forEach(d => form.append('evidencias_guardadas[]', String(d.id)));
-            if (actualizacion) cambios.filter(c => c.pendiente && c.indice !== undefined).forEach((c, i) => {
+            if (actualizacion) cambios.filter(c => c.indice !== undefined && (respuestasCambios[c.clave] || c.resultado)).forEach((c, i) => {
                 form.append(`cambios_revisados[${i}][tipo]`, c.tipo);
-                form.append(`cambios_revisados[${i}][indice]`, String(c.indice));
-                form.append(`cambios_revisados[${i}][resultado]`, respuestasCambios[c.clave] || 'correcto');
+                form.append(`cambios_revisados[${i}][indice]`, String(c.indice ?? 0));
+                form.append(`cambios_revisados[${i}][unidad_id]`, c.unidad_id || c.clave);
+                if (c.documento_id) form.append(`cambios_revisados[${i}][documento_id]`, String(c.documento_id));
+                form.append(`cambios_revisados[${i}][resultado]`, respuestasCambios[c.clave] || c.resultado);
             });
             if (revision?.actualizacion_id) form.append('actualizacion_id', revision.actualizacion_id);
             await onEnviar?.(form);

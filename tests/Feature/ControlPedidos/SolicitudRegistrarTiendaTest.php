@@ -746,10 +746,12 @@ class SolicitudRegistrarTiendaTest extends TestCase
         )->assertOk()->assertJsonPath('estado', 'sin_excepciones');
 
         $pedido = $tarea->pedido->fresh();
+        $conjunto = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->first();
         $this->assertSame(1, $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->count());
         $this->assertSame(0, $pedido->revisionesProducto()->count());
         $visible = RespuestaPreparacionTienda::datos($tarea->fresh(['documentos', 'productos', 'atendidaPor', 'cumplimientoFisico']));
-        $this->assertSame($foto->id, $visible['documentos'][0]['id']);
+        $this->assertSame($conjunto->id, $visible['documentos'][0]['id']);
+        $this->assertSame($foto->ruta_interna, $conjunto->ruta_archivo);
     }
 
     public function test_la_revision_conserva_atributos_y_solo_registra_la_pieza_afectada(): void
@@ -1465,7 +1467,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(count($anteriores) + 1, $pedido->documentos()->count());
         $this->assertSame('revisado_conjunto', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['estado']);
         $this->assertSame('correcto', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['respuesta_cambio']);
-        $this->assertSame(['anexo:0' => 'correcto'], $revisionNueva['cambios_revisados']);
+        $this->assertSame('correcto', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades'][0]['resultado']);
         $this->assertSame(0, $pedido->revisionesProducto()->whereNull('resolucion')->count());
         $this->post($respuesta, $datos, ['Accept' => 'application/json'])->assertOk();
         $this->assertSame(count($anteriores) + 1, $pedido->documentos()->count());
@@ -1490,6 +1492,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $tarea->update(['estado' => 'RESPONDIDA']);
         $url = '/control-pedidos/tienda/tareas/'.$tarea->id.'/disponibilidad';
         $datos = ['confirmacion_explicita' => 0, 'actualizacion_id' => (string) Str::uuid(),
+            'cambios_revisados' => [['tipo' => 'anexo', 'indice' => 0, 'resultado' => 'incidencia']],
             'excepciones' => [['descripcion' => 'Pieza manual agotada', 'cantidad' => 1, 'condicion' => 'faltante']],
             'evidencias' => [UploadedFile::fake()->image('actualizada.jpg')]];
         $this->post($url, $datos, ['Accept' => 'application/json'])->assertUnprocessable();
@@ -1518,6 +1521,225 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->postJson($url.'/alternativa', ['indice' => 0, 'decision' => 'faltante', 'nota' => 'La alternativa tampoco está disponible'])->assertOk();
         $this->assertTrue($pedido->fresh()->tieneSinExistenciaAbierta());
         $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertUnprocessable();
+    }
+
+    public function test_sustitucion_guarda_en_persistencia_y_conserva_el_pdf_original(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $pdf = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)->firstOrFail();
+        $pieza = $pedido->revisionesProducto()->firstOrFail();
+        $this->post('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', [
+            'revision_id' => $pieza->id,
+            'accion' => 'sustituir',
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencia' => UploadedFile::fake()->image('alternativa.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $alternativa = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->firstOrFail();
+        $this->assertStringContainsString('/sustitucion', $alternativa->ruta_archivo);
+        $this->assertTrue(Storage::disk('public')->exists($alternativa->ruta_archivo));
+        $this->assertSame($pdf->id, $pedido->fresh()->documentos()->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)->value('id'));
+        $this->assertSame($pdf->ruta_archivo, $pedido->fresh()->documentos()->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)->value('ruta_archivo'));
+        $this->actingAs($this->usuario)->get(route('control_pedidos.documentos.show', [$pedido, $alternativa]).'?vista=miniatura')->assertOk();
+    }
+
+    public function test_guardar_una_captura_deja_pendiente_a_la_hermana_sin_retiro_fisico(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencias' => [
+                UploadedFile::fake()->createWithContent('a.pdf', 'captura-a'),
+                UploadedFile::fake()->createWithContent('b.pdf', 'captura-b'),
+            ],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $docs = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['documentos'];
+        $this->assertCount(2, $docs);
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'indice' => 0,
+                'unidad_id' => 'anexo:'.$pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['solicitud_id'].':doc:'.$docs[0]['id'],
+                'documento_id' => $docs[0]['id'],
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $linea = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertSame('correcto', $linea['unidades'][0]['resultado']);
+        $this->assertNull($linea['unidades'][1]['resultado'] ?? null);
+        $this->assertTrue(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($pedido->fresh()->solicitud_preparacion_json));
+        $this->assertArrayNotHasKey('aplicada', array_flip(array_column($pedido->fresh()->solicitud_preparacion_json['retiro_piezas'] ?? [], 'estado')));
+        $this->assertNull($pedido->fresh()->consulta_cerrada_at);
+        $this->assertSame(PedidoBmaDocumento::TIPO_PDF_PEDIDO, $pedido->fresh()->documentos()->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)->value('tipo'));
+    }
+
+    public function test_persistir_unidad_no_escribe_la_hermana_por_indice(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencias' => [
+                UploadedFile::fake()->createWithContent('a.pdf', 'captura-a'),
+                UploadedFile::fake()->createWithContent('b.pdf', 'captura-b'),
+            ],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $docs = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['documentos'];
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $this->post($url, [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'indice' => 0,
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post($url, [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'indice' => 0,
+                'unidad_id' => 'anexo:'.$pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['solicitud_id'].':doc:'.$docs[0]['id'],
+                'documento_id' => $docs[1]['id'],
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post($url, [
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'indice' => 0,
+                'resultado' => 'correcto',
+            ]],
+            'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+        ], ['Accept' => 'application/json'])->assertUnprocessable();
+        $linea = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertNull($linea['unidades'][0]['resultado'] ?? null);
+        $this->assertNull($linea['unidades'][1]['resultado'] ?? null);
+    }
+
+    public function test_una_captura_todo_ok_y_otra_con_detalle_no_cruzan_solicitudes_del_mismo_sku(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencias' => [
+                UploadedFile::fake()->createWithContent('a.pdf', 'captura-a'),
+                UploadedFile::fake()->createWithContent('b.pdf', 'captura-b'),
+            ],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'catalogo',
+            'solicitud_id' => (string) Str::uuid(),
+            'piezas' => [['sku' => 'SKU-GEMELO', 'descripcion' => 'Aroma gemelo', 'cantidad' => 1]],
+            'evidencia' => UploadedFile::fake()->createWithContent('gemelo-a.pdf', 'gemelo-a'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'catalogo',
+            'solicitud_id' => (string) Str::uuid(),
+            'piezas' => [['sku' => 'SKU-GEMELO', 'descripcion' => 'Aroma gemelo', 'cantidad' => 1]],
+            'evidencia' => UploadedFile::fake()->createWithContent('gemelo-b.pdf', 'gemelo-b'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $anexos = $pedido->solicitud_preparacion_json['anexo_sin_remision'];
+        $docs = $anexos[0]['documentos'];
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $idCapturaOk = 'anexo:'.$anexos[0]['solicitud_id'].':doc:'.$docs[0]['id'];
+        $idCapturaDetalle = 'anexo:'.$anexos[0]['solicitud_id'].':doc:'.$docs[1]['id'];
+        $idGemeloA = 'anexo:'.$anexos[1]['solicitud_id'].':doc:'.$anexos[1]['documento_id'];
+        $idGemeloB = 'anexo:'.$anexos[2]['solicitud_id'].':doc:'.$anexos[2]['documento_id'];
+        $this->post($url, [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'unidad_id' => $idCapturaOk,
+                'documento_id' => $docs[0]['id'],
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->post($url, [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'unidad_id' => $idCapturaDetalle,
+                'documento_id' => $docs[1]['id'],
+                'resultado' => 'incidencia',
+            ]],
+            'excepciones' => [[
+                'descripcion' => 'Frasco golpeado',
+                'sku' => 'SKU-DET',
+                'cantidad' => 1,
+                'condicion' => 'detalle',
+                'detalle' => 'Golpe en tapa',
+                'origen_unidad_id' => $idCapturaDetalle,
+                'evidencias' => [UploadedFile::fake()->image('defecto-captura.jpg')],
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->post($url, [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo',
+                'unidad_id' => $idGemeloA,
+                'documento_id' => $anexos[1]['documento_id'],
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $fresco = $pedido->fresh();
+        $linea = $fresco->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertSame('correcto', $linea['unidades'][0]['resultado']);
+        $this->assertSame('incidencia', $linea['unidades'][1]['resultado']);
+        $this->assertNull($fresco->solicitud_preparacion_json['anexo_sin_remision'][2]['unidades'][0]['resultado'] ?? null);
+        $this->assertSame($idGemeloA, $fresco->solicitud_preparacion_json['anexo_sin_remision'][1]['unidades'][0]['unidad_id']);
+        $this->assertSame($idGemeloB, $fresco->solicitud_preparacion_json['anexo_sin_remision'][2]['unidades'][0]['unidad_id']);
+        $this->assertNotSame($idGemeloA, $idGemeloB);
+        $this->assertTrue(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($fresco->solicitud_preparacion_json));
+        $this->assertSame(1, $fresco->revisionesProducto()->where('descripcion_producto', 'Frasco golpeado')->count());
+    }
+
+    public function test_retiro_revisado_no_aplica_el_retiro_fisico(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $this->post('/control-pedidos/'.$pedido->id.'/retiro-piezas-tienda', [
+            'entrada' => 'documento',
+            'motivo_opcion' => 'El cliente ya no lo quiere',
+            'motivo' => 'El cliente ya no lo quiere',
+            'solicitud_id' => (string) Str::uuid(),
+            'documentos' => [UploadedFile::fake()->createWithContent('retiro.pdf', 'retiro-doc')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $retiro = $pedido->solicitud_preparacion_json['retiro_piezas'][0];
+        $docId = $retiro['documentos_piezas'][0]['id'];
+        $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'],
+            'cambios_revisados' => [[
+                'tipo' => 'retiro',
+                'unidad_id' => 'retiro:'.$retiro['solicitud_id'].':doc:'.$docId,
+                'documento_id' => $docId,
+                'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $fresco = $pedido->fresh();
+        $linea = $fresco->solicitud_preparacion_json['retiro_piezas'][0];
+        $this->assertSame('correcto', $linea['unidades'][0]['resultado']);
+        $this->assertSame('pendiente', $linea['estado']);
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, $fresco->estatus_envio);
+        $this->assertNull($fresco->consulta_cerrada_at);
+        $this->assertSame(0, $fresco->tareasPreparacion()->count());
     }
 
     public function test_tienda_muestra_la_sustitucion_y_responde_sin_liberar_inventario_no_apartado(): void

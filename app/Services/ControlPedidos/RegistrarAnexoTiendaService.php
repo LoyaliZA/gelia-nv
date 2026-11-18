@@ -8,11 +8,11 @@ use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /** Sin remisión documenta el ajuste. Con remisión abre un pedido relacionado y su propia cobertura. */
@@ -23,6 +23,7 @@ final class RegistrarAnexoTiendaService
         private RegistrarHistorialPedidoService $historial,
         private NotificarPedidoBmaService $notificar,
         private AdjuntosConsultaTienda $adjuntos,
+        private PersistenciaAdjuntosConsulta $persistencia,
     ) {}
 
     /**
@@ -63,7 +64,10 @@ final class RegistrarAnexoTiendaService
                 throw ValidationException::withMessages(['evidencia' => 'Adjunte el PDF o la captura del anexo.']);
             }
 
-            if ($pedido->tieneRemision() || filled($pedido->numero_remision)) {
+            $municipal = ConsultaMunicipal::es($pedido);
+            if ($municipal) {
+                ConsultaMunicipal::exigirRespuesta($pedido);
+            } elseif ($pedido->tieneRemision() || filled($pedido->numero_remision)) {
                 return $this->pedidoRelacionado($pedido, $usuario, $lineas, $archivos, $solicitudId);
             }
 
@@ -84,8 +88,11 @@ final class RegistrarAnexoTiendaService
             ));
             $json['anexo_integrado'] = false;
             ActualizacionConsulta::solicitar($json);
+            $json = ConsultaMunicipal::abrirPorAjuste($json);
             $pedido->update(['solicitud_preparacion_json' => $json, 'consulta_cerrada_at' => null, 'consulta_cerrada_por_id' => null,
-                'estatus_envio' => ($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio]);
+                'estatus_envio' => $municipal
+                    ? $pedido->estatus_envio
+                    : (($json['area_revision'] ?? '') === 'control_pedidos' ? PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE : $pedido->estatus_envio)]);
             $this->nota($pedido, $usuario->id, $this->textoDe($lineas, false));
             $this->avisarEjecutor($pedido, $usuario, $lineas);
 
@@ -255,38 +262,11 @@ final class RegistrarAnexoTiendaService
      */
     private function guardar(PedidoBma $pedido, array $archivos, string $carpeta, string $tipo, string $comentario): array
     {
-        $guardados = [];
-        $rutas = [];
-        $orden = (int) $pedido->documentos()->max('orden');
-        try {
-            foreach ($archivos as $archivo) {
-                $orden++;
-                $ruta = $archivo->store('pedidos_bma/'.$pedido->id.'/'.$carpeta, 'public');
-                $rutas[] = $ruta;
-                $documento = $pedido->documentos()->create([
-                    'tipo' => $tipo,
-                    'ruta_archivo' => $ruta,
-                    'nombre_original' => $archivo->getClientOriginalName(),
-                    'mime_type' => $archivo->getMimeType(),
-                    'tamano_bytes' => $archivo->getSize(),
-                    'orden' => $orden,
-                    'comentario' => $comentario,
-                    'activo' => true,
-                ]);
-                $guardados[] = [
-                    'id' => $documento->id,
-                    'nombre' => $documento->nombre_original,
-                    'mime_type' => $documento->mime_type,
-                    'tamano_bytes' => (int) $documento->tamano_bytes,
-                    'huella' => $this->adjuntos->huella($archivo),
-                ];
-            }
-        } catch (\Throwable $e) {
-            Storage::disk('public')->delete($rutas);
-            throw $e;
-        }
-
-        return $guardados;
+        return $this->persistencia->guardar($pedido, $archivos, [
+            'carpeta' => $carpeta,
+            'tipo' => $tipo,
+            'comentario' => $comentario,
+        ]);
     }
 
     /**
@@ -372,18 +352,24 @@ final class RegistrarAnexoTiendaService
     private function avisarEjecutor(PedidoBma $pedido, User $usuario, array $lineas): void
     {
         $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
-        $area = (string) ($json['area_revision'] ?? '');
-        $permiso = $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS
+        $municipal = ($json['modalidad_entrega'] ?? null) === 'municipal';
+        $cedis = $municipal
+            ? data_get($json, 'consulta_municipal.area') === 'cedis'
+            : (string) ($json['area_revision'] ?? '') === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS;
+        $permiso = $cedis
             ? 'control_pedidos.cedis'
-            : 'control_pedidos.tienda.ver';
+            : ($municipal ? 'control_pedidos.municipal.responder_consulta' : 'control_pedidos.tienda.ver');
+        $url = $cedis
+            ? '/control-pedidos/cedis?q='.rawurlencode((string) $pedido->folio)
+            : ($municipal ? '/control-pedidos/municipal/consultas-tienda' : '/control-pedidos/tienda?tarea='.$pedido->instruccionEntregaVigente?->id);
         $this->notificar->ejecutar(
             $pedido,
             'pedido_consulta_actualizada',
-            'Actualización de consulta: revise las piezas anexadas y envíe una nueva captura del pedido.',
+            'Actualización de consulta: revise las piezas anexadas. Las evidencias vigentes se conservan.',
             [$permiso],
             $usuario->id,
             false,
-            ['url' => $area === 'control_pedidos' ? '/control-pedidos/cedis?q='.rawurlencode($pedido->folio) : '/control-pedidos/tienda?tarea='.$pedido->instruccionEntregaVigente?->id]
+            ['url' => $url]
         );
     }
 

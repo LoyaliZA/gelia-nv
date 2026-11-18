@@ -5,6 +5,7 @@ namespace App\Support\ControlPedidos;
 use App\Models\Almacen;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
+use Illuminate\Validation\ValidationException;
 
 /** Seguimiento municipal. El detalle de la respuesta vive en revision_disponibilidad. */
 final class ConsultaMunicipal
@@ -64,6 +65,38 @@ final class ConsultaMunicipal
         }
 
         return (string) ($seguimiento['estado'] ?? self::PENDIENTE);
+    }
+
+    public static function exigirRespuesta(PedidoBma $pedido): void
+    {
+        if (! self::es($pedido)) {
+            return;
+        }
+        $estado = self::revision($pedido)['estado'] ?? null;
+        if (! in_array($estado, ['sin_excepciones', 'excepciones_pendientes', 'decision_registrada'], true)) {
+            throw ValidationException::withMessages([
+                'ajuste' => 'El ajuste se solicita cuando ya hay una respuesta de las piezas.',
+            ]);
+        }
+    }
+
+    /**
+     * Una modificación municipal reabre la decisión comercial. No cierra la consulta ni pide pesaje.
+     *
+     * @param  array<string, mixed>  $json
+     * @return array<string, mixed>
+     */
+    public static function abrirPorAjuste(array $json): array
+    {
+        if (($json['modalidad_entrega'] ?? null) !== 'municipal') {
+            return $json;
+        }
+        $seguimiento = is_array($json['consulta_municipal'] ?? null) ? $json['consulta_municipal'] : [];
+        unset($seguimiento['cerrada_at'], $seguimiento['cerrada_por_id']);
+        $seguimiento['estado'] = self::EXCEPCIONES;
+        $json['consulta_municipal'] = $seguimiento;
+
+        return $json;
     }
 
     public static function motivoBloqueo(PedidoBma $pedido): ?string

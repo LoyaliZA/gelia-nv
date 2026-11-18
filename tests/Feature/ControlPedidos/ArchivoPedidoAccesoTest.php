@@ -5,6 +5,7 @@ namespace Tests\Feature\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
+use App\Services\ControlPedidos\PersistenciaAdjuntosConsulta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -39,6 +40,33 @@ class ArchivoPedidoAccesoTest extends TestCase
         $this->actingAs($ajeno)->get($url.'?vista=miniatura', ['If-None-Match' => $etag])->assertForbidden();
         $otro = $pedido->replicate();
         $otro->folio = 'QA-OTRO';
+        $otro->save();
+        $this->actingAs($dueno)->get(route('control_pedidos.documentos.show', [$otro, $doc]).'?vista=miniatura')->assertNotFound();
+    }
+
+    public function test_evidencia_de_consulta_se_lee_autenticada_y_no_cruza_pedidos(): void
+    {
+        $this->assertSame(':memory:', config('database.connections.sqlite.database'));
+        Storage::fake('public');
+        $dueno = User::factory()->create();
+        $ajeno = User::factory()->create();
+        $ahora = now();
+        $lista = DB::table('catalogo_listas_descuento')->insertGetId(['nombre' => 'Lista QA', 'activo' => true, 'created_at' => $ahora, 'updated_at' => $ahora]);
+        $cliente = DB::table('clientes')->insertGetId(['numero_cliente' => 'QA-CONSULTA', 'nombre' => 'Cliente ficticio', 'lista_actual_id' => $lista, 'created_at' => $ahora, 'updated_at' => $ahora]);
+        $estatus = CatalogoEstatusPedido::create(['codigo_interno' => 'CONSULTA-QA', 'nombre_visual' => 'Borrador', 'fase_ciclo' => 'BORRADOR', 'activo' => true, 'orden' => 1]);
+        $pedido = PedidoBma::create(['folio' => 'QA-CONSULTA', 'fecha' => $ahora->toDateString(), 'cliente_id' => $cliente, 'vendedor_id' => $dueno->id, 'catalogo_estatus_pedido_id' => $estatus->id, 'total_mercancia' => 100, 'total_a_cobrar' => 100]);
+        $filas = app(PersistenciaAdjuntosConsulta::class)->guardar($pedido, [UploadedFile::fake()->image('consulta.png', 400, 300)], [
+            'carpeta' => 'disponibilidad',
+            'tipo' => 'evidencia_condicion',
+            'comentario' => 'Consulta',
+            'relacion_tipo' => 'revision_general',
+        ]);
+        $doc = $pedido->documentos()->findOrFail($filas[0]['id']);
+        $url = route('control_pedidos.documentos.show', [$pedido, $doc]);
+        $this->actingAs($dueno)->get($url.'?vista=miniatura')->assertOk()->assertHeader('Content-Type', 'image/webp');
+        $this->actingAs($ajeno)->get($url)->assertForbidden();
+        $otro = $pedido->replicate();
+        $otro->folio = 'QA-CONSULTA-OTRO';
         $otro->save();
         $this->actingAs($dueno)->get(route('control_pedidos.documentos.show', [$otro, $doc]).'?vista=miniatura')->assertNotFound();
     }

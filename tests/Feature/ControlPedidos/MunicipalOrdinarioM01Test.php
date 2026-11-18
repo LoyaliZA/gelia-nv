@@ -793,4 +793,143 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
     }
 
+    public function test_anexo_y_retiro_municipal_no_crean_tienda_ni_pisan_wizerp_ni_cierran(): void
+    {
+        $this->actingAs($this->ventas);
+        $pdf = $this->pedido->documentos()->where('tipo', 'pdf_pedido')->first();
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['consulta_municipal'] = ['area' => 'cedis', 'estado' => 'respondida', 'enviada_at' => now()->toIso8601String()];
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones', 'aceptacion_vigente' => true, 'ciclo_id' => 'ciclo-municipal'];
+        $this->pedido->update([
+            'solicitud_preparacion_json' => $json,
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION,
+        ]);
+        $pedidos = PedidoBma::query()->count();
+        $clave = (string) \Illuminate\Support\Str::uuid();
+        $url = '/control-pedidos/'.$this->pedido->id.'/anexo-tienda';
+        $this->actingAs(User::factory()->create())->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave,
+            'evidencia' => UploadedFile::fake()->create('ajeno.pdf', 10, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertForbidden();
+
+        $this->actingAs($this->ventas)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '0',
+            'evidencia' => UploadedFile::fake()->createWithContent('anexo.pdf', 'anexo-municipal'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->ventas)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '0',
+            'evidencia' => UploadedFile::fake()->createWithContent('anexo.pdf', 'anexo-municipal'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($this->ventas)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => $clave, 'lote' => '1',
+            'evidencias' => [UploadedFile::fake()->createWithContent('extra.pdf', 'extra-municipal')],
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $fresco = $this->pedido->fresh();
+        $this->assertSame($pedidos, PedidoBma::query()->count());
+        $this->assertSame('WIZ-FICTICIO', $fresco->folio_remision);
+        $this->assertSame($pdf->id, $fresco->documentos()->where('tipo', 'pdf_pedido')->value('id'));
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION, $fresco->estatus_envio);
+        $this->assertNull($fresco->consulta_cerrada_at);
+        $this->assertSame('excepciones_pendientes', $fresco->solicitud_preparacion_json['consulta_municipal']['estado']);
+        $this->assertFalse($fresco->solicitud_preparacion_json['revision_disponibilidad']['aceptacion_vigente']);
+        $this->assertCount(1, $fresco->solicitud_preparacion_json['anexo_sin_remision']);
+        $this->assertCount(2, $fresco->solicitud_preparacion_json['anexo_sin_remision'][0]['documentos']);
+        $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertUnprocessable();
+
+        $this->actingAs($this->ventas)->post('/control-pedidos/'.$this->pedido->id.'/retiro-piezas-tienda', [
+            'entrada' => 'documento',
+            'motivo' => 'El cliente ya no lo quiere',
+            'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+            'documentos' => [UploadedFile::fake()->createWithContent('retiro.pdf', 'retiro-municipal')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $trasRetiro = $this->pedido->fresh();
+        $this->assertSame($pedidos, PedidoBma::query()->count());
+        $this->assertSame('WIZ-FICTICIO', $trasRetiro->folio_remision);
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION, $trasRetiro->estatus_envio);
+        $this->assertNull($trasRetiro->consulta_cerrada_at);
+        $this->assertCount(1, $trasRetiro->solicitud_preparacion_json['retiro_piezas']);
+        $this->assertSame($pdf->ruta_archivo, $trasRetiro->documentos()->where('tipo', 'pdf_pedido')->value('ruta_archivo'));
+    }
+
+    public function test_un_fallo_parcial_al_guardar_adjuntos_no_deja_archivos_ni_referencias(): void
+    {
+        $pedido = $this->pedido;
+        $previos = $pedido->documentos()->count();
+        $uno = UploadedFile::fake()->createWithContent('uno.pdf', 'archivo-uno');
+        $dos = \Mockery::mock(UploadedFile::class);
+        $dos->shouldReceive('store')->once()->andThrow(new \RuntimeException('disco lleno'));
+        try {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($pedido, $uno, $dos) {
+                app(\App\Services\ControlPedidos\PersistenciaAdjuntosConsulta::class)->guardar($pedido, [$uno, $dos], [
+                    'carpeta' => 'anexo',
+                    'tipo' => 'anexo_piezas',
+                    'comentario' => 'prueba',
+                ]);
+            });
+            $this->fail('El guardado parcial debió abortarse.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('disco lleno', $e->getMessage());
+        }
+        $this->assertSame($previos, $pedido->fresh()->documentos()->count());
+        $this->assertFalse(collect(\Illuminate\Support\Facades\Storage::disk('public')->allFiles())->contains(
+            fn ($ruta) => str_contains($ruta, '/anexo/')
+        ));
+        $this->expectException(\InvalidArgumentException::class);
+        app(\App\Services\ControlPedidos\PersistenciaAdjuntosConsulta::class)->guardar($pedido, [], [
+            'carpeta' => 'anexo',
+            'tipo' => 'pdf_pedido',
+            'comentario' => 'no',
+        ]);
+    }
+
+    public function test_no_crea_referencia_si_el_archivo_no_quedo_en_disco(): void
+    {
+        $pedido = $this->pedido;
+        $previos = $pedido->documentos()->count();
+        $archivo = \Mockery::mock(UploadedFile::class);
+        $archivo->shouldReceive('store')->once()->andReturn('pedidos_bma/'.$pedido->id.'/anexo/fantasma.pdf');
+        try {
+            app(\App\Services\ControlPedidos\PersistenciaAdjuntosConsulta::class)->guardar($pedido, [$archivo], [
+                'carpeta' => 'anexo',
+                'tipo' => 'anexo_piezas',
+                'comentario' => 'prueba',
+            ]);
+            $this->fail('No debió registrar un archivo ausente.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('No se pudo guardar el archivo de la consulta.', $e->getMessage());
+        }
+        $this->assertSame($previos, $pedido->fresh()->documentos()->count());
+        $this->assertFalse(\Illuminate\Support\Facades\Storage::disk('public')->exists('pedidos_bma/'.$pedido->id.'/anexo/fantasma.pdf'));
+    }
+
+    public function test_un_lote_fallido_conserva_adjuntos_anteriores(): void
+    {
+        $pedido = $this->pedido;
+        $previo = UploadedFile::fake()->createWithContent('previo.pdf', 'archivo-previo');
+        $guardados = app(\App\Services\ControlPedidos\PersistenciaAdjuntosConsulta::class)->guardar($pedido, [$previo], [
+            'carpeta' => 'anexo',
+            'tipo' => 'anexo_piezas',
+            'comentario' => 'previo',
+        ]);
+        $ruta = $guardados[0]['ruta'];
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('public')->exists($ruta));
+        $documentos = $pedido->fresh()->documentos()->count();
+        $malo = \Mockery::mock(UploadedFile::class);
+        $malo->shouldReceive('store')->once()->andThrow(new \RuntimeException('disco lleno'));
+        try {
+            app(\App\Services\ControlPedidos\PersistenciaAdjuntosConsulta::class)->guardar($pedido, [$malo], [
+                'carpeta' => 'anexo',
+                'tipo' => 'anexo_piezas',
+                'comentario' => 'nuevo',
+            ]);
+            $this->fail('El segundo lote debió abortarse.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('disco lleno', $e->getMessage());
+        }
+        $this->assertTrue(\Illuminate\Support\Facades\Storage::disk('public')->exists($ruta));
+        $this->assertSame($documentos, $pedido->fresh()->documentos()->count());
+        $this->assertSame($ruta, $pedido->documentos()->where('tipo', 'anexo_piezas')->value('ruta_archivo'));
+    }
+
 }

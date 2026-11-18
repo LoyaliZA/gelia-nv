@@ -1,0 +1,11 @@
+---
+alwaysApply: true
+---
+Al terminar un cambio que modifique el comportamiento, la ubicación o las reglas de un módulo:
+1. Abre docs/ai/modulos/<MODULO>.md.
+2. Edita en su lugar la línea afectada, reemplazando el hecho anterior. No agregues historial.
+3. Si un hecho ya no aplica, bórralo.
+4. Actualiza "Última verificación" con fecha y commit.
+5. Respeta el límite de 80 líneas; condensa antes de agregar.
+6. Si el cambio no altera nada de lo anterior, no toques el archivo.
+7. Si no estás seguro de que un hecho sigue vigente, márcalo "(por verificar)".

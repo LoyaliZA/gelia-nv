@@ -1,13 +1,17 @@
 import { areaResponsableMunicipal, nombreTerminalMunicipal } from './terminalMunicipal';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, Clock, MapPin } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock, MapPin, PackagePlus } from 'lucide-react';
 import EncabezadoFolioPedido from '../Partials/EncabezadoFolioPedido';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import RespuestaDisponibilidadPedido from '../Partials/RespuestaDisponibilidadPedido';
 import AccionesRapidasDisponibilidad from '../Partials/AccionesRapidasDisponibilidad';
+import ResumenCambiosDisponibilidad from '../Partials/ResumenCambiosDisponibilidad';
+import CapturaConjuntoPedido from '../Partials/CapturaConjuntoPedido';
+import { AjustePiezas } from '../Partials/AjustePiezas';
+import { adaptadorConsultaMunicipal } from '../Partials/adaptadoresConsulta';
 import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
-import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 
 function etiquetaConsulta(consulta, revision) {
     if (consulta?.estado === 'cerrada') return { texto: 'Consulta cerrada', tono: 'gelia-estado-vivo--exito' };
@@ -35,7 +39,10 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
     }, [onOcupado]);
     useEffect(() => () => onOcupado?.(false), [onOcupado]);
     const [docPreview, setDocPreview] = useState(null);
-    const solicitud = pedido?.solicitud_preparacion || {};
+    const [solicitud, setSolicitud] = useState(pedido?.solicitud_preparacion || {});
+    const [modificar, setModificar] = useState(false);
+    const [aviso, setAviso] = useState('');
+    useEffect(() => { setSolicitud(pedido?.solicitud_preparacion || {}); }, [pedido]);
     const consulta = solicitud.consulta_municipal;
     const revision = solicitud.revision_disponibilidad;
     if (!consulta && !revision) return null;
@@ -59,6 +66,8 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
     }));
     const bloqueo = pedido?.motivo_bloqueo_cierre;
     const puedeCerrar = respondida && !cerrada && !excepciones && pedido?.puede_cerrar_consulta !== false && !bloqueo;
+    const adaptador = adaptadorConsultaMunicipal({ pedidoId: pedido.id, pedido: { ...pedido, solicitud_preparacion: solicitud } });
+    const puedeAjustar = !cerrada && (adaptador.capacidades.anexar || adaptador.capacidades.retirar);
 
     return (
         <section className="registrar-tienda-panel space-y-4" aria-label="Seguimiento de envío municipal">
@@ -87,19 +96,41 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
                     fecha={revision.respondida_at}
                     estado={revision.estado}
                     aceptacionVigente={revision.aceptacion_vigente !== false && !pendiente}
+                    mostrarCaptura={false}
                     filas={filas}
                     generales={vigentes}
                     anteriores={anteriores}
                     cantidad={piezas.length ? piezas.reduce((s, p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
                     onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })}
-                    accionesDePieza={pieza => pieza?.resolucion || !['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico) ? null : (
-                        <AccionesRapidasDisponibilidad compacta pieza={pieza} pedidoId={pedido.id} almacenId={consulta?.almacen_id} onActualizar={onPedidoActualizado} onOcupado={marcarOcupado} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+                    accionesDePieza={pieza => !adaptador.capacidades.sustituir || pieza?.resolucion || !['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico) ? null : (
+                        <AccionesRapidasDisponibilidad compacta pieza={pieza} pedidoId={pedido.id} almacenId={adaptador.almacenId} onActualizar={onPedidoActualizado} onOcupado={marcarOcupado} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
                     )}
                 />
             )}
             <AvisoOperativoPedido tono="info">
                 CEDIS o Tienda confirman mercancía. Ventas registra el cierre con el cliente. Una respuesta positiva no cierra ni autoriza el pago.
             </AvisoOperativoPedido>
+            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || []} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+            <CapturaConjuntoPedido pedido={{ ...pedido, solicitud_preparacion: solicitud }} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+            {aviso && <p className="text-sm theme-text-main m-0" role="status">{aviso}</p>}
+            {puedeAjustar && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar((actual) => !actual)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}
+            {puedeAjustar && (
+                <div hidden={!modificar}>
+                    <AjustePiezas
+                        pedidoId={pedido.id}
+                        pedido={{ ...pedido, solicitud_preparacion: solicitud }}
+                        solicitud={solicitud}
+                        adaptador={adaptador}
+                        onDirtyChange={(valor) => marcarOcupado(valor, 'ajuste')}
+                        onSolicitud={(siguiente) => {
+                            setSolicitud(siguiente);
+                            onPedidoActualizado?.({ ...pedido, solicitud_preparacion: siguiente, consulta_cerrada: false, consulta_cerrada_at: null });
+                        }}
+                        onAviso={setAviso}
+                        onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })}
+                    />
+                </div>
+            )}
             {excepciones && !cerrada && <p className="text-sm theme-text-aviso m-0" role="status">Hay excepciones pendientes. La consulta sigue detenida.</p>}
             {bloqueo && !cerrada && <p className="text-sm theme-text-aviso m-0" role="status">{bloqueo}</p>}
             {cerrada && onReabrir && !pedido.pago_validado_at && !pedido.numero_remision && (
