@@ -110,9 +110,15 @@ class ResolverEstadoVendedorOperacionPdvService
         if ($estado === EstadoVendedorOperacionPdv::Disponible
             && $intervalo?->inicio_at !== null
             && $intervalo->tipo === TipoIntervaloOperativoPdv::Disponible) {
+            $referencia = $intervalo->inicio_at;
+            $disponibleDesde = $jornada?->disponible_desde;
+            if ($disponibleDesde instanceof CarbonInterface && $disponibleDesde->greaterThan($referencia)) {
+                $referencia = $disponibleDesde;
+            }
+
             return [
                 'etiqueta' => 'Tiempo disponible',
-                'referencia_at' => $intervalo->inicio_at->toIso8601String(),
+                'referencia_at' => $referencia->toIso8601String(),
                 'modo' => 'transcurrido',
             ];
         }
