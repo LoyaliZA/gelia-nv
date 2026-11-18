@@ -16,6 +16,7 @@ import {
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import { CUPO_ADJUNTOS_CONSULTA, bytesConsulta, enviarEnLotes } from './lotesAdjuntosConsulta';
+import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -680,7 +681,7 @@ export default function SeguimientoSolicitudTienda({
         || pedido?.pesaje_respondido_at
         || '';
     useEffect(() => {
-        if (!lectura || (pedido?.updated_at && lectura?.updated_at && new Date(pedido.updated_at) > new Date(lectura.updated_at))) {
+        if (!lectura || lecturaConsultaVigente(lectura, pedido)) {
             setSolicitud(pedido?.solicitud_preparacion || {}); setLectura(null); setCerradaLocal(null);
         }
     }, [pedido, marcaRespuesta]);

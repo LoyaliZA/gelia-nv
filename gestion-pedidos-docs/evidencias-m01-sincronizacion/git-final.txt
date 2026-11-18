@@ -1,0 +1,110 @@
+ M app/Http/Controllers/ControlPedidos/DisponibilidadTiendaController.php
+ M app/Http/Controllers/ControlPedidos/PedidoBmaCedisController.php
+ M app/Models/Cliente.php
+ M app/Models/ControlPedidos/CatalogoPaqueteriaPedido.php
+ M app/Models/ControlPedidos/PedidoBma.php
+ M app/Services/ControlPedidos/AccionesDisponibilidadTiendaService.php
+ M app/Services/ControlPedidos/ActualizarPedidoBmaService.php
+ M app/Services/ControlPedidos/AnexarPagoEnvioPedidoBmaService.php
+ M app/Services/ControlPedidos/CerrarConsultaPedidoBmaService.php
+ M app/Services/ControlPedidos/EnviarPedidoBmaService.php
+ M app/Services/ControlPedidos/FusionarSolicitudPreparacionPedido.php
+ M app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php
+ M app/Services/ControlPedidos/ListarPedidosBmaService.php
+ M app/Services/ControlPedidos/ListarPedidosCedisService.php
+ M app/Services/ControlPedidos/NotificarPedidoBmaService.php
+ M app/Services/ControlPedidos/ObtenerCatalogosPedidoBmaService.php
+ M app/Services/ControlPedidos/PersistirIntencionPreparacionPedido.php
+ M app/Services/ControlPedidos/ReabrirConsultaPedidoBmaService.php
+ M app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php
+ M app/Services/ControlPedidos/ResuelveDatosPedidoBma.php
+ M app/Services/ControlPedidos/ValidacionCamposPedidoBma.php
+ M app/Services/ControlPedidos/ValidarPagoPedidoBmaService.php
+ M app/Services/Reportes/PagosPedidos/CalcularMetricasReportePagosPedidosService.php
+ M app/Services/Reportes/PagosPedidos/ExportarReportePagosPedidosCsvService.php
+ M app/Services/Reportes/PagosPedidos/ListarReportePagosPedidosService.php
+ M app/Services/Reportes/PagosPedidos/ObtenerDetalleReportePagoPedidoService.php
+ M app/Services/Reportes/PagosPedidos/RegistrarCierrePagoPedidoService.php
+ M app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php
+ M app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php
+ M app/Support/ControlPedidos/LecturaFinancieraPedido.php
+ M app/Support/ControlPedidos/VisibilidadPedidoBma.php
+ M database/seeders/data/permisos_actuales.php
+ M resources/css/gelia/features/control-pedidos-gestion-bma.css
+ M resources/js/Pages/Admin/Clientes.jsx
+ M resources/js/Pages/Admin/Partials/Catalogos/TablaPaqueteriasPedido.jsx
+ M resources/js/Pages/ControlPedidos/Auditar/Partials/ModalRevisarPedido.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Index.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Partials/TarjetasCedis.jsx
+ M resources/js/Pages/ControlPedidos/Cedis/Partials/q81Interfaz.test.jsx
+ M resources/js/Pages/ControlPedidos/Delegado/Partials/ModalDetalleDelegado.jsx
+ M resources/js/Pages/ControlPedidos/Index.jsx
+ M resources/js/Pages/ControlPedidos/Partials/AccionesRapidasDisponibilidad.jsx
+ M resources/js/Pages/ControlPedidos/Partials/AccionesRapidasDisponibilidad.test.jsx
+ M resources/js/Pages/ControlPedidos/Partials/AlternativasDisponibilidadCedis.jsx
+ M resources/js/Pages/ControlPedidos/Partials/FormularioRegistrarTienda.jsx
+ M resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx
+ M resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx
+ M resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.seleccion.test.jsx
+ M resources/js/Pages/ControlPedidos/Partials/PanelRespuestaDisponibilidad.jsx
+ M resources/js/Pages/ControlPedidos/Partials/PanelRespuestaDisponibilidad.test.jsx
+ M resources/js/Pages/ControlPedidos/Partials/ResumenCambiosDisponibilidad.jsx
+ M resources/js/Pages/ControlPedidos/Partials/RutaPedidoTienda.jsx
+ M resources/js/Pages/ControlPedidos/Partials/SeguimientoSolicitudTienda.jsx
+ M resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx
+ M resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js
+ M resources/js/Pages/ControlPedidos/Partials/pedidosListadoUi.js
+ M resources/js/Pages/ControlPedidos/Partials/useActualizacionesPedidos.js
+ M resources/js/Pages/ControlPedidos/Partials/useActualizacionesPedidos.test.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/MetricasPagosPedidos.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/ResumenFinancieroPedido.jsx
+ M resources/js/Pages/Reportes/PagosPedidos/Partials/pagosPedidosStyles.js
+ M routes/web/admin/clientes.php
+ M routes/web/modules/control-pedidos/core.php
+ M tests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php
+?? app/Http/Controllers/Clientes/ExpedienteClienteController.php
+?? app/Http/Controllers/ControlPedidos/Municipal/
+?? app/Models/ClienteConsignatario.php
+?? app/Models/ClienteConsignatarioVersion.php
+?? app/Models/ClienteDocumento.php
+?? app/Models/ClienteExpedienteEvento.php
+?? app/Services/Clientes/Expediente/
+?? app/Services/ControlPedidos/Municipal/
+?? app/Support/ControlPedidos/AlcanceConsultaMunicipal.php
+?? app/Support/ControlPedidos/ConsultaMunicipal.php
+?? database/migrations/2026_11_14_120000_create_cliente_expediente_tables.php
+?? gestion-pedidos-docs/M01_AJUSTES_FINALES_CEDIS_ACTUALIZACION.md
+?? gestion-pedidos-docs/M01_AUDITORIA_CODEX_DETALLADA.md
+?? gestion-pedidos-docs/M01_CONTINUIDAD_REGISTRO_Y_CONSULTA_CODEX.md
+?? gestion-pedidos-docs/M01_CORTE_ETAPAS_1_2.md
+?? gestion-pedidos-docs/M01_IMPLEMENTACION_REPORTE_DETALLADO.md
+?? gestion-pedidos-docs/M01_INTEGRACION_CONSULTA_CEDIS_VENTAS.md
+?? gestion-pedidos-docs/M01_REFINAMIENTO_CAPTURA_MUNICIPAL_CODEX.md
+?? "gestion-pedidos-docs/PROCESO PARA PEDIDOS.md"
+?? gestion-pedidos-docs/evidencias-m01-auditoria/
+?? gestion-pedidos-docs/evidencias-m01-consignatario/
+?? gestion-pedidos-docs/evidencias-m01-continuidad/
+?? gestion-pedidos-docs/evidencias-m01-envio-automatico/
+?? gestion-pedidos-docs/evidencias-m01-integracion/
+?? gestion-pedidos-docs/evidencias-m01-refinamiento/
+?? gestion-pedidos-docs/evidencias-m01-sincronizacion/
+?? resources/design-references/m01-alta-vacia/
+?? resources/design-references/m01-auditoria/
+?? resources/design-references/m01-cabeceras/
+?? resources/design-references/m01-consignatario/
+?? resources/design-references/m01-continuidad/
+?? resources/design-references/m01-envio-automatico/
+?? resources/design-references/m01-presentacion/
+?? resources/design-references/m01-refinamiento/
+?? resources/design-references/m01-sincronizacion/
+?? resources/js/Pages/Admin/ExpedienteCliente.jsx
+?? resources/js/Pages/ControlPedidos/Municipal/
+?? resources/js/Pages/ControlPedidos/Partials/presentacionPedidoCedis.js
+?? resources/js/Pages/ControlPedidos/Partials/presentacionPedidoCedis.test.js
+?? resources/js/Pages/ControlPedidos/Partials/vigenciaConsultaPedido.js
+?? scripts/qa/m01-auditoria/
+?? scripts/qa/m01-continuidad/
+?? scripts/qa/m01-refinamiento/
+?? scripts/qa/m01-sincronizacion/
+?? tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php

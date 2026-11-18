@@ -1,0 +1,7 @@
+{
+    "resultado": "aprobado",
+    "procesos": 4,
+    "versiones_datos": 13,
+    "versiones_documentos": 12,
+    "vigente_por_tipo": 1
+}

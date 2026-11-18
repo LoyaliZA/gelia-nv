@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ModalFormPedidoLegado, { hayBorradorPedidoLocal } from './ModalFormPedidoLegado';
 import FormularioRegistrarTienda from './FormularioRegistrarTienda';
 import { usaRegistroActual } from './flujoCapturaPedido';
@@ -7,12 +7,13 @@ export { hayBorradorPedidoLocal };
 
 function modoInicial(pedido, recuperarBorrador) {
     if (recuperarBorrador) return 'legado';
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'municipal') return 'tienda';
     return usaRegistroActual(pedido) ? 'tienda' : 'legado';
 }
 
 /**
- * Un alta nueva, o un borrador guardado por esta captura, usa Registrar pedidos — Tienda.
- * Municipal, nacional y los pedidos ya abiertos en el formulario anterior siguen ahí.
+ * La captura actual comparte datos y documento entre Tienda y Municipal.
+ * Nacional y municipales históricos sin marca conservan el formulario anterior.
  */
 export default function ModalFormPedido({
     abierto,
@@ -23,9 +24,14 @@ export default function ModalFormPedido({
     recuperarBorrador = false,
     onPedidoCreado = null,
     registrarTienda = {},
+    onLecturaPropia = null,
 }) {
     const [modo, setModo] = useState(() => modoInicial(pedido, recuperarBorrador));
     const [pedidoEnvio, setPedidoEnvio] = useState(null);
+    useEffect(() => {
+        onLecturaPropia?.(abierto && modo === 'tienda');
+        return () => onLecturaPropia?.(false);
+    }, [abierto, modo, onLecturaPropia]);
 
     if (modo === 'legado') {
         return (

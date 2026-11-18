@@ -1,3 +1,4 @@
+import { esRegistroMunicipal, nombreTerminalMunicipal } from '../Municipal/terminalMunicipal';
 import React, {
     useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
@@ -281,6 +282,7 @@ function AlertasFila({ pedido, esRechazado }) {
 }
 
 function lineaLogisticaPedido(pedido) {
+    if (esRegistroMunicipal(pedido)) return `Envío municipal · Terminal destino: ${nombreTerminalMunicipal(pedido)}`;
     const transporte = etiquetaTransportePedido(pedido);
     const alm = etiquetaAlmacen(pedido.almacen);
     if (transporte && alm && alm !== '—') return `${transporte} · ${alm}`;
@@ -491,7 +493,7 @@ export default function TablaPedidos({
                             <thead>
                                 <tr>
                                     <th scope="col" className="min-w-[12rem]">Pedido</th>
-                                    <th scope="col" className="min-w-[9rem]">Logística</th>
+                                    <th scope="col" className="min-w-[9rem]">{items.some(esRegistroMunicipal) ? 'Tipo de pedido' : 'Logística'}</th>
                                     <th scope="col" className="text-right w-[7.5rem]">Total</th>
                                     <th scope="col" className="min-w-[8rem]">Estado</th>
                                     <th scope="col" className="text-right w-[11rem]">Acciones</th>
@@ -528,15 +530,15 @@ export default function TablaPedidos({
                                             </td>
                                             <td className="align-top py-2.5 text-xs theme-text-muted font-medium leading-relaxed">
                                                 <span className="block theme-text-main font-semibold">
-                                                    {etiquetaTransportePedido(pedido) || '—'}
+                                                    {esRegistroMunicipal(pedido) ? 'Modalidad: Envío municipal' : etiquetaTransportePedido(pedido) || '—'}
                                                 </span>
-                                                <span className="block mt-0.5">{etiquetaAlmacen(pedido.almacen)}</span>
+                                                <span className="block mt-0.5">{esRegistroMunicipal(pedido) ? `Terminal destino: ${nombreTerminalMunicipal(pedido)}` : etiquetaAlmacen(pedido.almacen)}</span>
                                                 {fuentes.texto !== '—' && (
                                                     <span className="block mt-0.5 normal-case opacity-90" title={fuentes.completo || undefined}>
                                                         {fuentes.texto}
                                                     </span>
                                                 )}
-                                                {pedidoRequiereLogistica(pedido) && (
+                                                {!esRegistroMunicipal(pedido) && pedidoRequiereLogistica(pedido) && (
                                                     <span className="block mt-0.5 normal-case text-xs opacity-80">
                                                         {etiquetaOrigenGuia(pedido)}
                                                     </span>

@@ -1,0 +1,53 @@
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Unit\ControlPedidos\ControlPedidosEnvioDiferidoFase1Test[39m
+  [32;1m✓[39;22m[90m [39m[90mmunicipio diferido con costo null resuelve pendiente regularizacion[39m[90m [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnormal con costo resuelve completo[39m[90m                                  [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mmunicipio con costo tambien cierra completo[39m[90m                         [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mflags anexo por estatus envio[39m[90m                                       [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90maprobar anexo recalcula total como mercancia mas envio[39m[90m              [39m [90m0.04s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Feature\ControlPedidos\ElegibilidadPesajePedidoTest[39m
+  [32;1m✓[39;22m[90m [39m[90mlocal sin peso avanza sin kilogramos de cedis[39m[90m                       [39m [90m6.91s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlocal con peso obligatorio sigue exigiendo kilogramos[39m[90m               [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcomercial conserva pesaje aunque requiere peso sea falso[39m[90m            [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcaja se exige sin pedir kilogramos cuando el transporte local la ma[39m[90m…[39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio cedis con pesaje completo no hereda el bloqueo de peso[39m[90m        [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mpreparacion bodega pide el peso de la tarea y no el detalle cedis[39m[90m   [39m [90m0.06s[39m  
+  [32;1m✓[39;22m[90m [39m[90mmunicipio exige peso de preparacion solo si el transporte lo pide[39m[90m   [39m [90m0.06s[39m  
+  [32;1m✓[39;22m[90m [39m[90msin logistica desde cedis no exige direccion guia ni peso[39m[90m           [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcomercial sin marca sigue exigiendo direccion y guia[39m[90m                [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda municipal sin logistica no repite direccion ni guia[39m[90m          [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnombre de departamento no cambia la obligacion de pesaje[39m[90m            [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mconsulta de mercancia sin logistica no exige kilogramos[39m[90m             [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mrespuesta incompleta de pesaje se rechaza y la de mercancia pide pi[39m[90m…[39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90msolicitud duplicada no crea otra consulta[39m[90m                           [39m [90m0.05s[39m  
+  [32;1m✓[39;22m[90m [39m[90mpedido enviado no acepta pesaje ni consulta[39m[90m                         [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90mempaque municipal pide bascula solo cuando el transporte exige peso[39m[90m [39m [90m0.04s[39m  
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test[39m
+  [32;1m✓[39;22m[90m [39m[90mterminal sin logistica guarda sin municipio y reabre desde catalogo[39m[90m [39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mterminal inactiva con logistica o inexistente no se guarda[39m[90m          [39m [90m0.10s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdestino historico y atributos de transporte se conservan[39m[90m            [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar conserva costo desconocido y el expediente su identidad[39m[90m      [39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mexcepcion pendiente impide cerrar la consulta[39m[90m                       [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreenvio no borra respuesta ni cierre duplicado crea historial[39m[90m       [39m [90m0.16s[39m  
+  [32;1m✓[39;22m[90m [39m[90mlector cedis no puede reescribir solicitud o enviarla[39m[90m               [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90mno se puede responder sin enviar o en otro departamento[39m[90m             [39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90midentificaciones historicas solo por permiso o pedido referenciado[39m[90m… [39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90mdocumento tras baja continua numeracion y no expone ruta[39m[90m            [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90marchivo ejecutable no se publica como evidencia[39m[90m                     [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtienda filtra sucursal y rechaza respuesta directa ajena[39m[90m            [39m [90m0.94s[39m  
+  [32;1m✓[39;22m[90m [39m[90mresolver faltante y responder actualizacion permite cierre sin pisa[39m[90m…[39m [90m0.20s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcosto conocido insuficiente no valida y cubierto si valida y asocia[39m[90m…[39m [90m0.22s[39m  
+  [32;1m✓[39;22m[90m [39m[90mjaguar pago validado y reporte no presentan transporte gratis[39m[90m       [39m [90m0.21s[39m  
+  [32;1m✓[39;22m[90m [39m[90mnumero remision y validacion no eluden consulta abierta[39m[90m             [39m [90m0.11s[39m  
+  [32;1m✓[39;22m[90m [39m[90mhistorial incluye bajas solo con permiso y no rutas privadas[39m[90m        [39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mguardar mismo consignatario conserva snapshot tras editar expedient[39m[90m…[39m [90m0.12s[39m  
+  [32;1m✓[39;22m[90m [39m[90mreapertura invalida ambos cierres y bloquea pago hasta nueva respue[39m[90m…[39m [90m0.15s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcontexto inexistente no falla abierto y documento de otro cliente n[39m[90m…[39m [90m0.14s[39m  
+  [32;1m✓[39;22m[90m [39m[90mendpoints auxiliar denegan sin permiso y consulta abierta con permi[39m[90m…[39m [90m0.13s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio al auxiliar usa consulta municipal sin exigir pesaje nacional[39m[90m [39m [90m0.19s[39m  
+
+  [90mTests:[39m    [32;1m43 passed[39;22m[90m (349 assertions)[39m
+  [90mDuration:[39m [39m12.40s[39m
+

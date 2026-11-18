@@ -94,6 +94,7 @@ function DesglosePeriodo({ metricas, cargando }) {
 export default function MetricasPagosPedidos({ metricas, cargando }) {
     return (
         <div className="space-y-4">
+            {Number(metricas?.transportes_pendientes_determinar) > 0 && <p className="text-sm theme-text-aviso">Transporte pendiente de determinar en {metricas.transportes_pendientes_determinar} pedidos. Envío y totales incluyen únicamente importes conocidos; cobertura corresponde a la etapa exigible.</p>}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 min-w-0">
                 {DESTACADAS.map(({ key, ...tarjeta }) => (
                     <Tarjeta key={key} {...tarjeta} value={metricas?.[key]} cargando={cargando} />

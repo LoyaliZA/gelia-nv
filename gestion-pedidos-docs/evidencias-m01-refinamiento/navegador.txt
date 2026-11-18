@@ -1,0 +1,54 @@
+{
+  "pasos": [
+    "Alta de consignatario contextual y cancelar edición conserva terminal y costo diferido.",
+    "Cerrar y reabrir recupera borrador sin guardar.",
+    "Guardar solicitud con botón, recargar listado y reabrir conserva terminal y consignatario; listado muestra Envío municipal.",
+    "Enviar consulta con botón al almacén seleccionado."
+  ],
+  "medidas": [
+    {
+      "vista": "registro",
+      "tema": "light",
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "vista": "registro",
+      "tema": "dark",
+      "ancho": 1440,
+      "desborde": false
+    },
+    {
+      "vista": "registro",
+      "tema": "light",
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "vista": "registro",
+      "tema": "dark",
+      "ancho": 1024,
+      "desborde": false
+    },
+    {
+      "vista": "registro",
+      "tema": "light",
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "vista": "registro",
+      "tema": "dark",
+      "ancho": 390,
+      "desborde": false
+    },
+    {
+      "vista": "documentos",
+      "tema": "dark",
+      "ancho": 390,
+      "desborde": false
+    }
+  ],
+  "console": [],
+  "resultado": "aprobado"
+}

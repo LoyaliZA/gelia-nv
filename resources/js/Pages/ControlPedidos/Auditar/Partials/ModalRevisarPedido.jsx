@@ -1,3 +1,4 @@
+import { esRegistroMunicipal, nombreTerminalMunicipal } from '../../Municipal/terminalMunicipal';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -552,7 +553,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     )}
                                     <div className="grid grid-cols-2 gap-4">
                                         <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                        <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
+                                        <Campo label={esRegistroMunicipal(pedido) ? 'Terminal destino' : 'Origen de la guía'} value={esRegistroMunicipal(pedido) ? nombreTerminalMunicipal(pedido) : etiquetaOrigenGuia(pedido)} />
                                         <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                                         <Campo label={pedido.usa_preparacion_tienda ? 'Respuesta de Tienda' : 'Pesaje CEDIS'} value={pedido.pesaje_respondido_at ? 'Respondido' : (pedido.estatus_envio === 'pendiente_pesaje' ? 'Pendiente' : '—')} />
                                     </div>

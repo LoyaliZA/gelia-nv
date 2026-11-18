@@ -1,0 +1,14 @@
+M-01 integración Ventas / consulta municipal / CEDIS — navegador
+Fecha: 2026-11-17. Host: http://100.110.75.115:9080. Tema oscuro, escritorio. Sin enviar respuesta ni cerrar el pedido 252.
+
+Sesión Ventas (control-pedidos):
+- Formulario municipal nuevo: Guardar solicitud y Enviar consulta inhabilitados hasta elegir cliente.
+- Pedido 252 / PBMA-2026-00008 abierto en Editar: Seguimiento · Envío municipal, Folio 252, Taxi Tacotalpa, CEDIS, Consulta pendiente: CEDIS, Esperando respuesta de CEDIS. No se pulsó Actualizar respuesta. No se envió cierre.
+- Autoguardado al cambiar modalidad dejó el borrador PBMA-2026-00009. No se envió consulta de ese folio.
+
+Sesión CEDIS (control-pedidos/cedis?tab=TODOS):
+- Pedido 252: Tipo Envío municipal, Terminal destino Taxi Tacotalpa, Área responsable CEDIS, botón Revisar disponibilidad, PDF pedido. Pedidos 1 y 2 (TIENDA) conservan ruta, nota de compra y empaque.
+- Visor PDF pedido: archivo image.png, tipo pdf_pedido del folio 252. No se abrió INE.
+- Panel Consulta de disponibilidad: Folio 252, Disponibilidad · CEDIS, cliente, Taxi Tacotalpa, CEDIS, Todo OK / Con detalle o faltante. Se cerró con Cerrar consulta sin Enviar respuesta.
+
+No comprobado en navegador: envío directo de un pedido nuevo sin Guardar, respuesta en vivo de CEDIS, segunda respuesta, Echo cortado, consulta a Tienda, 403 de sucursal, anchos 1440/1024/390, tema claro, consola sistemática.

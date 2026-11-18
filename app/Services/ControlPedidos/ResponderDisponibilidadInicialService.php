@@ -13,6 +13,7 @@ use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,7 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(['consulta' => 'La consulta recibió otros cambios. Actualice antes de responder.']);
             }
 
+            $esMunicipal = ConsultaMunicipal::es($pedido);
             if ($tarea !== null) {
                 $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
                 if ((int) $tarea->pedido_bma_id !== (int) $pedido->id) {
@@ -70,9 +72,23 @@ class ResponderDisponibilidadInicialService
                 if ($area !== DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA) {
                     throw ValidationException::withMessages(['area_revision' => 'Esta tarea no es la revisión de tienda.']);
                 }
+            } elseif ($esMunicipal) {
+                abort_unless(\App\Support\ControlPedidos\AlcanceConsultaMunicipal::puedeResponder($usuario, $pedido), 403);
+                if (ConsultaMunicipal::estado($pedido) === ConsultaMunicipal::CERRADA) {
+                    throw ValidationException::withMessages(['consulta' => 'La consulta ya fue cerrada por Ventas.']);
+                }
             } elseif ($area !== DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS
                 || (! in_array($pedido->estatus_envio, [PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO], true))) {
                 throw ValidationException::withMessages(['area_revision' => 'Este pedido no está pendiente de consulta de disponibilidad.']);
+            }
+
+            if ($esMunicipal) {
+                foreach (array_merge($evidencias, ...array_map(fn ($fila) => is_array($fila) ? ($fila['evidencias'] ?? []) : [], $datos['excepciones'] ?? [])) as $archivo) {
+                    if (! $archivo instanceof UploadedFile || ! $archivo->isValid() || $archivo->getSize() > 10 * 1024 * 1024
+                        || ! in_array($archivo->getMimeType(), ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], true)) {
+                        throw ValidationException::withMessages(['evidencias' => 'Adjunte imágenes o PDF válidos de hasta 10 MB.']);
+                    }
+                }
             }
 
             $guardada = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : null;
@@ -263,11 +279,23 @@ class ResponderDisponibilidadInicialService
                 'respondida_at' => now()->toIso8601String(),
                 'respondida_por_id' => $usuario->id,
             ];
+            if ($esMunicipal) {
+                $json = ConsultaMunicipal::aplicarEstado($json, $estado);
+            }
             $cambios = [
                 'solicitud_preparacion_json' => $json,
                 'tiene_observaciones_fisicas' => $estado === 'excepciones_pendientes',
             ];
-            if ($estado === 'sin_excepciones' && $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
+            if ($esMunicipal && $estado === 'sin_excepciones' && $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE) {
+                $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
+                if ($estatusNuevo) {
+                    MaquinaEstadosPedidoBma::assertTransicion(
+                        $pedido->estatus?->fase_ciclo,
+                        CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO
+                    );
+                    $cambios['catalogo_estatus_pedido_id'] = $estatusNuevo->id;
+                }
+            } elseif (! $esMunicipal && $estado === 'sin_excepciones' && $area === DestinoRevisionRegistrarPedidos::CONTROL_PEDIDOS) {
                 $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO);
                 if (! $estatusNuevo) {
                     throw new \RuntimeException('No se encontró el estatus de consulta respondida.');

@@ -1,0 +1,109 @@
+
+   FAIL  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ jaguar conserva costo desconocido y el expediente su identidad       6.58s  
+  ✓ excepcion pendiente impide cerrar la consulta                        0.13s  
+  ⨯ reenvio no borra respuesta ni cierre duplicado crea historial        0.13s  
+  ✓ lector cedis no puede reescribir solicitud o enviarla                0.14s  
+  ⨯ no se puede responder sin enviar o en otro departamento              0.12s  
+  ⨯ identificaciones historicas solo por permiso o pedido referenciado…  0.18s  
+  ⨯ documento tras baja continua numeracion y no expone ruta             0.11s  
+  ⨯ archivo ejecutable no se publica como evidencia                      0.12s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > reenvio…    
+  Failed asserting that null is identical to Array &0 [
+    'respuesta_id' => '4f2cfe3d-f577-4f87-be7a-5c5cc51de8fe',
+    'actualizacion_pendiente' => false,
+    'aceptacion_vigente' => true,
+    'evidencia_actual_ids' => Array &1 [
+        0 => 1,
+    ],
+    'historial_respuestas' => Array &2 [],
+    'cambios_revisados' => Array &3 [],
+    'estado' => 'sin_excepciones',
+    'confirmada' => true,
+    'respondida_at' => '2026-11-14T12:38:36-06:00',
+    'respondida_por_id' => 1,
+].
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:233
+    229▕         $this->guardarSolicitud();
+    230▕         $this->responderConsulta();
+    231▕         $revision = $this->pedido->solicitud_preparacion_json['revision_disponibilidad'];
+    232▕         $this->postJson(route('control_pedidos.municipal.consulta', $this->pedido))->assertOk();
+  ➜ 233▕         $this->assertSame($revision, $this->pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad'] ?? null);
+    234▕         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
+    235▕         $primero = $this->pedido->fresh()->consulta_cerrada_at;
+    236▕         $historial = $this->pedido->historial()->count();
+    237▕         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
+
+  1   tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:233
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > no se pu…   
+  Expected response status code [403] but received 200.
+Failed asserting that 200 is identical to 403.
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:265
+    261▕         $otro = User::factory()->create();
+    262▕         $otro->givePermissionTo(Permission::findOrCreate('control_pedidos.cedis', 'web'));
+    263▕         $this->actingAs($otro)->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+    264▕             'confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+  ➜ 265▕         ])->assertForbidden();
+    266▕     }
+    267▕ 
+    268▕     public function test_identificaciones_historicas_solo_por_permiso_o_pedido_referenciado_incluso_tras_baja(): void
+    269▕     {
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > identifi…   
+  Expected response status code [200] but received 404.
+Failed asserting that 404 is identical to 200.
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:285
+    281▕         $this->get($url.'?pedido_id='.$this->pedido->id)->assertOk();
+    282▕         $this->ventas->givePermissionTo(Permission::findOrCreate('clientes.ver', 'web'));
+    283▕         $this->ventas->givePermissionTo(Permission::findOrCreate('clientes.expediente.eliminar', 'web'));
+    284▕         $this->deleteJson('/admin/clientes/'.$this->cliente->id.'/expediente/documentos/'.$doc)->assertOk();
+  ➜ 285▕         $this->get($url.'?pedido_id='.$this->pedido->id)->assertOk();
+    286▕         $this->deleteJson('/admin/clientes/'.$this->cliente->id.'/expediente/consignatarios/'.$id)->assertOk();
+    287▕         $this->get($url.'?pedido_id='.$this->pedido->id)->assertOk();
+    288▕         $this->get($url)->assertForbidden();
+    289▕     }
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > document…   
+  Failed asserting that 1 is identical to 2.
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:301
+    297▕         $this->assertArrayNotHasKey('ruta', $doc->toArray());
+    298▕         $this->ventas->givePermissionTo(Permission::findOrCreate('clientes.expediente.eliminar', 'web'));
+    299▕         $servicio->eliminarDocumento($doc, $this->ventas, $this->pedido);
+    300▕         $nuevo = $servicio->guardarDocumento($consignatario, $this->ventas, UploadedFile::fake()->create('ine.pdf', 20, 'application/pdf'), $this->pedido);
+  ➜ 301▕         $this->assertSame(2, $nuevo->version);
+    302▕         $this->assertSame($doc->id, $nuevo->anterior_id);
+    303▕     }
+    304▕ 
+    305▕     public function test_archivo_ejecutable_no_se_publica_como_evidencia(): void
+
+  1   tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:301
+
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test > archivo…    
+  Expected response status code [422] but received 200.
+Failed asserting that 200 is identical to 422.
+
+  at tests/Feature/ControlPedidos/MunicipalOrdinarioM01Test.php:311
+    307▕         $this->guardarSolicitud();
+    308▕         $this->postJson(route('control_pedidos.municipal.consulta', $this->pedido))->assertOk();
+    309▕         $this->postJson(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+    310▕             'confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->create('script.html', 1, 'text/html')],
+  ➜ 311▕         ])->assertUnprocessable();
+    312▕         $this->assertSame(0, $this->pedido->documentos()->count());
+    313▕     }
+    314▕ 
+    315▕ }
+
+
+  Tests:    5 failed, 3 passed (81 assertions)
+  Duration: 7.94s
+

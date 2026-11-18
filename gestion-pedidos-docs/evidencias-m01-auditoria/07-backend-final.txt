@@ -1,0 +1,76 @@
+
+   PASS  Tests\Unit\ControlPedidos\ControlPedidosEnvioDiferidoFase1Test
+  ✓ municipio diferido con costo null resuelve pendiente regularizacion  0.11s  
+  ✓ normal con costo resuelve completo                                   0.03s  
+  ✓ municipio con costo tambien cierra completo                          0.03s  
+  ✓ flags anexo por estatus envio                                        0.03s  
+  ✓ aprobar anexo recalcula total como mercancia mas envio               0.04s  
+
+   PASS  Tests\Unit\Reportes\CalcularMetricasReportePagosPedidosTest
+  ✓ contadores cobertura y remisiones                                    6.32s  
+  ✓ usuario con permiso reporte ve cierres de otras vendedoras           0.07s  
+
+   PASS  Tests\Unit\SaldosAFavor\IntegridadCoberturaPagoTest
+  ✓ diferencia dentro de tolerancia es cubierto
+  ✓ diferencia un centavo sobre tolerancia no cubre
+  ✓ cambiar tolerancia cambia regla
+  ✓ centavos redondeo estable
+  ✓ compat resumen legacy sigue cubierto exacto
+
+   PASS  Tests\Feature\ControlPedidos\ElegibilidadPesajePedidoTest
+  ✓ local sin peso avanza sin kilogramos de cedis                        0.05s  
+  ✓ local con peso obligatorio sigue exigiendo kilogramos                0.05s  
+  ✓ comercial conserva pesaje aunque requiere peso sea falso             0.06s  
+  ✓ caja se exige sin pedir kilogramos cuando el transporte local la ma… 0.05s  
+  ✓ envio cedis con pesaje completo no hereda el bloqueo de peso         0.04s  
+  ✓ preparacion bodega pide el peso de la tarea y no el detalle cedis    0.06s  
+  ✓ municipio exige peso de preparacion solo si el transporte lo pide    0.06s  
+  ✓ sin logistica desde cedis no exige direccion guia ni peso            0.04s  
+  ✓ comercial sin marca sigue exigiendo direccion y guia                 0.05s  
+  ✓ tienda municipal sin logistica no repite direccion ni guia           0.05s  
+  ✓ nombre de departamento no cambia la obligacion de pesaje             0.05s  
+  ✓ consulta de mercancia sin logistica no exige kilogramos              0.04s  
+  ✓ respuesta incompleta de pesaje se rechaza y la de mercancia pide pi… 0.04s  
+  ✓ solicitud duplicada no crea otra consulta                            0.05s  
+  ✓ pedido enviado no acepta pesaje ni consulta                          0.04s  
+  ✓ empaque municipal pide bascula solo cuando el transporte exige peso  0.04s  
+
+   PASS  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ jaguar conserva costo desconocido y el expediente su identidad       0.23s  
+  ✓ excepcion pendiente impide cerrar la consulta                        0.14s  
+  ✓ reenvio no borra respuesta ni cierre duplicado crea historial        0.16s  
+  ✓ lector cedis no puede reescribir solicitud o enviarla                0.13s  
+  ✓ no se puede responder sin enviar o en otro departamento              0.13s  
+  ✓ identificaciones historicas solo por permiso o pedido referenciado…  0.22s  
+  ✓ documento tras baja continua numeracion y no expone ruta             0.12s  
+  ✓ archivo ejecutable no se publica como evidencia                      0.13s  
+  ✓ tienda filtra sucursal y rechaza respuesta directa ajena             0.95s  
+  ✓ resolver faltante y responder actualizacion permite cierre sin pisa… 0.20s  
+  ✓ costo conocido insuficiente no valida y cubierto si valida y asocia… 0.24s  
+  ✓ jaguar pago validado y reporte no presentan transporte gratis        0.20s  
+  ✓ numero remision y validacion no eluden consulta abierta              0.10s  
+  ✓ historial incluye bajas solo con permiso y no rutas privadas         0.12s  
+  ✓ guardar mismo consignatario conserva snapshot tras editar expedient… 0.13s  
+  ✓ reapertura invalida ambos cierres y bloquea pago hasta nueva respue… 0.16s  
+  ✓ contexto inexistente no falla abierto y documento de otro cliente n… 0.14s  
+  ✓ endpoints auxiliar denegan sin permiso y consulta abierta con permi… 0.13s  
+  ✓ envio al auxiliar usa consulta municipal sin exigir pesaje nacional  0.19s  
+
+   PASS  Tests\Feature\ControlPedidos\RemisionAuditoriaTest
+  ✓ eliminar y volver a adjuntar conserva historial y solo una remision… 0.09s  
+  ✓ auxiliar registra numero de remision y consulta detalle fuera del f… 0.11s  
+  ✓ numero de pedido no se puede modificar desde la captura auxiliar     0.08s  
+  ✓ corregir remision no cambia referencia visible ni resuelve error de… 0.08s  
+  ✓ captura anterior no puede sobrescribir pedido desde el servicio      0.05s  
+  ✓ detalle respeta permiso y alcance de la auxiliar                     0.08s  
+  ✓ no elimina remision de un pedido que ya salio de revision            0.08s  
+
+   PASS  Tests\Feature\SaldosAFavor\Fase1IntegridadPagosPedidoBmaTest
+  ✓ pago rechazado no suma y archivo se conserva                         0.09s  
+  ✓ pago revisado no se elimina                                          0.04s  
+  ✓ banco fuera de departamento rechazado                                0.04s  
+  ✓ validar idempotente con lock                                         0.06s  
+
+  Tests:    58 passed (380 assertions)
+  Duration: 12.49s
+

@@ -1,0 +1,10 @@
+PHPUnit 12.5.25 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.4.27
+Configuration: /var/www/html/scripts/qa/m01-auditoria/phpunit-mysql.xml
+
+......................                                            22 / 22 (100%)
+
+Time: 01:26.304, Memory: 169.00 MB
+
+[30;42mOK (22 tests, 260 assertions)[0m

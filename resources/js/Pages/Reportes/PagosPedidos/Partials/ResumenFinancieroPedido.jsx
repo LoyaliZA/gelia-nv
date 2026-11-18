@@ -59,6 +59,7 @@ export default function ResumenFinancieroPedido({ cierre, financiero }) {
             <header className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <h3 className={SECCION_TITULO}>Cierre financiero</h3>
+                    {financiero.transporte_municipal?.desconocido && <p className="text-sm theme-text-aviso">Cobertura de la etapa exigible. El transporte sigue pendiente de determinar y cobrar.</p>}
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full border theme-border theme-text-muted">
                         Versión {cierre.version}
                     </span>
@@ -75,7 +76,7 @@ export default function ResumenFinancieroPedido({ cierre, financiero }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <BloqueConciliacion titulo="Composición del pedido">
                     <FilaConciliacion label="Mercancía" valor={financiero.monto_venta} />
-                    <FilaConciliacion label="Envío" valor={financiero.monto_envio} />
+                    <FilaConciliacion label="Envío" valor={financiero.transporte_municipal?.desconocido ? "Pendiente de determinar" : financiero.monto_envio} />
                     <FilaConciliacion label="Seguro" valor={financiero.monto_seguro} />
                     <FilaConciliacion label="Total de la remisión" valor={financiero.total_pedido} destacado />
                 </BloqueConciliacion>

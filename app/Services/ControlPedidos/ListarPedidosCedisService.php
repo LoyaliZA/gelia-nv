@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
+use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\ControlPedidos\BitacoraCedis;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,11 +43,13 @@ class ListarPedidosCedisService
 
         $resultado = $paginar ? $query->paginate(15)->withQueryString() : $query->get();
         $marcar = function (PedidoBma $pedido) use ($usuario): PedidoBma {
+            $pedido->setAttribute('version_consulta', (int) $pedido->historial->max('id'));
             $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
             $pedido->setAttribute(
                 'consulta_cedis_modo_revision_mercancia',
                 $pedido->consultaCedisModoRevisionMercancia()
             );
+            ConsultaMunicipal::hidratarAlmacen($pedido);
 
             return BitacoraCedis::presentar($pedido, $usuario);
         };
@@ -181,6 +184,10 @@ class ListarPedidosCedisService
                     })->orWhere(function (Builder $pesaje) use ($estatusPesaje) {
                         $pesaje->where('estatus_envio', $estatusPesaje)
                             ->whereNull('empacado_at');
+                    })->orWhere(function (Builder $municipal) {
+                        $municipal->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
+                            ->where('solicitud_preparacion_json->consulta_municipal->area', 'cedis')
+                            ->whereIn('solicitud_preparacion_json->consulta_municipal->estado', ['pendiente', 'excepciones_pendientes']);
                     });
                 })
         );
@@ -273,4 +280,5 @@ class ListarPedidosCedisService
     {
         return $query->whereDoesntHave('tareaPreparacionVigente');
     }
+
 }

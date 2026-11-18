@@ -13,7 +13,8 @@ trait ValidacionCamposPedidoBma
         $pedido->loadMissing(['origen', 'tipoOperacionEnvio']);
 
         $faltantes = [];
-        $requiereLogistica = ($pedido->origen?->requiere_logistica ?? true) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido);
+        $requiereLogistica = ($pedido->origen?->requiere_logistica ?? true) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
+            && ! \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido);
         $esDiferido = $pedido->esMunicipioDiferido();
         $esResguardoAbierto = $pedido->esResguardoAbierto();
         $esComplementario = $pedido->esResguardoComplementario();

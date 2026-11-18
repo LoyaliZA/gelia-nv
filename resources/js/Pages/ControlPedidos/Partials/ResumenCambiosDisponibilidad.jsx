@@ -4,7 +4,7 @@ import { GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { cambiosDisponibilidad } from './cambiosDisponibilidad';
 
-export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], onVer, interactivo = false, respuestas = {}, onResponder, onIncidencia, disabled = false }) {
+export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], onVer, interactivo = false, respuestas = {}, onResponder, onIncidencia, disabled = false, puedeVerDocumentos = true }) {
     const cambios = cambiosDisponibilidad(solicitud, documentos);
     if (!cambios.length && !solicitud.reapertura_disponibilidad) return null;
     const pendientes = cambios.filter(c => c.pendiente);
@@ -22,8 +22,8 @@ export default function ResumenCambiosDisponibilidad({ solicitud = {}, documento
                     <strong>{retiro ? 'Retiro solicitado' : confirmacion ? 'Estado confirmado' : cambio.retirada ? 'Nueva pieza solicitada' : 'Anexo solicitado'}</strong>
                     <span className="consulta-cambio-formato">{cambio.esDocumento ? 'Captura / PDF' : cambio.sku ? 'SKU' : 'Piezas'}</span>
                 </header>
-                {(!cambio.esDocumento || !cambio.documentos.length) && <div className="consulta-cambio-identidad"><strong>{cambio.descripcion || 'Piezas en captura'}</strong>{cambio.sku && <span>{cambio.sku}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</span>}</div>}
-                {cambio.documentos.length > 0 && <div className="consulta-cambio-documentos">{cambio.documentos.map((d, i) => <div key={d.id || i} className="consulta-cambio-documento">
+                {(!cambio.esDocumento || !cambio.documentos.length || !puedeVerDocumentos) && <div className="consulta-cambio-identidad"><strong>{cambio.descripcion || 'Piezas en captura'}</strong>{cambio.sku && <span>{cambio.sku}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</span>}</div>}
+                {puedeVerDocumentos && cambio.documentos.length > 0 && <div className="consulta-cambio-documentos">{cambio.documentos.map((d, i) => <div key={d.id || i} className="consulta-cambio-documento">
                     <MiniaturaDocumento documento={d} onVer={() => onVer?.(cambio.documentos, i)} className="consulta-cambio-miniatura" />
                     <button type="button" className={GELIA_BTN_OUTLINE} disabled={!onVer} onClick={() => onVer?.(cambio.documentos, i)}><Eye size={16} aria-hidden />Abrir captura</button>
                 </div>)}</div>}

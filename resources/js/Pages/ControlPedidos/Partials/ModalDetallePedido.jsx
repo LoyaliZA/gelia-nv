@@ -1,3 +1,4 @@
+import { esRegistroMunicipal, nombreTerminalMunicipal } from '../Municipal/terminalMunicipal';
 import ConsultaSolicitudTienda from './ConsultaSolicitudTienda';
 import { esCapturaTienda } from './flujoCapturaPedido';
 import usePedidoDialog from './usePedidoDialog';
@@ -185,7 +186,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Fecha pedido" value={formatearFechaNegocio(pedido.fecha)} />
                             <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                             <Campo label="Estado" value={etiquetaEstatusPedido(pedido.estatus, opcionesEstatus)} />
-                            <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
+                            <Campo label="Tipo de pedido" value={esRegistroMunicipal(pedido) ? 'Envío municipal' : pedido.origen?.nombre} />
                             <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                             {(pedido.sucursal_destino || pedido.sucursal_destino_id) && (
                                 <Campo
@@ -209,7 +210,7 @@ export default function ModalDetallePedido({ abierto, onClose, pedido }) {
                             <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                             <Campo label="Peso cobrado guía" value={pedido.peso_cobrado_guia_kg != null ? `${pedido.peso_cobrado_guia_kg} kg` : null} />
                             <Campo label="Paquetería" value={pedido.paqueteria?.nombre} />
-                            <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />
+                            {esRegistroMunicipal(pedido) ? <><Campo label="Modalidad" value="Envío municipal" /><Campo label="Terminal destino" value={nombreTerminalMunicipal(pedido)} /></> : <Campo label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} />}
                             <Campo label="Tipo guía" value={pedido.tipo_guia?.nombre} />
                             <Campo label="Reexpedición" value={pedido.zona?.nombre} />
                             <Campo label="Resguardo" value={pedido.es_resguardo ? 'Sí' : 'No'} />

@@ -1,0 +1,9 @@
+{
+  "pasos": [
+    "Solicitar nueva revisión reabre consulta, bloquea cierre y conserva documento, terminal y transporte.",
+    "CEDIS contesta la nueva revisión sin excepciones y Ventas vuelve a cerrar desde el control visible."
+  ],
+  "reanudo_revision_previamente_solicitada": true,
+  "console": [],
+  "resultado": "aprobado"
+}

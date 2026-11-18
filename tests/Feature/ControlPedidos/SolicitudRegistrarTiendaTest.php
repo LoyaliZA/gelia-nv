@@ -1389,6 +1389,28 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->getJson($consulta)->assertOk()->assertJsonPath('puede_ver_bitacora', true)->assertJsonStructure(['historial']);
     }
 
+    public function test_cedis_recibe_respuesta_canonica_sin_ampliar_lectura_despues_de_su_etapa(): void
+    {
+        $pedido = $this->pedido();
+        $this->documento($pedido);
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
+        $cedis = User::factory()->create(['departamento_id' => $this->departamento->id]);
+        $cedis->givePermissionTo(Permission::findOrCreate('control_pedidos.cedis', 'web'));
+        $this->actingAs($cedis)->getJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda')->assertOk();
+        $respuesta = $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
+            'confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('respuesta.jpg')],
+        ], ['Accept' => 'application/json'])->assertOk()
+            ->assertJsonPath('estado', 'sin_excepciones')
+            ->assertJsonPath('pedido.id', $pedido->id)
+            ->assertJsonPath('pedido.solicitud_preparacion.revision_disponibilidad.estado', 'sin_excepciones')
+            ->assertJsonPath('puede_consultar', false)
+            ->assertJsonMissingPath('pedido.historial');
+        $this->assertNotEmpty($respuesta->json('pedido.solicitud_preparacion.revision_disponibilidad.respuesta_id'));
+        $this->assertGreaterThan(0, $respuesta->json('pedido.version_consulta'));
+        // Responder no concede acceso fuera de la etapa existente.
+        $this->getJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda')->assertForbidden();
+    }
+
     public function test_bitacora_cedis_oculta_relaciones_anidadas_sin_borrar_los_registros(): void
     {
         $pedido = $this->pedido();

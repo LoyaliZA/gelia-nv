@@ -1,3 +1,6 @@
+import { esRegistroMunicipal } from '../../Municipal/terminalMunicipal';
+import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
+import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
 import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import { esTransferenciaDocumental } from '../../Partials/SeguimientoTransferenciaTienda';
@@ -68,6 +71,8 @@ const Campo = ({ label, value }) => (
 
 const comprobantesDe = (pedido) => (pedido?.documentos || []).filter((d) => d.tipo === 'comprobante' || !d.tipo);
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
+const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido')
+    || (pedido?.documentos || []).find((d) => d.tipo === 'cotizacion');
 
 export default function ModalDetalleCedis({
     abierto, onClose, pedido: pedidoInicial, onReportarErrorDatos, onMarcarApartado,
@@ -112,6 +117,9 @@ export default function ModalDetalleCedis({
 
     if (!abierto || !pedido) return null;
 
+    const municipal = esRegistroMunicipal(pedido);
+    const presentacion = presentacionPedidoCedis(pedido);
+    const pdfPedido = pdfPedidoDe(pedido);
     const esTienda = cedisConsultaEsRevisionMercancia(pedido);
     const empaqueConsulta = esTienda ? terminologiaEmpaqueConsultaCedis(pedido) : null;
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
@@ -447,7 +455,7 @@ export default function ModalDetalleCedis({
                         </section>
 
                         {/* 2. Nota de compra + guía (nota solo en empaque/envío) */}
-                        {(mostrarNotaCompra || mostrarGuia) && (
+                        {!municipal && (mostrarNotaCompra || mostrarGuia) && (
                         <section className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <p className={SECCION}>Empaque y guía</p>
                             <div className="space-y-3">
@@ -469,7 +477,11 @@ export default function ModalDetalleCedis({
                         </section>
                         )}
 
-                        {esTienda ? (
+                        {municipal && <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
+                            <h3 className="gelia-pedidos-seccion-titulo mb-3">Destino del pedido</h3>
+                            <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino="terminal" />
+                        </section>}
+                        {!municipal && (esTienda ? (
                         <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Sucursal destino</h3>
                             <p className="text-sm font-bold theme-text-main m-0">
@@ -494,7 +506,7 @@ export default function ModalDetalleCedis({
                                 )}
                             />
                         </section>
-                        )}
+                        ))}
 
                         <ConsultaSolicitudTienda pedido={pedido} operarTransferencia onTransferenciaActualizada={avance => setPedido(actual => ({ ...actual, estatus: avance.estatus, estatus_sucursal: avance.estatus_sucursal, empacado_at: avance.empacado_at, solicitud_preparacion: avance.solicitud_preparacion || actual.solicitud_preparacion }))} />
                         {!esCapturaTienda(pedido) && tieneRevisionFisica && (
@@ -658,9 +670,25 @@ export default function ModalDetalleCedis({
                         )}
 
                         {/* 3. Documentos */}
-                        {(comprobantes.length > 0 || remision || evidenciasApartado.length > 0 || complementos.length > 0) && (
+                        {(comprobantes.length > 0 || remision || evidenciasApartado.length > 0 || complementos.length > 0 || (municipal && pdfPedido)) && (
                             <section className={SECCION_WRAP}>
                                 <p className={SECCION}>Documentos</p>
+                                {municipal && pdfPedido && (
+                                    <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element mb-3">
+                                        <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-bold theme-text-main m-0 truncate">{pdfPedido.nombre_original || 'Pedido Wizerp'}</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setDocPreview(pdfPedido)}
+                                                className="text-xs font-bold inline-flex items-center gap-1 mt-1 outline-none min-h-[44px]"
+                                                style={{ color: 'var(--color-primario)' }}
+                                            >
+                                                Ver PDF pedido
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                                 {remision && (
                                     <div className="flex items-center gap-3 p-4 rounded-xl border theme-border theme-element mb-3">
                                         <FileText className="w-8 h-8 shrink-0" style={{ color: 'var(--color-primario)' }} />
@@ -739,7 +767,8 @@ export default function ModalDetalleCedis({
                                 )}
                                 <Campo label="Cliente" value={pedido.cliente?.nombre} />
                                 <Campo label="N° Cliente" value={pedido.cliente?.numero_cliente} />
-                                <Campo label="Tipo de pedido" value={pedido.origen?.nombre} />
+                                <Campo label={presentacion.etiqueta} value={presentacion.nombre} />
+                                {!municipal && <>
                                 <Campo label="Almacén" value={etiquetaAlmacen(pedido.almacen)} />
                                 {!esCapturaTienda(pedido) && (trasladoInterno
                                     ? <Campo label="Recorrido" value="Traslado interno" />
@@ -750,10 +779,11 @@ export default function ModalDetalleCedis({
                                 <Campo label="Tipo de guía" value={pedido.tipo_guia?.nombre} />
                                 <Campo label="Peso real" value={pedido.peso_real_kg != null ? `${pedido.peso_real_kg} kg` : null} />
                                 </>}
-                                <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                                 {!esCapturaTienda(pedido) && <Campo label="Seguro" value={pedido.aplica_seguro ? formatearMoneda(pedido.costo_seguro) : 'No aplica'} />}
+                                </>}
+                                <Campo label="Registrado" value={formatearFechaHoraAuditoria(pedido.created_at)} />
                             </div>
-                            {(pedido.cajas || []).length > 0 && (
+                            {!municipal && (pedido.cajas || []).length > 0 && (
                                 <div className="mt-3 space-y-2">
                                     <div className="flex items-center justify-between gap-2">
                                         <p className="text-xs font-semibold theme-text-muted m-0">Detalle de envíos (pesaje)</p>

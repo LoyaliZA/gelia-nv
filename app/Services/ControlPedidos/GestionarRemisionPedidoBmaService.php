@@ -18,6 +18,7 @@ class GestionarRemisionPedidoBmaService
 
     public function subir(PedidoBma $pedido, UploadedFile $archivo, int $usuarioId, ?string $fechaEmision = null): PedidoBma
     {
+        $this->assertMunicipal($pedido);
         if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede adjuntar remisión en pedidos pendientes de revisión.');
         }
@@ -31,6 +32,7 @@ class GestionarRemisionPedidoBmaService
         }
         return DB::transaction(function () use ($pedido, $archivo, $usuarioId, $fechaEmision) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            $this->assertMunicipal($pedido);
             if (\App\Support\ControlPedidos\TransferenciaT02::documental($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at'])) {
                 $json = $pedido->solicitud_preparacion_json ?? [];
                 $json['remision_tienda'] = ['emitida_at' => \Carbon\Carbon::parse($fechaEmision, app(PreparacionTiendaConfig::class)->zonaHoraria())->startOfDay()->toIso8601String(),
@@ -98,6 +100,8 @@ class GestionarRemisionPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $numero, $usuarioId) {
+            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            $this->assertMunicipal($pedido);
             $antes = (string) ($pedido->numero_remision ?? '');
             $pedido->update(['numero_remision' => $numero]);
             \App\Models\ControlPedidos\PedidoBmaReferencia::registrar(
@@ -174,6 +178,15 @@ class GestionarRemisionPedidoBmaService
                 'paqueteria', 'tipoGuia', 'tipoCaja', 'zona', 'envioTienda', 'pagoValidadoPor',
             ]);
         });
+    }
+
+    private function assertMunicipal(PedidoBma $pedido): void
+    {
+        $politica = app(Municipal\PoliticaFinancieraMunicipal::class);
+        $politica->assertPuedeOperarComercial($pedido);
+        if ($politica->esMunicipal($pedido) && (! $pedido->pago_validado_at || ! $politica->evaluar($pedido)['puede_remisionar'])) {
+            throw new \RuntimeException('Verifique el pago exigible antes de asociar la remisión.');
+        }
     }
 
     private function marcarRemisionesInactivas(PedidoBma $pedido, int $usuarioId): ?PedidoBmaDocumento

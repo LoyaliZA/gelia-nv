@@ -1,0 +1,18 @@
+PHPUnit 12.5.25 by Sebastian Bergmann and contributors.
+
+Runtime:       PHP 8.4.27
+Configuration: /tmp/gelia-m01-base/phpunit.xml
+
+F                                                                   1 / 1 (100%)
+
+Time: 00:06.968, Memory: 127.00 MB
+
+There was 1 failure:
+
+1) Tests\Feature\ControlPedidos\RecorridoTiendaIntegralTest::test_la_cobertura_de_mismo_dia_esta_abierta_a_departamentos_y_exige_dia_habil_sin_confirmarla
+El fin de semana no deja prevista la atención de mismo día.
+
+/var/www/html/tests/Feature/ControlPedidos/RecorridoTiendaIntegralTest.php:120
+
+FAILURES!
+Tests: 1, Assertions: 3, Failures: 1.

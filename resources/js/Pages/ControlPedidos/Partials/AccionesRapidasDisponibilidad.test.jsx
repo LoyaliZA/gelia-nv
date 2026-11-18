@@ -12,6 +12,15 @@ const faltante = { id: 8, descripcion_producto: 'Aroma agotado', sku: 'SKU-8', e
 const boton = texto => [...container.querySelectorAll('button')].find(b => b.textContent === texto);
 beforeEach(() => { vi.clearAllMocks(); globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); });
+it('libera la pausa al desaparecer la acción de una pieza resuelta', async () => {
+    const onOcupado = vi.fn();
+    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} onOcupado={onOcupado} />));
+    await act(() => boton('Retirar').click());
+    expect(onOcupado).toHaveBeenLastCalledWith(true, 8);
+    // El padre deja de renderizar acciones cuando la respuesta trae resolución.
+    await act(() => root.render(<span>Retiro registrado</span>));
+    expect(onOcupado).toHaveBeenLastCalledWith(false, 8);
+});
 it('un faltante ofrece solo retirar o sustituir, sin aceptar su inexistencia', async () => {
     await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} />));
     expect(boton('Retirar')).toBeDefined(); expect(boton('Sustituir')).toBeDefined(); expect(boton('Confirmar estado')).toBeUndefined();

@@ -64,6 +64,9 @@ export function labelEstadoCobertura(pedidoOrEstado, safAplicado = 0) {
         ? Number(pedidoOrEstado?.saf_aplicado ?? 0)
         : Number(safAplicado ?? 0);
 
+    if (typeof pedidoOrEstado === 'object' && pedidoOrEstado?.transporte_municipal?.desconocido) {
+        return `${LABEL_COBERTURA[estado] || estado} · transporte pendiente`;
+    }
     if (estado === 'cubierto' && saf > 0.005) {
         return 'Cubierto con SAF';
     }

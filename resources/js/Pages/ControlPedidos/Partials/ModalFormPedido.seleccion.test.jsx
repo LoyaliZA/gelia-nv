@@ -10,10 +10,13 @@ beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = docum
 afterEach(async () => { await act(() => root.unmount()); container.remove(); });
 describe('Modal de edición según la captura del pedido', () => {
     it('abre el borrador de la captura en el registro actual conservando su ID', async () => {
-        await act(() => root.render(<ModalFormPedido abierto pedido={{ id: 125, estatus: { fase_ciclo: 'BORRADOR' }, solicitud_preparacion: null, origen: null }} />));
+        const lecturaPropia = vi.fn();
+        await act(() => root.render(<ModalFormPedido abierto onLecturaPropia={lecturaPropia} pedido={{ id: 125, estatus: { fase_ciclo: 'BORRADOR' }, solicitud_preparacion: null, origen: null }} />));
+        expect(lecturaPropia).toHaveBeenLastCalledWith(true);
         expect(container.querySelector('[data-form="actual"]').textContent).toContain('125');
         await act(() => container.querySelector('button').click());
         expect(container.querySelector('[data-form="legado"]').textContent).toBe('125');
+        expect(lecturaPropia).toHaveBeenLastCalledWith(false);
     });
     it('mantiene recuperación del borrador local anterior', async () => {
         await act(() => root.render(<ModalFormPedido abierto recuperarBorrador />));
@@ -23,4 +26,11 @@ describe('Modal de edición según la captura del pedido', () => {
         await act(() => root.render(<ModalFormPedido abierto pedido={{ id: 9, estatus: { fase_ciclo: 'EN_CEDIS' }, solicitud_preparacion: null }} />));
         expect(container.querySelector('[data-form="legado"]').textContent).toBe('9');
     });
+    it('reabre Municipal en captura común y conserva municipal histórico en legado', async () => {
+        await act(() => root.render(<ModalFormPedido key="nuevo" abierto pedido={{ id: 21, solicitud_preparacion: { modalidad_entrega: 'municipal' } }} />));
+        expect(container.querySelector('[data-form="actual"]').textContent).toContain('21');
+        await act(() => root.render(<ModalFormPedido key="historico" abierto pedido={{ id: 22, estatus: { fase_ciclo: 'BORRADOR' }, solicitud_preparacion: { codigo_modalidad: 'ENVIO_MUNICIPIO' } }} />));
+        expect(container.querySelector('[data-form="legado"]').textContent).toBe('22');
+    });
+
 });

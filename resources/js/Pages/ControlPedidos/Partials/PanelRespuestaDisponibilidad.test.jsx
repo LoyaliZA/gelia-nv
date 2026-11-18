@@ -9,7 +9,7 @@ vi.mock('../../../Components/Almacenes/SelectorProducto', () => ({ default: ({ o
 let root, container;
 const onEnviar = vi.fn();
 const montar = (props = {}) => act(() => root.render(<PanelRespuestaDisponibilidad tomada puedeResponder onEnviar={onEnviar} {...props} />));
-const click = texto => act(() => [...container.querySelectorAll('button')].find(b => b.textContent.trim() === texto).click());
+const click = texto => act(async () => [...container.querySelectorAll('button')].find(b => b.textContent.trim() === texto).click());
 const estado = indice => act(() => container.querySelectorAll('input[type=radio]')[indice].click());
 const interruptor = (nombre, indice = 0) => act(() => [...container.querySelectorAll(`[role=switch][aria-label="${nombre}"]`)][indice].click());
 const foto = async (label = 'Captura del pedido', cantidad = 1, indice = 0) => {
@@ -22,6 +22,61 @@ const detalle = async (texto = 'Caja rota', indice = 0) => act(() => {
  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(textarea,texto);
  textarea.dispatchEvent(new Event('input',{bubbles:true}));
 });
+
+it('responde dos ciclos del mismo pedido sin desmontar ni reutilizar la captura anterior', async () => {
+    const pedido = { id: 4, documentos: [] };
+    await montar({ pedido });
+    await estado(0); await foto(); await click('Enviar respuesta');
+    expect(container.textContent).toContain('Respuesta enviada a Ventas.');
+    await montar({ pedido, revision: { respuesta_id: 'primera', estado: 'sin_excepciones' } });
+    await montar({ pedido, revision: { respuesta_id: 'primera', estado: 'sin_excepciones', actualizacion_id: 'nueva', actualizacion_pendiente: true } });
+    expect(container.textContent).toContain('Actualización de consulta');
+    expect(container.textContent).not.toContain('Respuesta enviada a Ventas.');
+    await click('Enviar respuesta');
+    expect(onEnviar).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain('Adjunta evidencia en Captura del pedido.');
+    await foto(); await click('Enviar respuesta');
+    expect(onEnviar).toHaveBeenCalledTimes(2);
+    expect(onEnviar.mock.lastCall[0].get('actualizacion_id')).toBe('nueva');
+});
+
+it('una revisión recibida conserva descripción y archivos pendientes', async () => {
+    const pedido = { id: 4, documentos: [] };
+    await montar({ pedido });
+    await estado(1); await click('Capturar sin catálogo');
+    const input = container.querySelector('.gelia-cedis-producto input');
+    await act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Captura pendiente');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await foto();
+    const archivos = container.querySelector('input[aria-label="Adjuntar: Captura del pedido"]').files;
+    await montar({ pedido, revision: { actualizacion_id: 'recibida', actualizacion_pendiente: true } });
+    expect(container.querySelector('.gelia-cedis-producto input').value).toBe('Captura pendiente');
+    expect(container.querySelectorAll('textarea').length).toBeGreaterThan(0);
+    expect(container.textContent).toContain('evidencia-0.png');
+    expect(archivos.length).toBe(1);
+});
+
+it('conserva las miniaturas enviadas sin descargar documentos fuera de etapa y limpia el siguiente ciclo', async () => {
+    const pedido = { id: 4, documentos: [] };
+    await montar({ pedido });
+    await estado(1); await click('Elegir perfume'); await interruptor('Única pieza');
+    await foto('Fotos del producto'); await foto(); await click('Enviar respuesta');
+    const guardada = { ...pedido, documentos: [{ id: 21, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', mime_type: 'image/png', url: '/etapa-terminada.png' }] };
+    const revision = { respuesta_id: 'guardada', estado: 'excepciones_pendientes', evidencia_actual_ids: [21] };
+    await montar({ pedido: guardada, revision, puedeLeerDocumentos: false,
+        piezas: [{ id: 7, descripcion: 'Perfume de catálogo', estado_fisico: 'regular' }], documentos: [{ id: 1, url: '/wizerp.pdf' }] });
+    const imagenes = [...container.querySelectorAll('img')];
+    expect(imagenes.length).toBeGreaterThanOrEqual(2);
+    expect(imagenes.every(img => img.src.startsWith('blob:'))).toBe(true);
+    expect([...container.querySelectorAll('button')].find(b => b.textContent.startsWith('Ver pedido')).disabled).toBe(true);
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+    await montar({ pedido: guardada, revision: { ...revision, actualizacion_id: 'siguiente', actualizacion_pendiente: true }, puedeLeerDocumentos: true });
+    await click('Enviar respuesta');
+    expect(onEnviar).toHaveBeenCalledOnce();
+    expect(container.textContent).toContain('Adjunta evidencia en Captura del pedido.');
+});
 beforeEach(() => {
  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
  globalThis.route = name => name;
@@ -31,6 +86,13 @@ beforeEach(() => {
  container = document.createElement('div');document.body.append(container);root = createRoot(container);
 });
 afterEach(async () => { await act(() => root.unmount());container.remove(); });
+it('en municipal reutiliza origen y destino con almacén y terminal persistidos', async () => {
+    await montar({ pedido: { almacen: { nombre: 'CEDIS Norte' }, solicitud_preparacion: { modalidad_entrega: 'municipal', consulta_municipal: { area: 'cedis' } }, paqueteria: { nombre: 'Terminal ficticia' } }, documentos: [{ tipo: 'pdf_pedido', url: '/wizerp.pdf' }] });
+    expect(container.textContent).toContain('Terminal ficticia');
+    expect(container.textContent).toContain('CEDIS');
+    expect(container.textContent).toContain('Ver pedido');
+    expect(container.textContent).not.toContain('Por confirmar');
+});
 it('exige estado y captura y responde el conjunto sin transcribir piezas correctas', async () => {
  await montar();await click('Enviar respuesta');expect(container.textContent).toContain('Indica el estado');
  await estado(0);await click('Enviar respuesta');expect(container.textContent).toContain('Adjunta evidencia');

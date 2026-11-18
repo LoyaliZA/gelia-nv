@@ -46,6 +46,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
+    const [lecturaPropiaFormulario, setLecturaPropiaFormulario] = useState(false);
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [movimientoTienda, setMovimientoTienda] = useState(null);
@@ -153,9 +154,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             if (mismo) return m;
             return { ...m, pedido: fresco };
         };
-        setModalForm(refrescar);
+        if (!lecturaPropiaFormulario) setModalForm(refrescar);
         setModalDetalle(refrescar);
-    }, [pedidosVista]);
+    }, [pedidosVista, lecturaPropiaFormulario]);
 
     // Con el formulario abierto sí seguimos refrescando el listado (CEDIS → modal).
     // Pausamos solo overlays que no necesitan sync en vivo.
@@ -173,6 +174,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || Boolean(pedidoAuditoria);
 
     useActualizacionesPedidos({
+        activo: !lecturaPropiaFormulario,
         onActualizar: refrescarListado,
         pausado: Boolean(pausarPollingListado || cargando),
         intervaloRespaldo: REFRESCO_LISTADO_MS,
@@ -187,13 +189,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             const modalId = Number(modalForm.pedido?.id);
             if (!pedidoId || !tipo.startsWith('pedido_')) return;
             if (!modalForm.abierto) return;
+            if (lecturaPropiaFormulario) return;
             const vivoId = modalId || Number(modalForm.pedidoIdVivo);
             if (vivoId && vivoId !== pedidoId) return;
             refrescarListado();
         };
         window.addEventListener('notification-received', onNotification);
         return () => window.removeEventListener('notification-received', onNotification);
-    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, refrescarListado]);
+    }, [modalForm.abierto, modalForm.pedido?.id, modalForm.pedidoIdVivo, lecturaPropiaFormulario, refrescarListado]);
 
     useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
 
@@ -349,9 +352,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     }}
                     catalogos={catalogos}
                     registrarTienda={registrar_tienda}
+                    onLecturaPropia={setLecturaPropiaFormulario}
                     direccionesNormalizadas={direcciones_normalizadas}
                     onClose={() => {
                         setModalForm({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean', pedidoIdVivo: null });
+                        refrescarListado();
                     }}
                 />
             ) : null}

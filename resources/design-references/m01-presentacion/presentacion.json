@@ -1,0 +1,319 @@
+{
+  "tarjetas": [
+    {
+      "tipo": "municipal",
+      "cabecera": "Envío:MUNICIPALDepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoTransporte ficticio Jaguar 164145",
+      "texto": "Envío:\nMUNICIPAL\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-MUNICIPAL-R3\n\nQA-WIZ-REGRESION-45-MUNICIPAL-R3\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nPendiente regularizar envío\nOrigen\nCEDIS ficticio 164145\nDestino\nTransporte ficticio Jaguar 164145\nRevisar disponibilidad\nPDF pedido\nDetalle"
+    },
+    {
+      "tipo": "nacional",
+      "cabecera": "Envío:NACIONALDepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoM01-QA-164145 - Sucursal ficticia",
+      "texto": "Envío:\nNACIONAL\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-NACIONAL\n\nQA-WIZ-REGRESION-45-NACIONAL\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nConsulta de pesaje solicitada\nOrigen\nCEDIS ficticio 164145\nDestino\nM01-QA-164145 - Sucursal ficticia\n\nPaquetería\n\nPaquetería nacional ficticia 45\n\nEnvíos / Guía\n\n— · Guía generada por la empresa\n\nResponder pesaje\nPDF pedido\nDetalle"
+    },
+    {
+      "tipo": "tienda",
+      "cabecera": "Tipo de pedidoTIENDADepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoM01-QA-164145 - Sucursal ficticia",
+      "texto": "Tipo de pedido\nTIENDA\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-TIENDA-R4\n\nQA-WIZ-REGRESION-45-TIENDA-R4\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nNueva consulta solicitada\nOrigen\nCEDIS ficticio 164145\nDestino\nM01-QA-164145 - Sucursal ficticia\nNueva consulta\nPDF pedido\nDetalle"
+    }
+  ],
+  "medidas": [
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "wizerp-municipal",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-dialog-workspace w-full max-w-[min(72rem,calc(100vw-1.5rem))] flex flex-col",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body flex-1 min-h-0 p-0 flex items-center justify-center theme-element relative overflow-auto",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "detalle-municipal",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-dialog-workspace max-w-4xl w-full flex flex-col",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body p-4 md:p-6 space-y-4",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "consulta-municipal",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-preparacion-modal w-full max-w-7xl max-h-[100dvh] md:max-h-[94dvh] flex flex-col overflow-hidden",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body min-h-0 flex-1 overflow-y-auto",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "consulta-municipal",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-preparacion-modal w-full max-w-7xl max-h-[100dvh] md:max-h-[94dvh] flex flex-col overflow-hidden",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body min-h-0 flex-1 overflow-y-auto",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "wizerp-nacional",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-dialog-workspace w-full max-w-[min(72rem,calc(100vw-1.5rem))] flex flex-col",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body flex-1 min-h-0 p-0 flex items-center justify-center theme-element relative overflow-auto",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "pesaje-nacional",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-dialog-workspace gelia-pedidos-respuesta max-w-3xl w-full flex flex-col",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body p-4 md:p-6 space-y-5",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true
+    },
+    {
+      "nombre": "wizerp-tienda",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-dialog-workspace w-full max-w-[min(72rem,calc(100vw-1.5rem))] flex flex-col",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body flex-1 min-h-0 p-0 flex items-center justify-center theme-element relative overflow-auto",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "municipal-reabierto-tras-recarga",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-formulario gelia-captura-inicial registrar-tienda-modal w-full",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body registrar-tienda-cuerpo",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "tienda-respuesta-automatica",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-formulario gelia-captura-inicial registrar-tienda-modal w-full",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body registrar-tienda-cuerpo",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    },
+    {
+      "nombre": "tienda-anexo-respondido",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [
+        {
+          "clase": "gelia-modal-shell gelia-pedidos-dialog gelia-pedidos-formulario gelia-captura-inicial registrar-tienda-modal w-full",
+          "sinDesborde": true
+        },
+        {
+          "clase": "gelia-modal-body registrar-tienda-cuerpo",
+          "sinDesborde": true
+        }
+      ],
+      "pagina": true
+    }
+  ],
+  "pasos": [
+    "Recarga/reapertura de Municipal conserva respuesta vigente, historial de capturas, terminal y condiciones.",
+    "Tienda conserva consulta documental CEDIS y recibe la respuesta automáticamente con ambos modales abiertos; Nacional conserva formulario de pesaje y peso real sin registrar cambios.",
+    "Anexo documental desde el editor existente de Tienda: CEDIS detecta su regreso mediante la bandeja autorizada y responde el nuevo ciclo sin cerrar modales ni ampliar acceso por etapa.",
+    "Municipal mantiene su recepción automática con el contrato final de respuesta canónica y las mismas dos cuentas independientes."
+  ],
+  "alcance": "Tres modalidades",
+  "console": [],
+  "resultado": "aprobado"
+}

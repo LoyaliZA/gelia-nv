@@ -12,6 +12,7 @@ import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { presentacionPedidoCedis } from './presentacionPedidoCedis';
 
 function formDataDe({ confirmacion, excepciones, archivos }) {
     const form = new FormData();
@@ -27,7 +28,7 @@ function formDataDe({ confirmacion, excepciones, archivos }) {
     return form;
 }
 
-export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, evidenciasGuardadas = [], onDirtyChange, onEnviar }) {
+export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, evidenciasGuardadas = [], onDirtyChange, avisoActualizacion = '', puedeLeerDocumentos = true, onEnviar }) {
     const solicitud = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
     const actualizacion = Boolean(revision?.actualizacion_pendiente || (solicitud.anexo_sin_remision || []).some(a => !a.respondida_at));
     const cambios = cambiosDisponibilidad(solicitud, pedido.documentos || documentos);
@@ -38,7 +39,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const [excepciones, setExcepciones] = useState([]);
     const [manual, setManual] = useState(false);
     const [archivos, setArchivos] = useState([]);
-    const [previews, setPreviews] = useState(() => actualizacion ? [] : [...evidenciasGuardadas.map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })), ...(pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }))]);
+    const [previews, setPreviews] = useState(() => actualizacion || !puedeLeerDocumentos ? [] : [...evidenciasGuardadas.map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })), ...(pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }))]);
     const [vista, setVista] = useState(null);
     const secuencia = useRef(0);
     const incidenciasRef = useRef(null);
@@ -48,7 +49,10 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     useEffect(() => () => excepcionesRef.current.forEach(fila => liberarPreviews(fila.previews)), []);
     const [error, setError] = useState('');
     const [ocupado, setOcupado] = useState(false);
-    const [enviada, setEnviada] = useState(false);
+    const ciclo = revision?.actualizacion_id || revision?.respuesta_id || 'inicial';
+    const [cicloEnviado, setCicloEnviado] = useState(null);
+    const enviada = cicloEnviado === ciclo;
+    const cicloAnterior = useRef(ciclo);
     const previewsRef = useRef([]);
     previewsRef.current = previews;
     useEffect(() => () => previewsRef.current.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); }), []);
@@ -62,7 +66,26 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const escaneo = useEscaneoPreparacion({ almacenId, permitirSinAlmacen: true, onProducto: agregar });
     const guardando = ocupado || escaneo.pendientes > 0;
     const respondida = enviada || Boolean(revision?.estado && !actualizacion);
-    useEffect(() => { onDirtyChange?.(!enviada && Boolean(estado || excepciones.length || archivos.length || Object.keys(respuestasCambios).length || capturaRapida)); }, [estado, excepciones.length, archivos.length, respuestasCambios, capturaRapida, enviada, onDirtyChange]);
+    const tieneCaptura = Boolean(estado || excepciones.length || archivos.length || Object.keys(respuestasCambios).length || capturaRapida);
+    useEffect(() => { onDirtyChange?.(guardando || (!respondida && tieneCaptura)); }, [guardando, respondida, tieneCaptura, onDirtyChange]);
+    useEffect(() => {
+        if (cicloAnterior.current === ciclo || guardando) return;
+        // Una captura aún no enviada se conserva, incluso ante nuevas props.
+        if (tieneCaptura && cicloEnviado !== cicloAnterior.current) return;
+        cicloAnterior.current = ciclo;
+        if (!puedeLeerDocumentos && !actualizacion) {
+            // El servidor ya confirmó la respuesta, pero la etapa terminó. Conservar
+            // las vistas locales enviadas evita descargar archivos fuera de alcance.
+            setCicloEnviado(ciclo);
+            setArchivos([]);
+            return;
+        }
+        liberarPreviews(previewsRef.current);
+        excepcionesRef.current.forEach(fila => liberarPreviews(fila.previews));
+        setEstado(''); setExcepciones([]); setArchivos([]); setRespuestasCambios({});
+        setOrigenIncidencia(null); setCapturaRapida(null); setManual(false); setError('');
+        setPreviews(actualizacion ? [] : (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.activo !== false && d.url && (!d.relacion_tipo || d.relacion_tipo === 'revision_general') && (!revision?.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id))).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })));
+    }, [ciclo, guardando, tieneCaptura, cicloEnviado, actualizacion, pedido.documentos, revision?.evidencia_actual_ids, puedeLeerDocumentos]);
     const editable = tomada && puedeResponder && !respondida;
     const dialogo = usePedidoDialog({ abierto: modo === 'dialogo' && abierto, onClose, bloqueado: guardando });
     const cambiar = (indice, cambios) => setExcepciones(actual => actual.map((fila, i) => {
@@ -112,7 +135,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         requestAnimationFrame(() => incidenciasRef.current?.scrollIntoView?.({ block: 'nearest' }));
     };
     const capturarCodigo = valor => escaneo.encolar(valor);
-    const destino = pedido.sucursal_destino?.nombre || pedido.sucursalDestino?.nombre || pedido.sucursal_destino_nombre || pedido.expediente_registrar?.sucursal || 'Por confirmar';
+    const presentacion = presentacionPedidoCedis(pedido);
     const referencias = documentos.filter(d => d.url);
 
     const enviar = async () => {
@@ -139,15 +162,16 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             });
             if (revision?.actualizacion_id) form.append('actualizacion_id', revision.actualizacion_id);
             await onEnviar?.(form);
-            setEnviada(true);
+            setCicloEnviado(ciclo);
         } catch (e) {
             const errores = e?.response?.data?.errors;
             setError(errores ? Object.values(errores).flat().join(' ') : e?.response?.data?.message || 'No se pudo registrar la revisión.');
         } finally { setOcupado(false); }
     };
     if (modo === 'dialogo' && !abierto) return null;
-    const resultado = piezas.length && !actualizacion ? piezas : actualizacion || estado === 'detalle' ? excepciones : [];
+    const resultado = !puedeLeerDocumentos && cicloEnviado === ciclo && respondida ? excepciones : piezas.length && !actualizacion ? piezas : actualizacion || estado === 'detalle' ? excepciones : [];
     const contenido = <section className="gelia-preparacion gelia-cedis-disponibilidad" aria-label={`Consulta de disponibilidad en ${origen}`}>
+        {avisoActualizacion && <p role="status" className="gelia-cedis-alerta text-sm m-0">{avisoActualizacion}</p>}
         <header className="gelia-preparacion-contexto">
             <div className="min-w-0">
                 <div className="registrar-tienda-seccion-titulo"><ClipboardCheck size={18} aria-hidden /><h3>{actualizacion ? 'Actualización de consulta' : 'Disponibilidad'} · {origen}</h3></div>
@@ -156,22 +180,22 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
 
                 </dl>
             </div>
-            {origen === 'CEDIS' && <RutaPedidoTienda origen={pedido.almacen?.nombre || origen} destino={destino} />}
-            <button className={GELIA_BTN_OUTLINE} type="button" disabled={!referencias.length} onClick={() => setVista({ documentos: referencias, indice: 0 })}><FileText size={16} aria-hidden />Ver pedido{referencias.length > 1 ? ` (${referencias.length})` : ''}</button>
+            {(origen === 'CEDIS' || presentacion.modalidad === 'municipal') && <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.modalidad === 'municipal' ? 'terminal' : 'sucursal'} />}
+            <button className={GELIA_BTN_OUTLINE} type="button" disabled={!referencias.length || !puedeLeerDocumentos} onClick={() => setVista({ documentos: referencias, indice: 0 })}><FileText size={16} aria-hidden />Ver pedido{referencias.length > 1 ? ` (${referencias.length})` : ''}</button>
         </header>
         <div className="gelia-preparacion-workspace" data-pedido-visible="false">
             <div className="gelia-preparacion-captura space-y-4">
-                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} interactivo={editable}
+                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} interactivo={editable} puedeVerDocumentos={puedeLeerDocumentos}
                     respuestas={respuestasCambios} onResponder={responderCambio} onIncidencia={reportarCambio} disabled={guardando}
                     onVer={(documentos, indice) => setVista({ documentos, indice })} />
-                    : mostrarCambios && <AlternativasDisponibilidadCedis pedido={pedido} onVer={(documentos, indice) => setVista({ documentos, indice })} />}
+                    : mostrarCambios && <AlternativasDisponibilidadCedis pedido={pedido} puedeVerDocumentos={puedeLeerDocumentos} onVer={(documentos, indice) => setVista({ documentos, indice })} />}
 
                 {actualizacion && !respondida && <p className="text-sm theme-text-main m-0" role="status">Revise las capturas y use las acciones de cada solicitud. Al terminar, tome una nueva captura del pedido completo.</p>}
                 {respondida ? <div className="grid gap-3" role="status">
                     <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Consulta respondida</span>
                     <p className="text-sm theme-text-muted m-0">Ventas confirma las piezas con el cliente.</p>
                     {resultado.length > 0 && <ul className="list-none p-0 m-0 space-y-2">{resultado.map((p, i) => {
-                        const fotos = p.previews || (pedido.documentos || []).filter(d => d.activo !== false && d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }));
+                        const fotos = p.previews || (puedeLeerDocumentos ? pedido.documentos || [] : []).filter(d => d.activo !== false && d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }));
                         return <li key={p.id || i} className="gelia-cedis-panel"><details open={resultado.length <= 3 ? true : undefined}><summary className="gelia-cedis-producto-resumen"><span><strong>{p.descripcion}</strong><span className="block text-xs theme-text-muted">{p.sku}{Number(p.cantidad) > 1 ? ` · ${p.cantidad} pza(s)` : ''}</span><EtiquetasPieza fila={p} /></span><ChevronDown size={18} aria-hidden /></summary><p className="text-sm">{p.detalle}</p>{fotos.length > 0 && <GaleriaEvidenciasPedido compacto label="Fotos del defecto" previews={fotos} disabled onVer={(docs, indice) => setVista({ documentos: docs, indice })} />}</details></li>;
                     })}</ul>}
                 </div> : !editable ? <p className="text-sm theme-text-muted">Toma la revisión para responder.</p> : <>

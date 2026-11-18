@@ -256,6 +256,15 @@ class PedidoBma extends Model
     public function getSolicitudPreparacionAttribute(): ?array
     {
         $solicitud = app(FusionarSolicitudPreparacionPedido::class)->normalizar($this->solicitud_preparacion_json);
+        // Proyección de lectura: las claves operativas solo las escriben los servicios municipales.
+        // No ampliamos el contrato de entrada/autoguardado compartido.
+        if (($solicitud['modalidad_entrega'] ?? null) === 'municipal') {
+            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino'] as $clave) {
+                if (array_key_exists($clave, $this->solicitud_preparacion_json ?? [])) {
+                    $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
+                }
+            }
+        }
         if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
             $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
             $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];
@@ -594,6 +603,9 @@ class PedidoBma extends Model
 
     public function puedeAnexarPagoEnvio(): bool
     {
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($this)
+            && (\App\Support\ControlPedidos\ConsultaMunicipal::estado($this) !== 'cerrada'
+                || \App\Support\ControlPedidos\ConsultaMunicipal::motivoBloqueo($this) !== null)) return false;
         if (in_array($this->estatus_envio, [
             self::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION,
             self::ESTATUS_ENVIO_ANEXO_RECHAZADO,
@@ -1112,6 +1124,10 @@ class PedidoBma extends Model
         }
         if (! $this->esEditablePorVendedora()) {
             return false;
+        }
+        // La consulta municipal ya tiene su política de cierre; no requiere un pesaje nacional.
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($this)) {
+            return \App\Support\ControlPedidos\ConsultaMunicipal::motivoBloqueo($this) === null;
         }
         if ($this->esConsultaDisponibilidadCedis()) {
             return ! $this->consulta_actualizacion_pendiente && $this->motivoBloqueoCierreConsultaTienda() === null;

@@ -111,6 +111,7 @@ class ListarReportePagosPedidosService
     private function compacto(PedidoBmaCierrePago $c): array
     {
         return [
+            'transporte_municipal' => data_get($c->metadata_snapshot, 'transporte_municipal'),
             'cierre_id' => $c->id,
             'version' => $c->version,
             'estado_cierre' => $c->estado,

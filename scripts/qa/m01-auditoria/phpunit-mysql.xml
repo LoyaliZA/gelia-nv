@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="/var/www/html/vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>/var/www/html/tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>/var/www/html/tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>/var/www/html/app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing" force="true"/>
+        <env name="APP_URL" value="https://gelianv.neobash.site"/>
+        <env name="FORM_PUBLIC_URL" value="https://form.neobash.site"/>
+        <env name="APP_ALLOWED_HOSTS" value=""/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="BROADCAST_CONNECTION" value="null"/>
+        <env name="CACHE_STORE" value="array"/>
+        <env name="DB_USERNAME" value="root" force="true"/>
+        <env name="DB_HOST" value="mysql" force="true"/>
+        <env name="DB_CONNECTION" value="mysql" force="true"/>
+        <env name="DB_DATABASE" value="codex_m01_audit_20261114" force="true"/>
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <env name="WEBAUTHN_ENABLED" value="true"/>
+        <env name="WEBAUTHN_RP_ID" value="gelianv.neobash.site"/>
+        <env name="WEBAUTHN_ORIGINS" value="https://gelianv.neobash.site,http://localhost"/>
+        <env name="MEDIOS_DRIVER" value="fake"/>
+    </php>
+</phpunit>

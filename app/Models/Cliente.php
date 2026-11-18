@@ -164,6 +164,11 @@ class Cliente extends Model
         return $this->hasMany(ClienteDireccion::class);
     }
 
+    public function consignatarios(): HasMany
+    {
+        return $this->hasMany(ClienteConsignatario::class);
+    }
+
     public function receptoresFiscales(): BelongsToMany
     {
         return $this->belongsToMany(ReceptorFiscal::class, 'cliente_receptor_fiscal')

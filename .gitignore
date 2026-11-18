@@ -31,7 +31,6 @@ Thumbs.db
 /scripts/backup-snapshot-local.sh
 /snapshots/
 /tmp
-/docs
 /logs
 /evidencia
 /.archify

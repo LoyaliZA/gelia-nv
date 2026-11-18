@@ -14,6 +14,8 @@ final class LecturaFinancieraPedido
         $pedido->refresh();
 
         return [
+            'version_consulta' => (int) $pedido->historial()->max('id'),
+            'updated_at' => $pedido->updated_at?->toISOString(),
             'estatus' => $pedido->estatus,
             'catalogo_estatus_pedido_id' => $pedido->catalogo_estatus_pedido_id,
             'sucursal_destino_id' => $pedido->sucursal_destino_id,

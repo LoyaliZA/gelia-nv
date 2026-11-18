@@ -33,9 +33,11 @@ class ValidarPagoPedidoBmaService
         if (! $pedido->esAuditablePorAuxiliar()) {
             throw new RuntimeException('Solo se puede validar el pago de pedidos pendientes de revisión.');
         }
+        app(Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
 
         return DB::transaction(function () use ($pedido, $usuarioId) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            app(Municipal\PoliticaFinancieraMunicipal::class)->assertPuedeOperarComercial($pedido);
 
             if ($pedido->pago_validado_at) {
                 $resumen = $this->pagos->resumenPago($pedido);
@@ -68,6 +70,12 @@ class ValidarPagoPedidoBmaService
             $resumen = $this->cobertura->calcular($pedido);
             if (! empty($resumen['bloqueos'])) {
                 throw new RuntimeException($resumen['bloqueos'][0]);
+            }
+            if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
+                $evaluacion = app(Municipal\PoliticaFinancieraMunicipal::class)->evaluar($pedido);
+                if (! $evaluacion['mercancia_cubierta'] || ($evaluacion['conocimiento_costo'] === 'conocido' && ! $evaluacion['transporte_cubierto'])) {
+                    throw new RuntimeException('El importe exigible de esta etapa no está cubierto.');
+                }
             }
 
             PedidoBmaPago::query()

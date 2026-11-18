@@ -1,12 +1,22 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Clientes\ExpedienteClienteController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaController;
 use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\PedidoBmaSaldosPagosController;
 use App\Http\Controllers\ControlPedidos\PlazosRetrasoPedidoBmaController;
 
 Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
+    Route::get('/municipal/clientes/{cliente}/consignatarios', [ExpedienteClienteController::class, 'index'])->name('municipal.expediente.index');
+    Route::post('/municipal/clientes/{cliente}/consignatarios', [ExpedienteClienteController::class, 'store'])->name('municipal.expediente.store');
+    Route::put('/municipal/clientes/{cliente}/consignatarios/{consignatario}', [ExpedienteClienteController::class, 'update'])->name('municipal.expediente.update');
+    Route::post('/municipal/clientes/{cliente}/consignatarios/{consignatario}/documento', [ExpedienteClienteController::class, 'documento'])->name('municipal.expediente.documento');
+    Route::get('/municipal/clientes/{cliente}/documentos/{documento}', [ExpedienteClienteController::class, 'descargar'])->withTrashed()->name('municipal.expediente.descargar');
+    Route::get('/municipal/consultas-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'tienda'])->name('municipal.consultas_tienda');
+    Route::post('/municipal/{pedidoBma}/solicitud', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'guardar'])->name('municipal.solicitud');
+    Route::post('/municipal/{pedidoBma}/consulta', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'enviarConsulta'])->name('municipal.consulta');
+    Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
     Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');

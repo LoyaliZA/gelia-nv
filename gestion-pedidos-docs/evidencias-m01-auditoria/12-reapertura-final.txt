@@ -1,0 +1,7 @@
+
+   PASS  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ reapertura invalida ambos cierres y bloquea pago hasta nueva respue… 6.52s  
+
+  Tests:    1 passed (11 assertions)
+  Duration: 6.95s
+

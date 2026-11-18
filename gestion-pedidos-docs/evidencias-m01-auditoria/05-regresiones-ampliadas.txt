@@ -1,0 +1,132 @@
+
+   PASS  Tests\Feature\ControlPedidos\BandejasOperativasTest
+  ✓ cedis filtra tipos excluyentes y conserva legados en todos           6.59s  
+  ✓ cedis fecha de solicitud vendedora y orden antes de paginar          0.08s  
+  ✓ tienda todos incluye cada etapa y contadores coinciden con las band… 0.12s  
+
+   PASS  Tests\Feature\ControlPedidos\ElegibilidadPesajePedidoTest
+  ✓ local sin peso avanza sin kilogramos de cedis                        0.05s  
+  ✓ local con peso obligatorio sigue exigiendo kilogramos                0.04s  
+  ✓ comercial conserva pesaje aunque requiere peso sea falso             0.05s  
+  ✓ caja se exige sin pedir kilogramos cuando el transporte local la ma… 0.05s  
+  ✓ envio cedis con pesaje completo no hereda el bloqueo de peso         0.05s  
+  ✓ preparacion bodega pide el peso de la tarea y no el detalle cedis    0.06s  
+  ✓ municipio exige peso de preparacion solo si el transporte lo pide    0.06s  
+  ✓ sin logistica desde cedis no exige direccion guia ni peso            0.04s  
+  ✓ comercial sin marca sigue exigiendo direccion y guia                 0.05s  
+  ✓ tienda municipal sin logistica no repite direccion ni guia           0.05s  
+  ✓ nombre de departamento no cambia la obligacion de pesaje             0.05s  
+  ✓ consulta de mercancia sin logistica no exige kilogramos              0.04s  
+  ✓ respuesta incompleta de pesaje se rechaza y la de mercancia pide pi… 0.04s  
+  ✓ solicitud duplicada no crea otra consulta                            0.05s  
+  ✓ pedido enviado no acepta pesaje ni consulta                          0.04s  
+  ✓ empaque municipal pide bascula solo cuando el transporte exige peso  0.04s  
+
+   PASS  Tests\Feature\ControlPedidos\ImportesPagoTiendaTest
+  ✓ el autoguardado devuelve importes y conserva la cobertura            0.13s  
+  ✓ la lectura de pagos incluye solicitud e importes                     0.09s  
+  ✓ un cobro en tienda conserva el medio y usa caja pdv                  0.10s  
+  ✓ sin caja pdv no guarda el cobro ni elige otro banco                  0.07s  
+  ✓ la transferencia de apartado no se convierte en caja pdv             0.06s  
+  ✓ una transferencia ordinaria usa el banco elegido y no etiqueta md    0.08s  
+  ✓ un banco fuera de alcance no se acepta en transferencia              0.06s  
+  ✓ el corte md solo se escribe con intencion y el segundo pago no lo m… 0.10s  
+  ✓ md no se reprograma si el primer pago llega otro dia aunque sea ant… 0.07s  
+  ✓ el credito no crea exhibicion de caja ni etiqueta md                 0.07s  
+  ✓ una version financiera vieja bloquea el pago y el reintento no dupl… 0.09s  
+  ✓ el segundo abono actualiza el pendiente sin cambiar el primero       0.11s  
+  ✓ editar y sustituir conservan caja pdv y el medio                     0.11s  
+  ✓ md oportuno se confirma con pago y remision sin recalcular el corte  0.10s  
+  ✓ reconoce caja pdv en mayusculas sin crear otro banco                 0.08s  
+
+   PASS  Tests\Feature\ControlPedidos\MunicipalOrdinarioM01Test
+  ✓ jaguar conserva costo desconocido y el expediente su identidad       0.22s  
+  ✓ excepcion pendiente impide cerrar la consulta                        0.14s  
+  ✓ reenvio no borra respuesta ni cierre duplicado crea historial        0.16s  
+  ✓ lector cedis no puede reescribir solicitud o enviarla                0.14s  
+  ✓ no se puede responder sin enviar o en otro departamento              0.13s  
+  ✓ identificaciones historicas solo por permiso o pedido referenciado…  0.23s  
+  ✓ documento tras baja continua numeracion y no expone ruta             0.11s  
+  ✓ archivo ejecutable no se publica como evidencia                      0.12s  
+  ✓ tienda filtra sucursal y rechaza respuesta directa ajena             0.96s  
+  ✓ resolver faltante y responder actualizacion permite cierre sin pisa… 0.21s  
+  ✓ costo conocido insuficiente no valida y cubierto si valida y asocia… 0.22s  
+  ✓ jaguar pago validado y reporte no presentan transporte gratis        0.20s  
+  ✓ numero remision y validacion no eluden consulta abierta              0.11s  
+
+   FAIL  Tests\Feature\ControlPedidos\RecorridoTiendaIntegralTest
+  ⨯ la cobertura de mismo dia esta abierta a departamentos y exige dia…  0.08s  
+  ✓ el apartado se cobra y entrega con fotografia                        0.08s  
+  ✓ la misma referencia no crea un segundo ingreso                       0.09s  
+  ✓ el credito aprobado no pide transferencia y el bloqueado sigue bloq… 0.09s  
+  ✓ el anexo no edita la remision y el retiro no confirma cedis          0.09s  
+  ✓ los veinte dias reintegran fisicamente sin crear saldo               0.10s  
+  ✓ la transferencia se recibe en custodia y se entrega                  0.11s  
+  ✓ el segundo traslado se mueve despues de autorizarlo                  0.09s  
+  ✓ el retiro de pdv se traslada y cedis lo integra                      0.13s  
+  ✓ el anexo se cubre se remisiona y se integra                          0.09s  
+  ✓ el credito se remisiona entrega y se cancela al terminar el dia sig… 0.16s  
+  ✓ cambiar modalidad exige archivo y conserva pago y remision           0.12s  
+  ✓ el excedente menor a diez no genera saldo y no se aplica al mismo p… 0.07s  
+
+   PASS  Tests\Feature\ControlPedidos\TransferenciaTiendaTest
+  ✓ confirmar consulta cedis resuelve almacenes sin simular recepcion    0.16s  
+  ✓ confirmar sin cedis configurado no adivina origen ni avanza          0.13s  
+  ✓ resolucion cedis no modifica captura de envios                       0.11s  
+  ✓ autoguardar destino de consulta cedis conserva origen y no crea cus… 0.17s  
+  ✓ confirmar transferencia exige pago y destino y llega a auditoria si… 0.43s  
+  ✓ credito cedis va a revision sin transferencia y completa custodia y… 0.58s  
+  ✓ auditoria revierte la aprobacion de credito si falla la validacion   0.18s  
+  ✓ credito vencido regresa el pedido con la indicacion                  0.24s  
+  ✓ credito pagado vuelve a revision sin exigir evidencia                0.18s  
+  ✓ md oportuno se traslada y conserva custodia pagada si no recoge hoy  0.40s  
+  ✓ md tardio no prepara y espera acuerdo explicito para continuar t02   0.23s  
+  ✓ md tardio no se prepara por la ruta de empaque anterior              0.11s  
+  ✓ md reportado en otro dia no se reprograma solo                       0.13s  
+  ✓ cedis no puede acordar la continuacion por la vendedora              0.13s  
+  ✓ recorrido separa preparacion salida recepcion custodia y entrega     0.38s  
+  ✓ no prepara sin ingreso verificado                                    0.13s  
+  ✓ no recibe antes de la salida                                         0.21s  
+  ✓ otra sucursal no puede recibir                                       0.25s  
+  ✓ version obsoleta no registra custodia                                0.30s  
+  ✓ veinte dias solo avisan gestion sin liberar pago ni custodia         0.34s  
+  ✓ desde pdv se conserva procedencia y se recibe en la misma sucursal   0.25s  
+  ✓ city center se identifica como ramificacion t03                      0.33s  
+  ✓ la emision de remision se conserva al sustituir pdf                  0.13s  
+  ✓ traslado solicita evidencia o anotacion y conserva pago              0.37s  
+  ✓ segundo traslado recorrido completo hasta entrega en destino         0.61s  
+  ✓ modalidad solo registra intencion sin convertir ni liberar custodia  0.37s  
+  ✓ rechazo conserva origen y la siguiente solicitud archiva la anterio… 0.44s  
+  ✓ destino antes de salir conserva documentos y no solicita segundo tr… 0.22s  
+  ✓ no sale a sucursal sin almacen de custodia configurado               0.19s  
+  ✓ editar productos antes de validar muestra la diferencia y continua…  0.38s  
+  ✓ tras pago comprobado el cambio informal conserva pagos y no reutili… 0.23s  
+
+   PASS  Tests\Feature\SaldosAFavor\ReglasSaldosAFavorTest
+  ✓ rechaza monto menor al minimo configurado                            0.08s  
+  ✓ vigencia por fecha limite                                            0.07s  
+  ✓ reserva fifo ignora cherry pick y marca reservado                    0.07s  
+  ✓ incidencia saf registra bitacora sin cambiar fase                    0.07s  
+  ✓ no aplica credito del mismo pedido                                   0.08s  
+  ✓ no mezcla canal ni sucursal al reservar                              0.08s  
+  ────────────────────────────────────────────────────────────────────────────  
+   FAILED  Tests\Feature\ControlPedidos\RecorridoTiend…  AssertionFailedError   
+  El fin de semana no deja prevista la atención de mismo día.
+
+  at tests/Feature/ControlPedidos/RecorridoTiendaIntegralTest.php:120
+    116▕         ]);
+    117▕         $this->usuario->givePermissionTo(Permission::findOrCreate(PoliticaAccionesRegistrarPedidos::PERMISO_MD, 'web'));
+    118▕         try {
+    119▕             app(RegistrarCoberturaTiendaService::class)->ejecutar($pedido, $this->usuario, 'transferencia', true);
+  ➜ 120▕             $this->fail('El fin de semana no deja prevista la atención de mismo día.');
+    121▕         } catch (ValidationException $e) {
+    122▕             $this->assertSame(PoliticaAccionesRegistrarPedidos::MENSAJE_SABADO, $e->errors()['atencion_tienda'][0]);
+    123▕         }
+    124▕
+
+  1   tests/Feature/ControlPedidos/RecorridoTiendaIntegralTest.php:120
+
+
+  Tests:    1 failed, 96 passed (789 assertions)
+  Duration: 22.33s
+

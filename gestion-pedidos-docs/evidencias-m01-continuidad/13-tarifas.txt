@@ -1,0 +1,14 @@
+
+  [30;42;1m PASS [39;49;22m[39m Tests\Unit\ControlPedidos\ControlPedidosTarifaLocalTest[39m
+  [32;1m✓[39;22m[90m [39m[90mtarifa fija local[39m[90m                                                   [39m [90m6.39s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtarifa por peso kg[39m[90m                                                  [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtarifa por peso gramos[39m[90m                                              [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mcomercial ignora tarifa[39m[90m                                             [39m [90m0.04s[39m  
+  [32;1m✓[39;22m[90m [39m[90menvio por cobrar anula costo en atributos[39m[90m                           [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mguia cliente anula costo y por cobrar[39m[90m                               [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90mtarifa local rellena costo vacio[39m[90m                                    [39m [90m0.03s[39m  
+  [32;1m✓[39;22m[90m [39m[90moverride manual se respeta[39m[90m                                          [39m [90m0.04s[39m  
+
+  [90mTests:[39m    [32;1m8 passed[39;22m[90m (14 assertions)[39m
+  [90mDuration:[39m [39m7.05s[39m
+

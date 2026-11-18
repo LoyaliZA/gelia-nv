@@ -1,0 +1,9 @@
+
+> check:style
+> npm run check:style-jsx && npm run check:style-css
+
+
+> check:style-jsx
+> bash scripts/style-guard/check-jsx-no-hex.sh --check
+
+style-guard: falta baseline /var/www/html/docs/style-system/baseline/jsx-hex-allowlist.tsv — ejecutar --update-baseline primero.

@@ -98,6 +98,9 @@ class NotificarPedidoBmaService
         }
 
         return $usuarios
+            ->when(\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido), fn (Collection $lista) => $lista->filter(
+                fn (User $usuario) => \App\Support\ControlPedidos\VisibilidadPedidoBma::puedeConsultar($usuario, $pedido)
+            ))
             ->unique('id')
             ->when($excluirUsuarioId, fn (Collection $c) => $c->reject(fn (User $u) => (int) $u->id === (int) $excluirUsuarioId))
             ->values();

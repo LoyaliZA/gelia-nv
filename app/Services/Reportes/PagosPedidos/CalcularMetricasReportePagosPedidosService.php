@@ -42,6 +42,8 @@ class CalcularMetricasReportePagosPedidosService
             SUM(CASE WHEN estado_cobertura = 'con_excedente' THEN 1 ELSE 0 END) as pedidos_con_excedente
         ")->first();
 
+        $transportesPendientes = (clone $query)->where('metadata_snapshot->transporte_municipal->desconocido', true)->count();
+
         $itemsEnAlcance = $this->queryItemsEnAlcance($query, $params);
         $exhibicionesIncluidas = (clone $itemsEnAlcance)->count();
         $pagosCoincidentes = (float) (clone $itemsEnAlcance)->sum('monto_snapshot');
@@ -83,11 +85,13 @@ class CalcularMetricasReportePagosPedidosService
             $saldoEtiqueta = 'excedente';
             $saldoValor = $excedente;
         } else {
-            $saldoEtiqueta = 'cubierto';
+            $saldoEtiqueta = $transportesPendientes > 0 ? 'transporte_pendiente' : 'cubierto';
             $saldoValor = 0.0;
         }
 
         return [
+            'transportes_pendientes_determinar' => $transportesPendientes,
+            'monto_envio_es_subtotal_conocido' => $transportesPendientes > 0,
             'pedidos_validados' => (int) ($agg->pedidos_validados ?? 0),
             'total_pedido' => number_format((float) ($agg->total_pedido ?? 0), 2, '.', ''),
             'total_remisiones' => number_format((float) ($agg->total_pedido ?? 0), 2, '.', ''),

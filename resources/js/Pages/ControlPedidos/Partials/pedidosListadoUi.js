@@ -27,6 +27,18 @@ export function badgesListaPedido(pedido) {
         requiereLogistica: pedidoRequiereLogistica(pedido),
     });
     const items = [{ key: 'estatus', className: badge.className, style: badge.style, label: badge.label }];
+    const municipal = pedido.solicitud_preparacion?.modalidad_entrega === 'municipal';
+    const consulta = pedido.solicitud_preparacion?.consulta_municipal;
+    const revisionMunicipal = pedido.solicitud_preparacion?.revision_disponibilidad;
+    if (municipal && consulta?.enviada_at) {
+        const pendiente = revisionMunicipal?.actualizacion_pendiente || revisionMunicipal?.vigente === false
+            || revisionMunicipal?.sustituida_at || revisionMunicipal?.aceptacion_vigente === false;
+        items[0].label = consulta.estado === 'cerrada' ? 'Consulta cerrada'
+            : pendiente || consulta.estado === 'excepciones_pendientes' ? 'Excepciones pendientes'
+            : consulta.estado === 'respondida' ? 'Consulta respondida'
+            : consulta.area === 'tienda' ? 'Consulta pendiente: Tienda' : 'Consulta pendiente: CEDIS';
+    }
+
 
     const traslado = (pedido.solicitud_preparacion || pedido.solicitud_preparacion_json)?.segundo_traslado;
     if (traslado && !traslado.recepcion_confirmada && ['pendiente', 'autorizada'].includes(traslado.estado)) {
@@ -129,7 +141,9 @@ export function accionesPedidoLista({
     if (puedeMutar && puedeCompletarEnvioResguardo(pedido) && (can('control_pedidos.crear') || can('control_pedidos.editar')) && onCompletarEnvio) {
         out.push({ key: 'completar', label: 'Completar envío', tone: 'teal', onClick: () => onCompletarEnvio(pedido) });
     }
-    if (puedeMutar && puedeAnexarPagoEnvio(pedido) && (can('control_pedidos.crear') || can('control_pedidos.auditar')) && onAnexarEnvio) {
+    const consultaMunicipalAbierta = pedido.solicitud_preparacion?.modalidad_entrega === 'municipal'
+        && pedido.solicitud_preparacion?.consulta_municipal?.estado !== 'cerrada';
+    if (!consultaMunicipalAbierta && puedeMutar && puedeAnexarPagoEnvio(pedido) && (can('control_pedidos.crear') || can('control_pedidos.auditar')) && onAnexarEnvio) {
         out.push({ key: 'anexar', label: 'Anexar pago', tone: 'amber', onClick: () => onAnexarEnvio(pedido) });
     }
     if (can('control_pedidos.ver_detalle') && onVer) {

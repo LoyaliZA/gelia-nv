@@ -1,0 +1,172 @@
+{
+  "tarjetas": [
+    {
+      "tipo": "municipal",
+      "cabecera": "Envío:MUNICIPALDepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoTransporte ficticio Jaguar 164145",
+      "texto": "Envío:\nMUNICIPAL\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-MUNICIPAL-R6\n\nQA-WIZ-REGRESION-45-MUNICIPAL-R6\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nPendiente regularizar envío\nOrigen\nCEDIS ficticio 164145\nDestino\nTransporte ficticio Jaguar 164145\nRevisar disponibilidad\nPDF pedido\nDetalle"
+    },
+    {
+      "tipo": "nacional",
+      "cabecera": "Envío:NACIONALDepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoM01-QA-164145 - Sucursal ficticia",
+      "texto": "Envío:\nNACIONAL\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-NACIONAL\n\nQA-WIZ-REGRESION-45-NACIONAL\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nConsulta de pesaje solicitada\nOrigen\nCEDIS ficticio 164145\nDestino\nM01-QA-164145 - Sucursal ficticia\n\nPaquetería\n\nPaquetería nacional ficticia 45\n\nEnvíos / Guía\n\n— · Guía generada por la empresa\n\nResponder pesaje\nPDF pedido\nDetalle"
+    },
+    {
+      "tipo": "tienda",
+      "cabecera": "Tipo de pedidoTIENDADepartamentoDepartamento ficticio 164145",
+      "ruta": "OrigenCEDIS ficticio 164145DestinoM01-QA-164145 - Sucursal ficticia",
+      "texto": "Tipo de pedido\nTIENDA\nDepartamento\nDepartamento ficticio 164145\n\nFolio: WIZ-REGRESION-45-TIENDA-R6\n\nQA-WIZ-REGRESION-45-TIENDA-R6\n\nCliente: Cliente ficticio de auditoría\n\nVentas ficticias sincronización\n2026-11-17\nNueva consulta solicitada\nOrigen\nCEDIS ficticio 164145\nDestino\nM01-QA-164145 - Sucursal ficticia\nNueva consulta\nPDF pedido\nDetalle"
+    }
+  ],
+  "medidas": [
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-municipal",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-nacional",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1440,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1440,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1024,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 1024,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 390,
+      "oscuro": true,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    },
+    {
+      "nombre": "tarjeta-tienda",
+      "ancho": 390,
+      "oscuro": false,
+      "modales": [],
+      "pagina": true,
+      "palabrasPartidas": []
+    }
+  ],
+  "pasos": [],
+  "alcance": "Tarjetas sin mutaciones",
+  "console": [],
+  "resultado": "aprobado"
+}

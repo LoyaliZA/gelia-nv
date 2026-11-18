@@ -1,3 +1,4 @@
+import { esRegistroMunicipal, nombreTerminalMunicipal } from '../../Municipal/terminalMunicipal';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
@@ -427,7 +428,7 @@ export default function ModalDetalleDelegado({
                             )}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                 <CampoConCopia label="Paquetería" value={pedido.paqueteria?.nombre} />
-                                <CampoConCopia label="Origen de la guía" value={etiquetaOrigenGuia(pedido)} copiar={false} />
+                                <CampoConCopia label={esRegistroMunicipal(pedido) ? 'Terminal destino' : 'Origen de la guía'} value={esRegistroMunicipal(pedido) ? nombreTerminalMunicipal(pedido) : etiquetaOrigenGuia(pedido)} copiar={false} />
                                 <CampoConCopia label="Tipo de guía" value={pedido.tipo_guia?.nombre || pedido.tipoGuia?.nombre} />
                                 <CampoConCopia label="Destinatario" value={dir?.nombre_destinatario || pedido.envia_otra_persona} />
                                 <CampoConCopia label="Teléfono" value={dir?.telefono_destinatario} />

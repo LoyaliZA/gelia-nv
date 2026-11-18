@@ -1,0 +1,14 @@
+{
+  "pasos": [
+    "Solicitud incompleta muestra validación servidor en el formulario, bloquea Enviar consulta y permite cerrar después de terminar la operación."
+  ],
+  "console": [
+    {
+      "level": "SEVERE",
+      "message": "http://laravel.test:9193/control-pedidos/municipal/43/solicitud - Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
+      "source": "network",
+      "timestamp": 1794932985091
+    }
+  ],
+  "resultado": "aprobado"
+}

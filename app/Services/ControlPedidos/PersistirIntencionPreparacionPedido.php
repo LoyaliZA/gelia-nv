@@ -35,6 +35,12 @@ class PersistirIntencionPreparacionPedido
             }
 
             $entrada = $datos['solicitud_preparacion'];
+            $municipal = $pedido->solicitud_preparacion_json ?? [];
+            if (($municipal['modalidad_entrega'] ?? null) === 'municipal' && ! empty($municipal['consulta_municipal']['enviada_at'])
+                && (! is_array($entrada) || ($entrada['modalidad_entrega'] ?? 'municipal') !== 'municipal')) {
+                throw ValidationException::withMessages(['modalidad_entrega' => 'La consulta municipal ya fue enviada. Conserve su modalidad.']);
+            }
+
             if (is_array($entrada)) {
                 $actual = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
                 $this->rechazarCambioDeDestinoEnviado($pedido, $actual, $entrada);

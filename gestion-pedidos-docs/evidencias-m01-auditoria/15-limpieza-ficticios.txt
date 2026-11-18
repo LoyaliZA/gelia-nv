@@ -1,0 +1,4 @@
+{
+    "archivos_ficticios_eliminados": 4,
+    "capturas_conservadas": true
+}
