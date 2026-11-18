@@ -210,4 +210,37 @@ class ResolverEstadoVendedorOperacionPdvTest extends TestCase
             $this->resolver->accionesDisponibles(EstadoVendedorOperacionPdv::JornadaCerrada),
         );
     }
+
+    public function test_tiempo_disponible_omite_el_cooldown(): void
+    {
+        $inicioIntervalo = now()->subSeconds(60);
+        $finCooldown = now()->subSeconds(40);
+        $jornada = JornadaPdv::factory()->create([
+            'estado' => EstadoJornadaPdv::Abierta,
+            'disponible_desde' => $finCooldown,
+        ]);
+        $intervalo = IntervaloOperativoPdv::factory()->create([
+            'jornada_id' => $jornada->id,
+            'user_id' => $jornada->user_id,
+            'sucursal_id' => $jornada->sucursal_id,
+            'tipo' => TipoIntervaloOperativoPdv::Disponible,
+            'inicio_at' => $inicioIntervalo,
+            'fin_at' => null,
+        ]);
+
+        $estado = $this->resolver->resolver(
+            $jornada->sucursal_id,
+            $jornada,
+            $intervalo,
+            false,
+            null,
+            now(),
+        );
+
+        $this->assertSame(EstadoVendedorOperacionPdv::Disponible, $estado);
+        $cronometro = $this->resolver->serializarCronometro($estado, $jornada, $intervalo);
+        $this->assertSame('Tiempo disponible', $cronometro['etiqueta'] ?? null);
+        $this->assertSame($finCooldown->toIso8601String(), $cronometro['referencia_at'] ?? null);
+        $this->assertNotSame($inicioIntervalo->toIso8601String(), $cronometro['referencia_at'] ?? null);
+    }
 }

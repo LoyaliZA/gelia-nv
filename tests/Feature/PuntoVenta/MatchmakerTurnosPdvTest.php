@@ -61,7 +61,7 @@ class MatchmakerTurnosPdvTest extends TestCase
 
         $this->sucursal = Sucursal::factory()->create(['nombre' => 'Sucursal Matchmaker']);
 
-        // ponytail: el cache de configuración apunta a database y el candado unique del matchmaker sobrevive entre tests con el mismo id de sucursal.
+        // ponytail: overlapping usa el almacén de caché; array evita candados residuales entre tests.
         config(['cache.default' => 'array']);
         Cache::purge('database');
         Cache::purge('array');
@@ -344,6 +344,101 @@ class MatchmakerTurnosPdvTest extends TestCase
             return $job->sucursalId === $this->sucursal->id
                 && $job->origenDisparador === 'jornada.abierta';
         });
+    }
+
+    public function test_dos_disparos_sin_sufijo_se_conservan(): void
+    {
+        Queue::fake();
+
+        EjecutarMatchmakerTurnosPdvJob::dispatch($this->sucursal->id, TurnoPdvEvento::TIPO_ALTA);
+        EjecutarMatchmakerTurnosPdvJob::dispatch($this->sucursal->id, TurnoPdvEvento::TIPO_ATENCION_CERRADA);
+
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, 2);
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn (EjecutarMatchmakerTurnosPdvJob $job): bool => $job->origenDisparador === TurnoPdvEvento::TIPO_ALTA);
+        Queue::assertPushed(EjecutarMatchmakerTurnosPdvJob::class, fn (EjecutarMatchmakerTurnosPdvJob $job): bool => $job->origenDisparador === TurnoPdvEvento::TIPO_ATENCION_CERRADA);
+    }
+
+    public function test_matchmaker_solapado_se_reencola_y_no_ejecuta(): void
+    {
+        $job = new class($this->sucursal->id, TurnoPdvEvento::TIPO_ALTA) extends EjecutarMatchmakerTurnosPdvJob
+        {
+            public mixed $releasedAfter = null;
+
+            public function release($delay = 0): void
+            {
+                $this->releasedAfter = $delay;
+            }
+        };
+
+        $middleware = $job->middleware()[0];
+        $this->assertInstanceOf(\Illuminate\Queue\Middleware\WithoutOverlapping::class, $middleware);
+
+        $lock = Cache::lock($middleware->getLockKey($job), 60);
+        $this->assertTrue($lock->get());
+
+        $ejecuto = false;
+        $middleware->handle($job, function () use (&$ejecuto): void {
+            $ejecuto = true;
+        });
+
+        $this->assertFalse($ejecuto);
+        $this->assertSame(1, $job->releasedAfter);
+        $lock->release();
+    }
+
+    public function test_sucursales_distintas_no_comparten_candado_de_matchmaker(): void
+    {
+        $otra = Sucursal::factory()->create(['nombre' => 'Otra sucursal matchmaker']);
+        $jobA = new EjecutarMatchmakerTurnosPdvJob($this->sucursal->id, TurnoPdvEvento::TIPO_ALTA);
+        $jobB = new EjecutarMatchmakerTurnosPdvJob($otra->id, TurnoPdvEvento::TIPO_ALTA);
+
+        $this->assertNotSame(
+            $jobA->middleware()[0]->getLockKey($jobA),
+            $jobB->middleware()[0]->getLockKey($jobB),
+        );
+
+        $lock = Cache::lock($jobA->middleware()[0]->getLockKey($jobA), 60);
+        $this->assertTrue($lock->get());
+
+        $ejecuto = false;
+        $jobB->middleware()[0]->handle($jobB, function () use (&$ejecuto): void {
+            $ejecuto = true;
+        });
+        $this->assertTrue($ejecuto);
+        $lock->release();
+    }
+
+    public function test_transaccion_revertida_no_publica_el_matchmaker(): void
+    {
+        Queue::fake();
+
+        try {
+            DB::transaction(function (): void {
+                EjecutarMatchmakerTurnosPdvJob::dispatch($this->sucursal->id, TurnoPdvEvento::TIPO_ALTA)
+                    ->afterCommit();
+                throw new \RuntimeException('forzar rollback');
+            });
+        } catch (\RuntimeException) {
+        }
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_no_asigna_dos_turnos_a_la_misma_persona(): void
+    {
+        Event::fake([TurnoAsignado::class, TurnoReatencion::class]);
+        $this->abrirSucursal();
+        $ventas = $this->crearVendedorOperacion('Un vendedor');
+        app(AbrirJornadaPdvService::class)->ejecutar($ventas, now());
+        $primero = $this->crearTurnoEnCola('Primero');
+        $segundo = $this->crearTurnoEnCola('Segundo');
+
+        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'prueba');
+        app(MatchmakerTurnosPdvService::class)->ejecutar($this->sucursal->id, 'prueba');
+
+        $this->assertSame(TurnoPdv::ESTADO_ASIGNADO, $primero->fresh()->estado);
+        $this->assertSame(TurnoPdv::ESTADO_EN_COLA, $segundo->fresh()->estado);
+        $this->assertSame(1, TurnoPdvAtencion::query()->whereNull('fin_at')->count());
     }
 
     public function test_finalizar_pausa_programa_solo_reparto_al_vencer_espera(): void
