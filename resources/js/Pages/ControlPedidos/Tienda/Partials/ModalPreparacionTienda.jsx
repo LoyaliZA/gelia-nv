@@ -76,7 +76,7 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
             opciones.onFinish?.();
         }
     };
-    useActualizacionesPedidos({ activo: Boolean(datos?.tarea?.pedido?.id), pedidoId: datos?.tarea?.pedido?.id, pausado: dirty || procesando || cargando, onActualizar: () => cargar().catch(() => setError('No se pudo actualizar la preparación.')), onPendiente: () => setMensaje('La preparación cambió. Se conserva su captura; al guardar se comprobará la versión.') });
+    useActualizacionesPedidos({ activo: Boolean(datos?.tarea?.pedido?.id), pedidoId: datos?.tarea?.pedido?.id, pausado: procesando || cargando, onActualizar: () => cargar(undefined, dirty).catch(() => setError('No se pudo actualizar la preparación.')), onPendiente: () => setMensaje('La preparación cambió. Se conserva su captura; al guardar se comprobará la versión.') });
     const tarea = datos?.tarea;
     const folio = tarea?.pedido?.folio_visible || tarea?.pedido?.folio || 'Preparación en tienda';
     const caratula = datos?.documentos?.filter((d) => d.tipo_evidencia === 'caratula_recoge_tienda').sort((a, b) => b.id - a.id)[0];

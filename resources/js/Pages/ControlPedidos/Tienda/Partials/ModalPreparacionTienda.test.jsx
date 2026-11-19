@@ -83,6 +83,22 @@ it('actualiza evidencias importadas sin descartar productos capturados ni la pro
     expect(button('Cerrar sin guardar')).toBeDefined();
 });
 
+it('con captura abierta lee un cambio nuevo del pedido y conserva la captura local', async () => {
+    const base = data('EN_ATENCION', 1);
+    base.tarea.pedido = { id: 32, folio: 'PBMA-2026-00032' };
+    api.get.mockResolvedValue({ data: base });
+    await mount();
+    await click('Elegir crema'); await click('Agregar pieza');
+    const llamadas = api.get.mock.calls.length;
+    const nueva = data('EN_ATENCION', 2);
+    nueva.tarea.pedido = { id: 32, folio: 'PBMA-2026-00032' };
+    nueva.documentos_solicitud = [...base.documentos_solicitud, { id: 5, nombre_original: 'Anexo-2.pdf', mime_type: 'application/pdf' }];
+    api.get.mockResolvedValue({ data: nueva });
+    await act(async () => { window.dispatchEvent(new CustomEvent('pedido-bma.actualizado', { detail: { pedido_id: 32 } })); await new Promise((r) => setTimeout(r, 300)); });
+    expect(api.get.mock.calls.length).toBeGreaterThan(llamadas);
+    expect(document.querySelector('#tienda-cantidad-0').value).toBe('1');
+});
+
 it('recorre respuesta, espera de Ventas y confirmación física única sin recapturar piezas', async () => {
  const inicial = data(); inicial.tarea.pedido = { ...inicial.tarea.pedido, area_revision: 'preparacion_tienda' };
  const respondida = structuredClone(inicial); respondida.tarea.pedido.revision_disponibilidad = { estado: 'sin_excepciones' };

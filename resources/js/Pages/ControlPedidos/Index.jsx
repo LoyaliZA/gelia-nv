@@ -149,6 +149,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 && fresco.pesaje_respondido_at === m.pedido.pesaje_respondido_at
                 && fresco.estatus_envio === m.pedido.estatus_envio
                 && fresco.catalogo_estatus_pedido_id === m.pedido.catalogo_estatus_pedido_id
+                && Number(fresco.version_consulta ?? 0) === Number(m.pedido.version_consulta ?? 0)
+                && fresco.consulta_cerrada_at === m.pedido.consulta_cerrada_at
+                && JSON.stringify(fresco.solicitud_preparacion ?? null) === JSON.stringify(m.pedido.solicitud_preparacion ?? null)
                 && Number(fresco.peso_real_kg) === Number(m.pedido.peso_real_kg)
                 && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas);
             if (mismo) return m;
@@ -160,8 +163,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     // Con el formulario abierto sí seguimos refrescando el listado (CEDIS → modal).
     // Pausamos solo overlays que no necesitan sync en vivo.
-    const pausarPollingListado = modalDetalle.abierto
-        || modalBitacora.abierto
+    // El detalle es de solo lectura: no se pausa para que la respuesta de Control de pedidos se refleje sin cerrar y reabrir.
+    const pausarPollingListado = modalBitacora.abierto
         || modalAnexo.abierto
         || modalCompletarEnvio.abierto
         || modalCargarGuia.abierto

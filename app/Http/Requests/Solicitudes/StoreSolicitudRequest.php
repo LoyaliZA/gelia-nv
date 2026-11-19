@@ -146,14 +146,6 @@ class StoreSolicitudRequest extends FormRequest
         if ($convertir && ! $procesoPermite) {
             $validator->errors()->add('convertir_menudeo_mayoreo', 'Este proceso no admite la conversión de menudeo a mayoreo.');
         }
-
-        $listaId = $this->input('catalogo_lista_descuento_id');
-        if ($cliente->es_menudeo && $listaId && ! $convertir) {
-            $lista = CatalogoListaDescuento::find($listaId);
-            if ($lista && str_starts_with(strtoupper($lista->nombre), 'MAYOREO ')) {
-                $validator->errors()->add('catalogo_lista_descuento_id', 'Un cliente de menudeo requiere la conversión explícita para solicitar una lista mayorista.');
-            }
-        }
     }
 
     private function validarTipoClienteSolicitado(Validator $validator): void

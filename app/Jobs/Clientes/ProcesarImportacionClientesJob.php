@@ -29,17 +29,23 @@ class ProcesarImportacionClientesJob implements ShouldQueue
 
     public int $tries = 1;
 
+    /** Instante de encolado: separa la espera en cola del tiempo de proceso (solo diagnóstico). */
+    public float $encoladoEn;
+
     public function __construct(
         public int $importacionId,
         public string $token,
         public int $desdeFila = 0,
-    ) {}
+    ) {
+        $this->encoladoEn = microtime(true);
+    }
 
     public function handle(
         RevisionImportacionClientes $revision,
         ImportarClientesWizerpService $importador,
         RegistrarImportacionClienteService $registrar,
     ): void {
+        $arranque = microtime(true);
         $importacion = ImportacionCliente::find($this->importacionId);
         if (! $importacion || in_array($importacion->estado, ['completo', 'cancelada'], true)) {
             return;
@@ -131,6 +137,14 @@ class ProcesarImportacionClientesJob implements ShouldQueue
             if (! $liberado) {
                 $candado->release();
             }
+            Log::info('Importación de clientes: tramo procesado.', [
+                'importacion_id' => $this->importacionId,
+                'desde_fila' => $this->desdeFila,
+                'espera_cola_ms' => (int) round(($arranque - $this->encoladoEn) * 1000),
+                'proceso_ms' => (int) round((microtime(true) - $arranque) * 1000),
+                'memoria_mb' => round(memory_get_peak_usage(true) / 1048576, 1),
+                'memoria_actual_mb' => round(memory_get_usage(true) / 1048576, 1),
+            ]);
         }
     }
 

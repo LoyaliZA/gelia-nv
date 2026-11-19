@@ -51,8 +51,20 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const puedeRetirar = operaciones.capacidades?.retirar !== false;
     const productos = useMemo(() => {
         const retiradas = new Set((solicitud?.retiro_piezas || []).flatMap(retiro => retiro.faltantes_retirados || []).map(Number));
+        // Lo ya solicitado (pendiente o aplicado) deja de ofrecerse; una cantidad parcial solo descuenta lo pedido.
+        const clave = (x) => String(x?.sku || x?.descripcion || '').trim().toLowerCase();
+        const pedidas = new Map();
+        for (const retiro of solicitud?.retiro_piezas || []) {
+            if (retiro?.estado === 'rechazada') continue;
+            for (const linea of retiro?.piezas_solicitadas || retiro?.piezas || []) {
+                if (linea?.revision_id) continue;
+                pedidas.set(clave(linea), (pedidas.get(clave(linea)) || 0) + (Number(linea?.cantidad) || 0));
+            }
+        }
         return piezasRespuesta(pedido?.tarea_preparacion, pedido?.revisiones_producto || pedido?.revisionesProducto || [])
-            .filter(pieza => !retiradas.has(Number(pieza.revision_id)));
+            .filter(pieza => !retiradas.has(Number(pieza.revision_id)))
+            .map(pieza => ({ ...pieza, cantidad: pieza.revision_id ? pieza.cantidad : pieza.cantidad - (pedidas.get(clave(pieza)) || 0) }))
+            .filter(pieza => pieza.cantidad > 0);
     }, [pedido, solicitud]);
     const claveAnexo = useRef(uuidSolicitud());
     const claveRetiro = useRef(uuidSolicitud());
@@ -160,7 +172,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 },
             });
             const lineas = respuesta.data?.expediente?.anexo?.sin_remision;
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
             else if (Array.isArray(lineas)) onSolicitud({ ...solicitud, anexo_sin_remision: lineas });
             claveAnexo.current = uuidSolicitud();
             setSeleccionadas([]);
@@ -267,7 +279,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     return form;
                 },
             });
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
             claveRetiro.current = uuidSolicitud();
             [...previewsRetiro, ...previewsDocumentos].forEach((preview) => {
                 if (preview.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url);

@@ -31,6 +31,18 @@ export function anexosPendientesRevision(solicitud = {}) {
     return (solicitud.anexo_sin_remision || []).some(anexoPendienteRevision);
 }
 
+/** Revisiones guardadas por unidad en un anexo aún sin responder: avance del ciclo en curso, no de la respuesta enviada. */
+export function revisionesDelCicloEnCurso(solicitud = {}) {
+    const ids = new Set();
+    for (const anexo of solicitud.anexo_sin_remision || []) {
+        if (!anexoPendienteRevision(anexo)) continue;
+        for (const unidad of anexo.unidades || []) {
+            for (const id of unidad?.revision_ids || []) ids.add(Number(id));
+        }
+    }
+    return ids;
+}
+
 /** El ciclo vigente es lo pedido después de la última respuesta; lo anterior queda en historial. */
 export function cambioDelCicloActual(cambio, solicitud = {}) {
     const corte = solicitud.revision_disponibilidad?.respondida_at;
@@ -137,6 +149,6 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
     const sueltas = decisiones.filter(d => !anexos.some(a => Number(a.sustituye_revision_id) === Number(d.revision_id))
         && !retiros.some(r => (r.piezas_solicitadas || r.piezas || []).some(p => Number(p.revision_id) === Number(d.revision_id))))
         .map(d => ({ ...d, clave: `decision-${d.revision_id}`, tipo: d.accion === 'confirmar' ? 'confirmacion' : 'retiro', clase: 'sku', documentos: [],
-            pendiente: Boolean(corte && d.fecha >= corte) }));
+            pendiente: false }));  // Decisión de Ventas ya registrada: se informa, no se revisa.
     return [...anexos, ...retiros, ...sueltas].sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
 }

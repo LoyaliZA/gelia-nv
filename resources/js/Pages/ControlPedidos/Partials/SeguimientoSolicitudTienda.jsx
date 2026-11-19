@@ -13,7 +13,7 @@ import { adaptadorConsultaTienda } from './adaptadoresConsulta';
 
 export { AjustePiezas };
 import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
-import { anexosPendientesRevision } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, revisionesDelCicloEnCurso } from './cambiosDisponibilidad';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -98,7 +98,8 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
     const capturas = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
     const generales = capturas.filter(d => !revision.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id));
     const anteriores = capturas.filter(d => revision.evidencia_actual_ids && !revision.evidencia_actual_ids.includes(d.id));
-    const piezas = (revisiones || []).filter(p => ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
+    const enCurso = revision.actualizacion_pendiente ? revisionesDelCicloEnCurso(pedido.solicitud_preparacion) : new Set();
+    const piezas = (revisiones || []).filter(p => !enCurso.has(Number(p.id)) && ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
     const filas = piezas.map(p => ({
         id: p.id, descripcion: p.descripcion_producto || p.descripcion, sku: p.sku,
         cantidad: p.cantidad_encontrada ?? (p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad_solicitada),
@@ -107,7 +108,7 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
         documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
     }));
     return <RespuestaDisponibilidadPedido
-        titulo="Respuesta de disponibilidad" origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'} mostrarCaptura={false}
+        titulo={revision.actualizacion_pendiente ? 'Respuesta anterior de disponibilidad' : 'Respuesta de disponibilidad'} origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'} mostrarCaptura={false}
         responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
         fecha={revision.respondida_at} estado={revision.estado} aceptacionVigente={revision.aceptacion_vigente !== false}
         filas={filas} generales={generales} anteriores={anteriores} cantidad={piezas.length ? piezas.reduce((s,p) => s + Number(p.cantidad_solicitada || 0), 0) : null}

@@ -187,7 +187,13 @@ class ListarPedidosCedisService
                     })->orWhere(function (Builder $municipal) {
                         $municipal->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
                             ->where('solicitud_preparacion_json->consulta_municipal->area', 'cedis')
-                            ->whereIn('solicitud_preparacion_json->consulta_municipal->estado', ['pendiente', 'excepciones_pendientes']);
+                            // Una consulta ya respondida o cerrada sigue consultable en CEDIS.
+                            ->whereIn('solicitud_preparacion_json->consulta_municipal->estado', ['pendiente', 'excepciones_pendientes', 'respondida', 'cerrada']);
+                    })->orWhere(function (Builder $tiendaCedis) {
+                        // Consulta de Tienda atendida por CEDIS: permanece en su bandeja tras la respuesta.
+                        $tiendaCedis->where('solicitud_preparacion_json->modalidad_entrega', 'tienda')
+                            ->where('solicitud_preparacion_json->area_revision', 'control_pedidos')
+                            ->whereNotNull('solicitud_preparacion_json->revision_disponibilidad->estado');
                     });
                 })
         );

@@ -147,3 +147,18 @@ it('transferencia espera cobertura completa sin bloqueos y guardar los cambios d
  const check=[...container.querySelectorAll('input[type="checkbox"]')].find(i=>i.closest('label').textContent.includes('Mismo día:'));
  expect(check.disabled).toBe(true);
 });
+
+it('fija el total de mercancía tras cerrar la consulta mientras se espera la respuesta de auditoría', async () => {
+    const montarFijo = async (props) => {
+        const cont = document.createElement('div'); document.body.append(cont);
+        const raiz = createRoot(cont);
+        await act(async () => raiz.render(<ImportesPagoTienda pedidoId={1} editable totalMercancia={100} importesListos {...props} />));
+        const total = cont.querySelector('#total-mercancia-tienda');
+        await act(async () => raiz.unmount()); cont.remove();
+        return total.disabled;
+    };
+    const enviada = { cobertura_tienda: { tipo: 'apartado', confirmacion_enviada_at: '2026-11-10' } };
+    expect(await montarFijo({ consultaCerrada: true, solicitud: enviada })).toBe(true);
+    expect(await montarFijo({ consultaCerrada: true, solicitud: enviada, estatusRechazado: true })).toBe(false);
+    expect(await montarFijo({ consultaCerrada: false, solicitud: enviada })).toBe(false);
+});

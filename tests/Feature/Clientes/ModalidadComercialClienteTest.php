@@ -107,16 +107,95 @@ class ModalidadComercialClienteTest extends TestCase
         $this->assertSame('5767.00', $cliente->monto_venta_actual);
     }
 
-    public function test_pg_con_monto_cero_no_se_inactiva_ni_clasifica(): void
+    public function test_pg_con_monto_cero_inactiva_sin_clasificar_menudeo(): void
     {
-        $cliente = $this->cliente('300', '10.00', menudeo: false, montoInicial: '0.00');
+        $cliente = $this->cliente('300', '10.00', lista: $this->plata, menudeo: false, montoInicial: '80.00');
         $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n300,pg,0\n");
 
         $cliente->refresh();
+        $this->assertTrue($cliente->es_inactivo);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        $this->assertSame($this->pg->id, app(ClasificacionComercialCliente::class)->listaEfectivaId($cliente));
+        $this->assertSame('0.00', $cliente->monto_venta_actual);
+        $this->assertNotSame(ClasificacionComercialCliente::ORIGEN_IMPORTACION, $cliente->modalidad_origen);
+    }
+
+    public function test_pg_con_monto_cero_sobre_inactivo_no_repite_inactivacion(): void
+    {
+        $cliente = $this->cliente('301', '0.00', lista: $this->plata, inactivo: true, menudeo: false);
+        $resultado = app(ImportarClientesWizerpService::class)->ejecutar(
+            UploadedFile::fake()->createWithContent('pg-cero.csv', "numero_cliente,codigo_lista,monto_venta_actual\n301,pg,0\n"),
+        );
+
+        $cliente->refresh();
+        $this->assertTrue($cliente->es_inactivo);
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame(0, $resultado['clientes_marcados_inactivos']);
+        $this->assertSame(0, $resultado['stats']['activados']);
+    }
+
+    public function test_pg_con_monto_cero_revision_coincide_con_aplicacion(): void
+    {
+        $this->cliente('302', '40.00', lista: $this->bronce, menudeo: false);
+        $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n302,pg,0\n");
+
+        $this->assertSame(1, $vista['conteos']['inactivaciones']);
+        $this->assertSame(0, $vista['conteos']['activaciones']);
+        $this->assertFalse($vista['bloqueado']);
+        $this->confirmar($vista);
+
+        $cliente = Cliente::where('numero_cliente', '302')->first();
+        $this->assertTrue($cliente->es_inactivo);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame($this->bronce->id, $cliente->lista_actual_id);
+    }
+
+    public function test_pg_con_monto_vacio_sigue_siendo_conflicto(): void
+    {
+        $cliente = $this->cliente('303', '40.00', lista: $this->plata, menudeo: false);
+        $vista = $this->revisar("numero_cliente,codigo_lista,monto_venta_actual\n303,pg,\n");
+
+        $this->assertGreaterThan(0, $vista['conteos']['conflictos']);
+        $this->confirmar($vista);
+
+        $cliente->refresh();
         $this->assertFalse($cliente->es_inactivo);
-        $this->assertSame($this->pg->id, $cliente->lista_actual_id);
-        $this->assertTrue($cliente->es_menudeo);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        $this->assertSame('40.00', $cliente->monto_venta_actual);
+    }
+
+    public function test_mayorista_con_cero_sigue_como_mayoreo_activo(): void
+    {
+        $cliente = $this->cliente('304', '80.00', lista: $this->pg, menudeo: true);
+        $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n304,3,0\n");
+
+        $cliente->refresh();
+        $this->assertFalse($cliente->es_inactivo);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
         $this->assertSame(ClasificacionComercialCliente::ORIGEN_IMPORTACION, $cliente->modalidad_origen);
+    }
+
+    public function test_codigo_vacio_con_cero_inactiva_sin_tocar_lista_ni_beneficios(): void
+    {
+        $cliente = $this->cliente('305', '30.00');
+        $solicitud = $this->solicitud($cliente, $this->respondida, $this->plata->id);
+        app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
+        $this->assertFalse($cliente->fresh()->es_menudeo);
+
+        $this->importar("numero_cliente,codigo_lista,monto_venta_actual\n305,,0\n");
+
+        $cliente->refresh();
+        $this->assertTrue($cliente->es_inactivo);
+        $this->assertFalse($cliente->es_menudeo);
+        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        $this->assertSame(
+            SolicitudBeneficio::ESTADO_VIGENTE,
+            SolicitudBeneficio::query()->where('solicitud_tag_id', $solicitud->id)->where('campo', 'es_menudeo')->value('estado'),
+        );
     }
 
     public function test_codigo_vacio_con_monto_positivo_no_escribe(): void

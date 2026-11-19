@@ -45,9 +45,10 @@ beforeEach(() => {
     });
     vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => {
         const transferencia = guardado.solicitud_preparacion.cobertura_tienda?.tipo === 'transferencia';
-        const pagado = transferencia ? 200 : 0;
+        // El pago aparece cuando ya hay un total guardado; con el pago en revisión el total queda fijo.
+        const pagado = transferencia && guardado.total_mercancia > 0 ? 200 : 0;
         const pendiente = Math.max(0, guardado.total_mercancia - pagado);
-        return { ...guardado, pagos: transferencia ? [{ id: 1, monto: pagado, forma_pago: 'transferencia' }] : [],
+        return { ...guardado, pagos: transferencia && pagado ? [{ id: 1, monto: pagado, forma_pago: 'transferencia' }] : [],
             resumen: { cubierto: !pendiente, pendiente, total_pagado: pagado, bloqueos: pendiente ? ['El total a cubrir no está completo.'] : [] } };
     } })));
     axios.post.mockImplementation(async (url, datos) => {
@@ -90,8 +91,6 @@ it.each(['apartado', 'credito', 'transferencia'])('confirma %s con la base reci�
 
     const texto = cobertura === 'apartado' ? 'Enviar confirmación a tienda' : 'Confirmar pedido y enviar a revisión';
     if (cobertura === 'transferencia') {
-        await escribir(250);
-        await autoguardar();
         expect(boton(texto).disabled).toBe(true);
     }
     await escribir(200);
