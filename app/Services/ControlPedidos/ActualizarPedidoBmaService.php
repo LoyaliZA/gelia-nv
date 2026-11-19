@@ -82,6 +82,16 @@ class ActualizarPedidoBmaService
                 }
             }
 
+            $coberturaTienda = (string) data_get($pedido->solicitud_preparacion_json, 'cobertura_tienda.tipo');
+            if ($pedido->consulta_cerrada_at !== null
+                && in_array($coberturaTienda, ['apartado', 'transferencia'], true)
+                && $pedido->estatus?->fase_ciclo !== \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_RECHAZADO_VENDEDORA
+                && (filled(data_get($pedido->solicitud_preparacion_json, 'cobertura_tienda.confirmacion_enviada_at')) || $pedido->pagosExhibicion()->exists())
+                && array_key_exists('total_mercancia', $datos) && $datos['total_mercancia'] !== null && $datos['total_mercancia'] !== ''
+                && abs((float) $datos['total_mercancia'] - (float) $pedido->total_mercancia) > 0.009) {
+                throw new \RuntimeException('El total de mercancía queda fijo después de cerrar la consulta mientras se espera la respuesta de auditoría.');
+            }
+
             if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
                 && filled(data_get($pedido->solicitud_preparacion_json, 'consulta_municipal.enviada_at'))) {
                 foreach (['cliente_id', 'numero_cliente', 'folio_remision', 'departamento_operacion_id'] as $campo) {

@@ -359,3 +359,26 @@ it('reutiliza fotos guardadas de la revisión inicial de tienda y exige captura 
  expect(onEnviar).not.toHaveBeenCalled();
  expect(container.textContent).toContain('Adjunta evidencia en Captura del pedido');
 });
+it('una decisión previa de Ventas no bloquea el envío: se revisan solo las capturas del anexo vigente', async () => {
+ await montar({revision:{estado:'excepciones_pendientes',actualizacion_pendiente:true,actualizacion_id:'ciclo-2'},pedido:{solicitud_preparacion:{
+  revision_disponibilidad:{respondida_at:'2026-11-01T10:00:00Z'},
+  acciones_disponibilidad:{9:{accion:'confirmar',revision_id:9,fecha:'2026-11-02T10:00:00Z'},10:{accion:'retirar',revision_id:10,fecha:'2026-11-02T11:00:00Z'}},
+  anexo_sin_remision:[{solicitud_id:'sol-n',entrada:'catalogo',sku:'SKU-N',descripcion:'Nueva',cantidad:1}],
+ }}});
+ await pulsarIndice(0,'Todo OK');
+ await foto();await click('Enviar respuesta');
+ expect(container.textContent).not.toContain('Revise cada captura');
+ expect(envioFinal()).toBeDefined();
+});
+it('un anexo nuevo llegado por props conserva la captura local y aparece sin cerrar el panel', async () => {
+ const solicitud=(n)=>({revision_disponibilidad:{respondida_at:'2026-11-01T10:00:00Z'},anexo_sin_remision:Array.from({length:n},(_,i)=>({solicitud_id:`sol-${i}`,entrada:'catalogo',sku:`SKU-${i}`,descripcion:`Pieza ${i}`,cantidad:1}))});
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true,actualizacion_id:'c2'},pedido:{solicitud_preparacion:solicitud(1)}});
+ await pulsarIndice(0,'Todo OK');
+ await montar({revision:{estado:'sin_excepciones',actualizacion_pendiente:true,actualizacion_id:'c3'},pedido:{solicitud_preparacion:solicitud(2)}});
+ expect(container.querySelectorAll('article[data-tipo="anexo"]')).toHaveLength(2);
+ await foto();await click('Enviar respuesta');
+ expect(container.textContent).toContain('Revise cada captura');
+ await pulsarIndice(1,'Todo OK');await click('Enviar respuesta');
+ expect(envioFinal().get('cambios_revisados[0][resultado]')).toBe('correcto');
+ expect(envioFinal().get('cambios_revisados[1][resultado]')).toBe('correcto');
+});

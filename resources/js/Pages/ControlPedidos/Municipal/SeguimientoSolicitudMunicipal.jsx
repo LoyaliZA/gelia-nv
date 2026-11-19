@@ -12,7 +12,7 @@ import { adaptadorConsultaMunicipal } from '../Partials/adaptadoresConsulta';
 import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
 import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
-import { anexosPendientesRevision } from '../Partials/cambiosDisponibilidad';
+import { anexosPendientesRevision, revisionesDelCicloEnCurso } from '../Partials/cambiosDisponibilidad';
 
 function etiquetaConsulta(consulta, revision, solicitud) {
     if (consulta?.estado === 'cerrada') return { texto: 'Consulta cerrada', tono: 'gelia-estado-vivo--exito' };
@@ -57,7 +57,8 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
     const capturas = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
     const vigentes = capturas.filter(d => !revision?.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id));
     const anteriores = capturas.filter(d => revision?.evidencia_actual_ids && !revision.evidencia_actual_ids.includes(d.id));
-    const piezas = (pedido.revisiones_producto || []).filter(p => !p.retirada_at && ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
+    const enCurso = revision?.actualizacion_pendiente ? revisionesDelCicloEnCurso(solicitud) : new Set();
+    const piezas = (pedido.revisiones_producto || []).filter(p => !enCurso.has(Number(p.id)) && !p.retirada_at && ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico));
     const filas = piezas.map(p => ({
         id: p.id, descripcion: p.descripcion_producto || p.descripcion, sku: p.sku,
         cantidad: p.cantidad_encontrada ?? (p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad_solicitada),
@@ -90,7 +91,7 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
             )}
             {respondida && revision?.estado && (
                 <RespuestaDisponibilidadPedido
-                    titulo="Respuesta de disponibilidad"
+                    titulo={revision?.actualizacion_pendiente ? "Respuesta anterior de disponibilidad" : "Respuesta de disponibilidad"}
                     origen={origen}
                     ariaLabel={`Resultado de la consulta en ${origen}`}
                     responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre}
@@ -123,9 +124,15 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
                         solicitud={solicitud}
                         adaptador={adaptador}
                         onDirtyChange={(valor) => marcarOcupado(valor, 'ajuste')}
-                        onSolicitud={(siguiente) => {
+                        onSolicitud={(siguiente, versionConsulta) => {
                             setSolicitud(siguiente);
-                            onPedidoActualizado?.({ ...pedido, solicitud_preparacion: siguiente, consulta_cerrada: false, consulta_cerrada_at: null });
+                            onPedidoActualizado?.({
+                                ...pedido,
+                                solicitud_preparacion: siguiente,
+                                consulta_cerrada: false,
+                                consulta_cerrada_at: null,
+                                ...(versionConsulta != null && Number(versionConsulta) > Number(pedido?.version_consulta ?? 0) ? { version_consulta: Number(versionConsulta) } : {}),
+                            });
                         }}
                         onAviso={setAviso}
                         onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })}

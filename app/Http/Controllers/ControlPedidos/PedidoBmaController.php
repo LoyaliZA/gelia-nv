@@ -308,6 +308,8 @@ class PedidoBmaController extends Controller
         return response()->json([
             'ok' => true,
             'solicitud_preparacion' => $pedidoBma->fresh()->solicitud_preparacion,
+            // Permite al cliente descartar una lectura anterior a este anexo.
+            'version_consulta' => (int) $pedidoBma->historial()->max('id'),
             'pedido_id' => $resultado->id,
             'folio' => $resultado->folio,
             'principal_id' => $resultado->pedido_principal_id ?: $pedidoBma->id,
@@ -358,6 +360,7 @@ class PedidoBmaController extends Controller
             'ok' => true,
             'message' => 'Retiro solicitado. El auxiliar identifica y retira; todavía no se libera el stock ni hay pago o entrega.',
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
+            'version_consulta' => (int) $pedidoBma->historial()->max('id'),
         ]);
     }
 

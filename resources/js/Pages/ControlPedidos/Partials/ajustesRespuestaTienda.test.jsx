@@ -81,3 +81,25 @@ it('muestra la captura vigente una sola vez al final del seguimiento de Ventas',
     expect(container.querySelectorAll('[aria-label="Captura del pedido"]')).toHaveLength(1);
     expect(container.querySelector('[aria-label="Resultado de la consulta en CEDIS"]')?.querySelector('[aria-label="Captura del pedido"]')).toBeNull();
 });
+it('dos anexos consecutivos informan la versión de consulta de cada respuesta para descartar lecturas anteriores', async () => {
+    const onSolicitud = vi.fn();
+    let version = 10;
+    const adaptador = { capacidades: { anexar: true, retirar: false }, comandos: { anexar: vi.fn(async () => ({ data: { solicitud_preparacion: { anexo_sin_remision: [{}] }, version_consulta: ++version } })) } };
+    await act(() => root.render(<AjustePiezas pedidoId={1} pedido={{}} solicitud={{}} adaptador={adaptador} onSolicitud={onSolicitud} onAviso={vi.fn()} />));
+    for (let i = 0; i < 2; i++) {
+        const input = container.querySelector('input[type="file"][multiple]');
+        Object.defineProperty(input, 'files', { configurable: true, value: [new File(['x'], `anexo-${i}.png`, { type: 'image/png' })] });
+        await act(() => input.dispatchEvent(new Event('change', { bubbles: true })));
+        await click('Solicitar agregado');
+    }
+    expect(onSolicitud.mock.calls.map((c) => c[1])).toEqual([11, 12]);
+});
+it('una pieza ya solicitada para retiro por SKU deja de ofrecerse en la edición', async () => {
+    const pedido = { tarea_preparacion: { respuesta: { productos: [{ id: 1, sku: 'SKU-1', descripcion: 'Perfume A', cantidad: 1 }, { id: 2, sku: 'SKU-2', descripcion: 'Perfume B', cantidad: 3 }] } } };
+    const solicitud = { retiro_piezas: [{ estado: 'pendiente', piezas_solicitadas: [{ sku: 'SKU-1', descripcion: 'Perfume A', cantidad: 1 }, { sku: 'SKU-2', descripcion: 'Perfume B', cantidad: 1 }] }] };
+    await act(() => root.render(<AjustePiezas pedidoId={1} pedido={pedido} solicitud={solicitud} />));
+    await click('Retirar piezas');
+    expect(container.textContent).not.toContain('Perfume A');
+    expect(container.textContent).toContain('Perfume B');
+    expect(container.querySelector('[aria-label="Cantidad a retirar de Perfume B"]').value).toBe('2');
+});

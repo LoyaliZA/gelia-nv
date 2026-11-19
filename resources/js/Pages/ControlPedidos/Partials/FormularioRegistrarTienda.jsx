@@ -998,12 +998,17 @@ export default function FormularioRegistrarTienda({
             return false;
         }
     };
-    const actualizarSolicitud = (valor) => {
+    const actualizarSolicitud = (valor, versionConsulta = null) => {
         const siguiente = typeof valor === 'function' ? valor(solicitudVivaRef.current) : valor;
         if (!siguiente || typeof siguiente !== 'object') return;
         solicitudVivaRef.current = siguiente;
         setSolicitudViva(siguiente);
-        setPedido((actual) => ({ ...actual, solicitud_preparacion: siguiente }));
+        // La versión de la respuesta deja por debajo cualquier lectura iniciada antes de este anexo.
+        setPedido((actual) => ({
+            ...actual,
+            solicitud_preparacion: siguiente,
+            ...(versionConsulta != null && Number(versionConsulta) > Number(actual?.version_consulta ?? 0) ? { version_consulta: Number(versionConsulta) } : {}),
+        }));
         const pendientes = (siguiente?.retiro_piezas || []).some((fila) => (fila.estado || 'pendiente') === 'pendiente')
             || (siguiente?.anexo_sin_remision || []).some((fila) => !fila.respondida_at);
         if (pendientes) setConsultaCerrada(false);
@@ -1559,6 +1564,8 @@ export default function FormularioRegistrarTienda({
                                         costo_seguro: confirmados.costo_seguro,
                                     },
                                     importesListos,
+                                    consultaCerrada,
+                                    estatusRechazado: pedido?.estatus?.fase_ciclo === 'RECHAZADO_VENDEDORA',
                                     bancos: bancosContexto,
                                     revisionEsperada: confirmados.revision_registro,
                                     totalMercanciaConfirmado: confirmados.total_mercancia,

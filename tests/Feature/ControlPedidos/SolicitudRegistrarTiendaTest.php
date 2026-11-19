@@ -1712,6 +1712,62 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(1, $fresco->revisionesProducto()->where('descripcion_producto', 'Frasco golpeado')->count());
     }
 
+    public function test_el_pedido_sigue_en_el_listado_de_ventas_tras_enviar_la_consulta_y_recibir_respuesta_y_anexos(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $listar = fn (string $tab) => collect(app(\App\Services\ControlPedidos\ListarPedidosBmaService::class)
+            ->ejecutar($this->usuario, ['tab' => $tab])->items())->pluck('id')->all();
+        $this->assertContains($pedido->id, $listar('TODAS'), 'Tras la respuesta debe seguir en Todas.');
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', ['entrada' => 'documento', 'solicitud_id' => (string) Str::uuid(), 'evidencia' => UploadedFile::fake()->image('anexo.jpg')], ['Accept' => 'application/json'])->assertOk();
+        foreach (range(1, 3) as $_) {
+            $this->assertContains($pedido->id, $listar('TODAS'));
+        }
+        $this->assertNull($pedido->fresh()->deleted_at);
+        $this->assertDatabaseHas('pedidos_bma', ['id' => $pedido->id, 'vendedor_id' => $this->usuario->id]);
+    }
+
+    public function test_el_avance_parcial_no_toca_la_respuesta_anterior_y_el_envio_final_solo_exige_lo_vigente(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $anterior = $pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad'];
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencias' => [UploadedFile::fake()->createWithContent('a.pdf', 'captura-a'), UploadedFile::fake()->createWithContent('b.pdf', 'captura-b')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $linea = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $docs = $linea['documentos'];
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        $idA = 'anexo:'.$linea['solicitud_id'].':doc:'.$docs[0]['id'];
+        $idB = 'anexo:'.$linea['solicitud_id'].':doc:'.$docs[1]['id'];
+        $this->post($url, [
+            'persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [['tipo' => 'anexo', 'unidad_id' => $idA, 'documento_id' => $docs[0]['id'], 'resultado' => 'incidencia']],
+            'excepciones' => [['descripcion' => 'Pieza parcial', 'sku' => 'SKU-P', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Tapa floja', 'origen_unidad_id' => $idA, 'evidencias' => [UploadedFile::fake()->image('p.jpg')]]],
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $fresco = $pedido->fresh();
+        $revision = $fresco->solicitud_preparacion_json['revision_disponibilidad'];
+        $this->assertSame($anterior['respuesta_id'], $revision['respuesta_id'], 'El avance parcial no sustituye la respuesta anterior.');
+        $this->assertSame($anterior['respondida_at'], $revision['respondida_at']);
+        $this->assertTrue(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($fresco->solicitud_preparacion_json));
+        $this->assertSame([], $fresco->solicitud_preparacion_json['revision_disponibilidad']['historial_respuestas'] ?? []);
+
+        $this->post($url, [
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [['tipo' => 'anexo', 'unidad_id' => $idB, 'documento_id' => $docs[1]['id'], 'resultado' => 'correcto']],
+            'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $final = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertNotSame($anterior['respuesta_id'], $final['revision_disponibilidad']['respuesta_id']);
+        $this->assertSame($anterior['respuesta_id'], $final['revision_disponibilidad']['historial_respuestas'][0]['respuesta_id'], 'La respuesta anterior queda como histórica.');
+        $this->assertFalse(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($final));
+        $this->assertSame(1, $pedido->fresh()->revisionesProducto()->where('descripcion_producto', 'Pieza parcial')->count());
+    }
+
     public function test_retiro_documental_no_exige_reconfirmacion_ni_aplica_el_retiro_fisico(): void
     {
         $pedido = $this->consultaConExcepcion();
@@ -1859,6 +1915,25 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk();
         $this->assertSame($count, $pedido->documentos()->count());
         $this->assertCount(1, $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision']);
+    }
+
+    public function test_anexos_consecutivos_devuelven_version_de_consulta_creciente_para_que_una_lectura_previa_no_los_pise(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $url = '/control-pedidos/'.$pedido->id.'/anexo-tienda';
+        $versiones = [];
+        foreach (['documento', 'catalogo', 'documento'] as $entrada) {
+            $datos = ['entrada' => $entrada, 'solicitud_id' => (string) Str::uuid()]
+                + ($entrada === 'documento'
+                    ? ['evidencia' => UploadedFile::fake()->image('anexo.jpg')]
+                    : ['piezas' => [['sku' => 'SKU-A', 'descripcion' => 'Crema', 'cantidad' => 1]], 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 20, 'application/pdf')]);
+            $respuesta = $this->post($url, $datos, ['Accept' => 'application/json'])->assertOk();
+            $versiones[] = $respuesta->json('version_consulta');
+            $this->assertSame((int) $pedido->historial()->max('id'), $respuesta->json('version_consulta'));
+        }
+        $this->assertNotContains(null, $versiones);
+        $this->assertSame($versiones, collect($versiones)->sortBy(fn ($v) => $v)->unique()->values()->all());
+        $this->assertCount(3, $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision']);
     }
 
     public function test_anexo_y_retiro_admiten_varios_archivos_hasta_50_mb_por_consulta(): void

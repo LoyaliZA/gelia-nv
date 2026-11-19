@@ -82,6 +82,8 @@ export default function ImportesPagoTienda({
     onLectura,
     onEstadoConfirmacion,
     encolarGuardado,
+    consultaCerrada = false,
+    estatusRechazado = false,
 }) {
     const [solicitud, setSolicitud] = useState(solicitudInicial);
     useEffect(() => setSolicitud(solicitudInicial), [solicitudInicial]);
@@ -142,6 +144,9 @@ export default function ImportesPagoTienda({
     const reporte = solicitud?.atencion_tienda === 'prevista' && tipoGuardado === 'transferencia'
         ? solicitud?.tienda_md_reporte
         : null;
+    // Con la consulta cerrada, el total queda fijo mientras Auditoría o el auxiliar atienden lo enviado.
+    const esperaRevision = Boolean(solicitud?.cobertura_tienda?.confirmacion_enviada_at) || Number(resumenServidor?.total_pagado || 0) > 0;
+    const totalFijo = consultaCerrada && !estatusRechazado && ['apartado', 'transferencia'].includes(tipoGuardado) && esperaRevision;
     const mostrarCaptura = editable && cobertura === tipoGuardado && tipoGuardado === 'transferencia';
     const pagoEnPdv = cobertura === 'apartado';
     const mostrarHistorial = tipoGuardado === 'credito' || tipoGuardado === 'apartado' || tipoGuardado === 'transferencia';
@@ -300,9 +305,10 @@ export default function ImportesPagoTienda({
                             id="total-mercancia-tienda"
                             value={totalMercancia}
                             onChange={onTotalMercancia}
-                            disabled={!editable || ocupado}
+                            disabled={!editable || ocupado || totalFijo}
                             className="w-full min-h-[44px]"
                         />
+                        {totalFijo && <p className="text-xs theme-text-muted m-0 min-[32rem]:col-span-2">El total queda fijo mientras se espera la respuesta de auditoría.</p>}
                     </div>
                     {(Number(costos.costo_envio || 0) > 0 || costos.envio_realizado) && <><div className="grid min-w-0 gap-1 min-[32rem]:grid-cols-[minmax(0,1fr)_auto] min-[32rem]:items-center min-[32rem]:gap-4">
                         <span className="text-sm theme-text-muted">Envío</span>

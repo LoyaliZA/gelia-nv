@@ -129,8 +129,8 @@ export default function Index({
             }
             return tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true });
         },
-        pausado: disponibilidad.abierto ? capturaDisponibilidad : (modalAbiertoRef.current || cargando),
-        onPendiente: () => { if (disponibilidad.abierto) setAvisoDisponibilidad('La consulta recibió cambios. Se conserva la captura pendiente; se leerán al terminar.'); },
+        // Con la consulta abierta la lectura solo fusiona datos operativos; la captura vive en el panel y no se pausa.
+        pausado: disponibilidad.abierto ? false : (modalAbiertoRef.current || cargando),
     });
 
 

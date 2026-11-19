@@ -49,6 +49,28 @@ class BandejasOperativasTest extends TestCase
         $this->assertCount(5, $listar->ejecutar([], false));
     }
 
+    public function test_cedis_conserva_consultas_respondidas_en_todos(): void
+    {
+        $respondida = $this->pedido('TIENDA-RESPONDIDA', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'area_revision' => 'control_pedidos', 'revision_disponibilidad' => ['estado' => 'sin_excepciones']],
+        ]);
+        $borrador = $this->pedido('TIENDA-SIN-RESPUESTA', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'area_revision' => 'control_pedidos'],
+        ]);
+        $municipal = $this->pedido('MUNICIPAL-RESPONDIDA', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal', 'consulta_municipal' => ['area' => 'cedis', 'estado' => 'respondida']],
+        ]);
+
+        $ids = app(ListarPedidosCedisService::class)->ejecutar([], false)->pluck('id')->all();
+
+        $this->assertContains($respondida->id, $ids);
+        $this->assertContains($municipal->id, $ids);
+        $this->assertNotContains($borrador->id, $ids);
+    }
+
     public function test_cedis_fecha_de_solicitud_vendedora_y_orden_antes_de_paginar(): void
     {
         $antiguo = $this->pedido('ANTIGUO', ['pesaje_solicitado_at' => '2026-11-07 09:00:00']);
