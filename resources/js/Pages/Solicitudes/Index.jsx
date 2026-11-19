@@ -126,7 +126,13 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
     const objTipo = solicitud.tipo_cliente || solicitud.tipoCliente;
     const responsableTag = solicitud.vendedor?.name?.split(' ').slice(0, 2).join(' ') || 'Responsable';
 
-    const listaActual = solicitud.cliente?.lista_descuento?.nombre || solicitud.cliente?.lista_actual || 'Público General';
+    const listaAlmacenada = solicitud.cliente?.lista_almacenada_nombre
+        || solicitud.cliente?.lista_descuento?.nombre
+        || solicitud.cliente?.lista_actual
+        || 'Público General';
+    const listaEfectiva = solicitud.cliente?.lista_efectiva_nombre || listaAlmacenada;
+    const clienteInactivo = solicitud.cliente?.es_inactivo === true || solicitud.cliente?.es_inactivo === 1;
+    const aplicacion = (solicitud.aplicacion_cliente || '').toLowerCase();
 
     const etiquetaLista = (nombre) => (
         esListaDiamante(nombre) ? (
@@ -147,9 +153,16 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
         <div className="gelia-tag-etiquetas flex flex-col items-start">
             <div className="gelia-tag-flujo">
                 <span className="gelia-tag-flujo-paso">
-                    <span className="gelia-tag-flujo-etiqueta">Lista actual</span>
-                    {etiquetaLista(listaActual)}
+                    <span className="gelia-tag-flujo-etiqueta">Lista almacenada</span>
+                    {etiquetaLista(listaAlmacenada)}
                 </span>
+                {listaEfectiva !== listaAlmacenada && (
+                    <span className="gelia-tag-flujo-paso">
+                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
+                        <span className="gelia-tag-flujo-etiqueta">Efectiva</span>
+                        {etiquetaLista(listaEfectiva)}
+                    </span>
+                )}
                 {esCambioLista && objLista && (
                     <span className="gelia-tag-flujo-paso">
                         <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
@@ -173,6 +186,16 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
                     >
                         {objTipo.nombre}
                     </EtiquetaConIcono>
+                )}
+                {solicitud.cliente && (
+                    <span className={CHIP_NEUTRO}>
+                        Cliente: {clienteInactivo ? 'Inactivo' : 'Activo'}
+                    </span>
+                )}
+                {(aplicacion === 'pendiente' || aplicacion === 'fallida') && (
+                    <span className={CHIP_NEUTRO}>
+                        Aplicación {aplicacion}
+                    </span>
                 )}
                 {solicitud.compra_en_tienda && (
                     <EtiquetaConIcono icon={Store} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>

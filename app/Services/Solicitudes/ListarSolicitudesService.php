@@ -6,7 +6,9 @@ use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\SolicitudTag;
 use App\Models\User;
+use App\Services\Clientes\ClasificacionComercialCliente;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class ListarSolicitudesService
 {
@@ -77,7 +79,10 @@ class ListarSolicitudesService
 
         $this->aplicarFiltros($query, $filtros, $usuario);
 
-        return $paginar ? $query->paginate(max(1, $porPagina))->withQueryString() : $query->get();
+        $resultado = $paginar ? $query->paginate(max(1, $porPagina))->withQueryString() : $query->get();
+        $this->anexarPresentacionComercial($resultado);
+
+        return $resultado;
     }
 
     public function metricas(?User $usuario): array
@@ -315,5 +320,24 @@ class ListarSolicitudesService
             }),
             default => $query->where('motivo_incorrecta', $motivo),
         };
+    }
+
+    private function anexarPresentacionComercial(mixed $solicitudes): void
+    {
+        $filas = method_exists($solicitudes, 'getCollection')
+            ? $solicitudes->getCollection()
+            : $solicitudes;
+        if (! $filas instanceof Collection) {
+            return;
+        }
+        $clasificacion = app(ClasificacionComercialCliente::class);
+        foreach ($filas as $solicitud) {
+            if (! $solicitud->cliente) {
+                continue;
+            }
+            foreach ($clasificacion->presentacion($solicitud->cliente) as $clave => $valor) {
+                $solicitud->cliente->setAttribute($clave, $valor);
+            }
+        }
     }
 }

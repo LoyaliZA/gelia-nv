@@ -51,16 +51,8 @@ class ProcesarFilaClienteAction
             $this->error('codigo_lista', 'El código de lista vacío y un monto positivo se contradicen.');
         }
         $estado = null;
-        if ($importaCodigoLista && $codigo !== '') {
-            $estado = false;
-        } elseif ($importaCodigoLista && $codigo === '' && $montoCero) {
-            $estado = true;
-        }
         if ($nuevo && trim($data['nombre'] ?? '') === '') {
             $this->error('nombre', 'El nombre es obligatorio para un cliente nuevo.');
-        }
-        if ($nuevo && $estado === null) {
-            $this->error('codigo_lista', 'Un cliente nuevo requiere información de Wizerp que determine su estado comercial.');
         }
         foreach (['dias_credito', 'dias_cheque_postfechado'] as $campo) {
             if (($data[$campo] ?? '') !== '' && (! ctype_digit($data[$campo]) || bccomp($data[$campo], '2147483647', 0) > 0)) {
@@ -87,10 +79,20 @@ class ProcesarFilaClienteAction
         $listaCodigo = $listaCsv ? $listas->firstWhere('id', $listaCsv) : null;
         $aviso = null;
         $mayoristaSinMonto = $listaCodigo && $clasificacion->esListaMayorista($listaCodigo) && $monto === null;
+        $pgCero = $listaCodigo && $clasificacion->esPublicoGeneral($listaCodigo) && $montoCero;
+        $pgCeroInactiva = $pgCero && ! $clasificacion->conversionVigente($cliente);
+        if ($importaCodigoLista && $codigo !== '' && ! $pgCeroInactiva) {
+            $estado = false;
+        } elseif ($importaCodigoLista && ($codigoVacio || $pgCeroInactiva) && $montoCero) {
+            $estado = true;
+        }
+        if ($nuevo && $estado === null) {
+            $this->error('codigo_lista', 'Un cliente nuevo requiere información de Wizerp que determine su estado comercial.');
+        }
         if ($mayoristaSinMonto) {
             $estado = null;
         }
-        $aplicariaLista = ! $codigoVacio && ! $mayoristaSinMonto && $listaCodigo && ! $cliente->lista_bloqueada && ! $gobernado && ! $categoriaEspecial;
+        $aplicariaLista = ! $codigoVacio && ! $pgCeroInactiva && ! $mayoristaSinMonto && $listaCodigo && ! $cliente->lista_bloqueada && ! $gobernado && ! $categoriaEspecial;
         if ($listaCodigo && $clasificacion->esPublicoGeneral($listaCodigo) && $monto === null && ! $codigoVacio) {
             $this->efecto['conflictos'][] = ['alcance' => 'fila', 'motivo' => 'PG con monto vacío. Conflicto pendiente de resolución.', 'solicitud_id' => null];
             if (! $nuevo) {
@@ -104,7 +106,7 @@ class ProcesarFilaClienteAction
         if ($aplicariaLista && $clasificacion->esListaMayorista($listaCodigo) && $monto !== null) {
             $menudeoPropuesto = false;
             $listaPropuesta = (int) $listaCodigo->id;
-        } elseif ($aplicariaLista && $clasificacion->esPublicoGeneral($listaCodigo) && $monto !== null && ! $clasificacion->conversionVigente($cliente)) {
+        } elseif ($aplicariaLista && $clasificacion->esPublicoGeneral($listaCodigo) && $montoPositivo && ! $clasificacion->conversionVigente($cliente)) {
             $menudeoPropuesto = true;
             $listaPropuesta = (int) $listaCodigo->id;
         }

@@ -48,13 +48,12 @@ class CrearSolicitudService
             $clienteEscalon = (! $esOperativo && $clienteId) ? Cliente::find($clienteId) : null;
             $esMenudeo = (bool) $clienteEscalon?->es_menudeo;
             $clasificacion = app(ClasificacionComercialCliente::class);
+            $listaPedida = $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null;
+            $quiereConversion = $esMenudeo && (
+                $convertirMenudeo || $clasificacion->esListaMayorista($listaPedida)
+            );
 
-            if ($convertirMenudeo && $esMenudeo) {
-                $listaExpresa = $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null;
-                if (! $clasificacion->esListaMayorista($listaExpresa)) {
-                    $listaDescuentoId = $clasificacion->buscarBronce()?->id;
-                }
-            } elseif ($compraSoloTag) {
+            if ($compraSoloTag && ! $quiereConversion) {
                 $listaDescuentoId = null;
                 $montoCotizado = 0;
             } elseif ($compraEnTienda) {
@@ -76,10 +75,18 @@ class CrearSolicitudService
 
                 $montoFinalTentativo = $escalon['monto_final_tentativo'];
                 $totalProyectadoNeto = $escalon['total_proyectado_neto'];
-            } elseif ($esMenudeo && ! $convertirMenudeo && $listaDescuentoId) {
-                $listaPedida = CatalogoListaDescuento::find($listaDescuentoId);
-                if ($clasificacion->esListaMayorista($listaPedida)) {
-                    $listaDescuentoId = null;
+            }
+
+            $convertirMenudeo = self::intencionConversionMenudeo(
+                $esMenudeo,
+                $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null,
+                $proceso?->nombre,
+                $convertirMenudeo,
+            );
+            if ($convertirMenudeo && $esMenudeo) {
+                $listaExpresa = $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null;
+                if (! $clasificacion->esListaMayorista($listaExpresa)) {
+                    $listaDescuentoId = $clasificacion->buscarBronce()?->id;
                 }
             }
 
@@ -297,6 +304,34 @@ class CrearSolicitudService
             'tag_vendedor_nombre' => $cliente->vendedor?->name,
             'tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
             'tipo_cliente_nombre' => $cliente->tipo?->nombre,
+            'es_inactivo' => (bool) $cliente->es_inactivo,
+            'es_menudeo' => (bool) $cliente->es_menudeo,
         ];
+    }
+
+    public static function procesoAdmiteConversion(?string $nombreProceso): bool
+    {
+        return in_array(strtoupper(trim((string) $nombreProceso)), [
+            'ASIGNAR TAG',
+            'CAMBIO DE LISTA',
+            'ASIGNAR TAG Y CAMBIO DE LISTA',
+        ], true);
+    }
+
+    public static function intencionConversionMenudeo(
+        bool $esMenudeo,
+        ?CatalogoListaDescuento $lista,
+        ?string $nombreProceso,
+        bool $flagFormulario,
+    ): bool {
+        if (! $esMenudeo || ! self::procesoAdmiteConversion($nombreProceso)) {
+            return false;
+        }
+
+        if (app(ClasificacionComercialCliente::class)->esListaMayorista($lista)) {
+            return true;
+        }
+
+        return $flagFormulario;
     }
 }

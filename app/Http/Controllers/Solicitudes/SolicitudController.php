@@ -330,6 +330,8 @@ class SolicitudController extends Controller
         $montoCotizado = (float) ($request->monto_cotizado ?? 0);
         $montoFinalTentativo = null;
         $totalProyectadoNeto = null;
+        $clienteEscalon = $solicitud->cliente_id ? Cliente::find($solicitud->cliente_id) : null;
+        $esMenudeo = (bool) $clienteEscalon?->es_menudeo;
 
         if ($compraSoloTag) {
             $listaDescuentoId = null;
@@ -337,25 +339,29 @@ class SolicitudController extends Controller
         } elseif ($compraEnTienda) {
             $listaDescuentoId = CrearSolicitudService::buscarListaBronce()?->id;
             $montoCotizado = 0;
-        } elseif ($montoCotizado > 0 && $solicitud->cliente_id) {
-            $clienteEscalon = Cliente::find($solicitud->cliente_id);
-            if ($clienteEscalon) {
-                $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
-                $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
-                    $clienteEscalon,
-                    $montoCotizado,
-                    $listaDescuentoId ? (int) $listaDescuentoId : null,
-                    $listasEscalon
-                );
+        } elseif ($montoCotizado > 0 && $clienteEscalon && ! $esMenudeo) {
+            $listasEscalon = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+            $escalon = app(EscalonamientoService::class)->evaluarCompraCliente(
+                $clienteEscalon,
+                $montoCotizado,
+                $listaDescuentoId ? (int) $listaDescuentoId : null,
+                $listasEscalon
+            );
 
-                if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
-                    $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
-                }
-
-                $montoFinalTentativo = $escalon['monto_final_tentativo'];
-                $totalProyectadoNeto = $escalon['total_proyectado_neto'];
+            if ($escalon['es_ascenso'] && $escalon['lista_calificada_efectiva']) {
+                $listaDescuentoId = (int) $escalon['lista_calificada_efectiva']->id;
             }
+
+            $montoFinalTentativo = $escalon['monto_final_tentativo'];
+            $totalProyectadoNeto = $escalon['total_proyectado_neto'];
         }
+
+        $convertirMenudeo = CrearSolicitudService::intencionConversionMenudeo(
+            $esMenudeo,
+            $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null,
+            $proceso?->nombre,
+            filter_var($request->input('convertir_menudeo_mayoreo'), FILTER_VALIDATE_BOOLEAN),
+        );
 
         $clienteReparacion = $solicitud->cliente_id
             ? Cliente::with('tipo')->find($solicitud->cliente_id)
@@ -381,7 +387,8 @@ class SolicitudController extends Controller
             $montoCotizado,
             $montoFinalTentativo,
             $totalProyectadoNeto,
-            $tipoReparacion
+            $tipoReparacion,
+            $convertirMenudeo,
         ) {
             $solicitud->update([
                 'monto_cotizado' => $montoCotizado,
@@ -391,6 +398,7 @@ class SolicitudController extends Controller
                 'observaciones_vendedor' => $request->observaciones_vendedor,
                 'compra_en_tienda' => $compraEnTienda,
                 'compra_en_tienda_solo_tag' => $compraSoloTag,
+                'convertir_menudeo_mayoreo' => $convertirMenudeo,
                 'monto_final_tentativo' => $montoFinalTentativo,
                 'total_proyectado_neto' => $totalProyectadoNeto,
                 'catalogo_estado_solicitud_id' => $idPendiente,

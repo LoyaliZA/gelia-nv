@@ -15,6 +15,14 @@ class MobileSyncPublicationService
 {
     public const AGGREGATE_CLIENTE = 'cliente';
 
+    /**
+     * Avisos pendientes por usuario mientras un proceso por lotes (importación) agrupa las notificaciones.
+     * null = modo normal: cada publicación avisa de inmediato. Las publicaciones durables no cambian.
+     *
+     * @var array<int, array{max_seq: int, requires_bootstrap: bool}>|null
+     */
+    private static ?array $avisosDiferidos = null;
+
     public function __construct(
         protected MobileClienteAlcanceService $alcance
     ) {}
@@ -167,6 +175,22 @@ class MobileSyncPublicationService
      */
     public function notificar(array $userIds, int $maxSeq, bool $requiresBootstrap): void
     {
+        if (self::$avisosDiferidos !== null) {
+            // Se acumula solo tras confirmar la transacción de la fila: un rollback no deja aviso pendiente.
+            $acumular = function () use ($userIds, $maxSeq, $requiresBootstrap) {
+                foreach (array_unique(array_filter(array_map('intval', $userIds))) as $userId) {
+                    $previo = self::$avisosDiferidos[$userId] ?? ['max_seq' => 0, 'requires_bootstrap' => false];
+                    self::$avisosDiferidos[$userId] = [
+                        'max_seq' => max($previo['max_seq'], $maxSeq),
+                        'requires_bootstrap' => $previo['requires_bootstrap'] || $requiresBootstrap,
+                    ];
+                }
+            };
+            DB::transactionLevel() > 0 ? DB::afterCommit($acumular) : $acumular();
+
+            return;
+        }
+
         if (DB::transactionLevel() > 0) {
             DB::afterCommit(function () use ($userIds, $maxSeq, $requiresBootstrap) {
                 try {
@@ -181,6 +205,26 @@ class MobileSyncPublicationService
         }
 
         $this->notificarConfirmado($userIds, $maxSeq, $requiresBootstrap);
+    }
+
+    /** Empieza a agrupar avisos: un aviso por usuario al liberar, en vez de uno por cliente publicado. */
+    public function diferirAvisos(): void
+    {
+        self::$avisosDiferidos ??= [];
+    }
+
+    /** Emite un aviso por usuario con el mayor seq acumulado y vuelve al modo normal. */
+    public function liberarAvisos(): void
+    {
+        $pendientes = self::$avisosDiferidos ?? [];
+        self::$avisosDiferidos = null;
+        foreach ($pendientes as $userId => $aviso) {
+            try {
+                $this->notificarConfirmado([$userId], $aviso['max_seq'], $aviso['requires_bootstrap']);
+            } catch (\Throwable $e) {
+                Log::warning('Publicación móvil confirmada sin aviso inmediato', ['max_seq' => $aviso['max_seq'], 'error' => $e->getMessage()]);
+            }
+        }
     }
 
     private function notificarConfirmado(array $userIds, int $maxSeq, bool $requiresBootstrap): void

@@ -12,6 +12,7 @@ import {
     fmtMontoEscalonamiento,
     listaVisibleEnSolicitudes,
 } from '../../../utils/escalonamiento';
+import { PANEL_AVISO, PANEL_NOTA } from './solicitudesStyles';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
@@ -60,6 +61,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const [buscandoCliente, setBuscandoCliente] = useState(false);
     const [alertaLista, setAlertaLista] = useState(null);
     const [alertaHeredado, setAlertaHeredado] = useState(false);
+    const [alertaInactivo, setAlertaInactivo] = useState(false);
     const [analisisFinanciero, setAnalisisFinanciero] = useState(null);
     const temporizadorBusqueda = useRef(null);
     const abortBusquedaCliente = useRef(null);
@@ -86,6 +88,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     const esMenudeo = infoCliente?.es_menudeo === true || infoCliente?.es_menudeo === 1;
     const puedeConvertirMenudeo = esMenudeo && admiteConversionMenudeo(procesos, data.catalogo_proceso_id);
     const listaBronce = resolverListaBronce(listas);
+    const idTipoPorNombre = (nombre) => {
+        const tipo = tiposCliente.find(t => (t.nombre || '').toUpperCase() === nombre);
+        return tipo ? String(tipo.id) : '';
+    };
+    const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
+    const intencionConversion = puedeConvertirMenudeo
+        && listaSeleccionada
+        && String(listaSeleccionada.nombre).toUpperCase().startsWith('MAYOREO ');
     const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
     const cotizacionOpcional = flujoTienda;
 
@@ -113,6 +123,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             setData('convertir_menudeo_mayoreo', false);
         }
     }, [data.catalogo_proceso_id, procesoFinancieroSeleccionado, procesoAsignarTagSolo]);
+
+    useEffect(() => {
+        if (!!data.convertir_menudeo_mayoreo === !!intencionConversion) return;
+        setData('convertir_menudeo_mayoreo', !!intencionConversion);
+    }, [intencionConversion]);
 
     useEffect(() => {
         if (!data.compra_en_tienda || !listaBronce) return;
@@ -150,7 +165,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
             if (!cotizacionOpcional) {
                 setAnalisisFinanciero(null);
                 setAlertaLista(null);
-                if (!modoEdicion && !(esMenudeo && data.convertir_menudeo_mayoreo)) {
+                if (!modoEdicion && !(esMenudeo && (data.convertir_menudeo_mayoreo || intencionConversion))) {
                     setData('catalogo_lista_descuento_id', '');
                 }
                 setData('confirmo_informacion_escalonamiento', false);
@@ -240,6 +255,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('numero_cliente', valor);
         setInfoCliente(null);
         setAlertaHeredado(false);
+        setAlertaInactivo(false);
         setAlertaLista(null);
         setAnalisisFinanciero(null);
         if (temporizadorBusqueda.current) clearTimeout(temporizadorBusqueda.current);
@@ -258,12 +274,23 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setInfoCliente(cliente);
         setMostrarDropdown(false);
         setAlertaHeredado(false);
-        setData(
-            'catalogo_tipo_cliente_id',
-            cliente.catalogo_tipo_cliente_id ? String(cliente.catalogo_tipo_cliente_id) : ''
-        );
+        const inactivo = cliente.es_inactivo === true || cliente.es_inactivo === 1;
+        setAlertaInactivo(inactivo);
+        const idReactivado = idTipoPorNombre('REACTIVADO');
+        const idActivo = idTipoPorNombre('ACTIVO');
+        if (inactivo && idReactivado) {
+            setData('catalogo_tipo_cliente_id', idReactivado);
+        } else if (String(cliente.tipo_cliente_nombre || '').toUpperCase() === 'REACTIVADO' && idActivo) {
+            setData('catalogo_tipo_cliente_id', idActivo);
+        } else {
+            setData(
+                'catalogo_tipo_cliente_id',
+                cliente.catalogo_tipo_cliente_id ? String(cliente.catalogo_tipo_cliente_id) : ''
+            );
+        }
         setData('catalogo_lista_descuento_id', '');
         setData('confirmo_informacion_escalonamiento', false);
+        setData('convertir_menudeo_mayoreo', false);
     };
 
     const requiereConfirmacionEscalonamiento = analisisFinanciero
@@ -308,6 +335,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     <div className="mb-8 p-5 rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-500/10 flex gap-4 items-center animate-fade-in">
                         <AlertTriangle className="w-8 h-8 text-amber-500 shrink-0" />
                         <p className="text-sm font-bold text-amber-700 dark:text-amber-400 m-0 leading-tight">Alerta: Cliente protegido (Heredado). Utiliza los procesos exclusivos para heredados.</p>
+                    </div>
+                )}
+                {alertaInactivo && (
+                    <div className={`${PANEL_AVISO} mb-5`} role="status">
+                        <p className="m-0 text-sm font-semibold theme-text-main">Cliente inactivo — Reactivación</p>
+                        <p className="m-0 mt-1 text-sm theme-text-muted">
+                            Este cliente se encuentra inactivo. GELIA identificó la solicitud como REACTIVADO. Puedes continuar normalmente con la cotización; la reactivación se procesará cuando corresponda según su autorización.
+                        </p>
                     </div>
                 )}
 
@@ -427,23 +462,13 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     </div>
                                 </label>
                                 )}
-                                {puedeConvertirMenudeo && (
-                                <label className="flex items-start gap-3 p-4 rounded-2xl border-2 border-amber-500/40 bg-amber-500/10 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={!!data.convertir_menudeo_mayoreo}
-                                        onChange={e => setData('convertir_menudeo_mayoreo', e.target.checked)}
-                                        className="mt-1 w-4 h-4"
-                                    />
-                                    <div>
-                                        <span className="text-sm font-medium theme-text-main">
-                                            Convertir cliente de Menudeo a Mayoreo
-                                        </span>
-                                        <p className="text-[10px] font-bold theme-text-muted mt-1 leading-snug">
-                                            Queda registrada en la solicitud. La lista y la modalidad cambian solo cuando la solicitud se autoriza. Bronce es el nivel inicial, salvo otra lista mayorista elegida aquí.
-                                        </p>
-                                    </div>
-                                </label>
+                                {intencionConversion && (
+                                <div className={PANEL_NOTA}>
+                                    <p className="m-0 text-sm font-medium theme-text-main">Conversión a Mayoreo</p>
+                                    <p className="m-0 mt-1 text-xs theme-text-muted">
+                                        La lista mayorista seleccionada queda registrada. Lista y modalidad cambian cuando la solicitud se autorice.
+                                    </p>
+                                </div>
                                 )}
                             </div>
                         )}

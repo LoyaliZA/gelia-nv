@@ -38,6 +38,7 @@ class ClienteApiController extends Controller
             'conversion_solicitud_id',
             'monto_venta_actual',
             'monto_credito_autorizado',
+            'catalogo_tipo_cliente_id',
         ];
 
         if ($conFiscales) {
@@ -54,7 +55,7 @@ class ClienteApiController extends Controller
 
         $query = Cliente::query()
             ->select($columnas)
-            ->with('listaDescuento:id,nombre');
+            ->with(['listaDescuento:id,nombre', 'tipo:id,nombre']);
 
         $this->aplicarBusqueda($query, $termino);
 
@@ -68,6 +69,8 @@ class ClienteApiController extends Controller
                 'nombre' => $cliente->nombre,
                 'es_heredado' => (bool) $cliente->es_heredado,
                 'es_inactivo' => (bool) $cliente->es_inactivo,
+                'catalogo_tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
+                'tipo_cliente_nombre' => $cliente->tipo?->nombre,
                 'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
                 'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
                 'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),
@@ -113,8 +116,9 @@ class ClienteApiController extends Controller
                 'modalidad_origen',
                 'conversion_solicitud_id',
                 'monto_venta_actual',
+                'catalogo_tipo_cliente_id',
             ])
-            ->with('listaDescuento:id,nombre')
+            ->with(['listaDescuento:id,nombre', 'tipo:id,nombre'])
             ->where('numero_cliente', $numero)
             ->first();
 
@@ -130,6 +134,8 @@ class ClienteApiController extends Controller
             'nombre' => $cliente->nombre,
             'es_heredado' => (bool) $cliente->es_heredado,
             'es_inactivo' => (bool) $cliente->es_inactivo,
+            'catalogo_tipo_cliente_id' => $cliente->catalogo_tipo_cliente_id,
+            'tipo_cliente_nombre' => $cliente->tipo?->nombre,
             'lista_actual_id' => $this->proyeccionCliente->listaVigenteId($cliente) ?? $cliente->lista_actual_id,
             'lista_actual' => $cliente->listaDescuento->nombre ?? 'Sin Lista',
             'monto_venta_actual' => $this->proyeccionCliente->montoAcumulado($cliente),

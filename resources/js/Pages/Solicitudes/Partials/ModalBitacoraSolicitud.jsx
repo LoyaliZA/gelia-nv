@@ -144,7 +144,18 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                     <aside className="gelia-tag-history-summary">
                         <h3 className="m-0 text-base theme-text-main">Resumen actual</h3>
                         <dl className="gelia-respuesta-contexto mt-4">
-                            {[['Proceso', solicitud.proceso?.nombre], ['Estado', solicitud.estado?.nombre], ['Responsable', solicitud.vendedor?.name], ['Cotización', money(solicitud.monto_cotizado)], ['Tipo solicitado', objTipo?.nombre || 'Mantener actual'], ['Lista solicitada', objLista?.nombre || 'Mantener actual']].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
+                            {[
+                                ['Proceso', solicitud.proceso?.nombre],
+                                ['Estado', solicitud.estado?.nombre],
+                                ['Responsable', solicitud.vendedor?.name],
+                                ['Cotización', money(solicitud.monto_cotizado)],
+                                ['Tipo solicitado', objTipo?.nombre || 'Mantener actual'],
+                                ['Estado actual del cliente', solicitud.cliente?.es_inactivo ? 'Inactivo' : 'Activo'],
+                                ['Lista solicitada', objLista?.nombre || 'Mantener actual'],
+                                ['Lista almacenada', solicitud.cliente?.lista_almacenada_nombre || solicitud.cliente?.lista_descuento?.nombre],
+                                ['Lista efectiva', solicitud.cliente?.lista_efectiva_nombre],
+                                ['Aplicación', solicitud.aplicacion_cliente],
+                            ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
                         </dl>
                         <div className="space-y-3 mt-5 text-sm theme-text-muted">
                             {solicitud.pago_confirmado && <p className="theme-text-exito">Pago confirmado</p>}

@@ -107,7 +107,8 @@ class AjustarMontoPorSolicitudService
             ) {
                 if ($esMenudeo) {
                     $this->aplicarConversionMenudeo($cliente, $solicitud, $clasificacion, $listaAnterior);
-                } elseif ($clasificacion->conversionVigente($cliente)) {
+                } elseif ($clasificacion->conversionVigente($cliente)
+                    && (int) $cliente->conversion_solicitud_id !== (int) $solicitud->id) {
                     $this->ratificarConversion($cliente, $solicitud, $clasificacion);
                 }
             }

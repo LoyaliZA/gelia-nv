@@ -78,7 +78,8 @@ class ClasificacionComercialCliente
     }
 
     /**
-     * El monto explícito, incluido cero, clasifica. El monto vacío no se interpreta.
+     * El monto vacío no se interpreta como cero.
+     * PG con monto positivo clasifica Menudeo. PG con cero no clasifica: la fila inactiva.
      * Una lista mayorista con monto explícito convierte Menudeo a Mayoreo.
      * Una mayorista sin monto queda sin regla: no convierte ni reactiva.
      */
@@ -103,8 +104,12 @@ class ClasificacionComercialCliente
             return 'mayoreo';
         }
 
+        if ($this->esPublicoGeneral($listaCodigo) && $monto !== null && bccomp($monto, '0', 2) === 0) {
+            return null;
+        }
+
         $cliente->lista_actual_id = $listaCodigo->id;
-        if ($this->esPublicoGeneral($listaCodigo) && $monto !== null && ! $this->conversionVigente($cliente)) {
+        if ($this->esPublicoGeneral($listaCodigo) && $monto !== null && bccomp($monto, '0', 2) > 0 && ! $this->conversionVigente($cliente)) {
             $this->asignar($cliente, true, self::ORIGEN_IMPORTACION);
         }
 

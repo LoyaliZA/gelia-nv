@@ -136,23 +136,28 @@ class ImportarClientesInactivosTest extends TestCase
         $this->assertFalse($cliente->es_inactivo);
     }
 
-    public function test_codigo_pg_marca_activo(): void
+    public function test_codigo_pg_con_cero_no_reactiva(): void
     {
         $this->sincronizarListas();
+        $listaPlata = $this->idLista('MAYOREO PLATA');
 
         Cliente::create([
             'numero_cliente' => '500',
             'nombre' => 'Cliente PG',
-            'lista_actual_id' => $this->idLista('MAYOREO PLATA'),
+            'lista_actual_id' => $listaPlata,
             'monto_venta_actual' => 0,
             'es_inactivo' => true,
+            'es_menudeo' => false,
         ]);
 
-        $this->importarCsv("numero_cliente,nombre,codigo_lista,monto_venta_actual\n500,Cliente PG,pg,0\n");
+        $resultado = $this->importarCsv("numero_cliente,nombre,codigo_lista,monto_venta_actual\n500,Cliente PG,pg,0\n");
 
         $cliente = Cliente::where('numero_cliente', '500')->first();
 
-        $this->assertFalse($cliente->es_inactivo);
-        $this->assertEquals($this->idLista('PUBLICO GENERAL'), $cliente->lista_actual_id);
+        $this->assertTrue($cliente->es_inactivo);
+        $this->assertEquals($listaPlata, $cliente->lista_actual_id);
+        $this->assertFalse((bool) $cliente->es_menudeo);
+        $this->assertEquals(0, $resultado['clientes_marcados_inactivos']);
+        $this->assertEquals(0, $resultado['stats']['activados']);
     }
 }
