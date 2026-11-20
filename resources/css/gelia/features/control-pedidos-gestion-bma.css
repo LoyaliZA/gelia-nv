@@ -1508,6 +1508,18 @@
     border-radius: 0.5rem;
 }
 
+.registrar-tienda-modal.registrar-nacional-modal .theme-label {
+    font-size: 0.75rem;
+}
+
+.registrar-nacional-documento .registrar-tienda-archivo {
+    padding: 0.75rem;
+}
+
+.registrar-nacional-documento .registrar-tienda-seccion-titulo {
+    margin-bottom: 0.5rem;
+}
+
 .registrar-tienda-pie {
     display: flex;
     flex-wrap: wrap;

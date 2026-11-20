@@ -57,9 +57,13 @@ class SolicitarPesajePedidoBmaService
             app(ValidarSucursalDestinoPedidoBma::class)->ejecutar($pedido, (int) $pedido->sucursal_destino_id, exigirSiAplica: true);
         }
 
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+            $this->resolverSalidaNacional($pedido);
+        }
         $pedido->loadMissing(['paqueteria', 'almacen.tipoAlmacen']);
-        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido) && $pedido->consultaCedisModoRevisionMercancia()) {
-            throw new \InvalidArgumentException('La consulta nacional exige pesaje en CEDIS. Elija una paquetería comercial con peso.');
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)
+            && ($pedido->consultaCedisModoRevisionMercancia() || ! $pedido->paqueteria?->habilitadaParaNacional())) {
+            throw new \InvalidArgumentException('La consulta nacional exige pesaje en CEDIS. Elija una paquetería nacional o PAQ. PENDIENTE.');
         }
         $revisionCedis = is_array($pedido->solicitud_preparacion_json)
             && ($pedido->solicitud_preparacion_json['area_revision'] ?? null) === 'control_pedidos';
@@ -141,6 +145,30 @@ class SolicitarPesajePedidoBmaService
                 'cliente', 'estatus', 'documentos', 'cajas.tipoCaja', 'cajas.tipoGuia', 'tipoCaja', 'origen',
             ]);
         });
+    }
+
+    private function resolverSalidaNacional(PedidoBma $pedido): void
+    {
+        $pedido->loadMissing('almacen.tipoAlmacen');
+        if (AlmacenPdv::esAlmacen($pedido->almacen)) {
+            throw new \InvalidArgumentException('El envío nacional debe salir de CEDIS.');
+        }
+        if (! $pedido->origen_id) {
+            $origen = \App\Models\ControlPedidos\CatalogoOrigenPedido::query()
+                ->where('activo', true)->where('requiere_logistica', true)->where('nombre', 'Envío Foráneo')->first();
+            if (! $origen) {
+                throw new \InvalidArgumentException('Configure el origen Envío Foráneo para enviar la consulta nacional.');
+            }
+            $pedido->origen()->associate($origen);
+        }
+        if (! $pedido->almacen_id) {
+            $almacenes = Almacen::query()->where('activo', true)->where('permite_salida_pedidos', true)
+                ->whereHas('tipoAlmacen', fn ($consulta) => $consulta->where('nombre', 'CEDIS'))->get();
+            if ($almacenes->count() !== 1) {
+                throw new \InvalidArgumentException('Configure un único almacén CEDIS activo con salida de pedidos.');
+            }
+            $pedido->almacen()->associate($almacenes->sole());
+        }
     }
 
     /**

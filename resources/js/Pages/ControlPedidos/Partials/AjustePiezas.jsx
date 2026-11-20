@@ -50,6 +50,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     const puedeAnexar = operaciones.capacidades?.anexar !== false;
     const puedeRetirar = operaciones.capacidades?.retirar !== false;
     const productos = useMemo(() => {
+        if (adaptador?.piezasRetiro) return adaptador.piezasRetiro;
         const retiradas = new Set((solicitud?.retiro_piezas || []).flatMap(retiro => retiro.faltantes_retirados || []).map(Number));
         // Lo ya solicitado (pendiente o aplicado) deja de ofrecerse; una cantidad parcial solo descuenta lo pedido.
         const clave = (x) => String(x?.sku || x?.descripcion || '').trim().toLowerCase();
@@ -65,7 +66,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             .filter(pieza => !retiradas.has(Number(pieza.revision_id)))
             .map(pieza => ({ ...pieza, cantidad: pieza.revision_id ? pieza.cantidad : pieza.cantidad - (pedidas.get(clave(pieza)) || 0) }))
             .filter(pieza => pieza.cantidad > 0);
-    }, [pedido, solicitud]);
+    }, [pedido, solicitud, adaptador]);
     const claveAnexo = useRef(uuidSolicitud());
     const claveRetiro = useRef(uuidSolicitud());
     const [modo, setModo] = useState('anexo');
@@ -172,7 +173,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 },
             });
             const lineas = respuesta.data?.expediente?.anexo?.sin_remision;
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta, respuesta.data);
             else if (Array.isArray(lineas)) onSolicitud({ ...solicitud, anexo_sin_remision: lineas });
             claveAnexo.current = uuidSolicitud();
             setSeleccionadas([]);
@@ -279,7 +280,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     return form;
                 },
             });
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta, respuesta.data);
             claveRetiro.current = uuidSolicitud();
             [...previewsRetiro, ...previewsDocumentos].forEach((preview) => {
                 if (preview.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url);

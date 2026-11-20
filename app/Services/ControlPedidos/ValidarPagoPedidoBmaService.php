@@ -65,6 +65,10 @@ class ValidarPagoPedidoBmaService
                 }
             }
 
+            if (\App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::requiereCotizacion($pedido)) {
+                throw new RuntimeException('Guarde la cotización vigente antes de validar el pago del envío.');
+            }
+
             $this->pagos->assertPagoListoParaAvanzar($pedido, RegistrarPagoPedidoBmaService::FASE_VALIDAR);
 
             $resumen = $this->cobertura->calcular($pedido);
@@ -95,10 +99,20 @@ class ValidarPagoPedidoBmaService
                     'revisado_at' => now(),
                 ]);
 
-            $pedido->update([
+            $attrs = [
                 'pago_validado_at' => now(),
                 'pago_validado_por_id' => $usuarioId,
-            ]);
+            ];
+            if ($pedido->tienePaqueteriaNacionalPendiente()) {
+                $json = $pedido->solicitud_preparacion_json;
+                $json['pago_solo_mercancia_nacional'] = [
+                    'validado_at' => now()->toIso8601String(),
+                    'validado_por_id' => $usuarioId,
+                    'total_mercancia' => $pedido->total_mercancia,
+                ];
+                $attrs['solicitud_preparacion_json'] = $json;
+            }
+            $pedido->update($attrs);
 
             $this->registrarCierre->ejecutar($pedido->fresh(), $usuarioId);
 

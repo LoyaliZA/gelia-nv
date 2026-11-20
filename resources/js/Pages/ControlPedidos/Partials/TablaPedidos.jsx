@@ -559,7 +559,7 @@ export default function TablaPedidos({
         const fase = pedido.estatus?.fase_ciclo;
         return puedeMutarPedido(pedido)
             && can('control_pedidos.editar')
-            && fasesEditarUi.includes(fase);
+            && (fasesEditarUi.includes(fase) || pedido.puede_continuar_nacional);
     };
 
     const puedeEliminarBorrador = (pedido) => !esPapelera

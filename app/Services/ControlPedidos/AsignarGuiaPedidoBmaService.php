@@ -46,6 +46,8 @@ class AsignarGuiaPedidoBmaService
         }
 
         \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeGuiar($pedido);
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
         $this->assertCajasConPeso($pedido);
 
         if (!$pedido->puedeAsignarGuia()) {
@@ -57,6 +59,11 @@ class AsignarGuiaPedidoBmaService
             || $pedido->empacado_at !== null;
 
         return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
+            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+            }
+
             $estatusAnterior = $pedido->estatus;
 
             $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo'], $usuarioId);

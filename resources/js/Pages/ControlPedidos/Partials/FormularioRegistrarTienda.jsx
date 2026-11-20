@@ -408,6 +408,10 @@ export default function FormularioRegistrarTienda({
     const [archivosConversion, setArchivosConversion] = useState([]);
     const [previewsConversion, setPreviewsConversion] = useState([]);
     const [vistaConversion, setVistaConversion] = useState(null);
+    const [confirmarRetiroSoporteNacional, setConfirmarRetiroSoporteNacional] = useState(false);
+    const [nacionalSucia, setNacionalSucia] = useState(false);
+    const [confirmarSalidaNacional, setConfirmarSalidaNacional] = useState(false);
+    const [operandoNacional, setOperandoNacional] = useState(false);
     const [confirmarSalidaConversion, setConfirmarSalidaConversion] = useState(false);
     const [resultadoConversion, setResultadoConversion] = useState(null);
     const [ocupadoConversion, setOcupadoConversion] = useState(false);
@@ -594,7 +598,29 @@ export default function FormularioRegistrarTienda({
         }
     };
 
-    const guardar = (cuerpo = null, silencioso = false) => encolar(() => ejecutarGuardar(cuerpo, silencioso));
+    const guardar = (cuerpo = null, silencioso = false) => encolar(() => ejecutarGuardar(
+        typeof cuerpo === 'function' ? cuerpo() : cuerpo, silencioso,
+    ));
+    const guardarNacional = (extra) => guardar(() => {
+        const { piezas_nacionales: piezas = [], guardar_mercancia_nacional: guardarMercancia, ...campos } = extra;
+        const datos = { ...payload(), ...campos };
+        if (!guardarMercancia) return datos;
+
+        const cuerpo = new FormData();
+        const adjuntar = (llave, valor) => {
+            if (valor === undefined) return;
+            if (valor === null) { cuerpo.append(llave, ''); return; }
+            if (valor instanceof File) cuerpo.append(llave, valor);
+            else if (typeof valor === 'object') Object.entries(valor).forEach(([clave, dato]) => adjuntar(`${llave}[${clave}]`, dato));
+            else cuerpo.append(llave, typeof valor === 'boolean' ? Number(valor) : valor);
+        };
+        Object.entries(datos).forEach(([llave, valor]) => adjuntar(llave, valor));
+        cuerpo.append('guardar_mercancia_nacional', '1');
+        piezas.forEach(({ id, sku, descripcion, cantidad, evidencia }, i) => {
+            adjuntar(`piezas_nacionales[${i}]`, { id, sku, descripcion, cantidad, evidencia });
+        });
+        return cuerpo;
+    });
 
     const ejecutarSubirArchivo = async (file) => {
         suspenderRef.current = true;
@@ -653,6 +679,7 @@ export default function FormularioRegistrarTienda({
 
     const subirArchivo = (file) => {
         if (!file || enviando) return;
+        setConfirmarRetiroSoporteNacional(false);
         archivoPendienteRef.current = file;
         setArchivoPendiente(true);
         return encolar(() => ejecutarSubirArchivo(file));
@@ -666,6 +693,7 @@ export default function FormularioRegistrarTienda({
 
     const pegarArchivo = (evento) => {
         if (modalidad === 'municipal' && solicitud.consulta_municipal?.enviada_at) return;
+        if (modalidad === 'nacional' && (pedido?.pesaje_solicitado_at || evento.defaultPrevented)) return;
         const pegado = archivosImagenDesdeClipboard(evento.clipboardData);
         if (!pegado.length) return;
         evento.preventDefault();
@@ -689,6 +717,7 @@ export default function FormularioRegistrarTienda({
     });
 
     const retirarArchivo = async () => {
+        setConfirmarRetiroSoporteNacional(false);
         archivoPendienteRef.current = null;
         setArchivoPendiente(false);
         if (!documento?.id || !pedidoIdRef.current) {
@@ -824,10 +853,15 @@ export default function FormularioRegistrarTienda({
         }
         onClose?.();
     };
+    const cerrarNacional = () => {
+        if (vistaConversion || operandoNacional) return;
+        if (nacionalSucia) setConfirmarSalidaNacional(true);
+        else onClose?.();
+    };
     const dialog = usePedidoDialog({
         abierto,
-        onClose: conversion ? intentarCerrar : onClose,
-        bloqueado: guardando || enviando || operandoMunicipal || estadoArchivo === 'cargando' || ocupadoConversion || Boolean(vistaConversion),
+        onClose: conversion ? intentarCerrar : modalidad === 'nacional' ? cerrarNacional : onClose,
+        bloqueado: guardando || enviando || operandoMunicipal || operandoNacional || estadoArchivo === 'cargando' || ocupadoConversion || Boolean(vistaConversion),
         cerrarConEscape: !vistaConversion && !ocupadoConversion,
     });
 
@@ -850,7 +884,7 @@ export default function FormularioRegistrarTienda({
         respaldoAunqueSuscrito: true,
         pausado: consultaMunicipalActiva
             ? (guardando || enviando || operandoMunicipal || estadoGuardado === 'guardando')
-            : (guardando || enviando || ['pendiente', 'guardando', 'error', 'conflicto'].includes(estadoGuardado)),
+            : (guardando || enviando || operandoNacional || nacionalSucia || ['pendiente', 'guardando', 'error', 'conflicto'].includes(estadoGuardado)),
         onActualizar: () => refrescarRef.current?.(),
         onPendiente: () => setAviso('El pedido cambió. Se conserva su captura mientras termina de guardar.'),
     });
@@ -859,13 +893,18 @@ export default function FormularioRegistrarTienda({
         let vigente = true;
         const baseAlLeer = baseRef.current;
         setLecturaOperativaLista(false);
-        axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`).then(({ data }) => {
+        const lectura = deseadaRef.current === 'nacional' ? 'consulta-nacional' : 'disponibilidad-tienda';
+        axios.get(`/control-pedidos/${pedidoId}/${lectura}`, { headers: cabeceras() }).then(({ data }) => {
             if (vigente && data?.id === pedidoId) {
                 setLecturaOperativaLista(true);
                 if (baseRef.current !== baseAlLeer) return;
                 if (Number(data.revision_registro) === Number(baseAlLeer.revision_esperada)) aplicarBase(data);
                 if (modalidad === 'municipal') adoptarConsultaMunicipal(data);
-                else {
+                else if (lectura === 'consulta-nacional') {
+                    aplicarBase(data);
+                    setPedido((actual) => ({ ...actual, ...data }));
+                    if (data.solicitud_preparacion) setSolicitudViva(data.solicitud_preparacion);
+                } else {
                     setPedido(data);
                     if (data.solicitud_preparacion) setSolicitudViva(data.solicitud_preparacion);
                     setConsultaCerrada(Boolean(data.consulta_cerrada || data.consulta_cerrada_at));
@@ -933,6 +972,11 @@ export default function FormularioRegistrarTienda({
     refrescarRef.current = async () => {
         const baseAlLeer = baseRef.current;
         try {
+            if (modalidad === 'nacional') {
+                const { data } = await axios.get(`/control-pedidos/${pedidoId}/consulta-nacional`, { headers: cabeceras() });
+                if (baseRef.current === baseAlLeer) adoptarLectura(data);
+                return data;
+            }
             if (consultaMunicipalActiva) {
                 const { data } = await axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`, { headers: cabeceras() });
                 if (baseRef.current !== baseAlLeer) return;
@@ -1028,7 +1072,7 @@ export default function FormularioRegistrarTienda({
         }
     };
 
-    const renderFormulario = (municipal = null) => {
+    const renderFormulario = (municipal = null, nacional = null) => {
         if (conversion && municipal) {
             capturaMunicipalRef.current = {
                 captura: municipal.captura,
@@ -1042,7 +1086,7 @@ export default function FormularioRegistrarTienda({
             <div
                 {...dialog}
                 aria-labelledby="registrar-tienda-titulo"
-                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog gelia-pedidos-formulario gelia-captura-inicial registrar-tienda-modal w-full`}
+                className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog gelia-pedidos-formulario gelia-captura-inicial registrar-tienda-modal w-full ${nacional ? 'registrar-nacional-modal' : ''}`}
             >
                 <header className="registrar-tienda-cabecera">
                     <span className={`${GELIA_ICON_BOX} registrar-tienda-emblema`} aria-hidden="true">
@@ -1071,8 +1115,8 @@ export default function FormularioRegistrarTienda({
                     <button
                         type="button"
                         className={`${GELIA_BTN_OUTLINE} registrar-tienda-cerrar`}
-                        onClick={conversion ? intentarCerrar : onClose}
-                        disabled={guardando || enviando || operandoMunicipal || ocupadoConversion}
+                        onClick={conversion ? intentarCerrar : nacional ? cerrarNacional : onClose}
+                        disabled={guardando || enviando || operandoMunicipal || operandoNacional || ocupadoConversion}
                         aria-label={conversion ? 'Cerrar cambio de modalidad' : 'Cerrar registro'}
                     >
                         <X size={18} aria-hidden="true" />
@@ -1122,6 +1166,15 @@ export default function FormularioRegistrarTienda({
                     )}
                     {conversion && flagsConversion?.accion_ui === 'continuar' && (
                         <AvisoOperativoPedido tono="info" className="mb-4">Continúa la solicitud de cambio pendiente de conexión. No se crea otra petición.</AvisoOperativoPedido>
+                    )}
+                    {nacional && nacionalSucia && confirmarSalidaNacional && (
+                        <div className="registrar-tienda-panel space-y-2" role="alert">
+                            <p className="m-0 text-sm">Hay cambios de mercancía o paquetería pendientes de guardar.</p>
+                            <div className="flex flex-wrap gap-2">
+                                <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setConfirmarSalidaNacional(false)}>Seguir editando</button>
+                                <button type="button" className={GELIA_BTN_OUTLINE} onClick={onClose}>Descartar cambios</button>
+                            </div>
+                        </div>
                     )}
                     {confirmarSalidaConversion && (
                         <div className="mb-4 grid gap-4" role="status">
@@ -1216,6 +1269,15 @@ export default function FormularioRegistrarTienda({
                                     />
                                 </div>
                             </div>
+                            {nacional && (
+                                <div className="min-w-0">
+                                    <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>
+                                    <input id="importe-mercancia-nacional" type="number" min="0.01" step="0.01" inputMode="decimal"
+                                        className={campo} value={totalMercancia} disabled={avanzado || operandoNacional}
+                                        onChange={(evento) => setTotalMercancia(evento.target.value)}
+                                    />
+                                </div>
+                            )}
                             <div className="min-w-0">
                                 <label className={THEME_LABEL} htmlFor="modalidad-tienda">
                                     Modalidad
@@ -1332,7 +1394,7 @@ export default function FormularioRegistrarTienda({
                             </section>
                         )}
                         <section
-                            className="registrar-tienda-panel registrar-tienda-documento"
+                            className={`registrar-tienda-panel registrar-tienda-documento ${nacional ? 'registrar-nacional-documento' : ''}`}
                             aria-labelledby="registrar-tienda-documento-titulo"
                         >
                             <div className="registrar-tienda-seccion-titulo">
@@ -1348,7 +1410,7 @@ export default function FormularioRegistrarTienda({
                                         Cargando
                                     </p>
                                 )}
-                                {!documento?.url && estadoArchivo !== 'cargando' && (
+                                {!nacional && !documento?.url && estadoArchivo !== 'cargando' && (
                                     <div className="registrar-tienda-archivo-vacio">
                                         <div
                                             className={`${GELIA_ICON_BOX} registrar-tienda-emblema`}
@@ -1362,7 +1424,18 @@ export default function FormularioRegistrarTienda({
                                         </p>
                                     </div>
                                 )}
-                                {documento?.url && estadoArchivo !== 'cargando' && (
+                                {nacional && documento?.url && estadoArchivo !== 'cargando' && (
+                                    <div className="flex min-w-0 items-center gap-3">
+                                        {esImagen(documento)
+                                            ? <img src={documento.url} alt="" className="w-14 h-14 shrink-0 object-contain rounded" />
+                                            : <span className={GELIA_ICON_BOX}><FileText size={18} aria-hidden="true" /></span>}
+                                        <div className="min-w-0">
+                                            <p className="m-0 break-words text-sm theme-text-main" role="status">{documento.nombre_original || 'Archivo del pedido'}</p>
+                                            <p className="m-0 text-xs theme-text-muted">{esImagen(documento) ? 'Imagen' : 'PDF'}</p>
+                                        </div>
+                                    </div>
+                                )}
+                                {!nacional && documento?.url && estadoArchivo !== 'cargando' && (
                                     <div className="registrar-tienda-archivo-listo w-full text-left">
                                         <p className="text-sm theme-text-main m-0 mb-2 break-words" role="status">
                                             Listo. {documento.nombre_original || 'Archivo del pedido'}
@@ -1391,7 +1464,7 @@ export default function FormularioRegistrarTienda({
                                     <button
                                         type="button"
                                         className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
-                                        disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
+                                        disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando || (nacional && revisionSolicitada)}
                                         onClick={() => archivoRef.current?.click()}
                                     >
                                         <FileUpIcon size={18} aria-hidden="true" />
@@ -1410,8 +1483,8 @@ export default function FormularioRegistrarTienda({
                                             <button
                                                 type="button"
                                                 className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}
-                                                disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando}
-                                                onClick={retirarArchivo}
+                                                disabled={conversion || estadoArchivo === 'cargando' || municipal?.bloqueado || municipal?.guardando || (nacional && revisionSolicitada)}
+                                                onClick={nacional ? () => setConfirmarRetiroSoporteNacional(true) : retirarArchivo}
                                             >
                                                 <Trash2Icon size={18} aria-hidden="true" />
                                                 Retirar
@@ -1419,6 +1492,15 @@ export default function FormularioRegistrarTienda({
                                         </>
                                     )}
                                 </div>
+                                {nacional && confirmarRetiroSoporteNacional && (
+                                    <div className="mt-3 space-y-2" role="alert">
+                                        <p className="m-0 text-sm break-words">¿Retirar {documento?.nombre_original || 'el documento del pedido'}?</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button type="button" className={GELIA_BTN_OUTLINE + ' min-h-[44px]'} onClick={() => setConfirmarRetiroSoporteNacional(false)}>Conservar archivo</button>
+                                            <button type="button" className={GELIA_BTN_OUTLINE + ' min-h-[44px]'} onClick={retirarArchivo}>Retirar archivo</button>
+                                        </div>
+                                    </div>
+                                )}
                                 <input
                                     ref={archivoRef}
                                     type="file"
@@ -1429,6 +1511,7 @@ export default function FormularioRegistrarTienda({
                             </div>
                         </section>
                     </div>
+                    {nacional?.contenido}
                     {(!conversion || (modalidad === 'municipal' && !resultadoConversion)) && municipal?.contenido}
                     {conversion && modalidad === 'municipal' && !resultadoConversion && (
                         <>
@@ -1531,7 +1614,7 @@ export default function FormularioRegistrarTienda({
                             {!conversion && <ConfirmacionRevisionTienda procesosListos={lecturaOperativaLista && procesosConfirmacionListos} destinoAccion={destinoAccion} onAviso={setAvisoConfirmacion} antesDeEnviar={asegurarGuardado} pedido={{ ...pedido, id: pedidoId, solicitud_preparacion: solicitudViva }} sucursales={catalogos.sucursales || []} consultaCerrada={consultaCerrada} importesListos={importesListos} onLectura={adoptarLectura} />}
                         </>
                     )}
-                    {modalidad !== 'municipal' && borradorConfirmado && !enviada && (
+                    {modalidad === 'tienda' && borradorConfirmado && !enviada && (
                         <p className="text-sm theme-text-muted mt-4 mb-0" role="status">
                             No se creó una tarea.
                         </p>
@@ -1581,10 +1664,10 @@ export default function FormularioRegistrarTienda({
                     </div>
                     <div className="registrar-tienda-pie-acciones">
                         <BotonBorrador
-                            guardando={guardando}
-                            confirmado={borradorConfirmado}
-                            deshabilitado={revisionSolicitada || enviando}
-                            onClick={() => guardar()}
+                            guardando={guardando || nacional?.enviando}
+                            confirmado={borradorConfirmado && !nacionalSucia}
+                            deshabilitado={revisionSolicitada || enviando || estadoArchivo === 'cargando'}
+                            onClick={nacional?.guardarBorrador || (() => guardar())}
                         />
                         {modalidad === 'tienda' && !revisionSolicitada && (
                             <button
@@ -1598,7 +1681,7 @@ export default function FormularioRegistrarTienda({
                                 <ArrowRight size={16} aria-hidden="true" />
                             </button>
                         )}
-                        <div ref={setDestinoAccion} className="registrar-tienda-accion-principal" />
+                        {nacional?.accion || <div ref={setDestinoAccion} className="registrar-tienda-accion-principal" />}
                     </div>
                     </>}
                 </footer>
@@ -1639,15 +1722,22 @@ export default function FormularioRegistrarTienda({
                     ...pedido,
                     id: pedidoId,
                     folio_remision: folio,
-                    documentos: documento?.url ? [documento] : (pedido?.documentos || []),
+                    cliente_id: clienteId,
+                    departamento_operacion_id: departamentoId,
+                    soporte_pedido: documento?.url ? documento : null,
                     solicitud_preparacion: solicitudViva,
                     catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id,
                 }}
                 catalogos={catalogos}
-                guardar={(extra) => guardar({ ...payload(), ...extra })}
+                guardar={guardarNacional}
                 onPedido={aplicarRespuesta}
+                onVer={(documentos, indice) => setVistaConversion({ documentos, indice })}
+                onDirtyChange={setNacionalSucia}
+                onBusyChange={setOperandoNacional}
+                bloqueado={estadoArchivo === 'cargando' || guardando}
+                importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
             >
-                {renderFormulario}
+                {(nacional) => renderFormulario(null, nacional)}
             </FormularioRegistrarNacional>
         );
     }

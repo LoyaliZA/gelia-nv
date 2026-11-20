@@ -70,6 +70,8 @@ class MarcarEnviadoPedidoBmaService
             );
         }
 
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
         if ($pedido->ofreceRastreo() && empty($pedido->numero_rastreo)) {
             throw new \RuntimeException('El pedido requiere número de guía antes de marcarlo como enviado.');
         }

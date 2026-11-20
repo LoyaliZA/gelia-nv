@@ -1321,11 +1321,17 @@ export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistic
 };
 
 /** Misma regla que PedidoBma::consultaCedisModoRevisionMercancia. */
-export const cedisConsultaEsRevisionMercancia = (pedido) => pedidoModoRevisionMercancia(
+export const cedisConsultaEsRevisionMercancia = (pedido) => {
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'nacional'
+        && pedido.solicitud_preparacion.captura_nacional === 'compartida') {
+        return pedido.consulta_cedis_modo_revision_mercancia === true;
+    }
+    return pedidoModoRevisionMercancia(
     pedido,
     pedido?.paqueteria,
     !(pedido?.es_consulta_mercancia || pedido?.origen?.requiere_logistica === false),
 ) || pedido?.consulta_cedis_modo_revision_mercancia === true;
+};
 
 /**
  * Terminología contextual de empaque en consulta CEDIS (QF-01).

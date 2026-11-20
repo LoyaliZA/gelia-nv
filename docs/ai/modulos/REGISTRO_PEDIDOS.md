@@ -28,9 +28,9 @@
 ## Puntos blandos
 - [verificado] «Legado» sigue importado y ejecutado; no es un archivo huérfano: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:38`.
 - [verificado] El identificador histórico `folio_remision` no autoriza editar el número de pedido desde Auditoría: `app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php:86`.
-- [verificado] El alta nacional 2.0 envía pesaje comercial a CEDIS. Sin remisión, anexo o retiro sigue en el mismo pedido. Con remisión o pago, el complemento captura piezas reales (SKU o captura sin SKU), crea revisiones solo en el hijo y conserva `solicitud_id` hasta el éxito: `app/Services/ControlPedidos/Nacional/RegistrarComplementoNacional.php`.
-- [verificado] Antes de la salida, Ventas solicita recolección en sucursal sin convertir `modalidad_entrega`; conserva costo de envío y no cancela la guía ante la paquetería: `app/Services/ControlPedidos/Nacional/CambiarNacionalATienda.php`.
-- [verificado] Tras el cierre, la misma captura puede cambiar la paquetería, incluida PAQ. PENDIENTE. El importe lo calcula el servidor y un costo mayor que cero no pasa a cero: `app/Services/ControlPedidos/Nacional/CambiarPaqueteriaNacional.php`.
-- [verificado] El alta nacional lista paqueterías comerciales con logística (`sin_logistica` falso), aunque `requiere_peso` sea falso. Omite las marcadas sin logística y deja PAQ. PENDIENTE para el cambio posterior: `resources/js/Pages/ControlPedidos/Nacional/FormularioRegistrarNacional.jsx`.
+- [verificado] El borrador nacional guarda líneas opcionales por SKU o evidencia con UUID y cantidad. Conserva el PDF general por separado. `GuardarMercanciaNacional` guarda las líneas, sus adjuntos y la revisión de la captura en el mismo guardado del borrador.
+- [verificado] Después del cierre y con cobertura de mercancía, Ventas puede solicitar recolección en sucursal antes de la salida. `CambiarNacionalATienda` conserva modalidad y cargos previos. La confirmación externa de cancelación de una guía es un hecho separado.
+- [verificado] Tras el cierre, la captura nacional permite cambiar la paquetería y registrar cotización con dirección verificada y flete de cada caja. `CambiarPaqueteriaNacional` aplica los importes con los servicios de costos existentes.
+- [verificado] El alta nacional ofrece PAQ. PENDIENTE y comerciales activas con logística, incluso si `requiere_peso` es falso. Ambos recorridos consultan peso en CEDIS: `FormularioRegistrarNacional` y `SolicitarPesajePedidoBmaService`.
 
-- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, filtro de paquetería nacional sin commit.
+- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.

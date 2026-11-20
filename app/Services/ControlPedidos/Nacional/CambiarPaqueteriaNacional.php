@@ -9,6 +9,8 @@ use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ActualizarCostosCajasPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\InvalidarGuiaPorCambioDireccion;
+use App\Services\ControlPedidos\Direcciones\CrearSnapshotDireccionPedido;
+use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\Nacional\CapturaNacional;
@@ -51,15 +53,22 @@ class CambiarPaqueteriaNacional
                 ->whereKey((int) ($contexto['catalogo_paqueteria_id'] ?? 0))
                 ->where('activo', true)
                 ->first();
-            if (! $nueva) {
+            if (! $nueva?->habilitadaParaNacional()) {
                 throw new InvalidArgumentException('Seleccione una paquetería.');
+            }
+
+            $cambioReal = (int) $pedido->catalogo_paqueteria_id !== $nueva->id;
+            $retomaEnvio = $pedido->tienePaqueteriaPendiente() && ! $nueva->esPendienteConfirmacion();
+            $cotizacion = $contexto['cotizacion'] ?? null;
+            if ($cotizacion && (! $pedido->consultaCerrada() || $nueva->esPendienteConfirmacion())) {
+                throw new InvalidArgumentException('Cierre la consulta y elija una paquetería antes de guardar la cotización.');
             }
 
             $lineas = is_array($contexto['lineas'] ?? null) ? $contexto['lineas'] : [];
             $this->rechazarCostoCero($pedido, $lineas);
 
             $usuarioId = (int) $contexto['usuario_id'];
-            if ($this->tieneGuiaVigente($pedido)) {
+            if ($cambioReal && $this->tieneGuiaVigente($pedido)) {
                 $this->invalidarGuia->ejecutar($pedido, $usuarioId, 'Cambio de paquetería');
                 $pedido = $pedido->fresh(['estatus', 'cajas', 'documentos']);
             }
@@ -72,8 +81,27 @@ class CambiarPaqueteriaNacional
                 'aplica_seguro' => $aplica,
             ]);
 
+            if ($cotizacion) {
+                $activas = $pedido->cajas->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva());
+                $ids = array_column($lineas, 'uuid_operativo');
+                if ($activas->isEmpty() || count($ids) !== $activas->count()
+                    || $activas->pluck('uuid_operativo')->diff($ids)->isNotEmpty()
+                    || collect($lineas)->contains(fn ($linea) => (float) $linea['costo_envio'] <= 0)) {
+                    throw new InvalidArgumentException('Indique el flete de cada caja activa.');
+                }
+                $direccionCambio = (int) $pedido->cliente_direccion_id !== (int) $cotizacion['cliente_direccion_id'];
+                if (! $cambioReal && $direccionCambio && $this->tieneGuiaVigente($pedido)) {
+                    throw new InvalidArgumentException('Use Cambiar dirección para actualizar un envío con guía vigente.');
+                }
+                $pedido->update($cotizacion);
+                if ($direccionCambio || ! $pedido->direccionVigente()->exists()) {
+                    app(CrearSnapshotDireccionPedido::class)->ejecutar($pedido, $usuarioId);
+                    $pedido->refresh();
+                }
+            }
+
             $reabierta = false;
-            if ($pedido->pago_validado_at) {
+            if ($pedido->pago_validado_at && ($cambioReal || $lineas !== [])) {
                 $pedido->update(['pago_validado_at' => null, 'pago_validado_por_id' => null]);
                 $pedido = $pedido->fresh(['cajas', 'zona', 'estatus']);
                 $reabierta = true;
@@ -82,8 +110,23 @@ class CambiarPaqueteriaNacional
                 $pedido = $this->cotizar($pedido->fresh(['cajas', 'zona', 'estatus']), $lineas, $nueva, $aplica, $usuarioId);
             }
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+            if ($cambioReal) {
+                unset($json['cotizacion_nacional']);
+            }
+            if ($cotizacion) {
+                $json['cotizacion_nacional'] = ['paqueteria_id' => $nueva->id];
+            }
             if ($reabierta) {
                 $json['cambio_paqueteria_cobertura'] = 'reabierta';
+            }
+            if ($retomaEnvio && ($reabierta || isset($json['pago_solo_mercancia_nacional']))
+                && ! $pedido->esEditablePorVendedora() && ! $pedido->esAuditablePorAuxiliar()) {
+                $auxiliar = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR);
+                if (! $auxiliar) {
+                    throw new RuntimeException('No está disponible la revisión de pagos del auxiliar.');
+                }
+                MaquinaEstadosPedidoBma::assertTransicion($pedido->estatus?->fase_ciclo, $auxiliar->fase_ciclo);
+                $pedido->update(['catalogo_estatus_pedido_id' => $auxiliar->id]);
             }
             $json['cambio_paqueteria'] = [
                 'solicitud_id' => $solicitudId,
@@ -97,7 +140,7 @@ class CambiarPaqueteriaNacional
                 $usuarioId,
                 $estatusId,
                 $estatusId,
-                'Paquetería actualizada a '.$nueva->nombre.'. La cobertura queda pendiente de revisión.',
+                $cotizacion ? 'Cotización nacional guardada.' : 'Paquetería actualizada a '.$nueva->nombre.'. La cobertura queda pendiente de revisión.',
                 AccionesHistorialPedidoBma::COSTOS_ENVIO
             );
 
@@ -108,7 +151,7 @@ class CambiarPaqueteriaNacional
     private function yaSalio(PedidoBma $pedido): bool
     {
         $fase = $pedido->estatus?->fase_ciclo;
-        if (in_array($fase, [CatalogoEstatusPedido::FASE_ENVIADO, CatalogoEstatusPedido::FASE_ENTREGADO], true)) {
+        if (in_array($fase, [CatalogoEstatusPedido::FASE_ENVIADO, CatalogoEstatusPedido::FASE_ENTREGADO, CatalogoEstatusPedido::FASE_EN_RUTA, CatalogoEstatusPedido::FASE_CANCELADO], true)) {
             return true;
         }
 

@@ -18,7 +18,8 @@ trait ValidacionCamposPedidoBma
         $esDiferido = $pedido->esMunicipioDiferido();
         $esResguardoAbierto = $pedido->esResguardoAbierto();
         $esComplementario = $pedido->esResguardoComplementario();
-        $omiteCosto = $esDiferido || $esResguardoAbierto || $esComplementario;
+        $paqNacionalPendiente = $pedido->tienePaqueteriaNacionalPendiente();
+        $omiteCosto = $esDiferido || $esResguardoAbierto || $esComplementario || $paqNacionalPendiente;
         $guiaCliente = (bool) $pedido->cliente_proporciona_guia;
         $envioPorCobrar = (bool) $pedido->envio_por_cobrar;
         $tienePesaje = $pedido->tienePesajeRespondido();
@@ -163,7 +164,7 @@ trait ValidacionCamposPedidoBma
                 if (! $esResguardoAbierto && ! $pedido->catalogo_paqueteria_id) {
                     $faltantes[] = 'paquetería';
                 }
-                if (! $esResguardoAbierto && ! $esMunicipalSinLogistica) {
+                if (! $esResguardoAbierto && ! $esMunicipalSinLogistica && ! $paqNacionalPendiente) {
                     if (! $pedido->catalogo_tipo_guia_id) {
                         $faltantes[] = 'tipo de guía';
                     }

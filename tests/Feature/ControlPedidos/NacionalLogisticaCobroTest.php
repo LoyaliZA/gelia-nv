@@ -3,6 +3,10 @@
 namespace Tests\Feature\ControlPedidos;
 
 use App\Models\Almacen;
+use App\Models\Cliente;
+use App\Models\ClienteDireccion;
+use App\Models\ControlPedidos\CatalogoTipoGuiaPedido;
+use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoOrigenPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
@@ -13,6 +17,10 @@ use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\User;
 use App\Services\ControlPedidos\AsignarGuiaPedidoBmaService;
+use App\Services\ControlPedidos\AprobarPedidoBmaService;
+use App\Services\ControlPedidos\ValidarPagoPedidoBmaService;
+use App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService;
+use App\Services\SaldosAFavor\CoberturaPagoPedidoBmaService;
 use App\Services\ControlPedidos\Direcciones\InvalidarGuiaPorCambioDireccion;
 use App\Services\ControlPedidos\GestionarRemisionPedidoBmaService;
 use App\Services\ControlPedidos\MarcarEnviadoPedidoBmaService;
@@ -25,6 +33,7 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
@@ -207,6 +216,110 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertNotNull($rechazo);
         $this->assertStringContainsString('PAQ. PENDIENTE', $rechazo->getMessage());
         $this->assertNull($actual->fresh()->numero_rastreo);
+    }
+
+    public function test_liquida_solo_mercancia_y_cobra_solo_el_envio_al_elegir_paqueteria(): void
+    {
+        Storage::fake('public');
+        $this->activarDetalle();
+        $pendiente = CatalogoPaqueteriaPedido::query()->updateOrCreate(['nombre' => 'PAQ. PENDIENTE'], [
+            'categoria' => 'local_regional', 'requiere_peso' => false, 'sin_logistica' => true, 'activo' => true,
+        ]);
+        $cliente = Cliente::query()->create([
+            'numero_cliente' => 'R040001', 'nombre' => 'Cliente ficticio', 'vendedor_id' => $this->usuario->id,
+            'lista_actual_id' => DB::table('catalogo_listas_descuento')->insertGetId(['nombre' => 'Lista R04', 'activo' => true]),
+        ]);
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR, [
+            'catalogo_paqueteria_id' => $pendiente->id, 'cliente_id' => $cliente->id,
+            'costo_envio' => null, 'consulta_cerrada_at' => now(), 'pesaje_solicitado_at' => now(),
+            'pesaje_respondido_at' => now(), 'peso_real_kg' => 1.5,
+        ]);
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1.5]);
+        $pdf = fn () => UploadedFile::fake()->create('remision-r04.pdf', 10, 'application/pdf');
+        $remisiones = app(GestionarRemisionPedidoBmaService::class);
+        $this->assertStringContainsString('mercancía', $this->rechazo(
+            fn () => $remisiones->actualizarNumeroRemision($pedido->fresh(), 'REM-R04', $this->usuario->id)
+        )->getMessage());
+
+        $pagos = app(RegistrarPagoPedidoBmaService::class);
+        $pagoMercancia = $pagos->handle($pedido->fresh(), ['monto' => 100, 'forma_pago' => 'efectivo'], $pdf(), $this->usuario->id);
+        app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id);
+        $remisiones->actualizarNumeroRemision($pedido->fresh(), 'REM-R04', $this->usuario->id);
+        $remisiones->subir($pedido->fresh(), $pdf(), $this->usuario->id);
+        $enCustodia = app(AprobarPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id);
+        $this->assertSame(CatalogoEstatusPedido::FASE_EN_CEDIS, $enCustodia->estatus->fase_ciclo);
+        $this->assertNotNull(data_get($enCustodia->solicitud_preparacion_json, 'pago_solo_mercancia_nacional.validado_at'));
+        $this->assertStringContainsString('paquetería', $this->rechazo(
+            fn () => app(GestionarGuiaPdfPedidoBmaService::class)->subir($enCustodia->fresh(), $pdf(), $this->usuario->id)
+        )->getMessage());
+
+        $dhl = $this->paqueteria('DHL');
+        $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/paqueteria-nacional', $this->contexto($enCustodia, $dhl->id))
+            ->assertOk()->assertJsonPath('mercancia_pagada', true)
+            ->assertJsonPath('estatus.fase_ciclo', CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR);
+        $this->assertStringContainsString('cotización', $this->rechazo(
+            fn () => app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id)
+        )->getMessage());
+
+        $direccion = ClienteDireccion::query()->create([
+            'cliente_id' => $cliente->id, 'numero_direccion' => 1, 'tipo_direccion' => ClienteDireccion::TIPO_ENVIO,
+            'nombre_destinatario' => 'Cliente ficticio', 'telefono_destinatario' => '5551234567',
+            'calle' => 'Calle ficticia', 'numero_exterior' => '1', 'colonia' => 'Centro',
+            'municipio' => 'Centro', 'ciudad' => 'Centro', 'estado' => 'Tabasco', 'codigo_postal' => '86000',
+            'pais' => 'México', 'esta_activa' => true, 'estado_verificacion' => ClienteDireccion::ESTADO_VERIFIED,
+            'origen' => ClienteDireccion::ORIGEN_MANUAL,
+        ]);
+        $zona = CatalogoZonaPedido::query()->create(['nombre' => 'Sin cargo R04', 'activo' => true, 'costo_adicional' => 0]);
+        $tipoGuia = CatalogoTipoGuiaPedido::query()->create(['nombre' => 'Guía R04', 'activo' => true]);
+        $this->postJson('/control-pedidos/'.$pedido->id.'/paqueteria-nacional', [
+            ...$this->contexto($pedido->fresh(), $dhl->id, [['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 60]]),
+            'cotizacion' => [
+                'cliente_direccion_id' => $direccion->id, 'catalogo_zona_id' => $zona->id,
+                'catalogo_tipo_guia_id' => $tipoGuia->id,
+            ],
+        ])->assertOk()->assertJsonPath('costo_envio', '60.00')->assertJsonPath('numero_remision', 'REM-R04');
+
+        $pedido->refresh();
+        $cobertura = app(CoberturaPagoPedidoBmaService::class);
+        $this->assertSame('60.00', $cobertura->calcular($pedido)['pendiente']);
+        $this->assertSame(1, $pedido->pagosExhibicion()->count());
+        $this->assertStringContainsString('cobertura', $this->rechazo(
+            fn () => app(GestionarGuiaPdfPedidoBmaService::class)->subir($pedido->fresh(), $pdf(), $this->usuario->id)
+        )->getMessage());
+        $this->assertStringContainsString('cobertura', $this->rechazo(
+            fn () => $remisiones->actualizarNumeroRemision($pedido->fresh(), 'REM-DUPLICADA', $this->usuario->id)
+        )->getMessage());
+        $this->assertSame('REM-R04', $pedido->fresh()->numero_remision);
+
+        $pagos->handle($pedido->fresh(), ['monto' => 60, 'forma_pago' => 'efectivo'], $pdf(), $this->usuario->id);
+        app(ValidarPagoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id);
+        $listo = app(AprobarPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id);
+        $this->assertTrue($cobertura->calcular($listo)['cubierto']);
+        $this->assertSame('REM-R04', $listo->numero_remision);
+        $this->assertSame(PedidoBmaPago::REVISION_VERIFICADO, $pagoMercancia->fresh()->estado_revision);
+        $this->assertSame(2, $listo->pagosExhibicion()->count());
+    }
+
+    public function test_la_salida_rechaza_cajas_con_guia_si_el_flete_nacional_sigue_sin_cobertura(): void
+    {
+        $dhl = $this->paqueteria('DHL');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
+            'catalogo_paqueteria_id' => $dhl->id, 'numero_rastreo' => 'GUIA-PRUEBA',
+            'costo_envio' => 60, 'empacado_at' => now(), 'consulta_cerrada_at' => now(),
+        ]);
+        $json = $pedido->solicitud_preparacion_json;
+        $json['pago_solo_mercancia_nacional'] = ['validado_at' => now()->toIso8601String()];
+        $json['cotizacion_nacional'] = ['paqueteria_id' => $dhl->id];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $caja = $this->caja($pedido, ['numero_rastreo' => 'GUIA-CAJA', 'costo_envio' => 60, 'peso_real_kg' => 1]);
+        $this->guia($pedido, 'guias/prueba.pdf', 'prueba.pdf', $caja->id);
+
+        $rechazo = $this->rechazo(fn () => app(MarcarEnviadoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id));
+
+        $this->assertNotNull($rechazo);
+        $this->assertStringContainsString('cobertura', $rechazo->getMessage());
+        $this->assertFalse($caja->fresh()->estaRecolectada());
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $pedido->fresh()->estatus->fase_ciclo);
     }
 
     public function test_dhl_cobra_reexpedicion_una_vez_y_asegura_solo_el_flete(): void

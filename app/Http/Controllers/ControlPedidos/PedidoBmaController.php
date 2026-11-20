@@ -172,6 +172,7 @@ class PedidoBmaController extends Controller
             'updated_at' => optional($pedido->updated_at)?->toIso8601String(),
             'progreso' => $progresoService->calcular($pedido),
             'origen_id' => $pedido->origen_id,
+            'catalogo_paqueteria_id' => $pedido->catalogo_paqueteria_id,
         ], \App\Support\ControlPedidos\LecturaFinancieraPedido::de($pedido), $this->contextoRegistrarTienda($pedido)));
     }
 
@@ -941,6 +942,7 @@ class PedidoBmaController extends Controller
             'condicion' => ['nullable', 'string', 'max:500'],
             'motivo' => ['nullable', 'string', 'max:180'],
             'piezas' => ['nullable', 'array', 'max:20'],
+            'piezas.*.revision_id' => ['nullable', 'integer', 'min:1'],
             'piezas.*.sku' => ['nullable', 'string', 'max:80'],
             'piezas.*.descripcion' => ['nullable', 'string', 'max:180'],
             'piezas.*.cantidad' => ['nullable', 'integer', 'min:1'],
@@ -960,6 +962,12 @@ class PedidoBmaController extends Controller
             ...$this->archivosSubidos($request, 'documentos'),
             $request->file('evidencia'),
         ]));
+        $archivos = array_values(array_reduce($archivos, function (array $unicos, $archivo) {
+            $clave = hash_file('sha256', $archivo->getRealPath()).':'.$archivo->getClientOriginalName();
+            $unicos[$clave] = $archivo;
+
+            return $unicos;
+        }, []));
         foreach (array_keys($datos['piezas'] ?? []) as $indice) {
             $archivoPieza = $request->file('piezas.'.$indice.'.evidencia');
             if ($archivoPieza) {
@@ -1001,6 +1009,10 @@ class PedidoBmaController extends Controller
             'lineas' => ['nullable', 'array'],
             'lineas.*.uuid_operativo' => ['required', 'uuid'],
             'lineas.*.costo_envio' => ['required', 'numeric', 'min:0'],
+            'cotizacion' => ['nullable', 'array:cliente_direccion_id,catalogo_tipo_guia_id,catalogo_zona_id'],
+            'cotizacion.cliente_direccion_id' => ['required_with:cotizacion', 'integer', 'exists:cliente_direcciones,id'],
+            'cotizacion.catalogo_tipo_guia_id' => ['required_with:cotizacion', 'integer', 'exists:catalogo_tipos_guia_pedido,id'],
+            'cotizacion.catalogo_zona_id' => ['required_with:cotizacion', 'integer', 'exists:catalogo_zonas_pedido,id'],
         ]);
         $datos['usuario_id'] = Auth::id();
 

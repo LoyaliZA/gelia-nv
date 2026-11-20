@@ -78,6 +78,12 @@ class CatalogoPaqueteriaPedido extends Model
         return mb_strtoupper(trim((string) $this->nombre)) === self::NOMBRE_PENDIENTE;
     }
 
+    public function habilitadaParaNacional(): bool
+    {
+        return $this->activo && ($this->esPendienteConfirmacion()
+            || ($this->ofreceRastreo() && ! $this->sinLogistica()));
+    }
+
     /** Registro municipal vigente: decisión operativa del 17 de noviembre de 2026. */
     public function habilitadaParaRegistroMunicipal(): bool
     {

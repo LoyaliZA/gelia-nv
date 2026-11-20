@@ -29,6 +29,8 @@ class CargarGuiaClientePedidoBmaService
         $pedido->loadMissing(['estatus']);
         app(ResguardosEnvioPedido::class)->assertNoSalePorSuCuenta($pedido);
 
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
         if (! $pedido->puedeCargarGuiaCliente()) {
             throw new \RuntimeException('El pedido no está pendiente de guía del cliente.');
         }
@@ -48,6 +50,11 @@ class CargarGuiaClientePedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $guia, $archivo, $usuarioId, $estatusPendienteEnvio) {
+            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+            }
+
             $estatusAnterior = $pedido->estatus;
 
             $this->eliminarGuiasPdf($pedido);

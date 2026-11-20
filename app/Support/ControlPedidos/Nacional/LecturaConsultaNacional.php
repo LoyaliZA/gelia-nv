@@ -12,7 +12,7 @@ final class LecturaConsultaNacional
     /** @return array<string, mixed> */
     public static function de(PedidoBma $pedido): array
     {
-        $pedido->loadMissing(['estatus', 'cajas', 'revisionesProducto', 'complementos.revisionesProducto', 'complementos.documentos', 'sucursalDestino']);
+        $pedido->loadMissing(['estatus', 'cajas', 'documentos', 'revisionesProducto', 'complementos.revisionesProducto', 'complementos.documentos', 'sucursalDestino']);
         $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
         $vinculo = is_array($json['vinculo_resguardo'] ?? null) ? $json['vinculo_resguardo'] : null;
         $vinculoPedidoId = $pedido->id;
@@ -34,6 +34,21 @@ final class LecturaConsultaNacional
             'base_captura' => $pedido->base_captura,
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
             'catalogo_paqueteria_id' => $pedido->catalogo_paqueteria_id,
+            'estatus' => $pedido->estatus,
+            'origen_id' => $pedido->origen_id,
+            'soporte_pedido' => $pedido->documentos->first(fn ($doc) => $doc->activo
+                && in_array($doc->tipo, ['pdf_pedido', 'cotizacion'], true)),
+            'almacen_id' => $pedido->almacen_id,
+            'mercancia_pagada' => isset($json['pago_solo_mercancia_nacional']),
+            'aplica_seguro' => (bool) $pedido->aplica_seguro,
+            'cliente_direccion_id' => $pedido->cliente_direccion_id,
+            'catalogo_tipo_guia_id' => $pedido->catalogo_tipo_guia_id,
+            'catalogo_zona_id' => $pedido->catalogo_zona_id,
+            'costo_seguro' => $pedido->costo_seguro,
+            'total_mercancia' => $pedido->total_mercancia,
+            'saldo_a_favor' => $pedido->saldo_a_favor,
+            'pago_validado_at' => $pedido->pago_validado_at?->toIso8601String(),
+            'documentos' => $pedido->documentos->where('activo', true)->values()->all(),
             'estatus_envio' => $pedido->estatus_envio,
             'pesaje_solicitado_at' => $pedido->pesaje_solicitado_at?->toIso8601String(),
             'pesaje_respondido_at' => $pedido->pesaje_respondido_at?->toIso8601String(),
@@ -44,6 +59,7 @@ final class LecturaConsultaNacional
             'numero_remision' => $pedido->numero_remision,
             'costo_envio' => $pedido->costo_envio,
             'peso_real_kg' => $pedido->peso_real_kg,
+            'peso_cobrado_guia_kg' => $pedido->peso_cobrado_guia_kg,
             'numero_cajas' => $pedido->numero_cajas,
             'sucursal_destino_id' => $pedido->sucursal_destino_id,
             'sucursal_destino' => $pedido->sucursalDestino ? [
@@ -61,15 +77,19 @@ final class LecturaConsultaNacional
                 'peso_real_kg' => $caja->peso_real_kg,
                 'peso_volumetrico_kg' => $caja->peso_volumetrico_kg,
                 'peso_cobrado_kg' => $caja->peso_cobrado_kg,
+                'costo_envio' => $caja->costo_envio,
                 'estado_operativo' => $caja->estado_operativo,
+                'estatus_recoleccion' => $caja->estatus_recoleccion,
             ])->values()->all(),
-            'revisiones_producto' => $pedido->revisionesProducto->map(fn (PedidoBmaRevisionProducto $revision) => [
+            'revisiones_producto' => $pedido->revisionesProducto->whereNull('retirada_at')->values()->map(fn (PedidoBmaRevisionProducto $revision) => [
                 'id' => $revision->id,
                 'sku' => $revision->sku,
                 'descripcion_producto' => $revision->descripcion_producto,
                 'cantidad_solicitada' => $revision->cantidad_solicitada,
                 'cantidad_encontrada' => $revision->cantidad_encontrada,
                 'estado_fisico' => $revision->estado_fisico,
+                'comentario' => $revision->comentario,
+                'resolucion' => $revision->resolucion,
             ])->values()->all(),
             'complementos' => $pedido->complementos->map(fn (PedidoBma $hijo) => [
                 'id' => $hijo->id,

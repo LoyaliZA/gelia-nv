@@ -3,6 +3,7 @@ import axios from 'axios';
 import { AjustePiezas } from '../Partials/AjustePiezas';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import { LABELS_ESTADO_FISICO } from '../Partials/pedidosBmaStyles';
 import { vinculoFisicoNacional } from './superficieNacional';
 
 function mensajeDe(error, reserva) {
@@ -12,15 +13,18 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualizado }) {
+export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualizado, onVer }) {
     const [aviso, setAviso] = useState('');
     const [error, setError] = useState('');
     const [ocupado, setOcupado] = useState(false);
-    const respondida = Boolean(pedido?.pesaje_respondido_at);
+    const actualizando = Boolean(pedido?.consulta_actualizacion_pendiente);
+    const respondida = Boolean(pedido?.pesaje_respondido_at) && !actualizando;
     const cerrada = Boolean(pedido?.consulta_cerrada || pedido?.consulta_cerrada_at);
     const adaptador = adaptadorConsultaNacional({ pedidoId: pedido?.id, pedido });
     const puedeAjustar = !cerrada && (adaptador.capacidades.anexar || adaptador.capacidades.retirar);
     const puedeCerrar = !cerrada && Boolean(pedido?.puede_cerrar_consulta);
+    const documentosRespuesta = (pedido?.documentos || []).filter((doc) => doc.tipo === 'evidencia_condicion'
+        && doc.activo !== false && doc.url && ['revision_producto', 'envio_caja', 'revision_general'].includes(doc.relacion_tipo));
     const vinculo = vinculoFisicoNacional(pedido);
     const puedeRegistrarSalida = Boolean(vinculo && vinculo.vinculo.estado === 'vinculado');
 
@@ -47,11 +51,11 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
     };
 
     return (
-        <section className="registrar-tienda-panel space-y-3" aria-label="Seguimiento de envío nacional">
-            <h3 className="m-0 text-base">Seguimiento</h3>
+        <section className="registrar-tienda-panel space-y-3" aria-label="Consulta a CEDIS">
+            <h3 className="m-0 text-base">Consulta a CEDIS</h3>
             {!respondida && !cerrada && (
                 <p className="text-sm theme-text-main m-0">
-                    CEDIS responde peso y piezas. La respuesta no cierra la consulta. Ventas registra el cierre.
+                    {actualizando ? 'CEDIS tiene pendiente actualizar la disponibilidad y el peso.' : 'Consulta enviada. CEDIS tiene pendiente confirmar disponibilidad y peso.'}
                 </p>
             )}
             {respondida && (
@@ -61,14 +65,24 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                             ? `${pedido.revisiones_producto.length} unidad${pedido.revisiones_producto.length === 1 ? '' : 'es'} en la respuesta.`
                             : 'CEDIS respondió la consulta.'}
                         {pedido.numero_cajas ? ` ${pedido.numero_cajas} caja${Number(pedido.numero_cajas) === 1 ? '' : 's'}.` : ''}
+                        {pedido.peso_real_kg != null && ` Peso real ${Number(pedido.peso_real_kg)} kg.`}
+                        {pedido.peso_cobrado_guia_kg != null && ` Peso a cobrar ${Number(pedido.peso_cobrado_guia_kg)} kg.`}
                     </p>
                     <ul className="m-0 pl-5 text-sm theme-text-main">
                         {(pedido.revisiones_producto || []).map((pieza) => (
-                            <li key={pieza.id || `${pieza.sku}-${pieza.descripcion_producto}`}>
-                                {pieza.sku ? `${pieza.sku} · ` : ''}{pieza.descripcion_producto} · {pieza.cantidad_encontrada ?? pieza.cantidad_solicitada}
+                            <li className="break-words" key={pieza.id}>
+                                {pieza.sku ? `${pieza.sku} · ` : ''}{pieza.descripcion_producto}
+                                {pieza.cantidad_solicitada != null && ` · ${pieza.cantidad_encontrada ?? '—'} de ${pieza.cantidad_solicitada}`}
+                                {LABELS_ESTADO_FISICO[pieza.estado_fisico] && ` · ${LABELS_ESTADO_FISICO[pieza.estado_fisico]}`}
+                                {pieza.comentario && <span className="block theme-text-muted">{pieza.comentario}</span>}
                             </li>
                         ))}
                     </ul>
+                    {documentosRespuesta.length > 0 && onVer && (
+                        <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => onVer(documentosRespuesta, 0)}>
+                            Ver evidencias de CEDIS
+                        </button>
+                    )}
                 </>
             )}
             {cerrada && <p className="text-sm theme-text-main m-0">Ventas registró el cierre de la consulta.</p>}
@@ -82,7 +96,8 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                     adaptador={adaptador}
                     avisoAnexo="Anexo registrado. CEDIS debe responder el nuevo peso antes de cerrar."
                     avisoRetiro="Retiro registrado. CEDIS debe responder el nuevo peso antes de cerrar."
-                    onSolicitud={() => ejecutar(refrescar)}
+                    onVer={onVer}
+                    onSolicitud={(_, version, lectura) => lectura ? onPedidoActualizado?.(lectura) : ejecutar(refrescar)}
                     onAviso={setAviso}
                 />
             )}

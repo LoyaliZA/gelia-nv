@@ -94,7 +94,9 @@ export function adaptadorConsultaNacional({ pedidoId, pedido = {} }) {
         && Boolean(pedido.pesaje_respondido_at)
         && !pedido.consulta_cerrada
         && !pedido.consulta_cerrada_at
-        && !pedido.numero_remision;
+        && !pedido.numero_remision
+        && !pedido.pago_validado_at
+        && !pedido.consulta_actualizacion_pendiente;
     const conCaptura = (tipo) => {
         const enviar = comando(`/control-pedidos/${pedidoId}/ajuste-nacional`);
 
@@ -113,6 +115,15 @@ export function adaptadorConsultaNacional({ pedidoId, pedido = {} }) {
 
     return {
         modalidad: 'nacional',
+        almacenId: pedido.almacen_id || pedido.almacen?.id || null,
+        piezasRetiro: (pedido.revisiones_producto || []).filter((p) => !p.retirada_at).map((p) => ({
+            id: `revision-${p.id}`,
+            revision_id: p.id,
+            sku: p.sku || '',
+            descripcion: p.descripcion_producto,
+            cantidad: Math.max(1, Number(p.cantidad_solicitada) || Number(p.cantidad_encontrada) || 1),
+            estado: p.estado_fisico,
+        })),
         capacidades: {
             anexar: abierta,
             retirar: abierta,

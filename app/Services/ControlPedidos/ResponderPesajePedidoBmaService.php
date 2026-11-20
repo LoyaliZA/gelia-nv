@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Support\ControlPedidos\Nacional\CapturaNacional;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
@@ -91,6 +92,29 @@ class ResponderPesajePedidoBmaService
         ));
 
         $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? [], $pedido->esTrasladoInternoAPdv());
+        $solicitadas = collect(CapturaNacional::piezasVigentes($pedido))->keyBy('id');
+        if ($solicitadas->isNotEmpty()) {
+            $contestadas = collect($revisiones)->groupBy('client_uuid');
+            $idsPrevios = $pedido->solicitud_preparacion_json['respuestas_piezas_nacionales'] ?? [];
+            foreach ($solicitadas as $id => $pieza) {
+                if ($contestadas->get($id)?->count() !== 1) {
+                    throw new \InvalidArgumentException('Responda cada pieza identificada por Ventas antes de enviar el pesaje.');
+                }
+            }
+            foreach ($revisiones as &$revision) {
+                $id = $revision['client_uuid'];
+                if ($pieza = $solicitadas->get($id)) {
+                    if ($revision['cantidad_solicitada'] !== $pieza['cantidad']) {
+                        throw new \InvalidArgumentException('Conserve la cantidad solicitada e indique cuántas piezas encontró.');
+                    }
+                    $revision['revision_id'] = $idsPrevios[$id] ?? null;
+                    $revision['pieza_solicitada'] = true;
+                } elseif (in_array($revision['revision_id'], $idsPrevios, true)) {
+                    $revision['revision_id'] = null;
+                }
+            }
+            unset($revision);
+        }
         if ($soloRevisiones && $revisiones === []) {
             throw new \InvalidArgumentException('Debe revisar al menos un producto para la consulta de mercancía.');
         }
@@ -168,7 +192,7 @@ class ResponderPesajePedidoBmaService
             $pedido, $usuarioId, $lineas, $tipos,
             $estadoGeneral, $comentarioGeneral, $evidenciasGenerales, $evidenciasEnvios, $revisiones,
             $soloRevisiones, $pesoAntes, $cajasAntes, $costoEnvioAntes, $esActualizacion, $revisionFisica,
-            $numeroBultosTienda, $tipoCajaRevision
+            $numeroBultosTienda, $tipoCajaRevision, $solicitadas
         ) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $pesoRealTotal = 0.0;
@@ -240,11 +264,16 @@ class ResponderPesajePedidoBmaService
                 throw new \RuntimeException('No se encontró el estatus de pesaje respondido.');
             }
 
+            $mercanciaNacionalAjustada = CapturaNacional::es($pedido) && in_array($pedido->motivo_repesaje, [
+                PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS,
+                PedidoBma::MOTIVO_REPESAJE_QUITA_PIEZAS,
+            ], true);
             $cambioPesos = ! $soloRevisiones && (
-                abs($pesoAntes - $pesoCobradoTotal) > 0.0001
+                $mercanciaNacionalAjustada
+                || abs($pesoAntes - $pesoCobradoTotal) > 0.0001
                 || $cajasAntes !== $numeroCajas
             );
-            // Invalidar costo solo si la actualización cambia pesos/cajas (Envío).
+            // Los ajustes nacionales invalidan la cotización de la composición anterior.
             $costoEnvio = ($esActualizacion && $cambioPesos) ? null : $costoEnvioAntes;
             $totalACobrar = $pedido->total_a_cobrar;
             if ($esActualizacion && $cambioPesos && $costoEnvioAntes !== null) {
@@ -286,6 +315,25 @@ class ResponderPesajePedidoBmaService
                 if ($esActualizacion && $cambioPesos) {
                     $datosPedido['total_a_cobrar'] = $totalACobrar;
                 }
+            }
+
+            if ($solicitadas->isNotEmpty() || $mercanciaNacionalAjustada
+                || array_key_exists('respuestas_piezas_nacionales', $pedido->solicitud_preparacion_json ?? [])) {
+                $json = $pedido->solicitud_preparacion_json;
+                $json['respuestas_piezas_nacionales'] = $solicitadas
+                    ->map(fn ($pieza, $id) => $productoUuidARevisionId[$id])->all();
+                if ($mercanciaNacionalAjustada) {
+                    unset($json['cotizacion_nacional']);
+                    $pedido->cajas()->activas()->update([
+                        'costo_envio' => null, 'costo_seguro' => null, 'costo_adicional' => null,
+                        'costos_actualizados_at' => null, 'costos_actualizados_por_id' => null,
+                    ]);
+                    $datosPedido['costo_seguro'] = 0;
+                    $datosPedido['total_a_cobrar'] = PedidoBma::calcularTotal(
+                        (float) $pedido->total_mercancia, 0, false, 0, (float) $pedido->saldo_a_favor
+                    );
+                }
+                $datosPedido['solicitud_preparacion_json'] = $json;
             }
 
             $pedido->update($datosPedido);
@@ -466,6 +514,7 @@ class ResponderPesajePedidoBmaService
             throw new \RuntimeException('Falta aplicar la migración que conserva las piezas retiradas. La actualización no se guardó para no perder su evidencia.');
         }
         $usados = [];
+        $reservadas = array_column($revisiones, 'revision_id');
 
         foreach ($revisiones as $i => $rev) {
             $revisionId = (int) ($rev['revision_id'] ?? 0);
@@ -480,9 +529,9 @@ class ResponderPesajePedidoBmaService
                     $match = $candidato;
                 }
             }
-            if (! $match && $revisionId === 0) {
-                $match = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($rev, $usados) {
-                    if (isset($usados[$row->id]) || $row->retirada_at !== null) {
+            if (! $match && $revisionId === 0 && empty($rev['pieza_solicitada'])) {
+                $match = $existentes->first(function (PedidoBmaRevisionProducto $row) use ($rev, $usados, $reservadas) {
+                    if (isset($usados[$row->id]) || in_array($row->id, $reservadas, true) || $row->retirada_at !== null) {
                         return false;
                     }
                     if ($rev['producto_id'] && (int) $row->producto_id === (int) $rev['producto_id']) {

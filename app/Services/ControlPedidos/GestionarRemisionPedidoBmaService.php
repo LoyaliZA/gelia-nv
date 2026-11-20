@@ -34,6 +34,7 @@ class GestionarRemisionPedidoBmaService
         return DB::transaction(function () use ($pedido, $archivo, $usuarioId, $fechaEmision) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $this->assertMunicipal($pedido);
+            \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertRemision($pedido);
             if (\App\Support\ControlPedidos\TransferenciaT02::documental($pedido) && ! isset($pedido->solicitud_preparacion_json['remision_tienda']['emitida_at'])) {
                 $json = $pedido->solicitud_preparacion_json ?? [];
                 $json['remision_tienda'] = ['emitida_at' => \Carbon\Carbon::parse($fechaEmision, app(PreparacionTiendaConfig::class)->zonaHoraria())->startOfDay()->toIso8601String(),
@@ -104,6 +105,7 @@ class GestionarRemisionPedidoBmaService
         return DB::transaction(function () use ($pedido, $numero, $usuarioId) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
             $this->assertMunicipal($pedido);
+            \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertRemision($pedido);
             $antes = (string) ($pedido->numero_remision ?? '');
             $pedido->update(['numero_remision' => $numero]);
             \App\Models\ControlPedidos\PedidoBmaReferencia::registrar(
