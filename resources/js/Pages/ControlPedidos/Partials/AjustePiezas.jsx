@@ -224,7 +224,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     sku: pieza.sku,
                     revision_id: pieza.revision_id,
                     descripcion: pieza.descripcion,
-                    cantidad: Math.max(1, Number(cantidades[pieza.id] || pieza.cantidad) || 1),
+                    cantidad: Math.max(1, Number(cantidades[pieza.id] ?? pieza.cantidad) || 1),
                 }))
                 .filter((pieza) => (pieza.sku || pieza.revision_id) && pieza.descripcion);
         const elegidas = mostrarBusqueda ? [...desdeLista] : desdeLista;
@@ -418,7 +418,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                                         inputMode="numeric"
                                         min="1"
                                         disabled={!marcadas[pieza.id]}
-                                        value={cantidades[pieza.id] || String(pieza.cantidad)}
+                                        value={cantidades[pieza.id] ?? String(pieza.cantidad)}
                                         onChange={(evento) => setCantidades((actual) => ({ ...actual, [pieza.id]: evento.target.value }))}
                                     />
                                 </li>

@@ -70,7 +70,7 @@ class GuardarClienteRequest extends FormRequest
             ],
             'vendedor_id'              => 'nullable|exists:users,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual'       => 'nullable|numeric|min:0',
+            'monto_venta_actual'       => 'nullable|numeric|min:0', // Se ignora: el oficial solo lo escribe la importación.
             'lista_actual_id'          => 'nullable|exists:catalogo_listas_descuento,id',
             'lista_bloqueada'          => 'nullable|boolean',
             'es_inactivo'              => 'prohibited',

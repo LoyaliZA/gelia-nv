@@ -91,7 +91,7 @@ class AcumuladoOperativoSolicitudTest extends TestCase
     public function test_la_cotizacion_suma_el_operativo_y_deja_el_oficial(): void
     {
         $cliente = $this->cliente('5000.00');
-        $solicitud = $this->solicitud($cliente, '30000.00');
+        $solicitud = $this->solicitud($cliente, '30000.00', $this->respondida);
         $this->ajuste()->aplicarBeneficios($solicitud);
 
         $cliente->refresh();
@@ -139,7 +139,7 @@ class AcumuladoOperativoSolicitudTest extends TestCase
 
         $menudeo = $this->cliente('1000.00', '8802', true);
         $menudeo->update(['lista_actual_id' => CatalogoListaDescuento::where('nombre', 'PUBLICO GENERAL')->value('id')]);
-        $solicitudMenudeo = $this->solicitud($menudeo, '30000.00', $this->pendiente, $this->plata->id);
+        $solicitudMenudeo = $this->solicitud($menudeo, '30000.00', $this->respondida, $this->plata->id);
         $this->ajuste()->aplicarBeneficios($solicitudMenudeo);
         $this->ajuste()->aplicarPagoConfirmado($solicitudMenudeo, 30000, $this->vendedor->id);
         $menudeo->refresh();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar } from 'lucide-react';
+import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar, Workflow, Wallet } from 'lucide-react';
 import CampoBusqueda from '@/Components/CampoBusqueda';
 import useIconoHover from '@/hooks/useIconoHover';
 import { normalizarFechaAlConfirmar } from '@/utils/fechaFiltro';
@@ -31,6 +31,29 @@ const ETIQUETA_MOTIVO = {
     pago_insuficiente: 'Pago insuficiente',
 };
 
+// Filtros extra de la variante tag-lista: [clave, etiqueta, opciones fijas, texto de «todos»]
+const FILTROS_PAGO = [
+    ['pago', 'Pago', [['confirmado', 'Pago confirmado'], ['pendiente', 'Pago pendiente'], ['vencido', 'Pago vencido']], 'Todos los pagos'],
+    ['consulta', 'Consultas', [['pendiente', 'Con consulta pendiente'], ['sin_leer', 'Respuesta sin leer']], 'Con y sin consulta'],
+    ['cancelacion', 'Cancelación', [['solicitada', 'Cancelación solicitada']], 'Con y sin cancelación'],
+];
+
+const ETIQUETA_EXTRA = {
+    pago: { confirmado: 'Pago confirmado', pendiente: 'Pago pendiente', vencido: 'Pago vencido' },
+    consulta: { pendiente: 'Consulta pendiente', sin_leer: 'Respuesta sin leer' },
+    cancelacion: { solicitada: 'Cancelación solicitada' },
+};
+
+function EncabezadoGrupo({ icono: Icono, children }) {
+    return (
+        <h4 className="m-0 flex items-center gap-2 border-b theme-border pb-1.5 text-xs font-bold uppercase tracking-wide theme-text-muted">
+            <Icono className="h-3.5 w-3.5" aria-hidden="true" />{children}
+        </h4>
+    );
+}
+
+const SIN_EXTRAS = {};
+
 const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 
 /**
@@ -56,6 +79,7 @@ export default function FiltrosSolicitudes({
     mostrarFiltrosClientes = false,
     filtroLista = '', filtroTipoCliente = '', filtroTag = '',
     listas = [], tiposCliente = [],
+    procesos = [], filtrosExtra = SIN_EXTRAS,
 }) {
     const filtrosClientes = variante === 'tag-lista' || mostrarFiltrosClientes;
     const tabsBase = filtrosClientes ? [...TABS.slice(0, 3), { id: 'VIGENTES', label: 'Vigentes' }, ...TABS.slice(3)] : TABS;
@@ -74,10 +98,13 @@ export default function FiltrosSolicitudes({
     const [listaLocal, setListaLocal] = useState(filtroLista);
     const [tipoClienteLocal, setTipoClienteLocal] = useState(filtroTipoCliente);
     const [tagLocal, setTagLocal] = useState(filtroTag);
+    const [extraLocal, setExtraLocal] = useState(filtrosExtra);
     const [errorFechas, setErrorFechas] = useState('');
     const iconoBuscar = useIconoHover(Search, { size: 16, className: 'h-4 w-4 shrink-0' });
     const iconoFiltros = useIconoHover(SlidersHorizontal, { size: 16, className: 'h-4 w-4 shrink-0' });
     const iconoPanelFiltros = useIconoHover(Filter, { size: 14, className: 'h-3.5 w-3.5' });
+    useEffect(() => { setExtraLocal(filtrosExtra); }, [filtrosExtra]);
+    const cambiarExtra = (clave, valor) => setExtraLocal((actual) => ({ ...actual, [clave]: valor }));
     useEffect(() => { setListaLocal(filtroLista); setTipoClienteLocal(filtroTipoCliente); setTagLocal(filtroTag); }, [filtroLista, filtroTipoCliente, filtroTag]);
 
     useEffect(() => {
@@ -110,6 +137,7 @@ export default function FiltrosSolicitudes({
         setErrorFechas('');
         onAplicarFiltros({
             ...(filtrosClientes ? { lista_id: listaLocal, tipo_cliente_id: tipoClienteLocal, tag: tagLocal } : {}),
+            ...(variante === 'tag-lista' ? extraLocal : {}),
             q: busquedaLocal,
             tipo_fecha: tipoFechaLocal,
             fecha_inicio: fechaInicioLocal,
@@ -122,6 +150,7 @@ export default function FiltrosSolicitudes({
 
     const limpiarPanelAdicionales = () => {
         setListaLocal(''); setTipoClienteLocal(''); setTagLocal(''); setErrorFechas('');
+        setExtraLocal(Object.fromEntries(Object.keys(extraLocal).map((clave) => [clave, ''])));
         setTipoFechaLocal('TODAS');
         setFechaInicioLocal('');
         setFechaFinLocal('');
@@ -132,6 +161,7 @@ export default function FiltrosSolicitudes({
 
     const quitarChip = (clave) => {
         const facetas = { lista_id: setListaLocal, tipo_cliente_id: setTipoClienteLocal, tag: setTagLocal };
+        if (clave.startsWith('extra:')) { const k = clave.slice(6); cambiarExtra(k, ''); onAplicarFiltros({ [k]: '' }); return; }
         if (facetas[clave]) { facetas[clave](''); onAplicarFiltros({ [clave]: '' }); return; }
         if (clave === 'q') {
             setBusquedaLocal('');
@@ -169,6 +199,12 @@ export default function FiltrosSolicitudes({
         filtrosClientes && filtroLista ? { clave: 'lista_id', etiqueta: `Lista: ${listas.find(l => String(l.id) === String(filtroLista))?.nombre || filtroLista}` } : null,
         filtrosClientes && filtroTipoCliente ? { clave: 'tipo_cliente_id', etiqueta: `Tipo: ${filtroTipoCliente === 'SIN_TIPO' ? 'Sin tipo registrado' : tiposCliente.find(t => String(t.id) === String(filtroTipoCliente))?.nombre || filtroTipoCliente}` } : null,
         filtrosClientes && filtroTag ? { clave: 'tag', etiqueta: filtroTag === 'con_tag' ? 'Con TAG actual' : 'Sin TAG actual' } : null,
+        ...(variante === 'tag-lista' ? [
+            filtrosExtra.proceso_id ? { clave: 'extra:proceso_id', etiqueta: `Operación: ${procesos.find((p) => String(p.id) === String(filtrosExtra.proceso_id))?.nombre || filtrosExtra.proceso_id}` } : null,
+            filtrosExtra.cliente_numero ? { clave: 'extra:cliente_numero', etiqueta: `Cliente n.º ${filtrosExtra.cliente_numero}` } : null,
+            filtrosExtra.es_heredado ? { clave: 'extra:es_heredado', etiqueta: filtrosExtra.es_heredado === '1' ? 'Cliente heredado' : 'Cliente no heredado' } : null,
+            ...Object.keys(ETIQUETA_EXTRA).map((k) => (filtrosExtra[k] ? { clave: `extra:${k}`, etiqueta: ETIQUETA_EXTRA[k][filtrosExtra[k]] || filtrosExtra[k] } : null)),
+        ] : []),
     ].filter(Boolean);
 
     const barFiltrosClass = variante === 'tag-lista'
@@ -283,6 +319,7 @@ export default function FiltrosSolicitudes({
                         )}
                     </div>
 
+                    {variante === 'tag-lista' && <EncabezadoGrupo icono={Calendar}>Periodo y responsable</EncabezadoGrupo>}
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div className="flex flex-col gap-1.5">
                             <label htmlFor={`${idPrefixFechas}-tipo`} className={`${THEME_LABEL} flex items-center gap-1`}>
@@ -321,7 +358,7 @@ export default function FiltrosSolicitudes({
 
                         <div className="flex flex-col gap-1.5">
                             <label htmlFor={`${idPrefixFechas}-motivo`} className={`${THEME_LABEL} flex items-center gap-1`}>
-                                <AlertOctagon className="h-3 w-3" aria-hidden="true" /> Motivo de incidencia
+                                <AlertOctagon className="h-3 w-3" aria-hidden="true" /> {variante === 'tag-lista' ? 'Motivo del error' : 'Motivo de incidencia'}
                             </label>
                             <select
                                 id={`${idPrefixFechas}-motivo`}
@@ -342,6 +379,7 @@ export default function FiltrosSolicitudes({
                     </div>
 
                     {filtrosClientes && <>
+                        {variante === 'tag-lista' && <EncabezadoGrupo icono={Filter}>Lista y tipo de cliente</EncabezadoGrupo>}
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                             {[
                                 ['lista', 'Lista de la solicitud', listaLocal, setListaLocal, listas, 'Todas las listas'],
@@ -349,6 +387,42 @@ export default function FiltrosSolicitudes({
                                 ['tag', 'TAG actual del cliente', tagLocal, setTagLocal, [{ id: 'con_tag', nombre: 'Clientes con TAG' }, { id: 'sin_tag', nombre: 'Clientes sin TAG' }], 'Con y sin TAG'],
                             ].map(([key, label, value, setter, options, placeholder]) => <div key={key} className="flex flex-col gap-1.5"><label htmlFor={`${idPrefixFechas}-${key}`} className={THEME_LABEL}>{label}</label><select id={`${idPrefixFechas}-${key}`} value={value} onChange={event => setter(event.target.value)} className={`${THEME_SELECT} w-full`}><option value="">{placeholder}</option>{options.map(option => <option key={option.id} value={option.id}>{option.nombre}</option>)}</select></div>)}
                         </div>
+                        {variante === 'tag-lista' && <>
+                            <EncabezadoGrupo icono={Workflow}>Operación y origen del cliente</EncabezadoGrupo>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor={`${idPrefixFechas}-proceso`} className={THEME_LABEL}>Tipo de operación</label>
+                                    <select id={`${idPrefixFechas}-proceso`} value={extraLocal.proceso_id || ''} onChange={(e) => cambiarExtra('proceso_id', e.target.value)} className={`${THEME_SELECT} w-full`}>
+                                        <option value="">Todas las operaciones</option>
+                                        {procesos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor={`${idPrefixFechas}-cliente-numero`} className={THEME_LABEL}>Número de cliente</label>
+                                    <input id={`${idPrefixFechas}-cliente-numero`} type="text" inputMode="numeric" autoComplete="off" value={extraLocal.cliente_numero || ''} onChange={(e) => cambiarExtra('cliente_numero', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarConsulta(); } }} className={`${THEME_INPUT} w-full`} />
+                                </div>
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor={`${idPrefixFechas}-heredado`} className={THEME_LABEL}>Origen del cliente</label>
+                                    <select id={`${idPrefixFechas}-heredado`} value={extraLocal.es_heredado || ''} onChange={(e) => cambiarExtra('es_heredado', e.target.value)} className={`${THEME_SELECT} w-full`}>
+                                        <option value="">Todos</option>
+                                        <option value="1">Clientes heredados</option>
+                                        <option value="0">Clientes no heredados</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <EncabezadoGrupo icono={Wallet}>Pago y seguimiento</EncabezadoGrupo>
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                {FILTROS_PAGO.map(([clave, etiqueta, opciones, todos]) => (
+                                    <div key={clave} className="flex flex-col gap-1.5">
+                                        <label htmlFor={`${idPrefixFechas}-${clave}`} className={THEME_LABEL}>{etiqueta}</label>
+                                        <select id={`${idPrefixFechas}-${clave}`} value={extraLocal[clave] || ''} onChange={(e) => cambiarExtra(clave, e.target.value)} className={`${THEME_SELECT} w-full`}>
+                                            <option value="">{todos}</option>
+                                            {opciones.map(([valor, nombre]) => <option key={valor} value={valor}>{nombre}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        </>}
                         <p className="m-0 text-xs theme-text-muted">El periodo corresponde a la creación de la solicitud. Para consultar listas aprobadas, combina la lista con Vigentes. El TAG refleja la asignación actual del cliente.</p>
                     </>}
                     {tipoFechaLocal === 'MES_ESPECIFICO' && <div className="flex flex-col gap-1.5 max-w-sm"><label htmlFor={`${idPrefixFechas}-mes`} className={THEME_LABEL}>Mes y año</label><input id={`${idPrefixFechas}-mes`} type="month" value={fechaInicioLocal?.slice(0, 7) || ''} className={THEME_INPUT} onChange={event => {

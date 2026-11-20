@@ -410,7 +410,8 @@ class ModalidadComercialClienteTest extends TestCase
         $web = $this->actingAs(User::factory()->create())->getJson('/api/clientes/1700')->assertOk();
         $movil = app(MobileClienteSerializerService::class)->serializar($cliente->fresh(), User::factory()->create());
 
-        $web->assertJsonPath('lista_actual_id', $this->plata->id);
+        // Una sola definición de lista efectiva: el Menudeo opera como Público General.
+        $web->assertJsonPath('lista_actual_id', $this->pg->id);
         $web->assertJsonPath('lista_almacenada_id', $this->plata->id);
         $web->assertJsonPath('lista_efectiva_id', $this->pg->id);
         $web->assertJsonPath('es_menudeo', true);

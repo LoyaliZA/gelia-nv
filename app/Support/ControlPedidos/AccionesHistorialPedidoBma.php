@@ -44,6 +44,11 @@ final class AccionesHistorialPedidoBma
     public const ANEXO_RESGUARDOS = 'anexo_resguardos';
     public const RESGUARDO = 'resguardo';
     public const LIBERAR_RESGUARDO = 'liberar_resguardo';
+    public const CONTINUACION_RESGUARDO = 'continuacion_resguardo';
+    public const CERRAR_ACUMULACION_RESGUARDO = 'cerrar_acumulacion_resguardo';
+    public const VINCULAR_REMISION_PAGADA = 'vincular_remision_pagada';
+    public const DESVINCULAR_REMISION_PAGADA = 'desvincular_remision_pagada';
+    public const INTEGRACION_LOCAL_MUNICIPAL = 'integracion_local_municipal';
     public const CAMBIO_DIRECCION = 'cambio_direccion';
     public const CAMBIO_SUCURSAL_DESTINO = 'cambio_sucursal_destino';
     public const ALTA_EXHIBICION_PAGO = 'alta_exhibicion_pago';
@@ -140,6 +145,7 @@ final class AccionesHistorialPedidoBma
         self::ANEXO_RESGUARDOS => 'Resguardos del envío',
         self::RESGUARDO => 'Resguardo / apartado',
         self::LIBERAR_RESGUARDO => 'Liberación de resguardo',
+        self::CONTINUACION_RESGUARDO => 'Solicitud de continuación de resguardo',
         self::CAMBIO_DIRECCION => 'Cambio de dirección',
         'decision_disponibilidad_tienda' => 'Decisión sobre disponibilidad',
         'respuesta_alternativa_tienda' => 'Respuesta sobre alternativa',

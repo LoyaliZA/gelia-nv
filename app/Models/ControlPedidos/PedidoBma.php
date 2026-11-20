@@ -260,7 +260,7 @@ class PedidoBma extends Model
         // Proyección de lectura: las claves operativas solo las escriben los servicios municipales.
         // No ampliamos el contrato de entrada/autoguardado compartido.
         if (($solicitud['modalidad_entrega'] ?? null) === 'municipal') {
-            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino'] as $clave) {
+            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino', 'resguardo_envio'] as $clave) {
                 if (array_key_exists($clave, $this->solicitud_preparacion_json ?? [])) {
                     $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
                 }
@@ -672,6 +672,13 @@ class PedidoBma extends Model
         $codigo = $codigoModalidad ?? $this->codigoModalidadDestinoFisico();
         if ($codigo !== null) {
             return in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
+        }
+
+        // El detonante es la sucursal destino (Carmen Cadena, City Center), no la forma de pago:
+        // un pedido de Tienda con destino lleva bolsas aunque no exista tarea de preparación.
+        $json = is_array($this->solicitud_preparacion_json) ? $this->solicitud_preparacion_json : [];
+        if (($json['modalidad_entrega'] ?? null) === 'tienda' && $this->sucursal_destino_id !== null) {
+            return true;
         }
 
         $this->loadMissing('origen');

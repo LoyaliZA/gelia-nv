@@ -1,3 +1,4 @@
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useState } from 'react';
 import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
@@ -152,22 +153,22 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                                 ['Tipo solicitado', objTipo?.nombre || 'Mantener actual'],
                                 ['Estado actual del cliente', solicitud.cliente?.es_inactivo ? 'Inactivo' : 'Activo'],
                                 ['Lista solicitada', objLista?.nombre || 'Mantener actual'],
-                                ['Lista almacenada', solicitud.cliente?.lista_almacenada_nombre || solicitud.cliente?.lista_descuento?.nombre],
-                                ['Lista efectiva', solicitud.cliente?.lista_efectiva_nombre],
+                                ['Lista actual', solicitud.cliente?.lista_almacenada_nombre || solicitud.cliente?.lista_descuento?.nombre],
+                                ['Lista aplicada', solicitud.cliente?.lista_efectiva_nombre],
                                 ['Aplicación', solicitud.aplicacion_cliente],
                             ].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || '—'}</dd></div>)}
                         </dl>
                         <div className="space-y-3 mt-5 text-sm theme-text-muted">
-                            {solicitud.pago_confirmado && <p className="theme-text-exito">Pago confirmado</p>}
+                            {solicitud.pago_confirmado && <AvisoSolicitud tono="exito" compacto>Pago confirmado</AvisoSolicitud>}
                             {solicitud.compra_en_tienda && <p>Compra en tienda</p>}
                             {solicitud.compra_en_tienda_solo_tag && <p>Compra realizada: solicitar TAG</p>}
                             {solicitud.monto_final_tentativo != null && <p>Pago tentativo: {money(solicitud.monto_final_tentativo)}</p>}
                             {solicitud.total_proyectado_neto != null && <p>Total neto proyectado: {money(solicitud.total_proyectado_neto)}</p>}
                             {solicitud.confirmo_informacion_escalonamiento && <p>Ventas confirmó haber informado al cliente que no alcanza el siguiente nivel.</p>}
-                            {solicitud.motivo_incorrecta && <p className="theme-text-peligro">Incidencia: {solicitud.motivo_incorrecta.replaceAll('_', ' ')}</p>}
+                            {solicitud.motivo_incorrecta && <AvisoSolicitud tono="peligro" compacto>Motivo del error: {solicitud.motivo_incorrecta.replaceAll('_', ' ')}</AvisoSolicitud>}
                         </div>
-                        {solicitud.observaciones_vendedor && <section className="gelia-tag-message mt-5"><h3>Comentario de ventas</h3><p>{solicitud.observaciones_vendedor}</p></section>}
-                        {solicitud.motivo_cancelacion && <section className="gelia-tag-message mt-5" data-tone="peligro"><h3>{solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'}</h3><p>{solicitud.motivo_cancelacion}</p>{(solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre && <p>Lista de rebaja: {(solicitud.lista_rebaja || solicitud.listaRebaja).nombre}</p>}</section>}
+                        {solicitud.observaciones_vendedor && <AvisoSolicitud tono="neutro" titulo="Comentario de ventas" className="mt-5">{solicitud.observaciones_vendedor}</AvisoSolicitud>}
+                        {solicitud.motivo_cancelacion && <AvisoSolicitud tono={solicitud.estado?.nombre === 'Cancelada' ? 'neutro' : 'peligro'} titulo={solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'} className="mt-5">{solicitud.motivo_cancelacion}{(solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre && <span className="block">Lista de rebaja: {(solicitud.lista_rebaja || solicitud.listaRebaja).nombre}</span>}</AvisoSolicitud>}
                         {solicitud.evidencia_path && <div className="mt-4"><EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" /></div>}
                     </aside>
                     <section className="gelia-tag-history-events" aria-label="Cronología de la solicitud">

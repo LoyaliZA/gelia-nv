@@ -44,6 +44,11 @@ class AutorizarSalidaPreparacionService
 
         $tarea->loadMissing('pedido');
         $pedido = $tarea->pedido;
+        try {
+            \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['resguardo' => $e->getMessage()]);
+        }
         if ($pedido && (int) $pedido->vendedor_id === (int) $usuario->id) {
             throw ValidationException::withMessages([
                 'permiso' => 'Quien registró la venta no puede autorizar la salida.',

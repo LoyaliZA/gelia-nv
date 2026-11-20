@@ -52,6 +52,12 @@ final class RetirarCustodiaParaEnvioService
             if ($custodia->pago_validado_at === null) {
                 throw ValidationException::withMessages(['pago' => 'La mercancía en custodia debe tener la cobertura verificada. No se cobra otra vez.']);
             }
+            try {
+                \App\Support\ControlPedidos\ExclusividadRemisionEnvio::assertDisponible($custodia, $principal);
+            } catch (\InvalidArgumentException $e) {
+                throw ValidationException::withMessages(['remision' => $e->getMessage()]);
+            }
+
             if (! in_array($custodia->estatus_sucursal, [
                 EstatusSucursalPedidoBma::EN_CUSTODIA,
                 EstatusSucursalPedidoBma::CUSTODIA_PARCIAL,

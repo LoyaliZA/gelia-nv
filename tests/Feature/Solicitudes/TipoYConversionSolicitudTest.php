@@ -116,12 +116,12 @@ class TipoYConversionSolicitudTest extends TestCase
         $this->assertSame($this->reactivado->id, $cliente->fresh()->catalogo_tipo_cliente_id);
     }
 
-    public function test_resolver_prefiere_nuevo_explicito_en_cliente_activo(): void
+    public function test_nuevo_explicito_en_cliente_activo_con_historial_se_registra_activo(): void
     {
         $cliente = $this->cliente(['es_inactivo' => false, 'catalogo_tipo_cliente_id' => $this->reactivado->id]);
 
         $this->assertSame(
-            $this->nuevo->id,
+            $this->activo->id,
             TipoClienteSolicitudResolver::resolver($this->nuevo->id, $cliente),
         );
     }

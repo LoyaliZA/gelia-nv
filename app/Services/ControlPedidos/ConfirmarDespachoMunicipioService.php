@@ -39,6 +39,12 @@ class ConfirmarDespachoMunicipioService
 
         return DB::transaction(function () use ($tarea, $usuario, $receptorTransportista, $versionEsperada) {
             $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
+            $tarea->loadMissing('pedido');
+            try {
+                \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($tarea->pedido);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['resguardo' => $e->getMessage()]);
+            }
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)
                 ->lockForUpdate()

@@ -110,7 +110,7 @@ class ReversionBeneficiosTest extends TestCase
         );
     }
 
-    public function test_el_oficial_que_ya_califica_la_lista_no_se_rebaja(): void
+    public function test_el_oficial_que_alcanza_el_minimo_no_sostiene_una_lista_cuya_unica_autorizacion_se_cancelo(): void
     {
         $cliente = $this->cliente(13000);
         $solicitud = $this->solicitud($cliente, $this->procesoLista, $this->vendedorAnterior, $this->plata->id);
@@ -119,7 +119,8 @@ class ReversionBeneficiosTest extends TestCase
         $this->ajuste()->revertirBeneficios($solicitud);
 
         $cliente->refresh();
-        $this->assertSame($this->plata->id, $cliente->lista_actual_id);
+        // Sin otra autoridad independiente, el rollback regresa a la lista administrativa previa (Bronce).
+        $this->assertSame($this->bronce->id, $cliente->lista_actual_id);
         $this->assertEquals(13000.0, (float) $cliente->monto_venta_actual);
     }
 

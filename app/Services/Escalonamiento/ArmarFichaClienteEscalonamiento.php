@@ -16,6 +16,7 @@ class ArmarFichaClienteEscalonamiento
         private ConsultarAcumuladoCliente $consultarAcumulado,
         private EvaluarListaClienteEscalonamiento $evaluarLista,
         private ConciliacionSolicitudEscalonamiento $conciliacion,
+        private ContextoVentasEscalonamiento $contextoVentas,
     ) {}
 
     /**
@@ -52,7 +53,7 @@ class ArmarFichaClienteEscalonamiento
                 'faltante_mantenimiento' => $proyeccion['faltante_mantenimiento'] ?? null,
                 'clasificacion_mes_max' => $resumen?->clasificacionMesMax?->nombre,
                 'diverge_lista_operativa' => $this->divergeListaOperativa($cabecera),
-            ]),
+            ], $this->contextoVentas->paraClientes(collect([$cliente]))[$cliente->id] ?? []),
             'movimientos' => $periodo ? $this->movimientos($periodo, $cliente) : [],
             'documentos' => $periodo ? $this->documentos($periodo, $cliente) : [],
             'aplicaciones' => $periodo ? $this->aplicaciones($periodo, $cliente) : [],

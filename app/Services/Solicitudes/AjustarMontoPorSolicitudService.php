@@ -62,6 +62,14 @@ class AjustarMontoPorSolicitudService
             }
 
             $this->prepararBloqueo((int) $solicitud->cliente_id);
+            // El estado se lee tras bloquear las solicitudes del cliente: una cancelación,
+            // un rechazo o un vencimiento concurrentes impiden conceder beneficios.
+            $vigenteEnBase = SolicitudTag::query()->whereKey($solicitud->id)->first();
+            if (! $vigenteEnBase || ! $this->solicitudAutorizada($vigenteEnBase)) {
+                return [];
+            }
+            $solicitud->catalogo_estado_solicitud_id = $vigenteEnBase->catalogo_estado_solicitud_id;
+            $solicitud->syncOriginalAttribute('catalogo_estado_solicitud_id');
             $cliente = Cliente::query()->lockForUpdate()->find($solicitud->cliente_id);
             if (! $cliente) {
                 return [];
@@ -86,6 +94,8 @@ class AjustarMontoPorSolicitudService
                 $this->aplicarRestauracionesPendientes($cliente);
                 $cliente->es_inactivo = false;
             }
+
+            $this->proyectarListaAlAutorizar($solicitud, $cliente, $clasificacion);
 
             if (
                 $solicitud->catalogo_lista_descuento_id
@@ -114,7 +124,10 @@ class AjustarMontoPorSolicitudService
             }
 
             if ($solicitud->catalogo_tipo_cliente_id && ! $cliente->es_inactivo) {
-                $cliente->catalogo_tipo_cliente_id = $solicitud->catalogo_tipo_cliente_id;
+                $cliente->catalogo_tipo_cliente_id = TipoClienteSolicitudResolver::paraFicha(
+                    (int) $solicitud->catalogo_tipo_cliente_id,
+                    $cliente,
+                );
                 $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO, $tipoAnterior, $this->valor($cliente->catalogo_tipo_cliente_id));
             }
 
@@ -133,6 +146,106 @@ class AjustarMontoPorSolicitudService
             return [
                 'antes' => $antes,
                 'despues' => $this->capturarSnapshotCliente($cliente),
+            ];
+        });
+    }
+
+    /**
+     * Una cotización sin lista elegida es válida: al autorizarse, GELIA calcula la lista que
+     * corresponde al acumulado operativo vigente (oficial + provisionales, sin duplicados
+     * posibles) y la deja en la solicitud para que se refleje como lista operativa. Si no
+     * alcanza otro escalón no escribe nada y el cliente conserva su lista. Nunca rebaja la
+     * lista ya solicitada y no actúa sobre Menudeo (su conversión es explícita), inactivos,
+     * listas bloqueadas ni clientes gobernados por el módulo.
+     */
+    private function proyectarListaAlAutorizar(SolicitudTag $solicitud, Cliente $cliente, ClasificacionComercialCliente $clasificacion): void
+    {
+        // Un Menudeo solo participa cuando la solicitud pide convertirlo a Mayoreo de forma explícita.
+        if ($cliente->es_inactivo || $cliente->lista_bloqueada
+            || ($clasificacion->esMenudeo($cliente) && ! $solicitud->convertir_menudeo_mayoreo)
+            || $this->autoridad->clienteGobernadoPorModulo($cliente)) {
+            return;
+        }
+        $proceso = $solicitud->proceso;
+        if (! $proceso || $proceso->esOperativo() || CrearSolicitudService::esFlujoTienda($solicitud)
+            || $this->importes->tieneCierrePorCorte($solicitud)) {
+            return;
+        }
+        $monto = $solicitud->pago_confirmado ? $solicitud->monto_aplicado_al_cliente : $solicitud->monto_cotizado;
+        if (bccomp($this->dinero($monto), '0', 2) <= 0) {
+            return;
+        }
+
+        $listas = CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get();
+        $evaluacion = $this->escalonamiento->evaluarCompraCliente(
+            $cliente,
+            (float) $monto,
+            $solicitud->catalogo_lista_descuento_id ? (int) $solicitud->catalogo_lista_descuento_id : null,
+            $listas,
+            app(AcumuladoOperativoCliente::class)->paraLista($cliente, (int) $solicitud->id),
+        );
+        $nueva = ($evaluacion['es_ascenso'] ?? false) ? ($evaluacion['lista_calificada_efectiva'] ?? null) : null;
+        if (! $nueva || ($clasificacion->esMenudeo($cliente) && ! $clasificacion->esListaMayorista($nueva))) {
+            return;
+        }
+        $solicitada = $solicitud->catalogo_lista_descuento_id
+            ? $listas->firstWhere('id', (int) $solicitud->catalogo_lista_descuento_id)
+            : null;
+        if ($solicitada && bccomp($this->dinero($solicitada->monto_requerido), $this->dinero($nueva->monto_requerido), 2) >= 0) {
+            return;
+        }
+
+        $solicitud->forceFill([
+            'catalogo_lista_descuento_id' => $nueva->id,
+            'monto_final_tentativo' => $evaluacion['monto_final_tentativo'] ?? $solicitud->monto_final_tentativo,
+            'total_proyectado_neto' => $evaluacion['total_proyectado_neto'] ?? $solicitud->total_proyectado_neto,
+        ])->saveQuietly();
+    }
+
+    /**
+     * Un pago final inferior a lo que respalda la lista concedida deja de sostenerla.
+     * Solo retira la concesión de lista de esta solicitud: respeta otra autorización
+     * que la sostenga, no toca tipo, TAG ni modalidad, no cambia el estado de la
+     * solicitud y conserva el pago como provisional vigente. Tras un corte no actúa:
+     * ya no hay evidencia para decidir si el documento está incluido en el oficial.
+     *
+     * @return array{antes?: array<string, mixed>, despues?: array<string, mixed>, lista_sin_respaldo?: bool}
+     */
+    public function retirarListaSinRespaldo(SolicitudTag $solicitud, ?int $usuarioId = null): array
+    {
+        if (! $solicitud->cliente_id || ! $solicitud->catalogo_lista_descuento_id) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($solicitud) {
+            $this->prepararBloqueo((int) $solicitud->cliente_id);
+            $fresca = SolicitudTag::query()->whereKey($solicitud->id)->first();
+            if (! $fresca || ! $fresca->pago_confirmado || ! $this->solicitudAutorizada($fresca)
+                || ! $fresca->catalogo_lista_descuento_id || $this->importes->tieneCierrePorCorte($fresca)) {
+                return [];
+            }
+            $cliente = Cliente::query()->lockForUpdate()->find($fresca->cliente_id);
+            $requerido = CatalogoListaDescuento::query()->whereKey($fresca->catalogo_lista_descuento_id)->value('monto_requerido');
+            if (! $cliente || $requerido === null) {
+                return [];
+            }
+            if (bccomp($this->dinero(app(AcumuladoOperativoCliente::class)->operativo($cliente)), $this->dinero($requerido), 2) >= 0) {
+                return [];
+            }
+            if (! $this->concesionVigente($fresca, SolicitudBeneficio::CAMPO_LISTA)) {
+                return [];
+            }
+
+            SolicitudBeneficio::query()->where('cliente_id', $cliente->id)->orderBy('id')->lockForUpdate()->get();
+            $antes = $this->capturarSnapshotCliente($cliente);
+            $this->revertirCampo($cliente, $fresca, SolicitudBeneficio::CAMPO_LISTA, false);
+            $cliente->save();
+            $cliente->refresh()->load(['listaDescuento', 'vendedor', 'tipo']);
+
+            return [
+                'antes' => $antes,
+                'despues' => $this->capturarSnapshotCliente($cliente),
+                'lista_sin_respaldo' => true,
             ];
         });
     }
@@ -169,8 +282,11 @@ class AjustarMontoPorSolicitudService
             $antes = $this->capturarSnapshotCliente($cliente);
             $consolidada = $this->importes->tieneCierrePorCorte($solicitud);
             $this->importes->revocarSiVigente($solicitud, $usuarioId, $origen ?? 'reversion');
+            // Si otra autoridad posterior ratificó la conversión a Mayoreo, su lista inicial la acompaña.
+            $modalidadPropia = $this->concesionVigente($solicitud, SolicitudBeneficio::CAMPO_MODALIDAD);
+            $conversionRatificada = $modalidadPropia !== null && $this->modalidadRatificada($cliente, $solicitud, $modalidadPropia);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, $consolidada);
-            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $consolidada);
+            $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_LISTA, $consolidada, $conversionRatificada);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_TIPO, $consolidada);
             $this->revertirCampo($cliente, $solicitud, SolicitudBeneficio::CAMPO_VENDEDOR, $consolidada);
             if ((bool) $cliente->es_menudeo !== $menudeoAntes) {
@@ -492,10 +608,20 @@ class AjustarMontoPorSolicitudService
         return bcadd((string) $valor, '0', 2);
     }
 
-    private function revertirCampo(Cliente $cliente, SolicitudTag $solicitud, string $campo, bool $consolidada = false): void
+    private function revertirCampo(Cliente $cliente, SolicitudTag $solicitud, string $campo, bool $consolidada = false, bool $sostenidaPorConversion = false): void
     {
         $actual = $this->valorActual($cliente, $campo);
         $propio = $this->concesionVigente($solicitud, $campo);
+
+        if ($sostenidaPorConversion && $campo === SolicitudBeneficio::CAMPO_LISTA && $propio) {
+            $this->cerrarConcesion(
+                $propio,
+                SolicitudBeneficio::ESTADO_REEMPLAZADO,
+                'La conversión fue ratificada por una autoridad posterior y conserva su lista inicial.',
+            );
+
+            return;
+        }
 
         if ($consolidada && $campo === SolicitudBeneficio::CAMPO_LISTA) {
             if ($propio) {
@@ -548,18 +674,6 @@ class AjustarMontoPorSolicitudService
 
             return;
         }
-
-        if (
-            $campo === SolicitudBeneficio::CAMPO_LISTA
-            && ! $cliente->es_inactivo
-            && ! $this->hayConcesionVigente($cliente, $campo)
-        ) {
-            $antes = $cliente->lista_actual_id;
-            $this->recalcularListaCliente($cliente);
-            if ($this->esListaInferior($cliente->lista_actual_id, $antes)) {
-                $cliente->lista_actual_id = $antes;
-            }
-        }
     }
 
     private function aplicarRestauracionesPendientes(Cliente $cliente): void
@@ -587,6 +701,29 @@ class AjustarMontoPorSolicitudService
         }
     }
 
+    /**
+     * Devuelve la lista administrativa previa a la concesión. No recalcula por monto ni conserva
+     * la lista porque el oficial la alcance: eso sería un ascenso automático durante un rollback.
+     * Solo se sostiene con una autoridad independiente (otra autorización vigente o una carga con
+     * código explícito), que cierra la concesión antes de llegar aquí. Sin procedencia verificable
+     * no se modifica la lista. La lista bloqueada no se toca.
+     */
+    private function restaurarListaAnterior(Cliente $cliente, SolicitudBeneficio $concesion): void
+    {
+        if ($cliente->lista_bloqueada) {
+            return;
+        }
+        if ($this->autoridad->clienteGobernadoPorModulo($cliente)) {
+            $this->recalcularListaCliente($cliente);
+
+            return;
+        }
+
+        if ($concesion->valor_anterior !== null && $concesion->valor_anterior !== '') {
+            $cliente->lista_actual_id = (int) $concesion->valor_anterior;
+        }
+    }
+
     private function restaurarCampo(Cliente $cliente, string $campo, SolicitudBeneficio $concesion): void
     {
         if ($campo === SolicitudBeneficio::CAMPO_MODALIDAD) {
@@ -609,7 +746,7 @@ class AjustarMontoPorSolicitudService
 
                 return;
             }
-            $this->recalcularListaCliente($cliente);
+            $this->restaurarListaAnterior($cliente, $concesion);
 
             return;
         }
@@ -866,6 +1003,14 @@ class AjustarMontoPorSolicitudService
         );
         $this->conceder($cliente, $solicitud, SolicitudBeneficio::CAMPO_MODALIDAD, '0', '0');
         $clasificacion->registrarEvento($cliente, $usuarioId ? (int) $usuarioId : null, (int) $solicitud->id);
+    }
+
+    /** Lee el estado vigente en base de datos: ni cancelada, ni incorrecta, ni vencida. */
+    public function estaAutorizada(SolicitudTag $solicitud): bool
+    {
+        $vigente = SolicitudTag::query()->whereKey($solicitud->id)->first();
+
+        return $vigente !== null && $this->solicitudAutorizada($vigente);
     }
 
     private function solicitudAutorizada(SolicitudTag $solicitud): bool

@@ -1,320 +1,182 @@
-import React, { useMemo, useState } from 'react';
-import { RefreshCw, SlidersHorizontal, Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { RefreshCw, Loader2, X, SlidersHorizontal, CalendarDays, Warehouse } from 'lucide-react';
 import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
-import {
-    BTN_SECONDARY,
-    TABS_PEDIDOS,
-    TABS_PEDIDOS_PRINCIPALES,
-    TABS_PEDIDOS_SUBFILTROS,
-    TABS_PEDIDOS_ADMIN,
-    esTabPedidoEnMetricasKpi,
-} from './pedidosBmaStyles';
 
-const BTN_TOOLBAR_MOVIL =
-    'inline-flex items-center justify-center rounded-xl border theme-border theme-element shrink-0 '
-    + 'min-h-[44px] min-w-[44px] px-2.5 theme-text-main hover:bg-black/5 dark:hover:bg-white/5 '
+const BTN_TOOLBAR =
+    'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element shrink-0 '
+    + 'min-h-[44px] md:min-h-[40px] min-w-[44px] px-3 text-sm font-semibold theme-text-main hover:bg-black/5 dark:hover:bg-white/5 '
     + 'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] '
     + 'disabled:opacity-60';
 
-function useConteoTab(metricas) {
-    return (tabId) => {
-        const map = {
-            TODAS: metricas.todas,
-            BORRADORES: metricas.borradores,
-            PESAJE_PENDIENTE: metricas.pesaje_pendiente,
-            PESAJE_RESPONDIDO: metricas.pesaje_respondido,
-            OBS_CEDIS: metricas.obs_cedis,
-            SIN_EXISTENCIA: metricas.sin_existencia,
-            PENDIENTE_AUXILIAR: metricas.pendiente_auxiliar,
-            EN_CEDIS: metricas.en_cedis,
-            PENDIENTE_GUIA_CLIENTE: metricas.pendiente_guia_cliente,
-            ENVIADOS: metricas.enviados,
-            RECHAZADAS: metricas.rechazadas,
-            ELIMINADAS: metricas.eliminadas,
-        };
-        return map[tabId];
-    };
-}
-
-function tabsFueraDeMetricas(tabs) {
-    return tabs.filter((t) => !esTabPedidoEnMetricasKpi(t.id));
-}
-
-function ListaBandejasMovil({ tabs, tabActiva, onElegir, conteoTab }) {
-    if (tabs.length === 0) return null;
-
-    return (
-        <div className="grid grid-cols-1 gap-1.5">
-            {tabs.map((tab) => {
-                const conteo = conteoTab(tab.id);
-                const activo = tabActiva === tab.id;
-                return (
-                    <button
-                        key={tab.id}
-                        type="button"
-                        aria-pressed={activo}
-                        onClick={() => onElegir(tab.id)}
-                        className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-semibold outline-none border transition-colors ${
-                            activo
-                                ? 'border-[color:color-mix(in_srgb,var(--color-primario)_50%,var(--theme-border))] bg-[color:color-mix(in_srgb,var(--color-primario)_10%,var(--theme-element-bg))] theme-text-main'
-                                : 'theme-border theme-element theme-text-muted hover:theme-text-main'
-                        }`}
-                    >
-                        <span className="min-w-0 leading-snug pr-1">{tab.label}</span>
-                        {conteo !== undefined && (
-                            <span className="text-xs font-bold tabular-nums shrink-0">{conteo}</span>
-                        )}
-                    </button>
-                );
-            })}
-        </div>
-    );
-}
-
-function IndicadorBandejaActiva({ tabActual, conteoActual, className = '', compact = false }) {
-    if (compact) {
-        return (
-            <p className={`m-0 text-xs font-semibold theme-text-muted truncate ${className}`.trim()}>
-                <span className="text-xs font-medium theme-text-muted mr-1">Bandeja</span>
-                <span className="theme-text-main">{tabActual.label}</span>
-                {conteoActual !== undefined && (
-                    <span className="tabular-nums font-bold"> · {conteoActual}</span>
-                )}
-            </p>
-        );
-    }
-
-    return (
-        <p className={`m-0 text-xs font-medium theme-text-muted ${className}`.trim()}>
-            <span className="text-xs font-medium mr-1.5">Bandeja activa</span>
-            <span className="theme-text-main font-bold">{tabActual.label}</span>
-            {conteoActual !== undefined && (
-                <span className="tabular-nums font-bold"> · {conteoActual}</span>
-            )}
-        </p>
-    );
-}
-
+/** Conteo por bandeja: ver bandejasPedidos.js (OBS_CEDIS: metricas.obs_cedis). */
 export default function FiltrosPedidos({
     filtros = {},
-    tabActiva,
     busqueda,
-    onTabChange,
     onBuscar,
     onActualizar,
-    metricas = {},
     buscando = false,
-    can = () => false,
+    filtrosExtra = {},
+    onCambiarFiltros,
+    almacenes = [],
 }) {
-    const [filtrosAbiertos, setFiltrosAbiertos] = useState(false);
-    const conteoTab = useConteoTab(metricas);
-
-    const mostrarEliminadas = can('control_pedidos.eliminados');
-
-    const tabActual = [...TABS_PEDIDOS, ...(mostrarEliminadas ? TABS_PEDIDOS_ADMIN : [])].find((t) => t.id === tabActiva)
-        || TABS_PEDIDOS[0];
-    const conteoActual = conteoTab(tabActual.id);
-
-    const bandejasExtraEscritorio = useMemo(() => {
-        const grupos = [
-            { key: 'estado', label: 'Estado', tabs: tabsFueraDeMetricas(TABS_PEDIDOS_PRINCIPALES) },
-            { key: 'envio', label: 'Envío y colas', tabs: tabsFueraDeMetricas(TABS_PEDIDOS_SUBFILTROS) },
-        ];
-        if (mostrarEliminadas) {
-            grupos.push({ key: 'admin', label: 'Administración', tabs: TABS_PEDIDOS_ADMIN });
-        }
-        return grupos.filter((g) => g.tabs.length > 0);
-    }, [mostrarEliminadas]);
-
-    const gruposPanelMovil = useMemo(() => {
-        const grupos = [
-            { key: 'estado', label: 'Estado', tabs: TABS_PEDIDOS_PRINCIPALES },
-            { key: 'envio', label: 'Envío y colas', tabs: TABS_PEDIDOS_SUBFILTROS },
-        ];
-        if (mostrarEliminadas) {
-            grupos.push({ key: 'admin', label: 'Administración', tabs: TABS_PEDIDOS_ADMIN });
-        }
-        return grupos;
-    }, [mostrarEliminadas]);
-
-    const todasBandejasExtra = useMemo(
-        () => bandejasExtraEscritorio.flatMap((g) => g.tabs),
-        [bandejasExtraEscritorio],
-    );
-
-    const valorSelectorExtra = todasBandejasExtra.some((t) => t.id === tabActiva) ? tabActiva : '';
-
-    const elegirTab = (id) => {
-        onTabChange(id);
-        setFiltrosAbiertos(false);
-    };
-
-    const onSelectorExtra = (e) => {
-        const id = e.target.value;
-        if (id) onTabChange(id);
-    };
+    const valor = busqueda ?? filtros.q ?? '';
+    const [abierto, setAbierto] = useState(false);
+    const nombreAlmacen = (id) => almacenes.find((a) => String(a.id) === String(id))?.nombre || `Almacén ${id}`;
+    const activos = [
+        filtrosExtra.mios ? { key: 'mios', texto: 'Solo mis pedidos', quitar: { mios: '' } } : null,
+        filtrosExtra.almacen_id ? { key: 'almacen_id', texto: nombreAlmacen(filtrosExtra.almacen_id), quitar: { almacen_id: '' } } : null,
+        filtrosExtra.desde ? { key: 'desde', texto: `Desde ${filtrosExtra.desde}`, quitar: { desde: '' } } : null,
+        filtrosExtra.hasta ? { key: 'hasta', texto: `Hasta ${filtrosExtra.hasta}`, quitar: { hasta: '' } } : null,
+    ].filter(Boolean);
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+    const esHoy = filtrosExtra.desde === hoy && filtrosExtra.hasta === hoy;
+    const limpiarTodo = { mios: '', almacen_id: '', desde: '', hasta: '' };
 
     return (
-        <div className="space-y-2.5 md:space-y-3">
-            {/* Escritorio */}
-            <div className="hidden md:flex flex-wrap items-end gap-2 lg:gap-3">
-                <div className="flex-1 min-w-[14rem]">
-                    <label htmlFor="pedidos-busqueda" className={`${THEME_LABEL} ml-0.5`}>Buscar</label>
-                    <CampoBusqueda
-                        wrapperClassName="relative mt-1"
-                        id="pedidos-busqueda"
-                        name="q" enterKeyHint="search"
-                        type="search"
-                        value={busqueda ?? filtros.q ?? ''}
-                        onChange={(e) => onBuscar(e.target.value)}
-                        placeholder="Folio, cliente o número…"
-                        className={`${THEME_INPUT} w-full py-2.5 text-sm font-semibold pr-10`}
-                        aria-busy={buscando}
-                        autoComplete="off"
-                        suffix={buscando ? (
-                            <Loader2
-                                className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
-                                aria-label="Buscando"
-                            />
-                        ) : null}
-                    />
-                </div>
-
-                <div className="w-full sm:w-auto min-w-[12rem] sm:max-w-[16rem] flex-1 sm:flex-none">
-                    <label htmlFor="pedidos-bandeja-extra" className={`${THEME_LABEL} ml-0.5`}>
-                        Otras bandejas
-                    </label>
+        <div className="space-y-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+            <div className="relative flex-1 min-w-0">
+                <label htmlFor="pedidos-busqueda" className="sr-only">Buscar folio, cliente o número</label>
+                <CampoBusqueda
+                    wrapperClassName="relative"
+                    id="pedidos-busqueda"
+                    name="q"
+                    enterKeyHint="search"
+                    type="search"
+                    value={valor}
+                    onChange={(e) => onBuscar(e.target.value)}
+                    placeholder="Buscar por folio, cliente o remisión…"
+                    className={`${THEME_INPUT} w-full py-2.5 text-sm font-semibold pr-10`}
+                    aria-busy={buscando}
+                    autoComplete="off"
+                    suffix={buscando ? (
+                        <Loader2
+                            className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
+                            aria-label="Buscando"
+                        />
+                    ) : null}
+                />
+            </div>
+            {valor ? (
+                <button type="button" onClick={() => onBuscar('')} className={BTN_TOOLBAR} aria-label="Limpiar búsqueda">
+                    <X className="w-4 h-4" aria-hidden />
+                    <span className="hidden sm:inline">Limpiar</span>
+                </button>
+            ) : null}
+            {onCambiarFiltros && almacenes.length > 0 && (
+                <div className="relative hidden md:block shrink-0">
+                    <label htmlFor="pedidos-toolbar-almacen" className="sr-only">Almacén</label>
+                    <Warehouse className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 theme-text-muted pointer-events-none" aria-hidden />
                     <select
-                        id="pedidos-bandeja-extra"
-                        name="bandeja"
-                        value={valorSelectorExtra}
-                        onChange={onSelectorExtra}
-                        className={`${THEME_SELECT} mt-1 w-full py-2.5 text-sm font-semibold`}
+                        id="pedidos-toolbar-almacen"
+                        value={filtrosExtra.almacen_id || ''}
+                        onChange={(e) => onCambiarFiltros({ almacen_id: e.target.value })}
+                        className={`${THEME_SELECT} min-h-[40px] pl-9 text-sm font-semibold max-w-[12rem]`}
                     >
-                        <option value="">
-                            {esTabPedidoEnMetricasKpi(tabActiva)
-                                ? 'Elegir bandeja adicional…'
-                                : 'Seleccionar bandeja…'}
-                        </option>
-                        {bandejasExtraEscritorio.map((grupo) => (
-                            <optgroup key={grupo.key} label={grupo.label}>
-                                {grupo.tabs.map((tab) => {
-                                    const conteo = conteoTab(tab.id);
-                                    const suffix = conteo !== undefined ? ` (${conteo})` : '';
-                                    return (
-                                        <option key={tab.id} value={tab.id}>
-                                            {tab.label}{suffix}
-                                        </option>
-                                    );
-                                })}
-                            </optgroup>
-                        ))}
+                        <option value="">Todos los almacenes</option>
+                        {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
                     </select>
                 </div>
-
-                {onActualizar && (
-                    <button
-                        type="button"
-                        onClick={onActualizar}
-                        disabled={buscando}
-                        className={`${BTN_SECONDARY} !min-h-0 !py-2.5 !px-3 flex items-center justify-center gap-2 outline-none shrink-0 disabled:opacity-60`}
+            )}
+            {onCambiarFiltros && (
+                <button
+                    type="button"
+                    aria-pressed={esHoy}
+                    onClick={() => onCambiarFiltros(esHoy ? { desde: '', hasta: '' } : { desde: hoy, hasta: hoy })}
+                    className={`${BTN_TOOLBAR} ${esHoy ? 'border-[color:var(--color-primario)] bg-[color:color-mix(in_srgb,var(--color-primario)_10%,var(--theme-element-bg))]' : ''}`}
+                >
+                    <CalendarDays className="w-4 h-4" aria-hidden />
+                    <span className="hidden sm:inline">Hoy</span>
+                </button>
+            )}
+            {onCambiarFiltros && (
+                <button
+                    type="button"
+                    onClick={() => setAbierto((v) => !v)}
+                    aria-expanded={abierto}
+                    aria-controls="pedidos-panel-filtros"
+                    className={BTN_TOOLBAR}
+                >
+                    <SlidersHorizontal className="w-4 h-4" aria-hidden />
+                    <span className="hidden sm:inline">Filtros</span>
+                    {activos.length > 0 ? (
+                        <span className="min-w-[1.25rem] px-1 rounded-full text-xs font-bold tabular-nums bg-[color-mix(in_srgb,var(--color-primario)_18%,transparent)] theme-text-primario">{activos.length}</span>
+                    ) : null}
+                </button>
+            )}
+            {onActualizar && (
+                <button
+                    type="button"
+                    onClick={onActualizar}
+                    disabled={buscando}
+                    aria-label="Actualizar listado"
+                    className={BTN_TOOLBAR}
+                >
+                    <RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} aria-hidden />
+                    <span className="hidden md:inline">Actualizar</span>
+                </button>
+            )}
+        </div>
+        {onCambiarFiltros && abierto ? (
+            <div id="pedidos-panel-filtros" className="rounded-xl border theme-border theme-element p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+                <div className="min-w-0 md:hidden">
+                    <label htmlFor="pedidos-filtro-almacen" className={THEME_LABEL}>Almacén</label>
+                    <select
+                        id="pedidos-filtro-almacen"
+                        value={filtrosExtra.almacen_id || ''}
+                        onChange={(e) => onCambiarFiltros({ almacen_id: e.target.value })}
+                        className={`${THEME_SELECT} mt-1 w-full min-h-[44px] text-sm`}
                     >
-                        <RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} aria-hidden />
-                        Actualizar
-                    </button>
-                )}
-            </div>
-
-            <div className="hidden md:flex items-center justify-between gap-2">
-                <IndicadorBandejaActiva tabActual={tabActual} conteoActual={conteoActual} />
-                {busqueda && <button type="button" onClick={() => onBuscar('')} className="text-xs font-semibold theme-text-main underline underline-offset-4">Limpiar búsqueda</button>}
-            </div>
-
-            {/* Móvil */}
-            <div className="md:hidden space-y-2 min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                    <CampoBusqueda
-                        wrapperClassName="relative flex-1 min-w-0"
-                        id="pedidos-busqueda-movil"
-                        name="q" enterKeyHint="search"
-                        type="search"
-                        value={busqueda ?? filtros.q ?? ''}
-                        onChange={(e) => onBuscar(e.target.value)}
-                        placeholder="Folio o cliente…"
-                        aria-label="Buscar folio, cliente o número"
-                        className={`${THEME_INPUT} w-full min-w-0 py-2.5 text-sm font-semibold pl-9 pr-9`}
-                        aria-busy={buscando}
-                        autoComplete="off"
-                        suffix={buscando ? (
-                            <Loader2
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin theme-text-muted"
-                                aria-label="Buscando"
-                            />
-                        ) : null}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setFiltrosAbiertos((v) => !v)}
-                        aria-expanded={filtrosAbiertos}
-                        aria-controls="pedidos-panel-filtros-movil"
-                        aria-label={`Filtros de bandeja, actual: ${tabActual.label}`}
-                        className={`${BTN_TOOLBAR_MOVIL} gap-1 max-[400px]:!min-w-[42px] max-[400px]:!px-2`}
-                    >
-                        <SlidersHorizontal className="w-4 h-4 shrink-0" aria-hidden />
-                        <span className="text-xs font-semibold hidden min-[400px]:inline">
-                            Filtros
-                        </span>
-                    </button>
-                    {onActualizar && (
-                        <button
-                            type="button"
-                            onClick={onActualizar}
-                            disabled={buscando}
-                            aria-label="Actualizar listado"
-                            className={BTN_TOOLBAR_MOVIL}
-                        >
-                            <RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} aria-hidden />
-                        </button>
-                    )}
+                        <option value="">Todos</option>
+                        {almacenes.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+                    </select>
                 </div>
-
-                {!filtrosAbiertos && (
-                    <IndicadorBandejaActiva
-                        tabActual={tabActual}
-                        conteoActual={conteoActual}
-                        compact
-                    />
-                )}
-
-                {filtrosAbiertos && (
-                    <div
-                        id="pedidos-panel-filtros-movil"
-                        className="rounded-xl border theme-border theme-element p-3 space-y-3 max-h-[min(52vh,28rem)] overflow-y-auto overscroll-y-contain"
-                        aria-label="Bandejas de pedidos"
-                    >
-                        <IndicadorBandejaActiva
-                            tabActual={tabActual}
-                            conteoActual={conteoActual}
-                            className="pb-2 border-b theme-border sticky top-0 z-[1] theme-element -mx-3 px-3 -mt-3 pt-3"
+                {[['desde', 'Desde'], ['hasta', 'Hasta']].map(([clave, texto]) => (
+                    <div key={clave} className="min-w-0">
+                        <label htmlFor={`pedidos-filtro-${clave}`} className={THEME_LABEL}>{texto}</label>
+                        <input
+                            id={`pedidos-filtro-${clave}`}
+                            type="date"
+                            value={filtrosExtra[clave] || ''}
+                            max={clave === 'desde' ? (filtrosExtra.hasta || undefined) : undefined}
+                            min={clave === 'hasta' ? (filtrosExtra.desde || undefined) : undefined}
+                            onChange={(e) => onCambiarFiltros({ [clave]: e.target.value })}
+                            className={`${THEME_INPUT} block mt-1 w-full min-w-0 min-h-[44px] text-sm`}
                         />
-
-                        {gruposPanelMovil.map((grupo) => (
-                            <div key={grupo.key}>
-                                <p className="text-xs font-semibold theme-text-muted mb-1.5 ml-0.5">
-                                    {grupo.label}
-                                </p>
-                                <ListaBandejasMovil
-                                    tabs={grupo.tabs}
-                                    tabActiva={tabActiva}
-                                    onElegir={elegirTab}
-                                    conteoTab={conteoTab}
-                                />
-                            </div>
-                        ))}
                     </div>
-                )}
+                ))}
+                <div className="flex flex-wrap items-center gap-2 min-h-[44px]">
+                    <button
+                        type="button"
+                        aria-pressed={Boolean(filtrosExtra.mios)}
+                        onClick={() => onCambiarFiltros({ mios: filtrosExtra.mios ? '' : '1' })}
+                        className={`${BTN_TOOLBAR} ${filtrosExtra.mios ? 'border-[color:var(--color-primario)]' : ''}`}
+                    >
+                        Solo míos
+                    </button>
+                </div>
             </div>
+        ) : null}
+        {activos.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtros activos">
+                {activos.map((f) => (
+                    <button
+                        key={f.key}
+                        type="button"
+                        onClick={() => onCambiarFiltros(f.quitar)}
+                        aria-label={`Quitar filtro: ${f.texto}`}
+                        className="inline-flex items-center gap-1.5 min-h-[44px] md:min-h-[32px] px-3 rounded-full border theme-border theme-element text-xs font-semibold theme-text-main outline-none focus-visible:outline-2 focus-visible:outline-[var(--color-primario)]"
+                    >
+                        {f.texto}
+                        <X className="w-3 h-3" aria-hidden />
+                    </button>
+                ))}
+                <button type="button" onClick={() => onCambiarFiltros(limpiarTodo)} className="text-xs font-semibold theme-text-main underline underline-offset-4 min-h-[44px] md:min-h-[32px]">
+                    Limpiar filtros
+                </button>
+            </div>
+        ) : null}
         </div>
     );
 }

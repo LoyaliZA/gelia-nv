@@ -54,6 +54,9 @@ final class LecturaFinancieraPedido
             'solicitud_preparacion' => $pedido->solicitud_preparacion,
             'atencion_md' => AtencionMismoDiaTienda::datos($pedido),
             'prioridad_md' => (bool) $pedido->prioridad_md,
+            'resguardo_envio' => ConsultaMunicipal::es($pedido)
+                ? PoliticaResguardoEnvio::evaluar($pedido)
+                : null,
         ];
     }
 }

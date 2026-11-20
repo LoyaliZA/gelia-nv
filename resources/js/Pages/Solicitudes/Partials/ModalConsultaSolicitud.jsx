@@ -1,3 +1,4 @@
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React from 'react';
@@ -35,7 +36,7 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
                     <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar consulta"><X className="w-5 h-5" aria-hidden="true" /></button>
                 </header>
                 <div className="gelia-modal-body p-5 sm:p-6 space-y-5">
-                    <p className="text-xs font-bold theme-text-muted">Selecciona qué deseas verificar antes de confirmar el pago:</p>
+                    <AvisoSolicitud tono="info" titulo="Consulta a supervisión">Selecciona qué deseas verificar antes de confirmar el pago.</AvisoSolicitud>
 
                     <label className={`flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-colors ${data.consulta_tag ? 'border-amber-500 bg-amber-500/10' : 'theme-border theme-element'}`}>
                         <input type="checkbox" name="consulta_tag" disabled={processing} checked={data.consulta_tag} onChange={e => { setData('consulta_tag', e.target.checked); clearErrors('consulta_tag'); }} className="w-4 h-4 accent-[var(--color-primario)]" />
@@ -55,7 +56,7 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
                         </div>
                     </label>
 
-                    {Object.values(errors).map((error, index) => <p key={index} role="alert" className="text-sm theme-text-peligro">{error}</p>)}
+                    {Object.values(errors).map((error, index) => <AvisoSolicitud key={index} tono="peligro" compacto anunciar>{error}</AvisoSolicitud>)}
                     <div>
                         <label htmlFor="consulta-comentario" className="text-[10px] font-medium   theme-text-muted mb-2 block">Comentario (opcional)</label>
                         <textarea id="consulta-comentario" name="comentario_vendedor" autoComplete="off" maxLength={1000}

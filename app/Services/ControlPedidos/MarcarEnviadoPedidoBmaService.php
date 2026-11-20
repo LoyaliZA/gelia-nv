@@ -47,6 +47,7 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('Hay una actualización de mercancía pendiente. CEDIS debe confirmarla antes de marcar el envío.');
         }
 
+        \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
         \App\Support\ControlPedidos\AtencionMismoDiaTienda::assertSalida($pedido);
         if (\App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
             && ! app(MovimientosTiendaService::class)->tieneCustodiaDestino((int) $pedido->sucursal_destino_id)) {

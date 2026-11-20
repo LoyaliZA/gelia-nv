@@ -73,7 +73,14 @@ class ValidarPagoPedidoBmaService
             }
             if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
                 $evaluacion = app(Municipal\PoliticaFinancieraMunicipal::class)->evaluar($pedido);
-                if (! $evaluacion['mercancia_cubierta'] || ($evaluacion['conocimiento_costo'] === 'conocido' && ! $evaluacion['transporte_cubierto'])) {
+                if (! $evaluacion['mercancia_cubierta']) {
+                    throw new RuntimeException(\App\Support\ControlPedidos\PoliticaResguardoEnvio::MENSAJE_MERCANCIA);
+                }
+                $soloMercancia = \App\Support\ControlPedidos\PoliticaResguardoEnvio::exigeSoloMercanciaParaAvanzar(
+                    $pedido,
+                    RegistrarPagoPedidoBmaService::FASE_VALIDAR
+                );
+                if (! $soloMercancia && $evaluacion['conocimiento_costo'] === 'conocido' && ! $evaluacion['transporte_cubierto']) {
                     throw new RuntimeException('El importe exigible de esta etapa no está cubierto.');
                 }
             }

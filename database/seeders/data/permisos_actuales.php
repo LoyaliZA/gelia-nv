@@ -41,6 +41,7 @@ return [
     'clientes.recuperar_aplicacion_autorizada',
     'clientes.resolver_conflicto_importacion',
     'clientes.correccion_emergencia',
+    'clientes.corregir_modalidad',
     'clientes.crear',
     'clientes.direcciones.crear',
     'clientes.direcciones.desactivar',

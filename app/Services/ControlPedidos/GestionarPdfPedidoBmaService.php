@@ -37,6 +37,9 @@ class GestionarPdfPedidoBmaService
 
             $carpeta = $tipo === PedidoBmaDocumento::TIPO_COTIZACION ? 'cotizacion' : 'pdf_pedido';
             $ruta = $archivo->store("pedidos_bma/{$carpeta}/{$pedido->id}", 'public');
+            if (! is_string($ruta) || $ruta === '') {
+                throw new \RuntimeException('No se pudo guardar el archivo en el almacenamiento. Intente de nuevo; si persiste, avise a TI (permisos de almacenamiento).');
+            }
 
             $pedido->documentos()->create([
                 'tipo' => $tipo,
@@ -72,6 +75,9 @@ class GestionarPdfPedidoBmaService
                 ->max('orden');
 
             $ruta = $archivo->store("pedidos_bma/anexo_piezas/{$pedido->id}", 'public');
+            if (! is_string($ruta) || $ruta === '') {
+                throw new \RuntimeException('No se pudo guardar el archivo en el almacenamiento. Intente de nuevo; si persiste, avise a TI (permisos de almacenamiento).');
+            }
 
             return $pedido->documentos()->create([
                 'tipo' => PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,

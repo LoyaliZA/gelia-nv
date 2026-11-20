@@ -116,7 +116,11 @@ class LiberarTareaPreparacionService
             );
 
             $pedido = $tarea->pedido()->with(['cliente', 'vendedor', 'estatus'])->first();
-            $pedido->update(['es_resguardo' => false, 'esperando_pago_at' => null]);
+            $pedido->esperando_pago_at = null;
+            $pedido->update([
+                'esperando_pago_at' => null,
+                'es_resguardo' => \App\Support\ControlPedidos\PoliticaResguardoEnvio::aplicarFlagCompartido($pedido, false),
+            ]);
 
             if ($filaOp) {
                 $estadoLib = $incidencia !== ''

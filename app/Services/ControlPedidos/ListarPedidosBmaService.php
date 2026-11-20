@@ -197,6 +197,9 @@ class ListarPedidosBmaService
         $canc = $pedido->relationLoaded('cancelacionOperativaActiva')
             ? $pedido->cancelacionOperativaActiva
             : null;
+        if (ConsultaMunicipal::es($pedido)) {
+            $pedido->setAttribute('resguardo_envio', \App\Support\ControlPedidos\PoliticaResguardoEnvio::evaluar($pedido));
+        }
         $pedido->setAttribute('esperando_pago_at', $pedido->esperando_pago_at?->toIso8601String());
         $pedido->setAttribute('esta_esperando_pago', $pedido->estaEsperandoPago());
         $fechaLimiteEspera = null;
@@ -367,6 +370,8 @@ class ListarPedidosBmaService
             });
         }
 
+        $this->aplicarFiltrosAcotados($query, $filtros, $usuario);
+
         $tab = strtoupper($filtros['tab'] ?? 'TODAS');
 
         if ($tab === 'ELIMINADAS') {
@@ -401,6 +406,27 @@ class ListarPedidosBmaService
             'RECHAZADAS' => $query->where('catalogo_estatus_pedido_id', $idsPorFase['RECHAZADO_VENDEDORA'] ?? 0),
             default => null,
         };
+    }
+
+    /** Fecha del pedido, almacén de preparación y «solo míos». Valores inválidos se ignoran. */
+    private function aplicarFiltrosAcotados(Builder $query, array $filtros, ?User $usuario): void
+    {
+        foreach (['desde' => '>=', 'hasta' => '<='] as $clave => $operador) {
+            $valor = $filtros[$clave] ?? null;
+            if (is_string($valor) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $valor)
+                && \DateTime::createFromFormat('Y-m-d', $valor)?->format('Y-m-d') === $valor) {
+                $query->whereDate('fecha', $operador, $valor);
+            }
+        }
+
+        $almacen = $filtros['almacen_id'] ?? null;
+        if (is_scalar($almacen) && ctype_digit((string) $almacen) && (int) $almacen > 0) {
+            $query->where('almacen_id', (int) $almacen);
+        }
+
+        if ($usuario && filter_var($filtros['mios'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->where('vendedor_id', $usuario->id);
+        }
     }
 
     private function idsPorFase(): array

@@ -247,6 +247,41 @@ class ListarSolicitudesService
         if (!empty($filtros['motivo_incorrecta'])) {
             $this->aplicarFiltroMotivoIncidencia($query, $filtros['motivo_incorrecta']);
         }
+
+        $this->aplicarFiltrosOperativos($query, $filtros);
+    }
+
+    /** Pago, consultas y cancelación: datos que ya muestra cada solicitud en la lista. */
+    private function aplicarFiltrosOperativos(Builder $query, array $filtros): void
+    {
+        $idCancelada = CatalogoEstadoSolicitud::idDe('Cancelada');
+
+        match ($filtros['pago'] ?? '') {
+            'confirmado' => $query->where('pago_confirmado', true),
+            'vencido' => $query->where('motivo_incorrecta', 'vencimiento_pago'),
+            'pendiente' => $query->where(function (Builder $q) {
+                $q->where('pago_confirmado', false)->orWhereNull('pago_confirmado');
+            })->whereIn('catalogo_estado_solicitud_id', array_filter([
+                CatalogoEstadoSolicitud::idDe('Respondida'),
+                CatalogoEstadoSolicitud::idDe('Verificada'),
+            ]))->where(function (Builder $q) {
+                $q->whereNull('motivo_incorrecta')->orWhere('motivo_incorrecta', '!=', 'vencimiento_pago');
+            }),
+            default => null,
+        };
+
+        match ($filtros['consulta'] ?? '') {
+            'pendiente' => $query->whereHas('consultas', fn (Builder $c) => $c->where('estado', 'pendiente')),
+            'sin_leer' => $query->whereHas('consultas', fn (Builder $c) => $c->where('estado', 'respondida')->whereNull('leido_vendedor_at')),
+            default => null,
+        };
+
+        if (($filtros['cancelacion'] ?? '') === 'solicitada') {
+            $query->whereNotNull('cancelacion_solicitada_at');
+            if ($idCancelada) {
+                $query->where('catalogo_estado_solicitud_id', '!=', $idCancelada);
+            }
+        }
     }
 
     private function aplicarFiltroTab(Builder $query, string $tab, ?User $usuario): void

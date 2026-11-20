@@ -28,9 +28,8 @@ class UpdateClienteExternoRequest extends FormRequest
             'uso_factura' => 'nullable|string|max:255',
             'vendedor_id' => 'nullable|exists:users,id',
             'catalogo_tipo_cliente_id' => 'nullable|exists:catalogo_tipo_clientes,id',
-            'monto_venta_actual' => app(EscalonamientoAutoridad::class)->estaActiva()
-                ? 'prohibited'
-                : 'nullable|numeric|min:0',
+            // El oficial solo lo escribe la importación autorizada o el módulo de escalonamiento.
+            'monto_venta_actual' => 'prohibited',
             'lista_actual_id' => app(EscalonamientoAutoridad::class)->estaActiva()
                 ? 'prohibited'
                 : 'nullable|exists:catalogo_listas_descuento,id',

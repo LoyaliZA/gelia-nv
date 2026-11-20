@@ -1,14 +1,20 @@
 import React from 'react';
-import { ChevronDown, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock3, FileText, TriangleAlert, Users, X, ArrowUpRight } from 'lucide-react';
 import { geliaCardClass } from '@/utils/geliaTheme';
 import { claseEtiquetaTipoCliente, iconoTipoCliente } from './solicitudesStyles';
 import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
 
-const METRICAS_TOTALES = [
-    ['clientes', 'Clientes únicos'],
-    ['solicitudes', 'Solicitudes'],
-    ['vigentes', 'Solicitudes vigentes'],
-    ['errores', 'Solicitudes con error'],
+// Cada indicador lleva icono y tono; los que filtran la lista abren su pestaña.
+const INDICADORES = [
+    { key: 'clientes', etiqueta: 'Clientes únicos', icono: Users, tono: 'primario' },
+    { key: 'solicitudes', etiqueta: 'Solicitudes', icono: FileText, tono: 'info', tab: 'TODAS' },
+    { key: 'vigentes', etiqueta: 'Vigentes', icono: CheckCircle2, tono: 'exito', tab: 'VIGENTES' },
+    { key: 'errores', etiqueta: 'Con error', icono: TriangleAlert, tono: 'peligro', tab: 'INCORRECTAS', apagarEnCero: true },
+];
+
+const INDICADORES_ACTIVIDAD = [
+    { key: 'pendientes', etiqueta: 'Pendientes', icono: Clock3, tono: 'aviso', tab: 'PENDIENTES' },
+    { key: 'respondidas_hoy', etiqueta: 'Respondidas hoy', icono: CheckCircle2, tono: 'exito' },
 ];
 
 const METRICAS_TIPO = [
@@ -24,11 +30,23 @@ function idFiltroTipo(tipo) {
     return tipo.id == null ? 'SIN_TIPO' : String(tipo.id);
 }
 
-function CeldaKpi({ etiqueta, valor, numero }) {
+function CeldaKpi({ etiqueta, valor, numero, icono: Icono, tono, tab, activo, seleccionado = activo, onSeleccionarTab, apagarEnCero }) {
+    const apagado = apagarEnCero && !valor;
+    const Tag = tab && onSeleccionarTab ? 'button' : 'div';
+    const botonProps = Tag === 'button'
+        ? { type: 'button', onClick: () => onSeleccionarTab(tab), 'aria-pressed': Boolean(seleccionado), 'aria-label': `${etiqueta}: ${numero(valor)}. Ver solicitudes` }
+        : {};
+
     return (
-        <div>
-            <p className="m-0 text-xs theme-text-muted">{etiqueta}</p>
-            <p className="m-0 mt-1 text-xl font-semibold tabular-nums theme-text-main sm:text-2xl">{numero(valor)}</p>
+        <div role="listitem" className="contents">
+        <Tag className={`gelia-solicitudes-indicador gelia-tag-kpi ${Tag === 'button' ? FOCUS_TIPO : ''}`} data-tone={apagado ? 'neutro' : tono} data-active={activo || undefined} {...botonProps}>
+            <span className="gelia-tag-kpi-icono" aria-hidden="true"><Icono className="h-5 w-5" /></span>
+            <span className="min-w-0 text-left">
+                <span className="block text-xs font-medium theme-text-muted">{etiqueta}</span>
+                <span className="mt-0.5 block text-2xl font-bold tabular-nums leading-none theme-text-main">{numero(valor)}</span>
+            </span>
+            {Tag === 'button' && <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 theme-text-muted" aria-hidden="true" />}
+        </Tag>
         </div>
     );
 }
@@ -83,6 +101,9 @@ function TarjetaTipoKpi({ tipo, numero, activo, onSeleccionar, onQuitarFiltro })
 
 export default function ResumenSolicitudes({
     resumen,
+    metricas = null,
+    tabActiva = 'TODAS',
+    onSeleccionarTab,
     filtroTipoCliente = '',
     onFiltrarTipo,
     onLimpiarTipo,
@@ -96,10 +117,11 @@ export default function ResumenSolicitudes({
             aria-label="Resumen de los resultados filtrados"
         >
             <div className="gelia-solicitudes-indicadores gelia-tag-resultados-kpis" role="list">
-                {METRICAS_TOTALES.map(([key, label]) => (
-                    <div key={key} className="gelia-solicitudes-indicador" role="listitem">
-                        <CeldaKpi etiqueta={label} valor={resumen[key]} numero={numero} />
-                    </div>
+                {INDICADORES.map(({ key, ...kpi }) => (
+                    <CeldaKpi key={key} {...kpi} valor={resumen[key]} numero={numero} activo={kpi.tab === tabActiva && kpi.tab !== 'TODAS'} seleccionado={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
+                ))}
+                {metricas && INDICADORES_ACTIVIDAD.map(({ key, ...kpi }) => (
+                    <CeldaKpi key={key} {...kpi} valor={metricas[key]} numero={numero} activo={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
                 ))}
             </div>
 

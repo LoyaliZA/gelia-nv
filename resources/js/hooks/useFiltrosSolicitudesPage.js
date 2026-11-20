@@ -37,6 +37,10 @@ export function calcularRangoFechas(tipo, fInicio, fFin) {
     return { inicioCalculado, finCalculado };
 }
 
+// Filtros extra del listado de Solicitudes (variante tag-lista); se guardan como un mapa.
+export const FILTROS_EXTRA = ['proceso_id', 'cliente_numero', 'es_heredado', 'pago', 'consulta', 'cancelacion'];
+const extrasDesde = (filtros) => Object.fromEntries(FILTROS_EXTRA.map((clave) => [clave, filtros[clave] || '']));
+
 /**
  * Estado y consulta de filtros compartidos entre Solicitudes y Reportes.
  */
@@ -56,6 +60,7 @@ export default function useFiltrosSolicitudesPage({
     const [tipoFecha, setTipoFecha] = useState(filtros.tipo_fecha || 'TODAS');
     const [fechaInicio, setFechaInicio] = useState(filtros.fecha_inicio || '');
     const [fechaFin, setFechaFin] = useState(filtros.fecha_fin || '');
+    const [filtrosExtra, setFiltrosExtra] = useState(() => extrasDesde(filtros));
 
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
@@ -68,6 +73,7 @@ export default function useFiltrosSolicitudesPage({
         setTipoFecha(filtros.tipo_fecha || 'TODAS');
         setFechaInicio(filtros.fecha_inicio || '');
         setFechaFin(filtros.fecha_fin || '');
+        setFiltrosExtra(extrasDesde(filtros));
     }, [
         filtros.tab,
         filtros.q,
@@ -79,11 +85,12 @@ export default function useFiltrosSolicitudesPage({
         filtros.tipo_fecha,
         filtros.fecha_inicio,
         filtros.fecha_fin,
+        ...FILTROS_EXTRA.map((clave) => filtros[clave]),
     ]);
 
     const filtrosAdicionalesActivos = useMemo(
-        () => [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha !== 'TODAS' ? tipoFecha : ''].filter(Boolean).length,
-        [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha]
+        () => [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha !== 'TODAS' ? tipoFecha : '', ...Object.values(filtrosExtra)].filter(Boolean).length,
+        [filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, filtrosExtra]
     );
 
     const construirParams = useCallback(
@@ -110,11 +117,12 @@ export default function useFiltrosSolicitudesPage({
                     fecha_fin: finCalculado || undefined,
                     motivo_incorrecta: motivo || undefined,
                     q: q?.trim() || undefined,
+                    ...Object.fromEntries(FILTROS_EXTRA.map((clave) => [clave, (overrides[clave] ?? filtrosExtra[clave]) || undefined])),
                     page: overrides.page,
                 }).filter(([, v]) => v !== '' && v !== null && v !== undefined)
             );
         },
-        [tabActiva, filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, busqueda, fechaInicio, fechaFin]
+        [tabActiva, filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, busqueda, fechaInicio, fechaFin, filtrosExtra]
     );
 
     const sincronizarEstadoFiltros = useCallback((overrides = {}) => {
@@ -131,6 +139,8 @@ export default function useFiltrosSolicitudesPage({
         if (overrides.q !== undefined) setBusqueda(overrides.q);
         if (overrides.fecha_inicio !== undefined) setFechaInicio(overrides.fecha_inicio);
         if (overrides.fecha_fin !== undefined) setFechaFin(overrides.fecha_fin);
+        const extras = FILTROS_EXTRA.filter((clave) => overrides[clave] !== undefined);
+        if (extras.length) setFiltrosExtra((actual) => ({ ...actual, ...Object.fromEntries(extras.map((clave) => [clave, overrides[clave]])) }));
     }, []);
 
     const aplicarFiltros = useCallback(
@@ -179,6 +189,7 @@ export default function useFiltrosSolicitudesPage({
             tipo_fecha: 'TODAS',
             fecha_inicio: '',
             fecha_fin: '',
+            ...Object.fromEntries(FILTROS_EXTRA.map((clave) => [clave, ''])),
             tab: nuevaTab,
         });
     }, [filtroMotivo, tabActiva, aplicarFiltros]);
@@ -196,6 +207,7 @@ export default function useFiltrosSolicitudesPage({
         filtroTag,
         filtroVendedor,
         filtroMotivo,
+        filtrosExtra,
         filtrosAdicionalesActivos,
         construirParams,
         exportParams,

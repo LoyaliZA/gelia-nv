@@ -30,6 +30,25 @@ abstract class TestCase extends BaseTestCase
             $app['db']->purge();
         }
 
+        // Las pruebas nunca escriben en storage/app real: un archivo de prueba podría colisionar con el de un
+        // pedido real del mismo número, o dejar carpetas con otro propietario.
+        $raiz = sys_get_temp_dir().'/gelia-pruebas-'.getmypid();
+        foreach ((array) $app['config']->get('filesystems.disks', []) as $nombre => $disco) {
+            $actual = $disco['root'] ?? null;
+            if (($disco['driver'] ?? null) === 'local' && is_string($actual) && str_starts_with($actual, storage_path('app'))) {
+                $app['config']->set("filesystems.disks.{$nombre}.root", $raiz.'/'.$nombre);
+            }
+        }
+        static $limpieza = false;
+        if (! $limpieza) {
+            $limpieza = true;
+            register_shutdown_function(static function () use ($raiz) {
+                if (is_dir($raiz)) {
+                    (new \Illuminate\Filesystem\Filesystem)->deleteDirectory($raiz);
+                }
+            });
+        }
+
         $app['config']->set('webauthn.enabled', true);
 
         return $app;

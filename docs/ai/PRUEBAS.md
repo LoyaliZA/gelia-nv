@@ -15,7 +15,7 @@
 | Área | Clases/archivos de referencia |
 | --- | --- |
 | Captura/consulta | `ConcurrenciaCapturaPedidoTest`, `SolicitudRegistrarTiendaTest`, `useActualizacionesPedidos.test.jsx` |
-| Municipal | `MunicipalOrdinarioM01Test`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `Municipal/registroMunicipal.test.jsx` |
+| Municipal | `MunicipalOrdinarioM01Test`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `ResguardoMunicipalOla1Test`, `ResguardoMunicipalOla2Test`, `Municipal/registroMunicipal.test.jsx` |
 | Conversión P0 | `ConversionModalidadM02Test` caso 10: GET pendiente 150, pago bloqueado con consulta abierta, cierre municipal, exhibición cubre solo transporte |
 | Pago/remisión | `ImportesPagoTiendaTest`, `RemisionAuditoriaTest`, `BlindarPagoTotalPedidoTest` |
 | Tienda/custodia | `InstruccionEntregaVigenteTest`, `TransferenciaTiendaTest`, `RecorridoTiendaIntegralTest` |
@@ -37,4 +37,4 @@
 - [verificado] CSV municipal sin caso de descarga; Reverb real y Nacional completo no acreditados: `gestion-pedidos-docs/M01_AUDITORIA_CODEX_DETALLADA.md:78`; `M01_CORTE_ETAPAS_1_2.md:126`.
 - [verificado] Falta baseline para check:style; no regenerarlo para ocultarlo: `scripts/style-guard/lib.sh:12`.
 - [inferido] SQLite/sync no acredita bloqueos MySQL ni entrega asíncrona: `phpunit.xml:29` y `:32`.
-- Última verificación: 2026-11-18, working tree M-02 oleada 3.
+- Última verificación: 2026-11-19, working tree resguardo municipal M-04 a M-10.

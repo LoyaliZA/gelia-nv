@@ -16,6 +16,13 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::get('/municipal/consultas-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'tienda'])->name('municipal.consultas_tienda');
     Route::post('/municipal/{pedidoBma}/solicitud', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'guardar'])->name('municipal.solicitud');
     Route::post('/municipal/{pedidoBma}/consulta', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'enviarConsulta'])->name('municipal.consulta');
+    Route::post('/municipal/{pedidoBma}/resguardo', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'resguardo'])->name('municipal.resguardo');
+    Route::post('/municipal/{pedidoBma}/resguardo/continuacion', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'continuacion'])->name('municipal.resguardo.continuacion');
+    Route::post('/municipal/{pedidoBma}/resguardo/acumulacion', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'cerrarAcumulacion'])->name('municipal.resguardo.acumulacion');
+    Route::get('/municipal/{pedidoBma}/remisiones-pagadas', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'remisiones'])->name('municipal.remisiones');
+    Route::post('/municipal/{pedidoBma}/remisiones-pagadas', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'vincular'])->name('municipal.remisiones.vincular');
+    Route::delete('/municipal/{pedidoBma}/remisiones-pagadas/{origen}', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'desvincular'])->name('municipal.remisiones.desvincular');
+    Route::post('/municipal/{pedidoBma}/remisiones-pagadas/{origen}/integrar-local', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'integrarLocal'])->name('municipal.remisiones.integrar_local');
     Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');

@@ -67,6 +67,7 @@ class EnviarPedidoBmaService
             throw new \InvalidArgumentException('El crédito no se combina con otros métodos de pago.');
         }
         // El resultado de Wizerp lo registra el auxiliar después de recibir la solicitud.
+        \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeEnviarAuditoria($pedido);
         if (! $pedido->esEnvioSoloResguardos() && ! $creditoTienda) {
             $this->pagosService->assertCubiertoParaEnviar($pedido);
             $this->pagosService->generarExcedenteSiAplica($pedido, $usuarioId);

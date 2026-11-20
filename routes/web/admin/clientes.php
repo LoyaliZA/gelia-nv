@@ -38,6 +38,7 @@ Route::middleware(['can:clientes.ver'])->group(function () {
     Route::get('/clientes/{cliente}/historial', [AdminController::class, 'historialCliente'])->name('clientes.historial');
     Route::post('/clientes', [ClienteController::class, 'store'])->name('clientes.store');
     Route::put('/clientes/{cliente}', [ClienteController::class, 'update'])->name('clientes.update');
+    Route::post('/clientes/{cliente}/modalidad', [ClienteController::class, 'corregirModalidad'])->middleware('can:clientes.corregir_modalidad')->name('clientes.modalidad');
 
     Route::middleware(['can:clientes.expediente.ver'])->group(function () {
         Route::get('/clientes/{cliente}/expediente', [ExpedienteClienteController::class, 'pagina'])->name('clientes.expediente.pagina');

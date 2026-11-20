@@ -12,7 +12,8 @@ import {
     fmtMontoEscalonamiento,
     listaVisibleEnSolicitudes,
 } from '../../../utils/escalonamiento';
-import { PANEL_AVISO, PANEL_NOTA } from './solicitudesStyles';
+import { PANEL_NOTA } from './solicitudesStyles';
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 
 const obtenerProceso = (procesos, procesoId) => procesos.find(p => String(p.id) === String(procesoId)) || null;
 
@@ -93,9 +94,12 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         return tipo ? String(tipo.id) : '';
     };
     const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
-    const intencionConversion = puedeConvertirMenudeo
+    const listaMayoristaElegida = !!(puedeConvertirMenudeo
         && listaSeleccionada
-        && String(listaSeleccionada.nombre).toUpperCase().startsWith('MAYOREO ');
+        && String(listaSeleccionada.nombre).toUpperCase().startsWith('MAYOREO '));
+    // La conversión es una acción explícita: casilla visible, o una lista mayorista elegida.
+    const intencionConversion = !!puedeConvertirMenudeo && (!!data.convertir_menudeo_mayoreo || listaMayoristaElegida);
+    const procesoCambiaLista = (obtenerProceso(procesos, data.catalogo_proceso_id)?.nombre || '').toUpperCase().includes('LISTA');
     const flujoTienda = procesoFinancieroSeleccionado && (!!data.compra_en_tienda || !!data.compra_en_tienda_solo_tag);
     const cotizacionOpcional = flujoTienda;
 
@@ -124,10 +128,19 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         }
     }, [data.catalogo_proceso_id, procesoFinancieroSeleccionado, procesoAsignarTagSolo]);
 
+    // Una lista mayorista elegida implica la conversión.
     useEffect(() => {
-        if (!!data.convertir_menudeo_mayoreo === !!intencionConversion) return;
-        setData('convertir_menudeo_mayoreo', !!intencionConversion);
-    }, [intencionConversion]);
+        if (listaMayoristaElegida && !data.convertir_menudeo_mayoreo) {
+            setData('convertir_menudeo_mayoreo', true);
+        }
+    }, [listaMayoristaElegida]);
+
+    // En un cambio de lista de un cliente Menudeo, convertir es lo esperado: queda marcada, y se puede quitar.
+    const [conversionDecidida, setConversionDecidida] = useState(false);
+    useEffect(() => {
+        if (conversionDecidida || !puedeConvertirMenudeo || !procesoCambiaLista) return;
+        if (!data.convertir_menudeo_mayoreo) setData('convertir_menudeo_mayoreo', true);
+    }, [puedeConvertirMenudeo, procesoCambiaLista, infoCliente?.id]);
 
     useEffect(() => {
         if (!data.compra_en_tienda || !listaBronce) return;
@@ -191,7 +204,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('monto_final_tentativo', analisis.montoFinalTentativo);
         setData('total_proyectado_neto', analisis.totalProyectadoNeto);
 
-        if (!esMenudeo && analisis.esAscenso && analisis.listaCalificadaEfectiva) {
+        if ((!esMenudeo || intencionConversion) && analisis.esAscenso && analisis.listaCalificadaEfectiva) {
             const reqObjetivo = parseFloat(analisis.listaCalificadaEfectiva.monto_requerido);
             const listaSeleccionada = buscarListaPorId(listas, data.catalogo_lista_descuento_id);
             const reqSeleccionada = listaSeleccionada ? parseFloat(listaSeleccionada.monto_requerido) : -1;
@@ -214,7 +227,11 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                 mensaje: `Nivel estable: ${analisis.listaAnticipada.nombre}`
             });
         } else {
-            setAlertaLista(null);
+            setAlertaLista({
+                mensaje: listaActualObj?.nombre
+                    ? `No alcanza otro escalón: conserva su lista ${listaActualObj.nombre}`
+                    : 'No alcanza otro escalón: conserva su lista actual',
+            });
         }
 
         if (!analisis.casiAlcanzaSiguiente) {
@@ -291,6 +308,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
         setData('catalogo_lista_descuento_id', '');
         setData('confirmo_informacion_escalonamiento', false);
         setData('convertir_menudeo_mayoreo', false);
+        setConversionDecidida(false);
     };
 
     const requiereConfirmacionEscalonamiento = analisisFinanciero
@@ -330,20 +348,16 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                     <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar registro"><X className="w-5 h-5" aria-hidden="true" /></button>
                 </header>
                 <div className="gelia-modal-body p-5 sm:p-6">
-                {Object.keys(errors).length > 0 && <div role="alert" className="gelia-tag-message mb-5" data-tone="peligro"><h3>Revisa estos datos antes de enviar</h3>{Object.entries(errors).map(([key, error]) => <p key={key}>{error}</p>)}</div>}
+                {Object.keys(errors).length > 0 && <AvisoSolicitud tono="peligro" titulo="Revisa estos datos antes de enviar" anunciar className="mb-5">{Object.entries(errors).map(([key, error]) => <p key={key} className="m-0">{error}</p>)}</AvisoSolicitud>}
                 {alertaHeredado && (
-                    <div className="mb-8 p-5 rounded-2xl border-2 border-amber-400 bg-amber-50 dark:bg-amber-500/10 flex gap-4 items-center animate-fade-in">
-                        <AlertTriangle className="w-8 h-8 text-amber-500 shrink-0" />
-                        <p className="text-sm font-bold text-amber-700 dark:text-amber-400 m-0 leading-tight">Alerta: Cliente protegido (Heredado). Utiliza los procesos exclusivos para heredados.</p>
-                    </div>
+                    <AvisoSolicitud tono="aviso" titulo="Cliente protegido (heredado)" anunciar className="mb-8">
+                        Utiliza los procesos exclusivos para heredados.
+                    </AvisoSolicitud>
                 )}
                 {alertaInactivo && (
-                    <div className={`${PANEL_AVISO} mb-5`} role="status">
-                        <p className="m-0 text-sm font-semibold theme-text-main">Cliente inactivo — Reactivación</p>
-                        <p className="m-0 mt-1 text-sm theme-text-muted">
-                            Este cliente se encuentra inactivo. GELIA identificó la solicitud como REACTIVADO. Puedes continuar normalmente con la cotización; la reactivación se procesará cuando corresponda según su autorización.
-                        </p>
-                    </div>
+                    <AvisoSolicitud tono="aviso" titulo="Cliente inactivo — Reactivación" anunciar className="mb-5">
+                        Este cliente se encuentra inactivo. GELIA identificó la solicitud como REACTIVADO. Puedes continuar normalmente con la cotización; la reactivación se procesará cuando corresponda según su autorización.
+                    </AvisoSolicitud>
                 )}
 
                 <fieldset disabled={processing} className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6 relative z-10 border-0 p-0 m-0">
@@ -364,7 +378,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </select>
                             <ChevronDown className="theme-field-with-icon__trailing" aria-hidden />
                         </div>
-                        {errors.catalogo_proceso_id && <p className="text-xs text-red-500">{errors.catalogo_proceso_id}</p>}
+                        {errors.catalogo_proceso_id && <AvisoSolicitud tono="peligro" compacto anunciar>{errors.catalogo_proceso_id}</AvisoSolicitud>}
                     </div>
 
                     <div className="space-y-5">
@@ -384,11 +398,9 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 className={`${THEME_INPUT} w-full py-4 text-sm`}
                                 disabled={modoEdicion}
                             />
-                            {errors.numero_cliente && <p className="text-xs text-red-500">{errors.numero_cliente}</p>}
+                            {errors.numero_cliente && <AvisoSolicitud tono="peligro" compacto anunciar>{errors.numero_cliente}</AvisoSolicitud>}
                             {!modoEdicion && data.numero_cliente && !infoCliente && (
-                                <p className="text-xs text-amber-600 dark:text-amber-400 font-bold">
-                                    Selecciona un cliente de la lista para continuar.
-                                </p>
+                                <AvisoSolicitud tono="aviso" compacto>Selecciona un cliente de la lista para continuar.</AvisoSolicitud>
                             )}
                             {infoCliente && (
                                 <div className={`mt-4 p-4 theme-element border ${infoCliente.es_heredado ? 'border-purple-500/50 bg-purple-500/5' : 'theme-border'} rounded-2xl shadow-sm animate-fade-in`}>
@@ -462,13 +474,23 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     </div>
                                 </label>
                                 )}
-                                {intencionConversion && (
-                                <div className={PANEL_NOTA}>
-                                    <p className="m-0 text-sm font-medium theme-text-main">Conversión a Mayoreo</p>
-                                    <p className="m-0 mt-1 text-xs theme-text-muted">
-                                        La lista mayorista seleccionada queda registrada. Lista y modalidad cambian cuando la solicitud se autorice.
-                                    </p>
-                                </div>
+                                {puedeConvertirMenudeo && (
+                                <label className={`${PANEL_NOTA} flex items-start gap-3 cursor-pointer`}>
+                                    <input
+                                        type="checkbox"
+                                        className="mt-1 w-4 h-4"
+                                        checked={!!data.convertir_menudeo_mayoreo}
+                                        onChange={(e) => { setConversionDecidida(true); setData('convertir_menudeo_mayoreo', e.target.checked); }}
+                                    />
+                                    <span>
+                                        <span className="block m-0 text-sm font-medium theme-text-main">Convertir cliente de Menudeo a Mayoreo</span>
+                                        <span className="block m-0 mt-1 text-xs theme-text-muted">
+                                            {intencionConversion
+                                                ? 'Al autorizarse, el cliente pasa a Mayoreo con la lista que corresponde a su acumulado operativo (Bronce como mínimo). Mientras esté pendiente no cambia nada.'
+                                                : 'Sin conversión el cliente sigue en Menudeo y su lista no cambia.'}
+                                        </span>
+                                    </span>
+                                </label>
                                 )}
                             </div>
                         )}
@@ -491,7 +513,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                     className={`${THEME_INPUT} w-full py-4 text-sm disabled:opacity-60`}
                                 />
                             </div>
-                            {errors.monto_cotizado && <p className="text-xs text-red-500">{errors.monto_cotizado}</p>}
+                            {errors.monto_cotizado && <AvisoSolicitud tono="peligro" compacto anunciar>{errors.monto_cotizado}</AvisoSolicitud>}
                         </div>
 
                         <div className="space-y-2">
@@ -521,7 +543,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 />
                             </div>
                             {errors.observaciones_vendedor && (
-                                <p className="text-xs text-red-500">{errors.observaciones_vendedor}</p>
+                                <AvisoSolicitud tono="peligro" compacto anunciar>{errors.observaciones_vendedor}</AvisoSolicitud>
                             )}
                         </div>
                     </div>
@@ -536,6 +558,12 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                 </span>
                             )}
                         </div>
+
+                        {infoCliente?.doble_conteo_posible && (
+                            <p className="m-0 mb-2 px-1 text-xs theme-text-muted">
+                                Una carga normal reciente pudo incluir cotizaciones ya autorizadas. La lista aplicada no las suma hasta confirmarlo con una carga con corte.
+                            </p>
+                        )}
 
                         {analisisFinanciero && (
                             <div className="mb-2 rounded-2xl border-2 theme-border overflow-hidden animate-fade-in shadow-sm">
@@ -625,9 +653,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                     <p className="text-[11px] font-medium   theme-text-muted m-0">Estado del escalonamiento</p>
 
                                                     {analisisFinanciero.casiAlcanzaSiguiente && analisisFinanciero.listaCasiAlcanzada && (
-                                                        <div className="p-4 rounded-xl bg-amber-500/10 border-2 border-amber-500/30 flex gap-3 items-start">
-                                                            <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-                                                            <p className="text-sm font-bold text-amber-800 dark:text-amber-300 leading-relaxed m-0">
+                                                        <AvisoSolicitud tono="aviso" titulo="Cerca de la siguiente lista">
                                                                 Puedes solicitar <span className="font-medium">{analisisFinanciero.listaCasiAlcanzada.nombre}</span> de forma provisional,
                                                                 pero el pago neto estimado quedaría{' '}
                                                                 <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteNetoCasi)}</span> por debajo del mínimo neto.
@@ -637,31 +663,28 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                                                                 )}
                                                                 Con este pago se estimaría:{' '}
                                                                 <span className="font-medium">{analisisFinanciero.listaConfirmacionEstimada?.nombre || analisisFinanciero.listaAnticipada?.nombre || 'lista actual'}</span>.
-                                                            </p>
-                                                        </div>
+                                                            
+                                                        </AvisoSolicitud>
                                                     )}
 
                                                     {analisisFinanciero.mantieneListaAnticipada
                                                         && analisisFinanciero.listaAnticipada
                                                         && !analisisFinanciero.listaAnticipada.nombre.toUpperCase().includes('PUBLICO')
                                                         && !analisisFinanciero.casiAlcanzaSiguiente && (
-                                                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex gap-2.5 items-center">
-                                                            <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
-                                                            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 m-0">
-                                                                El monto alcanza de forma estable la lista {analisisFinanciero.listaAnticipada.nombre}.
-                                                            </p>
-                                                        </div>
+                                                        <AvisoSolicitud tono="exito" compacto>
+                                                            El monto alcanza de forma estable la lista {analisisFinanciero.listaAnticipada.nombre}.
+                                                        </AvisoSolicitud>
                                                     )}
 
                                                     {analisisFinanciero.listaSiguienteEfectiva
                                                         && analisisFinanciero.faltanteBrutoParaSiguiente > 0
                                                         && !analisisFinanciero.casiAlcanzaSiguiente
                                                         && analisisFinanciero.listaSiguienteEfectiva.id !== analisisFinanciero.listaAnticipada?.id && (
-                                                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 leading-relaxed m-0 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                                                        <AvisoSolicitud tono="aviso" compacto>
                                                             Faltan <span className="font-medium tabular-nums">{fmtMonto(analisisFinanciero.faltanteBrutoParaSiguiente)}</span> brutos
                                                             (mínimo de lista {fmtMonto(analisisFinanciero.listaSiguienteEfectiva.monto_requerido)}) para{' '}
                                                             <span className="font-medium">{analisisFinanciero.listaSiguienteEfectiva.nombre}</span>.
-                                                        </p>
+                                                        </AvisoSolicitud>
                                                     )}
                                                 </div>
                                             ) : null}
@@ -751,7 +774,7 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
                             </label>
                         )}
                         {errors.confirmo_informacion_escalonamiento && (
-                            <p className="text-xs text-red-500 mt-1">{errors.confirmo_informacion_escalonamiento}</p>
+                            <AvisoSolicitud tono="peligro" compacto anunciar className="mt-1">{errors.confirmo_informacion_escalonamiento}</AvisoSolicitud>
                         )}
                         </>
                     </div>

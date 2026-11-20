@@ -125,7 +125,10 @@ class ListarComparacionClientesEscalonamiento
             ->groupBy('cliente_id')
             ->pluck('total', 'cliente_id');
 
+        $contextoVentas = app(ContextoVentasEscalonamiento::class)->paraClientes($clientesPorId->values());
+
         $filas = $clienteIds->map(function (int $clienteId) use (
+            $contextoVentas,
             $periodo,
             $nombresLista,
             $resumenes,
@@ -200,7 +203,7 @@ class ListarComparacionClientesEscalonamiento
                 'incidencias_abiertas' => (int) ($incidenciasAbiertas[$clienteId] ?? 0),
                 'diverge_operativa' => $listaOperativaId && $listaVigenteIdProy
                     && $listaOperativaId !== (int) $listaVigenteIdProy,
-            ];
+            ] + ($contextoVentas[$clienteId] ?? []);
         })->filter()->values();
 
         return [

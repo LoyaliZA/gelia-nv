@@ -17,11 +17,15 @@ beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     sessionStorage.clear();
     window.route = (name, id) => `${name}/${id}`;
-    window.axios = { get: vi.fn(async () => ({ data: { ...pedido, catalogo_paqueteria_id: 2, solicitud_preparacion: { modalidad_entrega: 'municipal', expediente: { consignatario_id: 12 }, finanzas_municipales: {} } } })), post: vi.fn(async (_url, body) => ({ data: { catalogo_paqueteria_id: body.catalogo_paqueteria_id, paqueteria: terminal, solicitud_preparacion: { modalidad_entrega: 'municipal', expediente: { consignatario_id: 12 }, finanzas_municipales: {} } } })) };
+    window.axios = {
+        get: vi.fn(async () => ({ data: { ...pedido, catalogo_paqueteria_id: 2, solicitud_preparacion: { modalidad_entrega: 'municipal', expediente: { consignatario_id: 12 }, finanzas_municipales: {} } } })),
+        post: vi.fn(async (_url, body) => ({ data: { catalogo_paqueteria_id: body.catalogo_paqueteria_id, paqueteria: terminal, solicitud_preparacion: { modalidad_entrega: 'municipal', expediente: { consignatario_id: 12 }, finanzas_municipales: {} } } })),
+        delete: vi.fn(async () => ({ data: {} })),
+    };
     host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => { await act(() => root.unmount()); host.remove(); });
-const render = async (props = {}) => act(() => root.render(<Formulario abierto {...props} pedido={pedido} catalogos={{ paqueterias: [terminal], paqueterias_municipio: [] }}>{({ contenido, pie }) => <>{contenido}{pie}</>}</Formulario>));
+const render = async (props = {}) => act(() => root.render(<Formulario abierto pedido={pedido} catalogos={{ paqueterias: [terminal], paqueterias_municipio: [] }} {...props}>{({ contenido, pie }) => <>{contenido}{pie}</>}</Formulario>));
 const button = text => [...document.querySelectorAll('button')].find(el => el.textContent === text);
 const select = async (label, value) => act(() => { const el = [...document.querySelectorAll('label')].find(el => el.textContent.startsWith(label)).querySelector('select'); el.value = value; el.dispatchEvent(new Event('change', { bubbles: true })); });
 it('usa categoría Local / Regional activa sin depender de Sin logística o costo diferido', () => {
@@ -108,6 +112,11 @@ it('no envía la consulta si el documento no queda persistido', async () => {
     await act(async () => button('Enviar consulta').click());
     expect(window.axios.post).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain('No se pudo adjuntar el PDF o la imagen');
+});
+it('muestra el resguardo de envío cuando la solicitud ya está guardada', async () => {
+    await render({ pedido: { ...pedido, catalogo_paqueteria_id: 2 } });
+    expect(document.body.textContent).toContain('Dejar en resguardo');
+    expect(document.body.textContent).toContain('Remisiones pagadas');
 });
 it('bloquea el doble clic mientras termina el guardado previo al envío', async () => {
     let confirmar;

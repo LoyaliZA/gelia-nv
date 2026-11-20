@@ -1,3 +1,4 @@
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Camera, FileText, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { compressImageToWebp, validateImageSource } from '@/utils/compressImage';
@@ -66,7 +67,7 @@ export default function AdjuntoRespuesta({ file, attachment, error, disabled = f
                 </label>
             </div>
             <p className="text-xs theme-text-muted m-0">JPG, PNG, WebP o PDF · hasta 5 MB al enviar. También puedes pegar una captura con Ctrl+V o ⌘V.</p>
-            {mensaje && <p id={`${id}-error`} role="alert" className="text-sm theme-text-peligro m-0">{mensaje}</p>}
+            {mensaje && <AvisoSolicitud tono="peligro" compacto anunciar><span id={`${id}-error`}>{mensaje}</span></AvisoSolicitud>}
         </section>
     );
 }

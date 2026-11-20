@@ -61,7 +61,8 @@ class ClienteApiController extends Controller
 
         $encontrados = $query->limit(50)->get();
         $acumulados = app(AcumuladoOperativoCliente::class)->presentarMuchos($encontrados);
-        $clientes = $encontrados->map(function ($cliente) use ($conFiscales, $acumulados) {
+        $proyectadas = app(\App\Services\Escalonamiento\ContextoVentasEscalonamiento::class)->listasProyectadas($encontrados);
+        $clientes = $encontrados->map(function ($cliente) use ($conFiscales, $acumulados, $proyectadas) {
             $operativo = $acumulados[$cliente->id];
             $fila = [
                 'id' => $cliente->id,
@@ -77,6 +78,9 @@ class ClienteApiController extends Controller
                 'acumulado_oficial' => $operativo['acumulado_oficial'],
                 'acumulado_provisional' => $operativo['acumulado_provisional'],
                 'acumulado_operativo' => $operativo['acumulado_operativo'],
+                'acumulado_para_lista' => $operativo['acumulado_para_lista'],
+                'doble_conteo_posible' => $operativo['doble_conteo_posible'],
+                'lista_proyectada' => $proyectadas[$cliente->id] ?? null,
                 'inclusion_indeterminada' => $operativo['inclusion_indeterminada'],
                 ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
                 'monto_credito_autorizado' => $cliente->monto_credito_autorizado !== null
@@ -142,6 +146,10 @@ class ClienteApiController extends Controller
             'acumulado_oficial' => $operativo['acumulado_oficial'],
             'acumulado_provisional' => $operativo['acumulado_provisional'],
             'acumulado_operativo' => $operativo['acumulado_operativo'],
+            'acumulado_para_lista' => $operativo['acumulado_para_lista'],
+            'doble_conteo_posible' => $operativo['doble_conteo_posible'],
+            'lista_proyectada' => app(\App\Services\Escalonamiento\ContextoVentasEscalonamiento::class)->listasProyectadas(collect([$cliente]))[$cliente->id] ?? null,
+            'operaciones' => app(\App\Services\Escalonamiento\ContextoVentasEscalonamiento::class)->operacionesEnCurso($cliente),
             'inclusion_indeterminada' => $operativo['inclusion_indeterminada'],
             ...app(ClasificacionComercialCliente::class)->presentacion($cliente),
         ]);
