@@ -2295,6 +2295,14 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $faltante = ['descripcion' => 'Pieza sin existencias', 'sku' => 'FALTANTE', 'cantidad' => 1, 'condicion' => 'faltante', 'origen_unidad_id' => $cambio(1, 'incidencia')['unidad_id']];
         $this->post($url.'/disponibilidad', $base + ['cambios_revisados' => [$cambio(1, 'incidencia')], 'excepciones' => [$faltante]], ['Accept' => 'application/json'])->assertOk();
         $this->post($url.'/disponibilidad', $base + ['cambios_revisados' => [$cambio(2, 'correcto')]], ['Accept' => 'application/json'])->assertOk();
+        $avance = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertTrue($avance['anexo_sin_remision'][0]['pendiente_revision']);
+        $this->assertArrayNotHasKey('respondida_at', $avance['anexo_sin_remision'][0]);
+        foreach ($avance['anexo_sin_remision'][0]['unidades'] as $unidadGuardada) {
+            $this->assertNotEmpty($unidadGuardada['respondida_at'], 'La fecha del avance existe antes del envío del anexo.');
+            $this->assertSame($auxiliar->id, $unidadGuardada['respondida_por_id']);
+        }
+        $this->assertSame($anterior['respondida_at'], $avance['revision_disponibilidad']['respondida_at']);
         $lecturaAuxiliar = $this->getJson($url)->assertOk()->assertJsonCount(0, 'tarea.respuesta.excepciones')
             ->assertJsonPath('tarea.pedido.excepciones.0.unica_pieza', true)->assertJsonCount(1, 'tarea.pedido.excepciones.0.documentos');
         $this->assertSame('Tapa rota', $lecturaAuxiliar->json('tarea.pedido.excepciones.0.detalle'));
@@ -2318,7 +2326,11 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(2, $pedido->revisionesProducto()->count());
         $final = $pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad'];
         $this->assertFalse($final['actualizacion_pendiente']);
+        $anexoEnviado = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $this->assertFalse($anexoEnviado['pendiente_revision']);
+        $this->assertNotEmpty($anexoEnviado['respondida_at']);
         $this->assertSame($anterior['respuesta_id'], $final['historial_respuestas'][0]['respuesta_id']);
+        $this->assertSame($anterior['respondida_at'], $final['historial_respuestas'][0]['respondida_at']);
         $this->actingAs($this->usuario)->getJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda')->assertOk()->assertJsonCount(2, 'tarea_preparacion.respuesta.excepciones');
         $pieza = $pedido->revisionesProducto()->where('sku', 'DETALLE')->firstOrFail();
         $this->postJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', ['revision_id' => $pieza->id, 'accion' => 'confirmar', 'solicitud_id' => (string) Str::uuid()])->assertOk();

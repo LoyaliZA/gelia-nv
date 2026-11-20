@@ -111,9 +111,11 @@ export function particionarCambiosConsulta(cambios, solicitud = {}, vista = 'ven
     return { actuales, anteriores: cambios.filter((cambio) => !esRespuestaAlmacen(cambio)) };
 }
 
-function ficha(linea, extra) {
+function ficha(linea, extra, tienda = false) {
     const guardada = persistidaDe(linea, extra.unidad_id);
     const retiro = extra.tipo === 'retiro';
+    // El envío pertenece al anexo original; la fecha de una unidad solo acredita su avance.
+    const avancePendiente = tienda && anexoPendienteRevision(linea);
     const atendida = retiro
         || linea.pendiente_revision === false
         || ['disponible', 'con_detalle', 'rechazado'].includes(linea.estado)
@@ -126,12 +128,16 @@ function ficha(linea, extra) {
         persistida: Boolean(guardada?.resultado) || (atendida && !guardada),
         pendiente: retiro ? false : !resultado,
         respuesta_cambio: resultado || linea.respuesta_cambio,
-        respondida_at: guardada?.respondida_at || (resultado ? linea.respondida_at : null),
-        respondida_por: guardada?.respondida_por,
+        avance_pendiente: avancePendiente,
+        guardada_at: guardada?.respondida_at,
+        guardada_por: guardada?.respondida_por,
+        respondida_at: tienda ? linea.respondida_at || (!avancePendiente ? guardada?.respondida_at : null) : guardada?.respondida_at || (resultado ? linea.respondida_at : null),
+        respondida_por: tienda ? linea.respondida_por || (!avancePendiente ? guardada?.respondida_por : null) : guardada?.respondida_por,
     };
 }
 
 export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
+    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
     const decisiones = Object.values(solicitud.acciones_disponibilidad || {});
     const corte = solicitud.revision_disponibilidad?.respondida_at;
     const anexos = (solicitud.anexo_sin_remision || []).flatMap((a, indice) => {
@@ -145,7 +151,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
                     clave: unidad_id, unidad_id, tipo: 'anexo', clase: 'captura', indice,
                     documento_id: documento.id, documentos: [documento], esDocumento: true, retirada,
                     sku: a.sku, descripcion: a.descripcion, cantidad: a.cantidad,
-                });
+                }, tienda);
             });
         }
         const esDocumento = a.entrada === 'documento';
@@ -153,7 +159,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         return [ficha(a, {
             clave: unidad_id, unidad_id, tipo: 'anexo', clase: esDocumento ? 'captura' : 'sku', indice,
             documentos: [], esDocumento, retirada,
-        })];
+        }, tienda)];
     });
     const retiros = (solicitud.retiro_piezas || []).flatMap((r, indice) => {
         const docs = (r.documentos_piezas || []).map(d => documentoDe(documentos, d.id) || (d.url ? d : null)).filter(Boolean);
@@ -190,8 +196,5 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         && !retiros.some(r => (r.piezas_solicitadas || r.piezas || []).some(p => Number(p.revision_id) === Number(d.revision_id))))
         .map(d => ({ ...d, clave: `decision-${d.revision_id}`, tipo: d.accion === 'confirmar' ? 'confirmacion' : 'retiro', clase: 'sku', documentos: [],
             pendiente: false }));  // Decisión de Ventas ya registrada: se informa, no se revisa.
-    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
-    return [...anexos, ...retiros, ...sueltas].map(cambio => ({ ...cambio,
-        avance_pendiente: tienda && cambio.tipo === 'anexo' && anexoPendienteRevision(cambio) && cambio.persistida,
-    })).sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
+    return [...anexos, ...retiros, ...sueltas].sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
 }

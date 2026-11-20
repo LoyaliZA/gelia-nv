@@ -1,7 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { cambiosDisponibilidad, equivalenciasUnidades } from './cambiosDisponibilidad';
+import { cambiosDisponibilidad, equivalenciasUnidades, esRespuestaAlmacen } from './cambiosDisponibilidad';
 
 describe('identidad de las unidades por revisar', () => {
+    it.each(['correcto', 'incidencia'])('la fecha del avance %s no acredita el envío ni cambia la captura persistida', resultado => {
+        const solicitud = { modalidad_entrega: 'tienda', area_revision: 'preparacion_tienda', anexo_sin_remision: [{
+            solicitud_id: 'sol', sku: 'A', pendiente_revision: true,
+            unidades: [{ unidad_id: 'anexo:sol:sku:A', resultado, respondida_at: '2026-11-20T10:00:00Z', respondida_por: 'Auxiliar' }],
+        }] };
+        const original = structuredClone(solicitud);
+        const cambio = cambiosDisponibilidad(solicitud)[0];
+        expect(cambio.avance_pendiente).toBe(true);
+        expect(cambio.respondida_at).toBeNull();
+        expect(cambio.respondida_por).toBeNull();
+        expect(cambio.guardada_at).toBe('2026-11-20T10:00:00Z');
+        expect(cambio.persistida).toBe(true);
+        expect(cambio.resultado).toBe(resultado);
+        expect(esRespuestaAlmacen(cambio)).toBe(false);
+        expect(solicitud).toEqual(original);
+        solicitud.anexo_sin_remision[0].pendiente_revision = false;
+        solicitud.anexo_sin_remision[0].respondida_at = '2026-11-20T11:00:00Z';
+        solicitud.anexo_sin_remision[0].respondida_por = 'Responsable del envío';
+        const enviada = cambiosDisponibilidad(solicitud)[0];
+        expect(esRespuestaAlmacen(enviada)).toBe(true);
+        expect(enviada.respondida_at).toBe('2026-11-20T11:00:00Z');
+        expect(enviada.respondida_por).toBe('Responsable del envío');
+    });
+
+    it.each(['municipal', 'cedis'])('conserva la interpretación existente de %s', proceso => {
+        const solicitud = { modalidad_entrega: proceso === 'municipal' ? 'municipal' : 'tienda', area_revision: 'control_pedidos',
+            anexo_sin_remision: [{ solicitud_id: 'sol', sku: 'A', pendiente_revision: true,
+                unidades: [{ unidad_id: 'anexo:sol:sku:A', resultado: 'correcto', respondida_at: '2026-11-20T10:00:00Z' }] }] };
+        const cambio = cambiosDisponibilidad(solicitud)[0];
+        expect(cambio.respondida_at).toBe('2026-11-20T10:00:00Z');
+        expect(cambio.avance_pendiente).toBe(false);
+        expect(esRespuestaAlmacen(cambio)).toBe(true);
+    });
     it('distingue líneas con la misma solicitud, documento y SKU', () => {
         const documentos = [{ id: 71, url: '/pedido.png' }];
         const solicitud = { anexo_sin_remision: ['linea-a', 'linea-b'].map(linea_id => ({

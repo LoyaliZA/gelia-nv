@@ -51,6 +51,15 @@ describe('Consulta separada del apartado y del pesaje', () => {
     it('una reconsulta explícita pendiente no usa la respuesta anterior como vigente', () => {
         expect(etiquetas({ ...conRespuesta(), consulta_actualizacion_pendiente: true })).toEqual(['Pendiente de respuesta']);
     });
+    it.each(['bandera de consulta', 'anexo pendiente'])('las lecturas parciales conservan pendientes los indicadores por %s', fuente => {
+        const pedido = conRespuesta();
+        if (fuente === 'bandera de consulta') pedido.solicitud_preparacion.revision_disponibilidad.actualizacion_pendiente = true;
+        else pedido.solicitud_preparacion.anexo_sin_remision = [{ pendiente_revision: true, unidades: [{ resultado: 'correcto', respondida_at: '2026-11-20T10:00:00Z' }] }];
+        expect(estadoConsultaPedido(pedido)).toBe('pendiente');
+        expect(etiquetas(pedido)).toEqual(['Pendiente de respuesta']);
+        expect(etiquetaEstatusEnvio('pendiente_pesaje', { pedido })).toBe('Pendiente de respuesta');
+        expect(decodeURIComponent(textoWhatsAppPedido(pedido))).toContain('Estado: Pendiente de respuesta');
+    });
     it('mantiene el pesaje para un envío nacional con logística', () => {
         const pedido = { ...pendiente, origen: { requiere_logistica: true }, solicitud_preparacion: { modalidad_entrega: 'nacional', area_revision: 'control_pedidos' } };
         expect(estadoConsultaPedido(pedido)).toBeNull();

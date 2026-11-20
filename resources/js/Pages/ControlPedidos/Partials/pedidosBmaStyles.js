@@ -1,5 +1,6 @@
 import { esRegistroMunicipal } from '../Municipal/terminalMunicipal';
 import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
+import { anexosPendientesRevision } from './cambiosDisponibilidad';
 import {
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
@@ -144,7 +145,9 @@ export const estadoConsultaPedido = (pedido) => {
         || Boolean(pedido.pesaje_respondido_at)
         || ['pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio)
         || fase === 'PESAJE_RESPONDIDO';
-    return pedido.consulta_actualizacion_pendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
+    const actualizacionTiendaPendiente = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda'
+        && (solicitud.revision_disponibilidad?.actualizacion_pendiente || anexosPendientesRevision(solicitud));
+    return pedido.consulta_actualizacion_pendiente || actualizacionTiendaPendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
 };
 
 export const apartadoConfirmadoPedido = (pedido) => Boolean(pedido && (
