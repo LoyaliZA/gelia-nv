@@ -162,6 +162,12 @@ final class VisibilidadTareaPreparacion
                             'cantidad' => $revision->cantidad_solicitada,
                             'estado_fisico' => $revision->estado_fisico,
                             'detalle' => $revision->comentario,
+                            'unica_pieza' => (bool) $revision->unica_pieza,
+                            'mejor_ejemplar' => (bool) $revision->mejor_ejemplar,
+                            'documentos' => $pedido->documentos->filter(fn ($d) => $d->activo
+                                && $d->relacion_tipo === \App\Models\ControlPedidos\PedidoBmaDocumento::RELACION_REVISION_PRODUCTO
+                                && (int) $d->relacion_id === (int) $revision->id)
+                                ->map(fn ($d) => ['id' => $d->id, 'url' => $d->url, 'nombre_original' => $d->nombre_original, 'mime_type' => $d->mime_type])->values()->all(),
                             'resolucion' => $revision->resolucion,
                         ])->values()->all()
                     : [],

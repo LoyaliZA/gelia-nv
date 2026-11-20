@@ -218,6 +218,41 @@ class ActivosMejorasTest extends TestCase
         ]);
     }
 
+    public function test_editar_conserva_el_departamento_en_una_solicitud_directa(): void
+    {
+        $this->admin->departamentos()->attach($this->departamento);
+
+        $destino = Departamento::create([
+            'nombre' => 'Destino de prueba',
+            'activo' => true,
+        ]);
+
+        $activo = Activo::create([
+            'folio' => 'TEC-TI-2026-0090',
+            'consulta_token' => (string) Str::uuid(),
+            'catalogo_tipo_activo_id' => $this->tipoEquipo->id,
+            'departamento_id' => $this->departamento->id,
+            'nombre' => 'Equipo de prueba',
+            'estado' => 'disponible',
+            'registrado_por_id' => $this->admin->id,
+            'atributos' => [],
+        ]);
+
+        $this->actingAs($this->admin)
+            ->put(route('activos.update', $activo), [
+                'departamento_id' => $destino->id,
+                'nombre' => 'Equipo actualizado',
+            ])
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('activos', [
+            'id' => $activo->id,
+            'nombre' => 'Equipo actualizado',
+            'departamento_id' => $this->departamento->id,
+        ]);
+    }
+
     public function test_filtro_pendientes_firma_solo_lista_asignaciones_sin_firmar(): void
     {
         $colaborador = User::factory()->create();

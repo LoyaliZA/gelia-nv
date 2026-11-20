@@ -9,7 +9,7 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
     const documentos = respuesta?.documentos || [];
     const mostrarSeguimiento = mostrarSeguimientoEntrega && (!respuesta?.documental || respuesta?.seguimiento_entrega_pdv_habilitado === true);
     const hayFotos = documentos.some((d) => d?.url);
-    const visible = Boolean(respuesta) && (respuesta.respondida || tarea.estado === 'CON_INCIDENCIA' || hayFotos);
+    const visible = Boolean(respuesta) && (respuesta.respondida || respuesta.revision?.estado || tarea.estado === 'CON_INCIDENCIA' || (!respuesta.documental && hayFotos));
     if (!visible) return null;
     const estados = { bueno: 'Bueno', regular: 'Con detalle', malo: 'Malo', danado: 'Dañado', sin_existencia: 'Sin existencias' };
     const fotosDe = (productoId) => documentos.filter((d) => Number(d.producto_id) === Number(productoId) && d.url);

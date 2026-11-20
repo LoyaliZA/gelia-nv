@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Activos;
 
+use App\Models\User;
 use App\Services\Activos\BuscarActivosService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -49,7 +50,7 @@ class StoreActivoRequest extends FormRequest
             'fotos' => 'nullable|array|max:5',
             'fotos.*' => 'image|mimes:jpeg,jpg,png,webp|max:5120',
             'registro_continuo' => 'nullable|boolean',
-            'user_id' => 'nullable|exists:users,id',
+            'user_id' => 'nullable|integer|exists:users,id',
             'notas' => 'nullable|string|max:1000',
             'condiciones_entrega' => 'nullable|string|max:1000',
         ];
@@ -58,8 +59,20 @@ class StoreActivoRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $validator) {
-            if ($this->filled('user_id') && !$this->user()->can('activos.asignar')) {
-                $validator->errors()->add('user_id', 'No tienes permiso para asignar activos.');
+            if ($this->filled('user_id')) {
+                if (! $this->user()->can('activos.asignar')) {
+                    $validator->errors()->add('user_id', 'No tienes permiso para asignar activos.');
+                } elseif (! $validator->errors()->hasAny(['user_id', 'departamento_id'])) {
+                    $departamentoId = $this->input('departamento_id');
+                    $pertenece = is_scalar($departamentoId) && User::query()
+                        ->whereKey($this->input('user_id'))
+                        ->whereHas('departamentos', fn ($query) => $query->whereKey($departamentoId))
+                        ->exists();
+
+                    if (! $pertenece) {
+                        $validator->errors()->add('user_id', 'El colaborador debe pertenecer al departamento del activo.');
+                    }
+                }
             }
 
             if (!$this->filled('catalogo_tipo_activo_id')) {

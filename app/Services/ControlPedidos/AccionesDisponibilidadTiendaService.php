@@ -32,6 +32,9 @@ final class AccionesDisponibilidadTiendaService
                 throw ValidationException::withMessages(['consulta' => 'Falta una respuesta de disponibilidad vigente.']);
             }
             $revision = $pedido->revisionesProducto()->lockForUpdate()->findOrFail($datos['revision_id']);
+            if (in_array((int) $revision->id, \App\Support\ControlPedidos\RespuestaPreparacionTienda::revisionesNoEnviadas($json), true)) {
+                throw ValidationException::withMessages(['pieza' => 'La pieza pertenece a un avance pendiente de envío. Espere la respuesta de Tienda.']);
+            }
             $accion = $datos['accion'];
             $anterior = $json['acciones_disponibilidad'][(string) $revision->id] ?? null;
             if ($anterior) {

@@ -16,8 +16,10 @@ use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\UnidadesRevisionConsulta;
+use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -105,6 +107,20 @@ class ResponderDisponibilidadInicialService
 
             // Una actualización revisa el conjunto: solo se recapturan sus nuevas excepciones.
             $excepciones = $this->excepciones($datos['excepciones'] ?? [], true);
+            // Las unidades de Tienda ya guardadas se publican una sola vez. El envío
+            // directo con piezas sigue usando el mismo contrato y las mismas validaciones.
+            if ($actualizacion && $area === DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA) {
+                $porUnidad = collect($datos['excepciones'] ?? [])->filter(fn ($fila) => ! empty($fila['origen_unidad_id']))->groupBy('origen_unidad_id');
+                foreach ($porUnidad as $unidadId => $filas) {
+                    $cambio = collect($datos['cambios_revisados'] ?? [])->firstWhere('unidad_id', $unidadId);
+                    if (! $cambio || ($cambio['resultado'] ?? '') !== 'incidencia') {
+                        throw ValidationException::withMessages(['cambios_revisados' => 'La pieza necesita el resultado de su unidad.']);
+                    }
+                    $this->guardarUnidadBloqueada($pedido, $usuario, array_merge($datos, ['excepciones' => $filas->all(), 'cambios_revisados' => [$cambio]]), $json, $nuevos, $area);
+                    $json = $pedido->solicitud_preparacion_json;
+                }
+                $excepciones = array_values(array_filter($excepciones, fn ($fila) => empty($fila['origen_unidad_id'])));
+            }
             if ($actualizacion) {
                 $fisica = collect($json['compromisos_inventario'] ?? [])->contains(fn ($c) => $c['activo'] ?? false)
                     || in_array($tarea?->cumplimientoFisico?->estado, ['SEPARADA', 'APARTADO_CONFIRMADO', 'LISTA_PARA_SALIDA', 'DESPACHADA', 'ENTREGADA'], true);
@@ -173,7 +189,7 @@ class ResponderDisponibilidadInicialService
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte una nueva captura del pedido actualizado.']);
             }
             $documentosAntes = $pedido->documentos()->pluck('id')->all();
-            $estado = $excepciones === [] && ! $pedido->revisionesProducto()->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists() ? 'sin_excepciones' : 'excepciones_pendientes';
+            $estado = $excepciones === [] && ! $pedido->revisionesProducto()->whereNotIn('id', RespuestaPreparacionTienda::revisionesNoEnviadas($json, false))->whereNull('resolucion')->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])->exists() ? 'sin_excepciones' : 'excepciones_pendientes';
             $comentario = $tarea === null ? 'Captura del pedido' : ($estado === 'sin_excepciones' ? 'Evidencia del pedido completo' : 'Evidencia de la excepción');
             if ($archivos !== []) {
                 $docsConjunto = $this->persistencia->guardar($pedido, $archivos, [
@@ -496,12 +512,19 @@ class ResponderDisponibilidadInicialService
             throw ValidationException::withMessages(['unidad_id' => 'La unidad no pertenece a esta consulta.']);
         }
         $unidadId = (string) ($hallada['unidad']['unidad_id'] ?? $unidadId);
+        $tienda = $area === DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA;
+        if ($tienda && UnidadesRevisionConsulta::lineaYaAtendida($hallada['tipo'], $hallada['linea'])) {
+            throw ValidationException::withMessages(['unidad_id' => 'Esta unidad ya pertenece a una respuesta enviada.']);
+        }
         $this->asegurarDocumentoDeUnidad($pedido, $hallada, is_array($cambio) ? $cambio : []);
         $resultado = (string) ($cambio['resultado'] ?? '');
         if (! in_array($resultado, ['correcto', 'incidencia'], true)) {
             throw ValidationException::withMessages(['resultado' => 'Indique el resultado de la unidad.']);
         }
         $excepciones = $this->excepciones($datos['excepciones'] ?? [], true);
+        if ($tienda && collect($excepciones)->contains(fn ($fila) => $fila['condicion'] === 'detalle' && $fila['evidencias'] === [])) {
+            throw ValidationException::withMessages(['excepciones' => 'Adjunte una foto del producto con detalle.']);
+        }
         foreach ($excepciones as $excepcion) {
             if (($excepcion['origen_unidad_id'] ?? '') !== $unidadId) {
                 throw ValidationException::withMessages(['excepciones' => 'Las piezas deben corresponder a la unidad que se guarda.']);
@@ -510,13 +533,33 @@ class ResponderDisponibilidadInicialService
         if ($resultado === 'incidencia' && $excepciones === [] && $hallada['tipo'] !== 'retiro') {
             throw ValidationException::withMessages(['cambios_revisados' => 'Registre las piezas con detalle antes de guardar.']);
         }
-        if (($hallada['unidad']['resultado'] ?? null) === $resultado && $excepciones === []) {
+        if (($hallada['unidad']['resultado'] ?? null) === $resultado
+            && ($tienda ? $this->avanceIgual($pedido, $hallada['unidad'], $excepciones) : $excepciones === [])) {
             $pedido->update(['solicitud_preparacion_json' => $json]);
 
             return $this->resultado((string) ($json['revision_disponibilidad']['estado'] ?? 'excepciones_pendientes'), $area, true);
         }
-        $revisionIds = $hallada['unidad']['revision_ids'] ?? [];
+        $revisionIds = $tienda ? [] : ($hallada['unidad']['revision_ids'] ?? []);
         $origenes = is_array($json['revision_origenes'] ?? null) ? $json['revision_origenes'] : [];
+        if ($tienda && ! empty($hallada['unidad']['resultado'])) {
+            // Solo se sustituyen avances de esta unidad abierta. Las respuestas enviadas
+            // no entran aquí; conservar el contenido y documentos anteriores en su historial.
+            $anteriores = $pedido->revisionesProducto()->whereIn('id', $hallada['unidad']['revision_ids'] ?? [])->get();
+            foreach ($json[$hallada['clave']][$hallada['indice']]['unidades'] as &$unidad) {
+                if ($unidad['unidad_id'] !== $unidadId) continue;
+                $unidad['historial'][] = [
+                    'resultado' => $unidad['resultado'], 'revision_ids' => $unidad['revision_ids'] ?? [],
+                    'por_id' => $unidad['respondida_por_id'] ?? null, 'por' => $unidad['respondida_por'] ?? null,
+                    'at' => $unidad['respondida_at'] ?? null,
+                    'revisiones' => $anteriores->map(fn ($r) => array_merge($r->toArray(), [
+                        'documento_ids' => $pedido->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)->where('relacion_id', $r->id)->pluck('id')->all(),
+                    ]))->all(),
+                ];
+            }
+            unset($unidad);
+            $pedido->documentos()->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)->whereIn('relacion_id', $anteriores->pluck('id'))->update(['activo' => false]);
+            $pedido->revisionesProducto()->whereIn('id', $anteriores->pluck('id'))->delete();
+        }
         foreach ($excepciones as $excepcion) {
             $revision = $pedido->revisionesProducto()->create([
                 'orden' => (int) $pedido->revisionesProducto()->max('orden') + 1,
@@ -557,6 +600,28 @@ class ResponderDisponibilidadInicialService
         $pedido->update(['solicitud_preparacion_json' => $json]);
 
         return $this->resultado((string) ($json['revision_disponibilidad']['estado'] ?? 'excepciones_pendientes'), $area, false);
+    }
+
+    private function avanceIgual(PedidoBma $pedido, array $unidad, array $excepciones): bool
+    {
+        $ids = ($unidad['resultado'] ?? '') === 'incidencia' ? ($unidad['revision_ids'] ?? []) : [];
+        if (count($ids) !== count($excepciones)) return false;
+        foreach ($excepciones as $indice => $fila) {
+            $revision = $pedido->revisionesProducto()->find($ids[$indice]);
+            if (! $revision || $revision->descripcion_producto !== $fila['descripcion'] || $revision->sku !== $fila['sku']
+                || (int) $revision->cantidad_solicitada !== $fila['cantidad'] || $revision->comentario !== $fila['detalle']
+                || $revision->estado_fisico !== ($fila['condicion'] === 'faltante' ? 'sin_existencia' : 'regular')
+                || (bool) $revision->unica_pieza !== $fila['unica_pieza'] || (bool) $revision->mejor_ejemplar !== $fila['mejor_ejemplar']) return false;
+            $documentos = $pedido->documentos()->where('activo', true)->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_PRODUCTO)->where('relacion_id', $revision->id)->orderBy('orden')->get();
+            if ($documentos->count() !== count($fila['evidencias'])) return false;
+            foreach ($fila['evidencias'] as $i => $archivo) {
+                $ruta = $documentos[$i]->ruta_archivo;
+                if (! Storage::disk('public')->exists($ruta)
+                    || hash('sha256', Storage::disk('public')->get($ruta)) !== hash_file('sha256', $archivo->getRealPath())) return false;
+            }
+        }
+
+        return true;
     }
 
     /**

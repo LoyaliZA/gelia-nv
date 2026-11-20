@@ -4,6 +4,8 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import ConsultaSolicitudTienda from './ConsultaSolicitudTienda';
 import SeguimientoSolicitudMunicipal from '../Municipal/SeguimientoSolicitudMunicipal';
+import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
+import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
 vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 let root, container;
 beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
@@ -43,4 +45,38 @@ it('Municipal: una pieza guardada por persistir_unidad no se mezcla con la respu
     await act(() => root.render(<SeguimientoSolicitudMunicipal pedido={pedido} />));
     expect(container.textContent).toContain('Pieza de la respuesta anterior');
     expect(container.textContent).not.toContain('Pieza revisada a medias');
+});
+
+it('la respuesta de la tarea de Tienda tampoco publica las piezas ni fotos pendientes', async () => {
+ const pedido = base({ tarea_preparacion: { estado: 'EN_ATENCION', respuesta: { documental: true, respondida: true,
+  revision: { estado: 'excepciones_pendientes' }, productos: [], excepciones: [
+   { id: 11, descripcion: 'Pieza anterior confirmada', estado_fisico: 'regular' },
+   { id: 22, descripcion: 'Pieza pendiente', estado_fisico: 'regular', documentos: [{ url: '/foto-pendiente.png' }] },
+  ] } } });
+ await act(() => root.render(<ConsultaSolicitudTienda pedido={pedido} />));
+ expect(container.textContent).toContain('Pieza anterior confirmada');
+ expect(container.textContent).not.toContain('Pieza pendiente');
+ expect(container.querySelector('img[src="/foto-pendiente.png"]')).toBeNull();
+});
+
+it.each(['correcto', 'incidencia'])('el resumen de Ventas conserva pendiente el avance %s hasta el envío', async resultado => {
+ const solicitud = base().solicitud_preparacion;
+ solicitud.anexo_sin_remision[0].unidades[0].resultado = resultado;
+ await act(() => root.render(<ResumenCambiosDisponibilidad solicitud={solicitud} />));
+ expect(container.textContent).toContain('Pendiente de respuesta');
+ expect(container.textContent).not.toContain('Todo OK');
+ expect(container.textContent).not.toContain('Con piezas reportadas');
+ solicitud.anexo_sin_remision[0].pendiente_revision = false;
+ solicitud.anexo_sin_remision[0].respondida_at = '2026-11-02T10:00:00Z';
+ await act(() => root.render(<ResumenCambiosDisponibilidad solicitud={solicitud} />));
+ expect(container.textContent).toContain(resultado === 'correcto' ? 'Todo OK' : 'Con piezas reportadas');
+});
+
+it('una foto documental guardada no acredita una respuesta y conserva la presentación legada', async () => {
+ const tarea = { estado: 'EN_ATENCION', respuesta: { documental: true, respondida: false, documentos: [{ url: '/guardada.jpg' }] } };
+ await act(() => root.render(<RespuestaPreparacionTienda tarea={tarea} />));
+ expect(container.textContent).toBe('');
+ tarea.respuesta.documental = false;
+ await act(() => root.render(<RespuestaPreparacionTienda tarea={tarea} />));
+ expect(container.textContent).toContain('Evidencias registradas');
 });

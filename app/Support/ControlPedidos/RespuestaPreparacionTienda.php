@@ -10,6 +10,32 @@ use App\Models\User;
 
 final class RespuestaPreparacionTienda
 {
+    /** Revisiones de avances de Tienda, incluidas versiones sustituidas que nunca se enviaron. */
+    public static function revisionesNoEnviadas(array $json, bool $incluirPendientes = true): array
+    {
+        if (($json['modalidad_entrega'] ?? '') !== 'tienda' || ($json['area_revision'] ?? '') !== 'preparacion_tienda') {
+            return [];
+        }
+        $ocultas = [];
+        foreach ($json['anexo_sin_remision'] ?? [] as $linea) {
+            $pendiente = ! UnidadesRevisionConsulta::lineaYaAtendida('anexo', $linea);
+            foreach ($linea['unidades'] ?? [] as $unidad) {
+                $vigentes = ($unidad['resultado'] ?? '') === 'incidencia' ? array_map('intval', $unidad['revision_ids'] ?? []) : [];
+                foreach ($json['revision_origenes'] ?? [] as $id => $origen) {
+                    if ($origen === ($unidad['unidad_id'] ?? null)
+                        && (($incluirPendientes && $pendiente) || ! in_array((int) $id, $vigentes, true))) {
+                        $ocultas[] = (int) $id;
+                    }
+                }
+                if ($incluirPendientes && $pendiente) {
+                    $ocultas = array_merge($ocultas, array_map('intval', $unidad['revision_ids'] ?? []));
+                }
+            }
+        }
+
+        return array_values(array_unique($ocultas));
+    }
+
     public static function datos(PedidoBmaTareaPreparacion $tarea): array
     {
         $tarea->loadMissing(['productos', 'atendidaPor', 'cumplimientoFisico', 'documentos', 'pedido.revisionesProducto', 'pedido.documentos']);
@@ -20,6 +46,7 @@ final class RespuestaPreparacionTienda
             : [];
         $excepciones = $pedido?->revisionesProducto
             ?->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])
+            ->whereNotIn('id', self::revisionesNoEnviadas($pedido->solicitud_preparacion_json ?? []))
             ->values() ?? collect();
         $estadosExcepcion = ['regular', 'malo', 'danado', 'sin_existencia'];
         $soloAfectadas = $tarea->productos->isNotEmpty()
