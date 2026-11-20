@@ -88,6 +88,41 @@ beforeEach(() => {
  container = document.createElement('div');document.body.append(container);root = createRoot(container);
 });
 afterEach(async () => { await act(() => root.unmount());container.remove(); });
+
+it('recupera atributos, detalle y fotos de una unidad de Tienda y envía sin recapturarlos', async () => {
+ const recuperar = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['foto'], { type: 'image/png' }) });
+ vi.stubGlobal('fetch', recuperar);
+ try {
+  await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'ciclo' },
+   pedido: { excepciones: [{ id: 12, descripcion: 'Pieza recuperada', cantidad: 1, estado_fisico: 'regular', detalle: 'Tapa rota', unica_pieza: true,
+    documentos: [{ id: 99, url: '/foto-guardada.png', nombre_original: 'foto.png', mime_type: 'image/png' }] }],
+    documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+    solicitud_preparacion: { anexo_sin_remision: [{ solicitud_id: 's', entrada: 'catalogo', descripcion: 'Pieza recuperada', pendiente_revision: true,
+     unidades: [{ unidad_id: 'anexo:s:sku:', resultado: 'incidencia', revision_ids: [12] }] }] } } });
+  expect(container.querySelector('textarea').value).toBe('Tapa rota');
+  expect(container.querySelector('[aria-label="Única pieza"]').getAttribute('aria-checked')).toBe('true');
+  expect(container.querySelector('img[src="/foto-guardada.png"]')).not.toBeNull();
+  await click('Enviar respuesta');
+  expect(envioFinal().get('excepciones[0][detalle]')).toBe('Tapa rota');
+  expect(envioFinal().getAll('excepciones[0][evidencias][]')).toHaveLength(1);
+  expect(recuperar).toHaveBeenCalledOnce();
+ } finally { vi.unstubAllGlobals(); }
+});
+
+it('espera y reintenta el avance fallido antes de permitir el envío final de Tienda', async () => {
+ const props = { origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true }, pedido: {
+  documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'catalogo', descripcion: 'Pieza pendiente', sku: 'A', cantidad: 1, pendiente_revision: true }] },
+ } };
+ await montar(props); await click('Todo OK');
+ onEnviar.mockRejectedValue({ response: { data: { message: 'Error de prueba al guardar' } } });
+ await click('Enviar respuesta');
+ expect(envioFinal()).toBeUndefined();
+ expect(container.textContent).toContain('Error de prueba al guardar');
+ onEnviar.mockResolvedValue({}); await click('Enviar respuesta');
+ expect(envioFinal()).toBeDefined();
+ expect(envioFinal().get('cambios_revisados[0][resultado]')).toBe('correcto');
+});
 it('en municipal reutiliza origen y destino con almacén y terminal persistidos', async () => {
     await montar({ pedido: { almacen: { nombre: 'CEDIS Norte' }, solicitud_preparacion: { modalidad_entrega: 'municipal', consulta_municipal: { area: 'cedis' } }, paqueteria: { nombre: 'Terminal ficticia' } }, documentos: [{ tipo: 'pdf_pedido', url: '/wizerp.pdf' }] });
     expect(container.textContent).toContain('Terminal ficticia');

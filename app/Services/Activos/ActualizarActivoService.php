@@ -40,14 +40,15 @@ class ActualizarActivoService
                 'activo_padre_id' => array_key_exists('activo_padre_id', $datos)
                     ? $datos['activo_padre_id']
                     : $activo->activo_padre_id,
-                'departamento_id' => $datos['departamento_id'] ?? $activo->departamento_id,
                 'area_id' => array_key_exists('area_id', $datos) ? $datos['area_id'] : $activo->area_id,
                 'nombre' => $datos['nombre'] ?? $activo->nombre,
-                'descripcion' => $datos['descripcion'] ?? $activo->descripcion,
+                'descripcion' => array_key_exists('descripcion', $datos) ? $datos['descripcion'] : $activo->descripcion,
                 'atributos' => $atributos,
-                'fecha_adquisicion' => $datos['fecha_adquisicion'] ?? $activo->fecha_adquisicion,
+                'fecha_adquisicion' => array_key_exists('fecha_adquisicion', $datos)
+                    ? $datos['fecha_adquisicion']
+                    : $activo->fecha_adquisicion,
                 'fecha_vencimiento' => $fechaVencimiento,
-                'valor' => $datos['valor'] ?? $activo->valor,
+                'valor' => array_key_exists('valor', $datos) ? $datos['valor'] : $activo->valor,
             ]);
 
             $this->registrarMovimiento->ejecutar($activo, $usuario, 'edicion', [

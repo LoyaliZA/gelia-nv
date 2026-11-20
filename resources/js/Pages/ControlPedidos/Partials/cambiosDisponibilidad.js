@@ -52,6 +52,21 @@ export function revisionesDelCicloEnCurso(solicitud = {}) {
     return ids;
 }
 
+export function revisionesNoEnviadasTienda(solicitud = {}) {
+    const ids = new Set();
+    if (solicitud.modalidad_entrega !== 'tienda' || solicitud.area_revision !== 'preparacion_tienda') return ids;
+    for (const anexo of solicitud.anexo_sin_remision || []) {
+        for (const unidad of anexo.unidades || []) {
+            const vigentes = unidad.resultado === 'incidencia' ? (unidad.revision_ids || []).map(Number) : [];
+            for (const [id, origen] of Object.entries(solicitud.revision_origenes || {})) {
+                if (origen === unidad.unidad_id && (anexoPendienteRevision(anexo) || !vigentes.includes(Number(id)))) ids.add(Number(id));
+            }
+            if (anexoPendienteRevision(anexo)) for (const id of unidad.revision_ids || []) ids.add(Number(id));
+        }
+    }
+    return ids;
+}
+
 /** El ciclo vigente es lo pedido después de la última respuesta; lo anterior queda en historial. */
 export function cambioDelCicloActual(cambio, solicitud = {}) {
     const corte = solicitud.revision_disponibilidad?.respondida_at;
@@ -67,7 +82,7 @@ export function cambioDelCicloActual(cambio, solicitud = {}) {
 export function esRespuestaAlmacen(cambio) {
     if (cambio.tipo === 'confirmacion') return true;
     if (cambio.tipo === 'retiro') return false;
-    return Boolean(!cambio.pendiente && (cambio.resultado || cambio.respondida_at));
+    return Boolean(!cambio.avance_pendiente && !cambio.pendiente && (cambio.resultado || cambio.respondida_at));
 }
 
 /** Ventas ve respuestas abiertas y solicitudes contraídas; CEDIS/Tienda ve el ciclo pedido abierto. */
@@ -159,5 +174,8 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         && !retiros.some(r => (r.piezas_solicitadas || r.piezas || []).some(p => Number(p.revision_id) === Number(d.revision_id))))
         .map(d => ({ ...d, clave: `decision-${d.revision_id}`, tipo: d.accion === 'confirmar' ? 'confirmacion' : 'retiro', clase: 'sku', documentos: [],
             pendiente: false }));  // Decisión de Ventas ya registrada: se informa, no se revisa.
-    return [...anexos, ...retiros, ...sueltas].sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
+    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
+    return [...anexos, ...retiros, ...sueltas].map(cambio => ({ ...cambio,
+        avance_pendiente: tienda && cambio.tipo === 'anexo' && anexoPendienteRevision(cambio) && cambio.persistida,
+    })).sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
 }

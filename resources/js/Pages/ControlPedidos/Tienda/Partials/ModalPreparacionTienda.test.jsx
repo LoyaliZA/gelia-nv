@@ -166,3 +166,50 @@ it('permite separar con horarios apagados aunque la fecha conservada esté venci
  expect(container.textContent).not.toContain('Vigencia terminada');
  expect(container.textContent).not.toContain('vigencia del apartado terminó');
 });
+
+it('guarda detalle después de la foto sin bloquear, desmontar ni perder la captura hermana', async () => {
+ const base = data();
+ base.tarea.pedido = { id: 32, area_revision: 'preparacion_tienda', modalidad_entrega: 'tienda',
+  documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.jpg' }],
+  revision_disponibilidad: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'ciclo-prueba' },
+  anexo_sin_remision: [{ solicitud_id: 'anexo-prueba', entrada: 'catalogo', sku: 'A', descripcion: 'Pieza de prueba', cantidad: 1, pendiente_revision: true },
+   { solicitud_id: 'anexo-hermano', entrada: 'catalogo', sku: 'B', descripcion: 'Pieza hermana', cantidad: 1, pendiente_revision: true }],
+ };
+ api.get.mockResolvedValue({ data: base });
+ await mount(); await click('Con detalle');
+ await act(() => [...document.querySelector('[data-indice="1"]').querySelectorAll('button')].find(b => b.textContent === 'Con detalle').click());
+ const hermana = document.querySelectorAll('textarea')[1];
+ await act(() => {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(hermana, 'Captura hermana');
+  hermana.dispatchEvent(new Event('input', { bubbles: true }));
+ });
+ const textarea = document.querySelector('textarea');
+ await act(() => { textarea.closest('details').open = true; textarea.focus(); });
+ const adjunto = document.querySelector('input[aria-label="Adjuntar: Fotos del producto"]');
+ await act(() => { Object.defineProperty(adjunto, 'files', { configurable: true, value: [new File(['foto'], 'defecto.jpg', { type: 'image/jpeg' })] }); adjunto.dispatchEvent(new Event('change', { bubbles: true })); });
+ const escribir = texto => act(() => {
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(textarea, texto);
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+ });
+ let terminar;
+ api.post.mockImplementationOnce(() => new Promise(resolve => { terminar = () => resolve({ data: {} }); }));
+ await escribir('T');
+ await act(async () => { await new Promise(r => setTimeout(r, 500)); });
+ expect(api.post.mock.lastCall[1].get('persistir_unidad')).toBe('1');
+ expect(textarea.disabled).toBe(false);
+ await escribir('Tapa dañada');
+ expect(document.activeElement).toBe(textarea);
+ await act(async () => terminar());
+ expect(document.querySelector('textarea')).toBe(textarea);
+ expect(textarea.value).toBe('Tapa dañada');
+ expect(document.querySelector('.gelia-cedis-producto').querySelectorAll('img')).toHaveLength(2);
+ expect(document.querySelectorAll('textarea')[1]).toBe(hermana);
+ expect(hermana.value).toBe('Captura hermana');
+ expect(document.body.textContent).not.toContain('Respuesta enviada a Ventas.');
+ const fotoHermana = document.querySelectorAll('input[aria-label="Adjuntar: Fotos del producto"]')[1];
+ await act(() => { Object.defineProperty(fotoHermana, 'files', { configurable: true, value: [new File(['foto'], 'hermana.jpg', { type: 'image/jpeg' })] }); fotoHermana.dispatchEvent(new Event('change', { bubbles: true })); });
+ await click('Enviar respuesta');
+ expect(api.post.mock.lastCall[1].get('persistir_unidad')).toBeNull();
+ expect(api.post.mock.lastCall[1].get('excepciones[0][detalle]')).toBe('Tapa dañada');
+ expect(api.post.mock.lastCall[1].get('excepciones[1][detalle]')).toBe('Captura hermana');
+});
