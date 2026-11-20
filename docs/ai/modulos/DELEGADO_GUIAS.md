@@ -11,6 +11,7 @@
 
 ## Reglas que no se rompen
 - [verificado] Resguardo y PAQ. PENDIENTE no admiten guía hasta resolver sus condiciones: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:31`.
+- [verificado] En captura nacional, una caja sin peso no recibe guía y el crédito bloqueado no guía ni sale: `app/Support/ControlPedidos/Nacional/BarreraCreditoNacional.php`.
 - [verificado] Impedir guía posterior a entrega al transporte: `app/Support/ControlPedidos/InstruccionEntrega.php:116`.
 - [verificado] Solo cuando ya está empacado, asignar guía avanza a pendiente de envío: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:47`.
 - [verificado] Corregir rastreo pasa por la cola de errores; no limpiar todos los campos reportados: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:54`.
@@ -27,4 +28,4 @@
 - [inferido] Un archivo importado puede quedar aplicado parcialmente; revisar contadores/errores antes de reintentar el lote: `app/Services/ControlPedidos/ImportarGuiasPedidoService.php:27` y `:63`.
 - [verificado] No confundir las fases de guía propia del cliente con la cola normal de Delegado: `app/Support/ControlPedidos/MaquinaEstadosPedidoBma.php:213`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-20, working tree, sin commit.

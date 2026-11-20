@@ -48,6 +48,11 @@ it('mantiene la continuación nacional con los datos comunes', async () => {
     const continuar = vi.fn();
     await act(async () => root.render(<Formulario abierto pedido={pedido} onContinuarEnvio={continuar} />));
     await cambiar('modalidad-tienda', 'nacional');
-    expect(continuar).toHaveBeenCalledWith(expect.objectContaining({ cliente_id: 3, folio_remision: 'WIZ-31', documentos: pedido.documentos,
-        solicitud_preparacion: expect.objectContaining({ modalidad_entrega: 'nacional' }) }));
+    expect(continuar).not.toHaveBeenCalled();
+    expect(document.getElementById('folio-tienda').value).toBe('WIZ-31');
+    expect(document.getElementById('cliente-tienda').value).toBe('900031');
+    expect(document.body.textContent).toContain('Envío nacional');
+    expect(document.body.textContent).toContain('Salida: CEDIS');
+    expect(document.body.textContent).not.toContain('Terminal destino');
+    expect(document.getElementById('paqueteria-nacional')).toBeTruthy();
 });

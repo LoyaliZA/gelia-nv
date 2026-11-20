@@ -175,6 +175,7 @@ abstract class PedidoBmaRequestBase extends FormRequest
             'solicitud_preparacion.traslado_interno_pdv' => ['nullable', 'boolean'],
             'solicitud_preparacion.atencion_tienda' => ['nullable', 'string', Rule::in(['despues', 'prevista'])],
             'solicitud_preparacion.modalidad_entrega' => ['nullable', 'string', Rule::in(['tienda', 'municipal', 'nacional'])],
+            'solicitud_preparacion.captura_nacional' => ['nullable', 'string', Rule::in(['compartida'])],
             'solicitud_preparacion.area_revision' => ['nullable', 'string', Rule::in(['preparacion_tienda', 'control_pedidos'])],
             'solicitud_preparacion.caso_tienda' => ['nullable', 'string', Rule::in(['revisar_apartar', 'consultar_cedis', 'apartado_pdv', 'mismo_dia_pdv', 'traspaso_cedis', 'consulta_cedis'])],
             'solicitud_preparacion.almacen_revision_id' => ['nullable', 'integer'],

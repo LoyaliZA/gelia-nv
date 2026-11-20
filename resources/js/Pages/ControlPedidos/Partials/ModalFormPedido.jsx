@@ -10,6 +10,7 @@ function modoInicial(pedido, recuperarBorrador, intencion) {
     if (intencion === 'conversion') return 'tienda';
     if (recuperarBorrador) return 'legado';
     if (pedido?.solicitud_preparacion?.modalidad_entrega === 'municipal') return 'tienda';
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'nacional' && pedido?.solicitud_preparacion?.captura_nacional === 'compartida') return 'tienda';
     return usaRegistroActual(pedido) ? 'tienda' : 'legado';
 }
 
@@ -71,6 +72,7 @@ export default function ModalFormPedido({
             intencion={intencion}
             reservaConversion={conversion ? reservaConversion : null}
             onContinuarEnvio={(siguiente) => {
+                if (siguiente?.solicitud_preparacion?.modalidad_entrega === 'nacional') return;
                 setPedidoEnvio(siguiente);
                 setModo('legado');
             }}

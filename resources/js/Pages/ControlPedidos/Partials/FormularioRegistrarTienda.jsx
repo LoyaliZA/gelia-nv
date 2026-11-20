@@ -1,4 +1,5 @@
 import FormularioRegistrarMunicipal from '../Municipal/FormularioRegistrarMunicipal';
+import FormularioRegistrarNacional from '../Nacional/FormularioRegistrarNacional';
 import SeguimientoSolicitudMunicipal from '../Municipal/SeguimientoSolicitudMunicipal';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -270,7 +271,6 @@ export default function FormularioRegistrarTienda({
     catalogos = {},
     registrarTienda = {},
     onPedidoCreado = null,
-    onContinuarEnvio,
     onActualizar = null,
     intencion = 'alta',
     reservaConversion = null,
@@ -485,6 +485,7 @@ export default function FormularioRegistrarTienda({
                       modalidad_entrega: datos.modalidad,
                       ...(datos.modalidad === 'tienda' && datos.caso ? { caso_tienda: datos.caso } : {}),
                       ...(datos.modalidad === 'tienda' && datos.area ? { area_revision: datos.area } : {}),
+                      ...(datos.modalidad === 'nacional' ? { captura_nacional: 'compartida', codigo_modalidad: CODIGO_ENVIO.nacional } : {}),
                       ...(datos.modalidad === 'tienda' && !enviada ? { atencion_tienda: datos.caso === 'mismo_dia_pdv' ? 'prevista' : null } : {}),
                       ...(datos.modalidad === 'tienda' && !enviada && datos.caso === 'mismo_dia_pdv' ? { codigo_modalidad: 'RECOGE_TIENDA_TRANSFERENCIA' } : {}),
                       ...(datos.modalidad === 'tienda'
@@ -754,58 +755,6 @@ export default function FormularioRegistrarTienda({
             }
         });
 
-    const continuarEnvio = (valor) =>
-        encolar(async () => {
-            if (avanzado || deseadaRef.current !== valor) {
-                if (deseadaRef.current === 'tienda') setTransito('');
-                return;
-            }
-            const codigo = CODIGO_ENVIO[valor];
-            const hayCaptura = Boolean(pedidoIdRef.current || datosRef.current.clienteId
-                || String(datosRef.current.folio || '').trim() || archivoPendiente);
-            const guardado = hayCaptura ? await ejecutarGuardar(
-                {
-                    ...payload({ modalidad_entrega: valor, codigo_modalidad: codigo }),
-                },
-                true,
-            ) : null;
-            if (deseadaRef.current === 'tienda') {
-                setTransito('');
-                if (hayCaptura) await ejecutarGuardar(null, true);
-                return;
-            }
-            if (deseadaRef.current !== valor) return;
-            if (hayCaptura && !guardado?.id && !pedidoIdRef.current) {
-                setTransito('');
-                return;
-            }
-            const limpio = { ...(pedido || {}) };
-            delete limpio.progreso;
-            delete limpio.tarea_preparacion;
-            onContinuarEnvio?.({
-                ...limpio,
-                id: guardado?.id || pedidoIdRef.current,
-                folio: guardado?.folio || pedido?.folio,
-                folio_remision: folio,
-                cliente_id: clienteId || null,
-                cliente: clienteId
-                    ? { id: clienteId, numero_cliente: numeroCliente, nombre: nombreCliente }
-                    : pedido?.cliente,
-                departamento_operacion_id: departamentoId || null,
-                origen_id: pedido?.origen_id || guardado?.origen_id || null,
-                sucursal_destino_id: pedido?.sucursal_destino_id || null,
-                revision_registro: guardado?.revision_registro,
-                base_captura: guardado?.base_captura,
-                documentos: documento?.url ? [documento] : pedido?.documentos || [],
-                solicitud_preparacion: guardado?.solicitud_preparacion ?? {
-                    modalidad_entrega: valor,
-                    codigo_modalidad: codigo,
-                },
-                prioridad_md: Boolean(pedido?.prioridad_md),
-                progreso: guardado?.progreso?.perfil === 'tienda' ? null : (guardado?.progreso ?? null),
-            });
-        });
-
     const cambiarModalidad = (valor) => {
         if (!valor) return;
         if (conversion) {
@@ -821,12 +770,11 @@ export default function FormularioRegistrarTienda({
             setAviso(MENSAJE_MODALIDAD);
             return;
         }
-        deseadaRef.current = valor;
-        if (valor === 'nacional') {
-            setTransito(valor);
-            continuarEnvio(valor);
+        if (modalidad === 'nacional' && pedido?.pesaje_solicitado_at && valor !== 'nacional') {
+            setAviso('La consulta a CEDIS ya se envió. La modalidad se conserva.');
             return;
         }
+        deseadaRef.current = valor;
         setTransito('');
         setModalidad(valor);
         if (valor !== 'tienda') setArea('');
@@ -1110,7 +1058,9 @@ export default function FormularioRegistrarTienda({
                         <p className="registrar-tienda-descripcion">
                             {conversion
                                 ? 'El pedido conserva sus datos. Complete solo lo que el envío municipal necesita.'
-                                : modalidad === 'municipal' ? 'Datos del pedido y envío municipal a terminal.' : 'Captura el pedido y elige el destino de la revisión.'}
+                                : modalidad === 'municipal' ? 'Datos del pedido y envío municipal a terminal.'
+                                : modalidad === 'nacional' ? 'Datos del pedido y consulta de peso en CEDIS.'
+                                : 'Captura el pedido y elige el destino de la revisión.'}
                         </p>
                         {pedido?.estatus && <div className="flex flex-wrap gap-1.5 mt-2" aria-label="Estado del pedido" aria-live="polite">
                             {badgesListaPedido(pedido).slice(0, 2).map((badge) => <span key={badge.key} className={badge.className} style={badge.style}>{badge.label}</span>)}
@@ -1278,7 +1228,8 @@ export default function FormularioRegistrarTienda({
                                         value={transito || modalidad}
                                         disabled={conversion
                                             ? Boolean(resultadoConversion) || ocupadoConversion || !reservaConversion?.reservaOk
-                                            : avanzado || guardando || enviando || municipal?.bloqueado || municipal?.guardando}
+                                            : avanzado || guardando || enviando || municipal?.bloqueado || municipal?.guardando
+                                                || (modalidad === 'nacional' && Boolean(pedido?.pesaje_solicitado_at))}
                                         onChange={(evento) => cambiarModalidad(evento.target.value)}
                                     >
                                         <option value="">{conversion ? 'Modalidad actual' : 'Elegir'}</option>
@@ -1679,6 +1630,25 @@ export default function FormularioRegistrarTienda({
             >
                 {renderFormulario}
             </FormularioRegistrarMunicipal>
+        );
+    }
+    if (modalidad === 'nacional') {
+        return (
+            <FormularioRegistrarNacional
+                pedido={{
+                    ...pedido,
+                    id: pedidoId,
+                    folio_remision: folio,
+                    documentos: documento?.url ? [documento] : (pedido?.documentos || []),
+                    solicitud_preparacion: solicitudViva,
+                    catalogo_paqueteria_id: pedido?.catalogo_paqueteria_id,
+                }}
+                catalogos={catalogos}
+                guardar={(extra) => guardar({ ...payload(), ...extra })}
+                onPedido={aplicarRespuesta}
+            >
+                {renderFormulario}
+            </FormularioRegistrarNacional>
         );
     }
     if (modalidad !== 'municipal') return renderFormulario();

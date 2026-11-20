@@ -42,6 +42,9 @@ class AsignarGuiaPedidoBmaService
             );
         }
 
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeGuiar($pedido);
+        $this->assertCajasConPeso($pedido);
+
         if (!$pedido->puedeAsignarGuia()) {
             throw new \RuntimeException('El pedido no está pendiente de guía.');
         }
@@ -129,5 +132,19 @@ class AsignarGuiaPedidoBmaService
         return $restantes === []
             ? $this->colaErroresService->attrsColaVacia()
             : $this->colaErroresService->attrsColaPendiente($restantes);
+    }
+
+    private function assertCajasConPeso(PedidoBma $pedido): void
+    {
+        if (! \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+            return;
+        }
+        $pedido->loadMissing('cajas');
+        $sinPeso = $pedido->cajas->contains(
+            fn (\App\Models\ControlPedidos\PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->peso_real_kg === null
+        );
+        if ($sinPeso) {
+            throw new \RuntimeException('Hay una caja sin peso. No se asigna guía.');
+        }
     }
 }

@@ -58,6 +58,9 @@ class SolicitarPesajePedidoBmaService
         }
 
         $pedido->loadMissing(['paqueteria', 'almacen.tipoAlmacen']);
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido) && $pedido->consultaCedisModoRevisionMercancia()) {
+            throw new \InvalidArgumentException('La consulta nacional exige pesaje en CEDIS. Elija una paquetería comercial con peso.');
+        }
         $revisionCedis = is_array($pedido->solicitud_preparacion_json)
             && ($pedido->solicitud_preparacion_json['area_revision'] ?? null) === 'control_pedidos';
         if (! $revisionCedis

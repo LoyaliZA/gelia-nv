@@ -16,8 +16,18 @@ describe('Modal de edición según la captura del pedido', () => {
         expect(lecturaPropia).toHaveBeenLastCalledWith(true);
         expect(container.querySelector('[data-form="actual"]').textContent).toContain('125');
         await act(() => container.querySelector('button').click());
-        expect(container.querySelector('[data-form="legado"]').textContent).toBe('125');
-        expect(lecturaPropia).toHaveBeenLastCalledWith(false);
+        expect(container.querySelector('[data-form="actual"]').textContent).toContain('125');
+        expect(container.querySelector('[data-form="legado"]')).toBeNull();
+        expect(lecturaPropia).toHaveBeenLastCalledWith(true);
+        expect(document.body.textContent).not.toContain('compartida');
+    });
+    it('abre el nacional marcado en la captura actual y deja el histórico en legado', async () => {
+        await act(() => root.render(<ModalFormPedido key="marcado" abierto pedido={{ id: 41, solicitud_preparacion: { modalidad_entrega: 'nacional', captura_nacional: 'compartida' } }} />));
+        expect(container.querySelector('[data-form="actual"]').textContent).toContain('41');
+        expect(document.body.textContent).not.toContain('compartida');
+        await act(() => root.render(<ModalFormPedido key="historico" abierto pedido={{ id: 42, solicitud_preparacion: { modalidad_entrega: 'nacional' } }} />));
+        expect(container.querySelector('[data-form="legado"]').textContent).toBe('42');
+        expect(document.body.textContent).not.toContain('compartida');
     });
     it('mantiene recuperación del borrador local anterior', async () => {
         await act(() => root.render(<ModalFormPedido abierto recuperarBorrador />));

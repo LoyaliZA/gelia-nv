@@ -19,6 +19,7 @@ class GestionarRemisionPedidoBmaService
     public function subir(PedidoBma $pedido, UploadedFile $archivo, int $usuarioId, ?string $fechaEmision = null): PedidoBma
     {
         $this->assertMunicipal($pedido);
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeRemisionar($pedido);
         if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede adjuntar remisión en pedidos pendientes de revisión.');
         }
@@ -90,6 +91,7 @@ class GestionarRemisionPedidoBmaService
 
     public function actualizarNumeroRemision(PedidoBma $pedido, string $numero, int $usuarioId): PedidoBma
     {
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeRemisionar($pedido);
         if (! $pedido->esAuditablePorAuxiliar()) {
             throw new \RuntimeException('Solo se puede capturar la remisión en pedidos pendientes de revisión.');
         }

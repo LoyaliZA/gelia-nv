@@ -45,7 +45,7 @@ function piezasRespuesta(tarea, revisiones = []) {
     return [...reportadas, ...conocidas];
 }
 
-export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange }) {
+export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange, avisoAnexo = '', avisoRetiro = '' }) {
     const operaciones = adaptador || adaptadorConsultaTienda({ pedidoId, pedido });
     const puedeAnexar = operaciones.capacidades?.anexar !== false;
     const puedeRetirar = operaciones.capacidades?.retirar !== false;
@@ -181,13 +181,13 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setNota('');
             setEvidenciasAnexo([]);
             setPreviewAnexo([]);
-            onAviso(
+            onAviso(avisoAnexo || (
                 respuesta.data?.folio && respuesta.data?.pedido_id && respuesta.data.pedido_id !== pedidoId
                     ? `Anexo registrado en ${respuesta.data.folio}. Falta su cobertura y la integración física.`
                     : entrada === 'documento'
                         ? 'Anexo documental enviado. Quien prepara identifica las piezas. No confirma disponibilidad.'
-                        : 'Anexo con productos enviado. Quien prepara lo revisa. No confirma disponibilidad.',
-            );
+                        : 'Anexo con productos enviado. Quien prepara lo revisa. No confirma disponibilidad.'
+            ));
         } catch (errorAnexo) {
             setError(mensajeDe(errorAnexo, 'No se registró el anexo.'));
         } finally {
@@ -294,7 +294,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setAgregadas([]);
             setPiezaBuscada(null);
             setCantidadBuscada('1');
-            onAviso(respuesta.data?.message || 'Retiro solicitado.');
+            onAviso(avisoRetiro || respuesta.data?.message || 'Retiro solicitado.');
         } catch (errorRetiro) {
             setError(mensajeDe(errorRetiro, 'No se solicitó el retiro.'));
         } finally {

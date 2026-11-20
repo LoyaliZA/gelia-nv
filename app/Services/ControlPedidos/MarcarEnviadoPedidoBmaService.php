@@ -70,6 +70,9 @@ class MarcarEnviadoPedidoBmaService
             throw new \RuntimeException('El pedido requiere número de guía antes de marcarlo como enviado.');
         }
 
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeSalir($pedido);
+        $this->assertGuiaVigente($pedido);
+
         $cajas = $pedido->cajas
             ->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())
             ->sortBy('orden')
@@ -182,5 +185,24 @@ class MarcarEnviadoPedidoBmaService
 
             return $pedido;
         });
+    }
+
+    private function assertGuiaVigente(PedidoBma $pedido): void
+    {
+        $guias = $pedido->documentos()->where('tipo', \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_GUIA)->get();
+        if ($guias->isNotEmpty() && $guias->where('activo', true)->isEmpty()) {
+            throw new \RuntimeException('La guía invalidada no autoriza la salida. Se requiere una guía vigente.');
+        }
+
+        if (! \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+            return;
+        }
+
+        $sinRastreo = $pedido->cajas
+            ->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->estaPendiente() && ! filled($caja->numero_rastreo))
+            ->isNotEmpty();
+        if ($sinRastreo) {
+            throw new \RuntimeException('Cada caja que sale requiere guía vigente.');
+        }
     }
 }

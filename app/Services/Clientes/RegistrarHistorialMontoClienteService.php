@@ -8,6 +8,7 @@ use App\Models\HistorialMontoCliente;
 class RegistrarHistorialMontoClienteService
 {
     public const ORIGEN_CARGA_MASIVA = 'carga_masiva';
+    public const ORIGEN_EDICION_ADMINISTRATIVA = 'edicion_administrativa';
     public const ORIGEN_SOLICITUD_APROBACION = 'solicitud_aprobacion';
     public const ORIGEN_SOLICITUD_PAGO = 'solicitud_pago';
     public const ORIGEN_SOLICITUD_REVERSION = 'solicitud_reversion';

@@ -82,8 +82,10 @@ it('continúa Nacional vacío sin persistir por la sola elección de modalidad',
     await cambiar('modalidad-tienda', 'nacional');
     await act(async () => vi.advanceTimersByTimeAsync(1000));
     expect(urls).toEqual([]);
-    expect(continuar).toHaveBeenCalledWith(expect.objectContaining({ solicitud_preparacion: expect.objectContaining({ modalidad_entrega: 'nacional' }) }));
-    expect(continuar.mock.lastCall[0].id).toBeFalsy();
+    expect(continuar).not.toHaveBeenCalled();
+    expect(document.getElementById('modalidad-tienda').value).toBe('nacional');
+    expect(document.body.textContent).toContain('Salida: CEDIS');
+    expect(document.body.textContent).not.toContain('Terminal destino');
 });
 
 it('un pedido nuevo con PDF elegido envía autoguardar, pdf-pedido y consulta sin guardar a mano', async () => {

@@ -14,7 +14,7 @@
 ## Reglas que no se rompen
 - [verificado] Cambio tras remisión o guía requiere permisos adicionales; enviado/entregado bloquea cambio: `app/Services/ControlPedidos/Direcciones/CambiarDireccionPedido.php:32`.
 - [verificado] Cambiar dirección crea snapshot e invalida guía existente: `app/Services/ControlPedidos/Direcciones/CambiarDireccionPedido.php:51`.
-- [verificado] Invalidación conserva archivo histórico, limpia rastreo y solicita nueva guía: `app/Services/ControlPedidos/Direcciones/InvalidarGuiaPorCambioDireccion.php:28`.
+- [verificado] Invalidación conserva el archivo, marca `activo=false` la guía del pedido y de las cajas no recolectadas, limpia su rastreo y deja la cancelación de paquetería como otro registro: `app/Services/ControlPedidos/Direcciones/InvalidarGuiaPorCambioDireccion.php`.
 
 ## Dependencias con otros módulos
 - Clientes, solicitudes públicas y [Delegado](DELEGADO_GUIAS.md).
@@ -25,7 +25,7 @@
 
 ## Puntos blandos
 - [verificado] Marcar un PDF como `[INVALIDADA]` no elimina su fila ni su archivo: `app/Services/ControlPedidos/Direcciones/InvalidarGuiaPorCambioDireccion.php:30`.
-- [inferido] Lectores que busquen cualquier PDF de guía pueden encontrar el histórico invalidado; por confirmar consumidores antes de reutilizar esa búsqueda: `app/Services/ControlPedidos/Direcciones/CambiarDireccionPedido.php:57`.
+- [verificado] La salida no acepta un PDF de guía si ninguno quedó activo: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php`.
 - [verificado] La documentación describe flag para normalizadas; valor efectivo del despliegue queda por confirmar sin leer configuración operativa: `docs/control-pedidos/pase-3-cierre.md:8`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-20, working tree, sin commit.

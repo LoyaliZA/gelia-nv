@@ -266,6 +266,13 @@ class PedidoBma extends Model
                 }
             }
         }
+        if (is_array($solicitud) && ($this->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'nacional') {
+            foreach (['captura_nacional', 'ajustes_nacionales', 'invalidacion_guia'] as $clave) {
+                if (array_key_exists($clave, $this->solicitud_preparacion_json) && ! array_key_exists($clave, $solicitud)) {
+                    $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
+                }
+            }
+        }
         if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
             $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
             $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esCapturaTienda, usaRegistroActual } from './flujoCapturaPedido';
+import { esCapturaNacional, esCapturaTienda, usaRegistroActual } from './flujoCapturaPedido';
 
 const borrador = { id: 125, folio_remision: '20261004', estatus: { fase_ciclo: 'BORRADOR' }, solicitud_preparacion: null, origen: null, origen_id: null, pagos_exhibicion: [], documentos: [] };
 describe('Selección de captura de pedidos', () => {
@@ -27,5 +27,8 @@ describe('Selección de captura de pedidos', () => {
         for (const modalidad of ['municipal', 'nacional']) {
             expect(usaRegistroActual({ solicitud_preparacion: { modalidad_entrega: modalidad, piezas_tienda: [] } })).toBe(false);
         }
+        expect(esCapturaNacional({ solicitud_preparacion: { modalidad_entrega: 'nacional', captura_nacional: 'compartida' } })).toBe(true);
+        expect(usaRegistroActual({ solicitud_preparacion: { modalidad_entrega: 'nacional', captura_nacional: 'compartida' } })).toBe(true);
+        expect(esCapturaNacional({ solicitud_preparacion: { modalidad_entrega: 'nacional' } })).toBe(false);
     });
 });

@@ -76,6 +76,9 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/pdf-pedido', [PedidoBmaController::class, 'subirPdfPedido'])->name('pdf_pedido.store');
         Route::post('/{pedidoBma}/anexo-piezas', [PedidoBmaController::class, 'subirAnexoPiezas'])->name('anexo_piezas.store');
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
+        Route::get('/{pedidoBma}/consulta-nacional', [PedidoBmaController::class, 'consultaNacional'])->name('consulta_nacional.show');
+        Route::post('/{pedidoBma}/ajuste-nacional', [PedidoBmaController::class, 'ajusteNacional'])->name('ajuste_nacional');
+        Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
         Route::post('/{pedidoBma}/solicitar-preparacion-tienda', [PedidoBmaController::class, 'solicitarPreparacionTienda'])->name('solicitar_preparacion_tienda');
         Route::post('/{pedidoBma}/desglose-preparacion', [PedidoBmaController::class, 'guardarDesglosePreparacion'])->name('desglose_preparacion');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
