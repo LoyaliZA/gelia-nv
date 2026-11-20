@@ -120,6 +120,8 @@ class ConsolidarPedidosEmpaqueService
             throw new \RuntimeException("El pedido {$pedido->folio} requiere pago validado y remisión.");
         }
 
+        \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
+
         if ($pedido->es_resguardo) {
             throw new \RuntimeException("El pedido {$pedido->folio} está en resguardo; libérelo antes de consolidar.");
         }

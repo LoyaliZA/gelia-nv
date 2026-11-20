@@ -29,13 +29,40 @@ class TipoClienteSolicitudResolverTest extends TestCase
 
     public function test_prefiere_tipo_explicito_sobre_ficha_cliente(): void
     {
-        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->activo->id, 'es_inactivo' => false]);
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->nuevo->id, 'es_inactivo' => false]);
+        $this->assertSame($this->activo->id, TipoClienteSolicitudResolver::resolver($this->activo->id, $cliente));
+    }
+
+    public function test_nuevo_explicito_no_degrada_a_un_activo_con_ficha_tipificada(): void
+    {
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->activo->id, 'es_inactivo' => false, 'monto_venta_actual' => '0.00']);
+        $this->assertSame($this->activo->id, TipoClienteSolicitudResolver::resolver($this->nuevo->id, $cliente));
+        $this->assertSame($this->activo->id, TipoClienteSolicitudResolver::paraFicha($this->nuevo->id, $cliente));
+    }
+
+    public function test_nuevo_explicito_no_degrada_a_un_activo_con_acumulado_oficial(): void
+    {
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => null, 'es_inactivo' => false, 'monto_venta_actual' => '5000.00']);
+        $this->assertSame($this->activo->id, TipoClienteSolicitudResolver::resolver($this->nuevo->id, $cliente));
+    }
+
+    public function test_nuevo_se_conserva_en_un_cliente_sin_historial(): void
+    {
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => null, 'es_inactivo' => false, 'monto_venta_actual' => '0.00']);
         $this->assertSame($this->nuevo->id, TipoClienteSolicitudResolver::resolver($this->nuevo->id, $cliente));
+        $porFicha = new Cliente(['catalogo_tipo_cliente_id' => $this->nuevo->id, 'es_inactivo' => false, 'monto_venta_actual' => '0.00']);
+        $this->assertSame($this->nuevo->id, TipoClienteSolicitudResolver::resolver(null, $porFicha));
+    }
+
+    public function test_un_activo_con_ficha_nuevo_y_acumulado_se_resuelve_activo(): void
+    {
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->nuevo->id, 'es_inactivo' => false, 'monto_venta_actual' => '100.00']);
+        $this->assertSame($this->activo->id, TipoClienteSolicitudResolver::resolver(null, $cliente));
     }
 
     public function test_usa_tipo_de_ficha_si_formulario_vacio(): void
     {
-        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->nuevo->id, 'es_inactivo' => false]);
+        $cliente = new Cliente(['catalogo_tipo_cliente_id' => $this->nuevo->id, 'es_inactivo' => false, 'monto_venta_actual' => '0.00']);
         $this->assertSame($this->nuevo->id, TipoClienteSolicitudResolver::resolver(null, $cliente));
     }
 

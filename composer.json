@@ -61,6 +61,7 @@
         ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
+            "@php artisan storage:verificar",
             "@php artisan test"
         ],
         "post-autoload-dump": [

@@ -11,6 +11,9 @@ import {
     Clock,
     Eye,
     FileText,
+    MapPin,
+    Package,
+    Store,
     Pencil,
     Repeat,
     RotateCcw,
@@ -22,8 +25,10 @@ import {
     Wallet,
 } from 'lucide-react';
 import { router } from '@inertiajs/react';
+import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
 import {
     geliaCardClass,
+    GELIA_ICON_BOX,
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
 } from '../../../utils/geliaTheme';
@@ -32,17 +37,18 @@ import {
     formatearMoneda,
     montoVentaPedido,
     etiquetaAlmacen,
-    formatearFechaNegocio,
-    etiquetaOrigenGuia,
-    etiquetaTransportePedido,
     pedidoRequiereLogistica,
+    formatearFechaNegocio,
+    etiquetaTransportePedido,
     textoFuentesPagoCompacto,
     FASES_PRE_VENTA,
     TABS_PEDIDOS,
     TABS_PEDIDOS_ADMIN,
+    badgesRetrasoSla,
 } from './pedidosBmaStyles';
 import EncabezadoFolioPedido from './EncabezadoFolioPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import { diasDesde, textoAntiguedad } from './bandejasPedidos';
 import {
     accionesPedidoLista,
     agruparAccionesPedido,
@@ -254,7 +260,7 @@ export function MenuAccionesPedido({ acciones, primaria, idBase }) {
                 aria-expanded={abierto}
                 aria-haspopup="menu"
                 onClick={() => setAbierto((v) => !v)}
-                className={`${THEME_BTN_SECONDARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold inline-flex items-center gap-1`}
+                className={`${THEME_BTN_SECONDARY} theme-btn-primary--compact min-h-[44px] lg:min-h-[36px] px-3 text-xs font-bold inline-flex items-center gap-1`}
             >
                 Más
                 <ChevronDown className={`w-3.5 h-3.5 transition-transform ${abierto ? 'rotate-180' : ''}`} aria-hidden />
@@ -310,7 +316,7 @@ function AccionesFila({ acciones, idBase }) {
             <button
                 type="button"
                 onClick={primaria.onClick}
-                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold`}
+                className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] lg:min-h-[36px] px-3 text-xs font-bold`}
             >
                 {primaria.label}
             </button>
@@ -343,14 +349,101 @@ function AlertasFila({ pedido, esRechazado }) {
     );
 }
 
-function lineaLogisticaPedido(pedido) {
-    if (esRegistroMunicipal(pedido)) return `Envío municipal · Terminal destino: ${nombreTerminalMunicipal(pedido)}`;
-    const transporte = etiquetaTransportePedido(pedido);
-    const alm = etiquetaAlmacen(pedido.almacen);
-    if (transporte && alm && alm !== '—') return `${transporte} · ${alm}`;
-    if (transporte) return transporte;
-    if (alm && alm !== '—') return alm;
-    return null;
+
+function iconoEntrega(pedido) {
+    if (esRegistroMunicipal(pedido)) return MapPin;
+    if (pedidoEsTrasladoInternoPdv(pedido)) return ArrowRightLeft;
+    if (pedido.solicitud_preparacion?.modalidad_entrega === 'tienda' || pedido.usa_preparacion_tienda) return Store;
+    return pedidoRequiereLogistica(pedido) ? Truck : Package;
+}
+
+function datosEntrega(pedido) {
+    if (esRegistroMunicipal(pedido)) {
+        return { titulo: 'Envío municipal', destino: `Terminal: ${nombreTerminalMunicipal(pedido)}` };
+    }
+    const almacen = etiquetaAlmacen(pedido.almacen);
+    return { titulo: etiquetaTransportePedido(pedido) || '—', destino: almacen !== '—' ? almacen : null };
+}
+
+/** Logística: modalidad (con icono por tipo) y sucursal/almacén de destino. */
+function CeldaEntrega({ pedido }) {
+    const Icono = iconoEntrega(pedido);
+    const { titulo, destino } = datosEntrega(pedido);
+    return (
+        <div className="flex items-start gap-2.5 min-w-0">
+            <span className={`${GELIA_ICON_BOX} w-9 h-9 shrink-0 inline-flex items-center justify-center`} aria-hidden>
+                <Icono className="w-4 h-4 theme-text-primario" />
+            </span>
+            <span className="min-w-0">
+                <span className="block text-sm font-semibold theme-text-main leading-snug">{titulo}</span>
+                {destino ? <span className="block text-xs theme-text-muted font-medium leading-snug mt-0.5">{destino}</span> : null}
+            </span>
+        </div>
+    );
+}
+
+/** Administración: importe a cobrar y forma de pago. */
+function CeldaTotal({ pedido, fuentes }) {
+    const monto = montoVentaPedido(pedido);
+    const esImporte = String(monto).trim().startsWith('$');
+    return (
+        <div className="text-right">
+            {esImporte ? (
+                <span className="block text-base font-bold tabular-nums theme-text-main leading-tight">{monto}</span>
+            ) : (
+                <span className="inline-block whitespace-nowrap px-2.5 py-1 rounded-lg border theme-border theme-element text-xs font-bold theme-text-main">{monto}</span>
+            )}
+            {fuentes?.texto && fuentes.texto !== '—' ? (
+                <span className="block text-xs theme-text-muted font-medium mt-0.5 normal-case" title={fuentes.completo || undefined}>{fuentes.texto}</span>
+            ) : null}
+        </div>
+    );
+}
+
+const FASES_CERRADAS = ['ENVIADO', 'CANCELADO', 'ENTREGADO'];
+
+function antiguedadPedido(pedido) {
+    if (FASES_CERRADAS.includes(pedido.estatus?.fase_ciclo)) return null;
+    return diasDesde(pedido.fecha);
+}
+
+function requiereAtencion(pedido, esRechazado) {
+    return esRechazado || badgesRetrasoSla(pedido).length > 0;
+}
+
+function EstadoVacio({ tabLabel, busqueda, tabActiva, onLimpiarBusqueda, onVerTodas, onNuevo }) {
+    const botonSec = `${THEME_BTN_SECONDARY} theme-btn-primary--compact min-h-[44px] px-4 text-xs font-bold`;
+    return (
+        <div className={`${geliaCardClass()} p-8 md:p-12 text-center space-y-3`}>
+            <p className="text-sm font-bold theme-text-main m-0">
+                {busqueda ? `Sin resultados para «${busqueda}»` : `No hay pedidos en ${tabLabel ? `«${tabLabel}»` : 'esta bandeja'}`}
+            </p>
+            <p className="text-xs theme-text-muted m-0">
+                {busqueda ? 'Revisa el folio o el nombre, o busca en todas las bandejas.' : 'Cuando haya pedidos en esta etapa aparecerán aquí.'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                {busqueda && onLimpiarBusqueda ? (
+                    <button type="button" onClick={onLimpiarBusqueda} className={botonSec}>Limpiar búsqueda</button>
+                ) : null}
+                {tabActiva !== 'TODAS' && onVerTodas ? (
+                    <button type="button" onClick={onVerTodas} className={botonSec}>Ver todas</button>
+                ) : null}
+                {!busqueda && onNuevo ? (
+                    <button type="button" onClick={onNuevo} className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] px-4 text-xs font-bold`}>Nuevo pedido</button>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function EsqueletoListado() {
+    return (
+        <div className={`${geliaCardClass()} p-4 md:p-5 space-y-3`} aria-busy="true" aria-label="Cargando pedidos">
+            {[0, 1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-14 rounded-xl theme-element animate-pulse" />
+            ))}
+        </div>
+    );
 }
 
 function CardPedido({
@@ -362,12 +455,11 @@ function CardPedido({
     const badgeItems = useBadgesItems(pedido);
     const badgePrincipal = badgeItems[0] || null;
     const badgesResto = badgeItems.slice(1);
-    const logistica = lineaLogisticaPedido(pedido);
 
     return (
         <article
             className={`rounded-xl border theme-border theme-element p-3.5 flex flex-col gap-2.5 min-w-0 ${
-                esRechazado ? 'ring-1 ring-[color-mix(in_srgb,var(--color-peligro)_30%,transparent)]' : ''
+                requiereAtencion(pedido, esRechazado) ? 'border-l-4 border-l-[var(--color-peligro)]' : ''
             }`}
         >
             <header className="flex items-start justify-between gap-2 min-w-0">
@@ -376,7 +468,7 @@ function CardPedido({
                     onClick={() => onVer(pedido)}
                     className="gelia-tienda-op-fila-link text-left min-w-0 flex-1"
                 >
-                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                    <EncabezadoFolioPedido pedido={pedido} size="sm" internoCompacto />
                 </button>
                 <BadgeEstadoPrincipal item={badgePrincipal} />
             </header>
@@ -387,10 +479,9 @@ function CardPedido({
                 </p>
                 <p className="text-xs theme-text-muted font-medium m-0 tabular-nums">
                     {formatearFechaNegocio(pedido.fecha)}
+                    {antiguedadPedido(pedido) !== null ? ` · ${textoAntiguedad(antiguedadPedido(pedido))}` : ''}
                 </p>
-                {logistica && (
-                    <p className="text-xs theme-text-muted font-medium m-0 leading-snug">{logistica}</p>
-                )}
+                <CeldaEntrega pedido={pedido} />
                 {badgesResto.length > 0 && (
                     <BadgesPedido items={badgesResto} compact max={1} className="pt-0.5" />
                 )}
@@ -398,15 +489,13 @@ function CardPedido({
             </div>
 
             <footer className="flex items-center justify-between gap-3 pt-2 border-t theme-border">
-                <p className="text-sm font-bold tabular-nums theme-text-main m-0">
-                    {montoVentaPedido(pedido)}
-                </p>
+                <CeldaTotal pedido={pedido} fuentes={textoFuentesPagoCompacto(pedido.fuentes_pago)} />
                 <div className="flex items-center justify-end gap-1.5 shrink-0">
                     {primaria ? (
                         <button
                             type="button"
                             onClick={primaria.onClick}
-                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] px-3 text-xs font-bold`}
+                            className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px] lg:min-h-[36px] px-3 text-xs font-bold`}
                         >
                             {primaria.label}
                         </button>
@@ -436,6 +525,9 @@ export default function TablaPedidos({
     busqueda = '',
     cargando = false,
     onIrAPagina,
+    onLimpiarBusqueda,
+    onVerTodas,
+    onNuevo,
     onVer,
     onEditar,
     onEliminar,
@@ -507,15 +599,14 @@ export default function TablaPedidos({
     };
 
     const vacio = (
-        <div className={`${geliaCardClass()} p-10 md:p-16 text-center`}>
-            <p className="text-sm font-bold theme-text-muted m-0">
-                Sin pedidos en esta vista
-                {tabLabel ? ` (${tabLabel})` : ''}.
-            </p>
-            {busqueda && (
-                <p className="text-xs theme-text-muted mt-2 m-0">Prueba otra búsqueda o bandeja.</p>
-            )}
-        </div>
+        <EstadoVacio
+            tabLabel={tabLabel}
+            busqueda={busqueda}
+            tabActiva={tabActiva}
+            onLimpiarBusqueda={onLimpiarBusqueda}
+            onVerTodas={onVerTodas}
+            onNuevo={onNuevo}
+        />
     );
 
     return (
@@ -526,7 +617,7 @@ export default function TablaPedidos({
                 </p>
             )}
             {items.length === 0 ? (
-                vacio
+                cargando ? <EsqueletoListado /> : vacio
             ) : (
                 <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4 relative`}>
                     {cargando && (
@@ -535,10 +626,10 @@ export default function TablaPedidos({
                             aria-hidden
                         />
                     )}
-                    <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
-                        {total} pedido{total === 1 ? '' : 's'}
-                        {tabLabel ? <span className="theme-text-muted font-semibold"> · {tabLabel}</span> : null}
-                    </p>
+                    <div className="flex items-baseline gap-2 pb-1">
+                        <h2 className="text-base font-bold theme-text-main m-0">{tabLabel || 'Pedidos'}</h2>
+                        <span className="text-sm font-semibold theme-text-muted tabular-nums">{total} pedido{total === 1 ? '' : 's'}</span>
+                    </div>
 
                     <div className="lg:hidden space-y-3 sm:space-y-3.5">
                         {items.map((pedido) => (
@@ -556,11 +647,12 @@ export default function TablaPedidos({
                         <table className="gelia-tienda-op-table gelia-pedidos-bma-listado w-full">
                             <thead>
                                 <tr>
-                                    <th scope="col" className="min-w-[12rem]">Pedido</th>
-                                    <th scope="col" className="min-w-[9rem]">{items.some(esRegistroMunicipal) ? 'Tipo de pedido' : 'Logística'}</th>
-                                    <th scope="col" className="text-right w-[7.5rem]">Total</th>
-                                    <th scope="col" className="min-w-[8rem]">Estado</th>
-                                    <th scope="col" className="text-right w-[11rem]">Acciones</th>
+                                    <th scope="col" className="min-w-[13rem]">Pedido</th>
+                                    <th scope="col" className="min-w-[9rem]">{items.some(esRegistroMunicipal) ? 'Tipo de pedido' : 'Entrega'}</th>
+                                    <th scope="col" className="min-w-[9rem]">Estado</th>
+                                    <th scope="col" className="w-[7rem]">Antigüedad</th>
+                                    <th scope="col" className="!text-right w-[10rem]">Total</th>
+                                    <th scope="col" className="!text-right w-[11rem]">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -570,53 +662,43 @@ export default function TablaPedidos({
                                     const acciones = accionesPedidoLista({ ...accionesBase, pedido });
                                     const idBase = `${menuId}-${pedido.id}`;
                                     const badgeItems = badgesListaPedido(pedido);
+                                    const atencion = requiereAtencion(pedido, esRechazado);
+                                    const dias = antiguedadPedido(pedido);
 
                                     return (
                                         <tr
                                             key={pedido.id}
-                                            className={esRechazado ? 'bg-[color-mix(in_srgb,var(--color-peligro)_5%,transparent)]' : undefined}
+                                            className={atencion ? 'bg-[color-mix(in_srgb,var(--color-peligro)_5%,transparent)] shadow-[inset_3px_0_0_var(--color-peligro)]' : undefined}
                                         >
-                                            <td className="align-top py-2.5">
+                                            <td className="align-top py-3">
                                                 <button
                                                     type="button"
                                                     onClick={() => onVer(pedido)}
                                                     className="gelia-tienda-op-fila-link text-left w-full min-w-0"
                                                 >
-                                                    <EncabezadoFolioPedido pedido={pedido} size="sm" />
-                                                    <span className="block text-sm font-bold theme-text-main mt-1 normal-case leading-snug">
+                                                    <EncabezadoFolioPedido pedido={pedido} size="md" internoCompacto />
+                                                    <span className="block text-sm font-semibold theme-text-main mt-1 normal-case leading-snug">
                                                         {pedido.cliente?.nombre || '—'}
-                                                    </span>
-                                                    <span className="block text-xs theme-text-muted font-medium mt-0.5 tabular-nums">
-                                                        {formatearFechaNegocio(pedido.fecha)}
                                                     </span>
                                                 </button>
                                                 <AlertasFila pedido={pedido} esRechazado={esRechazado} />
                                             </td>
-                                            <td className="align-top py-2.5 text-xs theme-text-muted font-medium leading-relaxed">
-                                                <span className="block theme-text-main font-semibold">
-                                                    {esRegistroMunicipal(pedido) ? 'Modalidad: Envío municipal' : etiquetaTransportePedido(pedido) || '—'}
+                                            <td className="align-top py-3">
+                                                <CeldaEntrega pedido={pedido} />
+                                            </td>
+                                            <td className="align-top py-3">
+                                                <BadgesPedido items={badgeItems} compact max={2} />
+                                            </td>
+                                            <td className="align-top py-3 text-xs font-medium tabular-nums whitespace-nowrap">
+                                                <span className={`block font-semibold theme-text-main`}>
+                                                    {dias === null ? formatearFechaNegocio(pedido.fecha) : textoAntiguedad(dias)}
                                                 </span>
-                                                <span className="block mt-0.5">{esRegistroMunicipal(pedido) ? `Terminal destino: ${nombreTerminalMunicipal(pedido)}` : etiquetaAlmacen(pedido.almacen)}</span>
-                                                {fuentes.texto !== '—' && (
-                                                    <span className="block mt-0.5 normal-case opacity-90" title={fuentes.completo || undefined}>
-                                                        {fuentes.texto}
-                                                    </span>
-                                                )}
-                                                {!esRegistroMunicipal(pedido) && pedidoRequiereLogistica(pedido) && (
-                                                    <span className="block mt-0.5 normal-case text-xs opacity-80">
-                                                        {etiquetaOrigenGuia(pedido)}
-                                                    </span>
-                                                )}
+                                                {dias !== null ? <span className="block mt-0.5 theme-text-muted">{formatearFechaNegocio(pedido.fecha)}</span> : null}
                                             </td>
-                                            <td className="align-top py-2.5 text-right whitespace-nowrap">
-                                                <span className="text-sm font-bold tabular-nums theme-text-main">
-                                                    {montoVentaPedido(pedido)}
-                                                </span>
+                                            <td className="align-top py-3 text-right">
+                                                <CeldaTotal pedido={pedido} fuentes={fuentes} />
                                             </td>
-                                            <td className="align-top py-2.5">
-                                                <BadgesPedido items={badgeItems} compact />
-                                            </td>
-                                            <td className="align-top py-2.5 text-right">
+                                            <td className="align-top py-3 text-right">
                                                 <AccionesFila acciones={acciones} idBase={idBase} />
                                             </td>
                                         </tr>

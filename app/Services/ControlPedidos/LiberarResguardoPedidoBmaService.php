@@ -23,6 +23,11 @@ class LiberarResguardoPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $captura = null, ?UploadedFile $comprobante = null): PedidoBma
     {
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
+            && \App\Support\ControlPedidos\PoliticaResguardoEnvio::intencionActiva($pedido)) {
+            return app(Municipal\LiberarResguardoMunicipalService::class)->ejecutar($pedido, $usuarioId, $captura['huella_conjunto'] ?? null);
+        }
+
         if (!$pedido->es_resguardo) {
             throw new \InvalidArgumentException('Este pedido no está en resguardo.');
         }

@@ -9,7 +9,8 @@
 ## Estado actual
 - [verificado] Registrar exhibición inicia revisión pendiente; no verifica ingreso: `app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php:143`.
 - [verificado] Cobertura canónica calcula en centavos mercancía, cargos aplicables, SAF y pagos activos; aplica tolerancia: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:124`.
-- [verificado] Validar pago crea cierre de reporte y resuelve su campo de la cola de errores: `app/Services/ControlPedidos/ValidarPagoPedidoBmaService.php:91`.
+- [verificado] Validar pago crea cierre de reporte y resuelve su campo de la cola de errores: `app/Services/ControlPedidos/ValidarPagoPedidoBmaService.php:96`.
+- [verificado] M-10 / flete diferido: `assertPagoListoParaAvanzar` y `CoberturaPagoPedidoBmaService::bloqueos` exigen mercancía cubierta y conservan SAF, comprobantes, rechazos y FASE_APROBAR; el pendiente de transporte no se marca cubierto. Con resguardo activo, enviar a auditoría también es solo mercancía (M-09 se valida después): `RegistrarPagoPedidoBmaService.php`.
 
 ## Reglas que no se rompen
 - [verificado] Reintento de pago recupera exhibición por clave antes de comprobar versión financiera: `app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php:111`.
@@ -28,11 +29,11 @@
 - [verificado] Auditoría revisa exhibiciones y rechaza pagos mediante permiso propio: `routes/web/modules/control-pedidos/auditar.php:7`.
 
 ## Cómo probar
-- [PRUEBAS](../PRUEBAS.md): importes, referencia duplicada, reintento, sustitución, crédito y cierre/remisión con consulta abierta.
+- [PRUEBAS](../PRUEBAS.md): importes, referencia duplicada, reintento, sustitución, crédito, cierre/remisión con consulta abierta; `ResguardoMunicipalOla1Test` y `ResguardoMunicipalOla2Test` para mercancía vs flete, M-09 y crédito que no habilita resguardo.
 
 ## Puntos blandos
 - [verificado] `pagos_validos` del resumen no debe leerse como verificación bancaria; toma pagos activos para cobertura: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:46`.
 - [verificado] Excedentes desde $10 tienen gestión SAF; menores no se automatizan: `gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md:82`.
 - [inferido] Modificar la fórmula solo en React produciría una proyección incompatible con el bloqueo servidor; confirmar con resumen persistido: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:78`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-19, working tree resguardo municipal M-04 a M-10.

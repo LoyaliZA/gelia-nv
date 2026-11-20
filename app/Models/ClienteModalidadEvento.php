@@ -20,6 +20,7 @@ class ClienteModalidadEvento extends Model
         'origen',
         'solicitud_id',
         'usuario_id',
+        'motivo',
     ];
 
     public function cliente(): BelongsTo

@@ -181,6 +181,28 @@ class SolicitudController extends Controller
             return $this->redirectToSolicitudesList($request, 'Operación procesada.');
         }
 
+        if (! $solicitud->pago_confirmado && filter_var($request->input('pago_parcial'), FILTER_VALIDATE_BOOLEAN)) {
+            // Un abono no es el pago final: la cotización vigente y la lista concedida
+            // se conservan hasta que se confirme el pago final.
+            $abono = (float) $request->monto_final_pagado;
+            DB::transaction(function () use ($solicitud, $abono, $idRespondida) {
+                AuditoriaSolicitud::create([
+                    'solicitud_id' => $solicitud->id,
+                    'usuario_id' => Auth::id(),
+                    'estado_anterior_id' => $idRespondida,
+                    'estado_nuevo_id' => $idRespondida,
+                    'motivo_reporte' => 'ABONO PARCIAL REGISTRADO: $'.number_format($abono, 2).'. La cotización y la lista se conservan hasta el pago final.',
+                    'datos_snapshot' => [
+                        'modo_confirmacion' => 'pago_parcial',
+                        'monto_parcial' => number_format($abono, 2, '.', ''),
+                        'monto_venta_sin_cambio' => true,
+                    ],
+                ]);
+            });
+
+            return $this->redirectToSolicitudesList($request, 'Abono registrado. El pago final sustituirá la cotización.');
+        }
+
         DB::transaction(function () use ($solicitud, $request, $idRespondida, $idIncorrecta) {
             $ajusteMonto = app(AjustarMontoPorSolicitudService::class);
             if ($solicitud->cliente_id) {
@@ -194,6 +216,7 @@ class SolicitudController extends Controller
             $montoFinal = (float) $request->monto_final_pagado;
             $proyeccion = ['efecto_lista' => 'retenida', 'motivo_lista' => 'Sin cliente asociado. La lista no cambia.'];
             $esAlertaFaltaPago = false;
+            $listaSinRespaldo = false;
             if ($solicitud->cliente_id) {
                 $cliente = Cliente::query()->lockForUpdate()->find($solicitud->cliente_id);
                 if ($cliente) {
@@ -232,6 +255,15 @@ class SolicitudController extends Controller
                     'catalogo_estado_solicitud_id' => $estadoNuevoId,
                     'catalogo_lista_descuento_id' => $solicitud->catalogo_lista_descuento_id,
                 ]);
+
+                if ($solicitud->cliente_id) {
+                    $retiro = $ajusteMonto->retirarListaSinRespaldo($solicitud->fresh(), Auth::id());
+                    if ($retiro !== []) {
+                        $listaSinRespaldo = true;
+                        $snapshotDiff['lista_sin_respaldo'] = $retiro;
+                        $mensajeAuditoria .= ' El pago final no respalda la lista solicitada: se retiró solo esa concesión. La solicitud conserva su estado y el pago.';
+                    }
+                }
             }
 
             AuditoriaSolicitud::create([
@@ -247,8 +279,8 @@ class SolicitudController extends Controller
             if ($destinatarios->isNotEmpty()) {
                 Notification::send($destinatarios, new AlertaSolicitud(
                     $solicitud,
-                    $esAlertaFaltaPago ? 'alerta_pago_insuficiente' : 'pago_confirmado',
-                    $esAlertaFaltaPago
+                    ($esAlertaFaltaPago || $listaSinRespaldo) ? 'alerta_pago_insuficiente' : 'pago_confirmado',
+                    ($esAlertaFaltaPago || $listaSinRespaldo)
                         ? Auth::user()->name.' registró un pago cuyo acumulado no alcanza la lista solicitada.'
                         : Auth::user()->name.' confirmó el pago. La lista no se modifica con este movimiento.',
                 ));
@@ -533,6 +565,23 @@ class SolicitudController extends Controller
             abort(422, 'No se puede aprobar ni verificar una solicitud comercial sin tipo de cliente solicitado registrado.');
         }
 
+        // Un cliente Menudeo con una solicitud de cambio de lista que no pidió la conversión:
+        // quien aprueba decide de forma explícita. Antes la lista quedaba bloqueada sin aviso.
+        $convertirAlAprobar = false;
+        $esAprobacionNueva = in_array($estadoNuevoId, [$idRespondida, $idVerificada], true)
+            && ! in_array($estadoAnteriorId, [$idRespondida, $idVerificada], true);
+        if ($esAprobacionNueva && ! $aprobarFlujoTienda && ! $solicitud->convertir_menudeo_mayoreo
+            && $solicitud->cliente_id && $solicitud->proceso && ! $solicitud->proceso->esOperativo()
+            && CrearSolicitudService::procesoAdmiteConversion($solicitud->proceso->nombre)
+            && str_contains(strtoupper($solicitud->proceso->nombre), 'LISTA')
+            && Cliente::query()->whereKey($solicitud->cliente_id)->value('es_menudeo')) {
+            $decision = $request->input('decision_modalidad');
+            if (! in_array($decision, ['convertir', 'mantener'], true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['decision_modalidad' => 'Este cliente está en Menudeo. Indica si la solicitud lo convierte a Mayoreo o lo mantiene en Menudeo.']);
+            }
+            $convertirAlAprobar = $decision === 'convertir';
+        }
+
         DB::transaction(function () use (
             $solicitud,
             $estadoAnteriorId,
@@ -541,7 +590,8 @@ class SolicitudController extends Controller
             $idRespondida,
             $idVerificada,
             $idIncorrecta,
-            $aprobarFlujoTienda
+            $aprobarFlujoTienda,
+            $convertirAlAprobar
         ) {
             if ($solicitud->cliente_id) {
                 app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
@@ -564,6 +614,9 @@ class SolicitudController extends Controller
             ];
             if ($aprobarFlujoTienda) {
                 $datosUpdate['pago_confirmado'] = true;
+            }
+            if ($convertirAlAprobar) {
+                $datosUpdate['convertir_menudeo_mayoreo'] = true;
             }
 
             $solicitud->update($datosUpdate);
@@ -639,8 +692,13 @@ class SolicitudController extends Controller
         $solicitud->refresh();
         if ($solicitud->aplicacion_cliente === 'pendiente') {
             try {
-                app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
-                $solicitud->forceFill(['aplicacion_cliente' => 'aplicada', 'aplicacion_error' => null])->save();
+                $ajusteAplicacion = app(AjustarMontoPorSolicitudService::class);
+                $ajusteAplicacion->aplicarBeneficios($solicitud);
+                $solicitud->forceFill(
+                    $ajusteAplicacion->estaAutorizada($solicitud)
+                        ? ['aplicacion_cliente' => 'aplicada', 'aplicacion_error' => null]
+                        : ['aplicacion_cliente' => 'no_aplica', 'aplicacion_error' => 'La solicitud ya no está autorizada.']
+                )->save();
             } catch (\Throwable $e) {
                 $solicitud->forceFill([
                     'aplicacion_cliente' => 'fallida',

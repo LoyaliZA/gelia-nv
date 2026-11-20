@@ -43,6 +43,9 @@ class RecuperacionAplicacionClienteController extends Controller
         if ($solicitud->motivo_incorrecta === 'vencimiento_pago') {
             return back()->withErrors(['solicitud' => 'Un pago vencido no se recupera. Hay que abrir una solicitud nueva.']);
         }
+        if (! app(\App\Services\Solicitudes\AjustarMontoPorSolicitudService::class)->estaAutorizada($solicitud)) {
+            return back()->withErrors(['solicitud' => 'La solicitud ya no está autorizada (cancelada, incorrecta o vencida). No se recuperan beneficios.']);
+        }
         $solicitud->forceFill([
             'aplicacion_cliente' => $solicitud->aplicacion_cliente ?: 'pendiente',
         ])->save();

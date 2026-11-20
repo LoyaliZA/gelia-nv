@@ -196,7 +196,16 @@ class CoberturaPagoPedidoBmaService
             $bloqueos[] = 'Hay comprobantes rechazados pendientes de sustitución.';
         }
 
-        if (! \App\Support\ControlPedidos\CustodiaDocumentalTienda::credito($pedido) && (float) $base['pendiente'] > (float) $base['tolerancia_aplicada']) {
+        $soloMercancia = \App\Support\ControlPedidos\PoliticaResguardoEnvio::exigeSoloMercanciaParaAvanzar(
+            $pedido,
+            RegistrarPagoPedidoBmaService::FASE_VALIDAR
+        );
+        if ($soloMercancia) {
+            $municipal = app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->evaluar($pedido);
+            if (! $municipal['mercancia_cubierta']) {
+                $bloqueos[] = \App\Support\ControlPedidos\PoliticaResguardoEnvio::MENSAJE_MERCANCIA;
+            }
+        } elseif (! \App\Support\ControlPedidos\CustodiaDocumentalTienda::credito($pedido) && (float) $base['pendiente'] > (float) $base['tolerancia_aplicada']) {
             $bloqueos[] = RegistrarPagoPedidoBmaService::mensajeMontoFaltante((float) $base['pendiente']);
         }
 

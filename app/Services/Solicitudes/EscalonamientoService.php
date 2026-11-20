@@ -52,7 +52,8 @@ class EscalonamientoService
         Cliente $cliente,
         float $montoCotizado,
         ?int $listaSolicitadaId,
-        Collection|array $catalogoListas
+        Collection|array $catalogoListas,
+        ?string $acumuladoBase = null,
     ): array {
         $listas = collect($catalogoListas);
         if ($this->proyeccionCliente) {
@@ -62,7 +63,8 @@ class EscalonamientoService
                 ? $listas->firstWhere('id', (int) $cliente->lista_actual_id)
                 : null;
         }
-        $acumulado = (float) app(AcumuladoOperativoCliente::class)->operativo($cliente);
+        // Oficial + provisionales vigentes, sin los que una carga normal pudo duplicar.
+        $acumulado = (float) ($acumuladoBase ?? app(AcumuladoOperativoCliente::class)->paraLista($cliente));
 
         return $this->evaluar(
             $acumulado,

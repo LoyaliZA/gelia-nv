@@ -225,7 +225,13 @@ class RegistrarPagoPedidoBmaService
             }
         }
 
-        if ($pendienteCentavos > $toleranciaCentavos) {
+        $soloMercancia = \App\Support\ControlPedidos\PoliticaResguardoEnvio::exigeSoloMercanciaParaAvanzar($pedido, $fase);
+        if ($soloMercancia) {
+            $municipal = app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->evaluar($pedido);
+            if (! $municipal['mercancia_cubierta']) {
+                throw new InvalidArgumentException(\App\Support\ControlPedidos\PoliticaResguardoEnvio::MENSAJE_MERCANCIA);
+            }
+        } elseif ($pendienteCentavos > $toleranciaCentavos) {
             throw new InvalidArgumentException(self::mensajeMontoFaltante((float) $resumen['pendiente']));
         }
 

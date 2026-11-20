@@ -67,6 +67,10 @@ const parseNumeroMonto = (valor) =>
     parseFloat(valor?.toString().replace(/[^0-9.-]+/g, '') || 0);
 
 export const parseMontoHistorico = (cliente) => {
+    // Base de la lista automática: operativo sin los provisionales que una carga normal pudo duplicar.
+    if (cliente?.acumulado_para_lista !== undefined && cliente?.acumulado_para_lista !== null && cliente?.acumulado_para_lista !== '') {
+        return parseNumeroMonto(cliente.acumulado_para_lista);
+    }
     if (cliente?.acumulado_operativo !== undefined && cliente?.acumulado_operativo !== null && cliente?.acumulado_operativo !== '') {
         return parseNumeroMonto(cliente.acumulado_operativo);
     }

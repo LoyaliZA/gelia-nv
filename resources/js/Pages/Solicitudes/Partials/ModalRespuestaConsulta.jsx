@@ -1,3 +1,4 @@
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import React from 'react';
 import { useForm } from '@inertiajs/react';
@@ -46,7 +47,7 @@ export default function ModalRespuestaConsulta({ onClose, solicitud, consulta })
                         <textarea id="consulta-respuesta-mensaje" name="comentario_encargada" autoComplete="off" rows={3} maxLength={1000} value={data.comentario_encargada} disabled={processing} onChange={(event) => setData('comentario_encargada', event.target.value)} className="theme-textarea w-full" placeholder="Explica el resultado y el siguiente paso…" />
                     </div>
                     <AdjuntoRespuesta file={data.evidencia_respuesta} attachment={attachment} error={errors.evidencia_respuesta} disabled={processing} />
-                    {Object.entries(errors).filter(([key]) => key !== 'evidencia_respuesta').map(([key, error]) => <p key={key} role="alert" className="text-sm theme-text-peligro">{error}</p>)}
+                    {Object.entries(errors).filter(([key]) => key !== 'evidencia_respuesta').map(([key, error]) => <AvisoSolicitud key={key} tono="peligro" compacto anunciar>{error}</AvisoSolicitud>)}
                     <p className="text-xs theme-text-muted m-0">Ventas podrá consultar esta respuesta y la evidencia desde la solicitud.</p>
                 </div>
                 <footer className="gelia-modal-footer gelia-workflow-actions">

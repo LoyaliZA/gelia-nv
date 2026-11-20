@@ -86,7 +86,22 @@ class CrearSolicitudService
             if ($convertirMenudeo && $esMenudeo) {
                 $listaExpresa = $listaDescuentoId ? CatalogoListaDescuento::find($listaDescuentoId) : null;
                 if (! $clasificacion->esListaMayorista($listaExpresa)) {
+                    // Al convertir, la lista es la que el acumulado operativo califica (Bronce como mínimo).
                     $listaDescuentoId = $clasificacion->buscarBronce()?->id;
+                    if (! $compraEnTienda && ! $compraSoloTag && $montoCotizado > 0 && $clienteEscalon) {
+                        $escalonConversion = app(EscalonamientoService::class)->evaluarCompraCliente(
+                            $clienteEscalon,
+                            $montoCotizado,
+                            null,
+                            CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get(),
+                        );
+                        $calificada = ($escalonConversion['es_ascenso'] ?? false) ? ($escalonConversion['lista_calificada_efectiva'] ?? null) : null;
+                        if ($calificada && $clasificacion->esListaMayorista($calificada)) {
+                            $listaDescuentoId = (int) $calificada->id;
+                            $montoFinalTentativo = $escalonConversion['monto_final_tentativo'];
+                            $totalProyectadoNeto = $escalonConversion['total_proyectado_neto'];
+                        }
+                    }
                 }
             }
 

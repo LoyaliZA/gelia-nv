@@ -45,9 +45,9 @@ class ProyeccionClienteEscalonamiento
             return app(ListaPublicoGeneralEscalonamiento::class)->id();
         }
         if (! $this->autoridad->estaActiva()) {
-            $id = $cliente->lista_actual_id;
-
-            return $id ? (int) $id : null;
+            // Una sola definición de lista efectiva: inactivo y Menudeo operan como
+            // Público General aunque conserven otra lista almacenada.
+            return app(\App\Services\Clientes\ClasificacionComercialCliente::class)->listaEfectivaId($cliente);
         }
 
         $datos = $this->paraCliente($cliente, $periodo);

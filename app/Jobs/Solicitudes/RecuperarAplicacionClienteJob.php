@@ -29,10 +29,22 @@ class RecuperarAplicacionClienteJob implements ShouldQueue
             return;
         }
         if ($solicitud->motivo_incorrecta === 'vencimiento_pago') {
+            $this->cerrarSinAplicar($solicitud);
+
+            return;
+        }
+        if (! $ajuste->estaAutorizada($solicitud)) {
+            $this->cerrarSinAplicar($solicitud);
+
             return;
         }
         try {
             $ajuste->aplicarBeneficios($solicitud);
+            if (! $ajuste->estaAutorizada($solicitud)) {
+                $this->cerrarSinAplicar($solicitud);
+
+                return;
+            }
             $solicitud->forceFill(['aplicacion_cliente' => 'aplicada', 'aplicacion_error' => null])->save();
         } catch (Throwable $e) {
             $solicitud->forceFill([
@@ -44,5 +56,14 @@ class RecuperarAplicacionClienteJob implements ShouldQueue
                 self::dispatch($solicitud->id)->delay(now()->addSeconds(30));
             }
         }
+    }
+
+    /** Cancelada, rechazada o vencida: no recupera beneficios ni se reintenta. */
+    private function cerrarSinAplicar(SolicitudTag $solicitud): void
+    {
+        $solicitud->forceFill([
+            'aplicacion_cliente' => 'no_aplica',
+            'aplicacion_error' => 'La solicitud ya no está autorizada. No se aplicó ningún beneficio.',
+        ])->save();
     }
 }

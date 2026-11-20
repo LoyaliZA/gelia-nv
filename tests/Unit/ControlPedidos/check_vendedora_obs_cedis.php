@@ -9,7 +9,7 @@ $fallos = 0;
 $root = dirname(__DIR__, 3);
 
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
-$filtros = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/FiltrosPedidos.jsx');
+$filtros = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/bandejasPedidos.js');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
 $listadoUi = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosListadoUi.js');
 $listar = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosBmaService.php');
@@ -23,11 +23,11 @@ $checks = [
     ['tab OBS_CEDIS en TABS', str_contains($styles, "id: 'OBS_CEDIS'")],
     ['tabs pedidos principales', str_contains($styles, 'TABS_PEDIDOS_PRINCIPALES')],
     ['tabs pedidos subfiltros', str_contains($styles, 'TABS_PEDIDOS_SUBFILTROS')],
-    ['filtros filas Estado / Envío', str_contains($filtros, 'Estado') && str_contains($filtros, 'Envío y colas')],
+    ['bandejas agrupadas por flujo', str_contains($filtros, 'Por atender') && str_contains($filtros, 'En proceso')],
     ['badge Observaciones CEDIS', str_contains($styles, 'badgeObservacionesCedis')],
     ['badge Sin existencias', str_contains($styles, 'badgeSinExistencias')],
     ['helper pedidoTieneSinExistencias', str_contains($styles, 'pedidoTieneSinExistencias')],
-    ['filtros conteo obs_cedis', str_contains($filtros, 'OBS_CEDIS: metricas.obs_cedis')],
+    ['filtros conteo obs_cedis', str_contains($filtros, "id: 'OBS_CEDIS', metrica: 'obs_cedis'")],
     ['listar filtro OBS_CEDIS', str_contains($listar, "'OBS_CEDIS' => \$query->where('tiene_observaciones_fisicas', true)")],
     ['listar metrica obs_cedis', str_contains($listar, "'obs_cedis' =>")],
     ['listado usa badgeObservacionesCedis', str_contains($listadoUi, 'badgeObservacionesCedis')],

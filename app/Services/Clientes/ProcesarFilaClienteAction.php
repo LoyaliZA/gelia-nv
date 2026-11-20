@@ -125,6 +125,24 @@ class ProcesarFilaClienteAction
         }
         if ($aplicariaLista) {
             $aviso = $clasificacion->aplicarEnImportacion($cliente, $listaCodigo, $monto);
+            // Un código de lista explícito es una autoridad comercial independiente: si asigna la
+            // misma lista que concedió una solicitud, esa lista ya no depende de la solicitud.
+            if ($persistir && $cliente->id && $listaCodigo && (int) $cliente->lista_actual_id === (int) $listaCodigo->id) {
+                \App\Models\SolicitudBeneficio::query()
+                    ->where('cliente_id', $cliente->id)
+                    ->where('campo', \App\Models\SolicitudBeneficio::CAMPO_LISTA)
+                    ->where('estado', \App\Models\SolicitudBeneficio::ESTADO_VIGENTE)
+                    ->where('valor_aplicado', (string) $listaCodigo->id)
+                    ->update([
+                        'estado' => \App\Models\SolicitudBeneficio::ESTADO_REEMPLAZADO,
+                        'motivo' => 'Una importación posterior asignó esa lista con código explícito.',
+                    ]);
+            }
+        }
+        // PG con monto 0 significa solo INACTIVO: nunca Menudeo. Si el cliente ya venía marcado
+        // como Menudeo por una carga anterior, esta actualización lo corrige.
+        if ($pgCero && $cliente->es_menudeo) {
+            $clasificacion->asignar($cliente, false, ClasificacionComercialCliente::ORIGEN_IMPORTACION);
         }
         $cliente->discrepanciaModalidad = $aviso;
         if ($estado !== null) {

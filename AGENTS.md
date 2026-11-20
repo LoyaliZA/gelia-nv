@@ -49,3 +49,12 @@ Ajuste del 5 de noviembre: nunca mostrar códigos de fichas de proceso en botone
 Continuación del 5 de noviembre: leer [City Center y cambio de sucursal](gestion-pedidos-docs/TIENDA_T03_IMPLEMENTACION.md) antes de modificar traslados. La petición del usuario exige autorización de gerencia para el segundo traslado; prevalece sobre la propuesta conceptual sin autorización. Evidencia del cliente o anotación «Se notificó un error de captura»; solicitud, autorización, salida y recepción son hechos distintos. El cambio municipal/nacional registra intención pendiente de conexión. No reactivar el bloqueo por nombre de City Center ni convertir solicitudes en movimientos físicos.
 
 Revisión posterior del 5 de noviembre: leer [Acciones rápidas de disponibilidad y Mismo día](gestion-pedidos-docs/DISPONIBILIDAD_ACCIONES_RAPIDAS.md). El cierre ya exige resolver faltantes y confirmar/retirar/sustituir los detalles reportados; no pedir recaptura del conjunto correcto. Sin existencias no admite Confirmar estado. Conservar el historial de ajustes fuera de la captura detallada plegable y las claves de solicitud para evitar duplicados. La reapertura notifica al origen de la consulta y conserva el reporte MD original, pagos y documentos.
+
+## UI/UX skills
+
+Taste, a11y, bans, voice, and icon library for this project live in `.ux-profile.md`.
+Run `setup-ui-ux-skills` again only to change those defaults.
+Before UI or microcopy work, read `.ux-profile.md`, then the matching domain skill (page-patterns, viewports, forms, surfaces, loaders, empty-states, copy, motion).
+Before creating a new page, read `page-patterns` and name the pattern. Do not write page markup until the pattern is named.
+Layouts must pass `viewports` at 375px and 1280px.
+Before finishing UI, run `ux-audit`.

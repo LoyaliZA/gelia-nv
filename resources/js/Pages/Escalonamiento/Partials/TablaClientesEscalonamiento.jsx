@@ -213,6 +213,17 @@ export default function TablaClientesEscalonamiento({
                                                 Operativa: <BadgeListaDescuento nombre={fila.lista_operativa} />
                                             </span>
                                         )}
+                                        {fila.acumulado_operativo !== undefined && (
+                                            <span className="text-xs theme-text-muted block mt-1.5 tabular-nums">
+                                                Operativo Ventas: {Number(fila.acumulado_operativo).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
+                                                {fila.doble_conteo_posible ? ' · posible doble conteo' : ''}
+                                            </span>
+                                        )}
+                                        {fila.lista_proyectada && (
+                                            <span className="text-xs theme-text-muted block mt-1.5">
+                                                Proyectada: <BadgeListaDescuento nombre={fila.lista_proyectada} />
+                                            </span>
+                                        )}
                                         <div className="flex flex-wrap gap-2 mt-2">
                                             {fila.es_inactivo && (
                                                 <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--neutro inline-flex text-xs font-semibold">

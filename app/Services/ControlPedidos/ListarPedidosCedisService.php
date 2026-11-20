@@ -50,6 +50,9 @@ class ListarPedidosCedisService
                 $pedido->consultaCedisModoRevisionMercancia()
             );
             ConsultaMunicipal::hidratarAlmacen($pedido);
+            if (ConsultaMunicipal::es($pedido)) {
+                $pedido->setAttribute('resguardo_envio', \App\Support\ControlPedidos\PoliticaResguardoEnvio::evaluar($pedido));
+            }
 
             return BitacoraCedis::presentar($pedido, $usuario);
         };

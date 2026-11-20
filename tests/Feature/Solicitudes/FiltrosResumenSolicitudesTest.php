@@ -151,4 +151,20 @@ class FiltrosResumenSolicitudesTest extends TestCase
         $this->assertSame('Mayorista', $auditorias[1]->datos_snapshot['cotizado']['tipo_cliente_nombre']);
         $this->assertSame('Plata', $auditorias[1]->datos_snapshot['cotizado']['lista_nombre']);
     }
+
+    public function test_filtros_de_pago_consulta_y_cancelacion_acotan_el_listado(): void
+    {
+        $confirmada = $this->solicitud('Respondida', ['pago_confirmado' => true]);
+        $pendiente = $this->solicitud('Respondida', ['pago_confirmado' => false]);
+        $vencida = $this->solicitud('Incorrecta', ['pago_confirmado' => false, 'motivo_incorrecta' => 'vencimiento_pago']);
+        $cancelacion = $this->solicitud('Respondida', ['pago_confirmado' => true, 'cancelacion_solicitada_at' => now()]);
+        $service = app(ListarSolicitudesService::class);
+        $ids = fn (array $f) => $service->ejecutar(null, $f, false)->pluck('id')->sort()->values()->all();
+
+        $this->assertSame([$confirmada->id, $cancelacion->id], $ids(['pago' => 'confirmado']));
+        $this->assertSame([$pendiente->id], $ids(['pago' => 'pendiente']));
+        $this->assertSame([$vencida->id], $ids(['pago' => 'vencido']));
+        $this->assertSame([$cancelacion->id], $ids(['cancelacion' => 'solicitada']));
+        $this->assertCount(4, $ids(['pago' => 'desconocido', 'consulta' => 'otra']));
+    }
 }

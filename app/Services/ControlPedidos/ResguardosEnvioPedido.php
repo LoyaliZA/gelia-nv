@@ -86,11 +86,14 @@ class ResguardosEnvioPedido
         }
 
         return DB::transaction(function () use ($envio, $datos, $usuarioId) {
-            $envio = PedidoBma::query()->lockForUpdate()->findOrFail($envio->id);
-            $ids = array_key_exists('resguardo_ids', $datos)
+            $idsPrevios = array_key_exists('resguardo_ids', $datos)
                 ? $this->idsDe($datos['resguardo_ids'] ?? [])
                 : $envio->resguardosAnexados()->pluck('pedido_resguardo_id')->map(fn ($id) => (int) $id)->all();
-            $ids = array_values(array_filter($ids, fn (int $id) => $id !== (int) $envio->id));
+            $idsLock = array_values(array_unique(array_merge([(int) $envio->id], $idsPrevios)));
+            sort($idsLock);
+            $bloqueados = PedidoBma::query()->whereIn('id', $idsLock)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $envio = $bloqueados->get($envio->id) ?? PedidoBma::query()->lockForUpdate()->findOrFail($envio->id);
+            $ids = array_values(array_filter($idsPrevios, fn (int $id) => $id !== (int) $envio->id));
 
             $actuales = $envio->resguardosAnexados()->pluck('pedido_resguardo_id')->map(fn ($id) => (int) $id)->sort()->values()->all();
             $nuevos = collect($ids)->sort()->values()->all();
@@ -99,7 +102,7 @@ class ResguardosEnvioPedido
             if ($cambio) {
                 foreach ($nuevos as $id) {
                     if (! in_array($id, $actuales, true)) {
-                        $this->assertAnexable(PedidoBma::query()->find($id), $envio);
+                        $this->assertAnexable($bloqueados->get($id) ?? PedidoBma::query()->find($id), $envio);
                     }
                 }
 
@@ -133,7 +136,10 @@ class ResguardosEnvioPedido
             $solo = array_key_exists('envio_solo_resguardos', $datos)
                 ? filter_var($datos['envio_solo_resguardos'], FILTER_VALIDATE_BOOLEAN)
                 : (bool) $envio->envio_solo_resguardos;
-            if (($cambio || $notasAntes !== $notas) && $envio->tienePesajeRespondido() && $envio->empacado_at === null) {
+            if (($cambio || $notasAntes !== $notas)
+                && $envio->tienePesajeRespondido()
+                && $envio->empacado_at === null
+                && ! \App\Support\ControlPedidos\ConsultaMunicipal::es($envio)) {
                 $this->reabrirPesaje($envio, $usuarioId);
             }
 
@@ -188,6 +194,8 @@ class ResguardosEnvioPedido
         if ($otro && (int) $otro->pedido_envio_id !== (int) $envio->id) {
             throw new \InvalidArgumentException('Ese resguardo ya está anexado a otro envío.');
         }
+
+        \App\Support\ControlPedidos\ExclusividadRemisionEnvio::assertDisponible($resguardo, $envio);
     }
 
     /**

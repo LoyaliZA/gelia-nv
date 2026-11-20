@@ -173,7 +173,8 @@ export const estadoTransferenciaTienda = (pedido, fase = pedido?.estatus?.fase_c
         if (['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(fase)) return { label: `TIENDA MD · ${etiquetaConsultaPedido(pedido)}`, color: 'var(--color-primario)' };
         return { label: `TIENDA MD · ${fase === 'BORRADOR' ? 'Borrador' : fase === 'PENDIENTE_DE_ENVIO' ? 'Bolsas preparadas' : reporte?.oportuno ? 'Pago reportado' : 'Pendiente de pago'}`, color: 'var(--color-primario)' };
     }
-    if (solicitud?.cobertura_tienda?.tipo !== 'transferencia') return null;
+    // Crédito sigue el mismo recorrido físico: bolsas, custodia y entrega no dependen de la forma de pago.
+    if (!['transferencia', 'credito'].includes(solicitud?.cobertura_tienda?.tipo)) return null;
     if (solicitud.seguimiento_recoleccion?.estado === 'pendiente_gestion') return { label: 'Pendiente de gestión', color: 'var(--color-aviso)' };
     const estados = {
         en_transito: 'En traslado a sucursal', recibido: 'Bolsas recibidas', en_recepcion: 'Pendiente de custodia', en_custodia: 'En custodia',

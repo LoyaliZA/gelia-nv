@@ -40,7 +40,7 @@ class FusionarSolicitudPreparacionPedido
         $base = is_array($actual) ? $actual : [];
         $salida = ['version' => 1];
         if (($base['modalidad_entrega'] ?? null) === 'municipal') {
-            foreach (['expediente', 'finanzas_municipales', 'consulta_municipal', 'municipio_destino'] as $clave) {
+            foreach (['expediente', 'finanzas_municipales', 'consulta_municipal', 'municipio_destino', 'resguardo_envio'] as $clave) {
                 if (array_key_exists($clave, $base)) $salida[$clave] = $base[$clave];
             }
         }
@@ -209,7 +209,7 @@ class FusionarSolicitudPreparacionPedido
         }
         foreach ([
             'acciones_disponibilidad', 'reapertura_disponibilidad', 'solicitudes_ajuste_ids', 'solicitudes_ajuste_lotes', 'cobertura_tienda', 'cambio_cobertura_tienda', 'historial_cambios_cobertura', 'segundo_traslado', 'historial_traslados_tienda', 'movimientos_tienda_version', 'cambio_modalidad_tienda', 'credito_wizerp', 'tienda_md_reporte',
-            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad', 'conversion_modalidad',
+            'retiro_recoleccion', 'liberacion_fisica_20', 'cambio_modalidad', 'conversion_modalidad', 'resguardo_envio',
             'continuacion_ejecutor', 'entrega_custodia', 'compromisos_inventario', 'complemento_pdv', 'anexo_integracion', 'transferencia_tienda', 'seguimiento_recoleccion', 'remision_tienda',
         ] as $clave) {
             if (is_array($salida[$clave] ?? null) && $salida[$clave] !== []) {
@@ -344,6 +344,7 @@ class FusionarSolicitudPreparacionPedido
             'compromisos_inventario',
             'complemento_pdv',
             'anexo_integracion',
+            'resguardo_envio',
         ] as $clave) {
             if (array_key_exists($clave, $origen)) {
                 $salida[$clave] = $origen[$clave];

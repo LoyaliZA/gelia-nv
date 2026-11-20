@@ -28,6 +28,8 @@ class AsignarGuiaPedidoBmaService
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen']);
         InstruccionEntrega::assertGuiaNoPosterior($pedido);
 
+        \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
+
         if ($pedido->es_resguardo) {
             throw new \RuntimeException('Un pedido en resguardo no puede recibir guía. Libere el resguardo primero.');
         }

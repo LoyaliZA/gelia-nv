@@ -62,7 +62,7 @@ class ClasificacionComercialCliente
         $cliente->conversion_autorizada_at = null;
     }
 
-    public function registrarEvento(Cliente $cliente, ?int $usuarioId, ?int $solicitudId): void
+    public function registrarEvento(Cliente $cliente, ?int $usuarioId, ?int $solicitudId, ?string $motivo = null): void
     {
         if (! $cliente->id || $cliente->modalidad_origen === null) {
             return;
@@ -74,6 +74,7 @@ class ClasificacionComercialCliente
             'origen' => $cliente->modalidad_origen,
             'solicitud_id' => $solicitudId,
             'usuario_id' => $usuarioId,
+            'motivo' => $motivo,
         ]);
     }
 

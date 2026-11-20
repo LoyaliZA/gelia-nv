@@ -45,6 +45,13 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
 
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [filtrosExtra, setFiltrosExtra] = useState({
+        desde: filtros.desde || '',
+        hasta: filtros.hasta || '',
+        almacen_id: filtros.almacen_id || '',
+        mios: filtros.mios === '1' || filtros.mios === 'true' || filtros.mios === true ? '1' : '',
+    });
+    const filtrosExtraRef = useRef(filtrosExtra);
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     const [lecturaPropiaFormulario, setLecturaPropiaFormulario] = useState(false);
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
@@ -64,7 +71,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [ultimaSync, setUltimaSync] = useState(null);
     const detalleDesdeEnlaceRef = useRef(false);
     const debounceBusqueda = useRef(null);
-    const paramsListado = useRef({ tab: tabActiva, q: busqueda || undefined, page: pedidos?.current_page || 1 });
+    const paramsListado = useRef({ tab: tabActiva, q: busqueda || undefined, ...filtrosExtraRef.current, page: pedidos?.current_page || 1 });
     const flashMostradoRef = useRef(null);
 
     const cargarYMarcar = useCallback(async (params, opts) => {
@@ -206,23 +213,30 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const onTabChange = (tab) => {
         clearTimeout(debounceBusqueda.current);
         setTabActiva(tab);
-        cargarYMarcar({ tab, q: busqueda || undefined, page: 1 });
+        cargarYMarcar({ tab, q: busqueda || undefined, ...filtrosExtraRef.current, page: 1 });
+    };
+
+    const onCambiarFiltros = (cambios) => {
+        clearTimeout(debounceBusqueda.current);
+        filtrosExtraRef.current = { ...filtrosExtraRef.current, ...cambios };
+        setFiltrosExtra(filtrosExtraRef.current);
+        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, ...filtrosExtraRef.current, page: 1 });
     };
 
     const onBuscar = (valor) => {
         setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
         debounceBusqueda.current = setTimeout(() => {
-            cargarYMarcar({ tab: tabActiva, q: valor || undefined, page: 1 });
+            cargarYMarcar({ tab: tabActiva, q: valor || undefined, ...filtrosExtraRef.current, page: 1 });
         }, 400);
     };
 
     const onIrAPagina = (page) => {
-        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page });
+        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, ...filtrosExtraRef.current, page });
     };
 
     const onActualizar = () => {
-        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, page: pedidosVista?.current_page || 1 });
+        cargarYMarcar({ tab: tabActiva, q: busqueda || undefined, ...filtrosExtraRef.current, page: pedidosVista?.current_page || 1 });
     };
 
     const abrirNuevo = () => {
@@ -284,7 +298,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     };
 
     const exportarCsv = () => {
-        window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: busqueda || '' });
+        window.location.href = route('control_pedidos.exportar', { tab: tabActiva, q: busqueda || '', ...Object.fromEntries(Object.entries(filtrosExtra).filter(([, v]) => v)) });
     };
 
     const etiquetaEliminar = pedidoAEliminar?.folio_remision || pedidoAEliminar?.folio || 'este borrador';
@@ -303,23 +317,23 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onLinkDireccion={() => setModalLinkDireccion(true)}
                 />
 
-                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-4`}>
+                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-4 md:p-5 space-y-3`}>
                     <MetricasBandejaPedidos
                         metricas={metricasVista}
                         tabActiva={tabActiva}
                         onTabChange={onTabChange}
+                        incluirEliminadas={can('control_pedidos.eliminados')}
                     />
                     <div className="gelia-tienda-op-divider" aria-hidden />
                     <FiltrosPedidos
                         filtros={filtros}
-                        tabActiva={tabActiva}
                         busqueda={busqueda}
-                        onTabChange={onTabChange}
                         onBuscar={onBuscar}
                         onActualizar={onActualizar}
-                        metricas={metricasVista}
                         buscando={cargando}
-                        can={can}
+                        filtrosExtra={filtrosExtra}
+                        onCambiarFiltros={onCambiarFiltros}
+                        almacenes={catalogos.almacenes || []}
                     />
                 </div>
 
@@ -329,6 +343,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     tabActiva={tabActiva}
                     busqueda={busqueda}
                     cargando={cargando}
+                    onLimpiarBusqueda={() => onBuscar('')}
+                    onVerTodas={() => onTabChange('TODAS')}
+                    onNuevo={can('control_pedidos.crear') ? abrirNuevo : undefined}
                     onIrAPagina={onIrAPagina}
                     onVer={abrirVer}
                     onBitacora={abrirBitacora}

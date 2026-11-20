@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import {
     Calculator,
@@ -182,7 +182,42 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
         setClientesEnVista(prev => [...prev, { ...cliente, monto_cotizado_input: '' }]);
         setMostrarDropdown(false);
         setTerminoBusqueda('');
+        setTimeout(refrescarClientes, 0);
     };
+
+    // El acumulado temporal y la lista operativa cambian con cada autorización o pago: se vuelven a
+    // leer al agregar el cliente, al volver a la ventana y cada minuto, sin esperar la carga masiva.
+    const clientesRef = useRef([]);
+    clientesRef.current = clientesEnVista;
+    const refrescarClientes = async () => {
+        const actuales = clientesRef.current;
+        if (actuales.length === 0) return;
+        const frescos = await Promise.all(actuales.map(async (c) => {
+            try {
+                const { data } = await axios.get(`/api/clientes/${encodeURIComponent(c.numero_cliente)}`);
+                return data?.encontrado ? data : null;
+            } catch {
+                return null;
+            }
+        }));
+        setClientesEnVista(prev => prev.map(c => {
+            const nuevo = frescos.find(f => f && f.id === c.id);
+            return nuevo ? { ...c, ...nuevo, monto_cotizado_input: c.monto_cotizado_input } : c;
+        }));
+    };
+
+    useEffect(() => {
+        if (clientesEnVista.length === 0) return undefined;
+        const alVolver = () => { if (document.visibilityState === 'visible') refrescarClientes(); };
+        document.addEventListener('visibilitychange', alVolver);
+        window.addEventListener('focus', alVolver);
+        const intervalo = setInterval(alVolver, 60000);
+        return () => {
+            document.removeEventListener('visibilitychange', alVolver);
+            window.removeEventListener('focus', alVolver);
+            clearInterval(intervalo);
+        };
+    }, [clientesEnVista.length]);
 
     const quitarCliente = (id) => {
         setClientesEnVista(prev => prev.filter(c => c.id !== id));
@@ -354,6 +389,37 @@ export default function EjercicioEscalonamientoPanel({ listas, variant = 'page' 
                                 </div>
                             </div>
                         </div>
+
+                        {cliente.acumulado_operativo !== undefined && (
+                            <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border theme-border theme-element space-y-2" aria-label="Operación en curso del cliente">
+                                <p className="text-xs font-black uppercase tracking-widest theme-text-main m-0">Operación en curso</p>
+                                <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
+                                    Oficial {fmtMontoEscalonamiento(cliente.acumulado_oficial)} + provisional {fmtMontoEscalonamiento(cliente.acumulado_provisional)} = operativo {fmtMontoEscalonamiento(cliente.acumulado_operativo)}
+                                </p>
+                                <p className="text-xs theme-text-muted m-0">
+                                    El cálculo de abajo parte de {fmtMontoEscalonamiento(cliente.acumulado_para_lista ?? cliente.acumulado_operativo)} y de la lista operativa vigente, aunque la próxima carga masiva aún no actualice el oficial.
+                                    {cliente.lista_proyectada ? ` Una solicitud pendiente proyecta ${cliente.lista_proyectada}; no concede nada hasta autorizarse.` : ''}
+                                </p>
+                                {cliente.doble_conteo_posible && (
+                                    <p className="text-xs font-bold text-amber-900 dark:text-amber-200 m-0">
+                                        Una carga normal posterior pudo incluir ventas ya cotizadas. Es una advertencia de incertidumbre, no una conciliación: esos provisionales no se suman al calcular la lista.
+                                    </p>
+                                )}
+                                {Array.isArray(cliente.operaciones) && cliente.operaciones.length > 0 && (
+                                    <ul className="m-0 p-0 list-none space-y-1">
+                                        {cliente.operaciones.map((op) => (
+                                            <li key={op.folio} className="text-xs theme-text-muted flex flex-wrap gap-x-2">
+                                                <span className="font-black theme-text-main">{op.folio}</span>
+                                                <span>{op.proceso}</span>
+                                                <span>{op.estado}{op.pago_confirmado ? ' · pago confirmado' : ''}</span>
+                                                <span className="tabular-nums">{fmtMontoEscalonamiento(op.provisional_vigente ?? op.monto)}{op.provisional_vigente ? ' provisional' : ' sin efecto'}</span>
+                                                {op.lista && <span>{op.lista}</span>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
 
                         {menudeo && (
                             <div className="mx-4 md:mx-5 mt-4 p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-3">

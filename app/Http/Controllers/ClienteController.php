@@ -30,6 +30,33 @@ class ClienteController extends Controller
     /**
      * Actualiza un cliente existente desde el modal.
      */
+    /**
+     * Corrección administrativa de la modalidad (Menudeo/Mayoreo) sin esperar la siguiente carga.
+     * Exige permiso y motivo, deja evento con usuario y no toca el estado comercial (inactivo/activo),
+     * la lista ni el monto oficial, que siguen llegando por importación o por autorizaciones.
+     */
+    public function corregirModalidad(Request $request, Cliente $cliente)
+    {
+        $datos = $request->validate([
+            'es_menudeo' => ['required', 'boolean'],
+            'motivo' => ['required', 'string', 'min:5', 'max:500'],
+        ]);
+        $esMenudeo = (bool) $datos['es_menudeo'];
+        $clasificacion = app(\App\Services\Clientes\ClasificacionComercialCliente::class);
+
+        DB::transaction(function () use ($cliente, $esMenudeo, $datos, $clasificacion) {
+            $cliente = Cliente::query()->lockForUpdate()->findOrFail($cliente->id);
+            if ((bool) $cliente->es_menudeo === $esMenudeo) {
+                return;
+            }
+            $clasificacion->asignar($cliente, $esMenudeo, \App\Services\Clientes\ClasificacionComercialCliente::ORIGEN_ADMINISTRACION);
+            $cliente->save();
+            $clasificacion->registrarEvento($cliente, Auth::id(), null, $datos['motivo']);
+        });
+
+        return back()->with('success', 'Modalidad actualizada.');
+    }
+
     public function update(GuardarClienteRequest $request, Cliente $cliente, CorreccionEmergenciaNumeroClienteService $correccionEmergencia, RecalcularCreditoClienteService $recalcularCredito)
     {
         $validated = $this->datosClienteDesdeRequest($request);
@@ -97,8 +124,10 @@ class ClienteController extends Controller
             unset($validated['fecha_inicio_credito']);
         }
 
+        // El monto oficial no se edita desde administración; la lista solo con la autoridad apagada.
+        unset($validated['monto_venta_actual']);
         if (app(\App\Services\Escalonamiento\EscalonamientoAutoridad::class)->estaActiva()) {
-            unset($validated['monto_venta_actual'], $validated['lista_actual_id']);
+            unset($validated['lista_actual_id']);
         }
 
         return $validated;

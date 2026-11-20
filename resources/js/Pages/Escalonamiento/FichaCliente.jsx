@@ -51,6 +51,22 @@ export default function FichaCliente({ auth, cliente, periodo, ficha, historialM
                     </section>
                 )}
 
+                <section className={geliaCardClass('p-6 space-y-3')}>
+                    <h2 className="text-base font-black theme-text-main m-0">Operación de Ventas</h2>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                        <TarjetaLista etiqueta="Acumulado oficial (importación)" valor={dinero(cab.acumulado_oficial)} />
+                        <TarjetaLista etiqueta="Provisionales vigentes" valor={dinero(cab.acumulado_provisional)} />
+                        <TarjetaLista etiqueta="Acumulado operativo" valor={dinero(cab.acumulado_operativo)} />
+                        <TarjetaLista etiqueta="Lista proyectada (solicitud pendiente)" valor={cab.lista_proyectada || 'Sin solicitud pendiente'} esLista={!!cab.lista_proyectada} />
+                    </dl>
+                    {cab.doble_conteo_posible && (
+                        <p className="gelia-callout-aviso p-3 text-sm m-0 font-semibold">
+                            Una carga normal posterior pudo incluir ventas ya cotizadas. Es una advertencia de incertidumbre, no una conciliación: la lista automática no suma esos provisionales hasta confirmarlo con una carga con corte.
+                        </p>
+                    )}
+                    <p className="text-xs theme-text-muted m-0">El acumulado del módulo sale de documentos del período y no se mezcla con las cotizaciones provisionales.</p>
+                </section>
+
                 {historialMeses.length > 0 && (
                     <section className={geliaCardClass('p-6 space-y-3')}>
                         <h2 className="text-base font-black theme-text-main m-0">Historial por mes</h2>

@@ -5,7 +5,9 @@ namespace App\Services\PuntoVenta\Resguardos;
 use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\User;
+use App\Support\ControlPedidos\PoliticaResguardoEnvio;
 use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
@@ -73,7 +75,7 @@ class ConsultaDetalleResguardoPdvService
             $resguardo->load([
                 'sucursal:id,nombre',
                 'cliente:id,numero_cliente',
-                'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona',
+                'pedido:id,folio,folio_remision,envia_a_otra_persona,envia_otra_persona,solicitud_preparacion_json',
                 'pedido.bultosEmpaque.documentos',
                 'evidencias',
                 'eventoRegistroManual.actor:id,name,username',
@@ -98,9 +100,46 @@ class ConsultaDetalleResguardoPdvService
 
         $auditoria = $this->auditoria->obtener($user, $resguardo);
 
+        $serializado = $this->serializarResguardo($resguardo);
+        $serializado['integracion_municipal'] = $this->integracionMunicipal($user, $resguardo);
+
         return [
-            'resguardo' => $this->serializarResguardo($resguardo),
+            'resguardo' => $serializado,
             'timeline' => $auditoria['timeline'],
+        ];
+    }
+
+    /**
+     * Integración local pendiente o confirmada de esta custodia con un envío municipal. Solo expone la fila de esta
+     * remisión; `puede_confirmar` repite la política del servidor y la ruta vuelve a validarla.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function integracionMunicipal(User $user, ResguardoPdv $resguardo): ?array
+    {
+        if (! $resguardo->pedido_bma_id) {
+            return null;
+        }
+        $custodia = PedidoBma::query()->find($resguardo->pedido_bma_id);
+        $local = $custodia && is_array($custodia->solicitud_preparacion_json['integracion_local'] ?? null)
+            ? $custodia->solicitud_preparacion_json['integracion_local']
+            : [];
+        $principal = in_array($local['estado'] ?? null, ['pendiente', 'integrado'], true) && (int) ($local['pedido_principal_id'] ?? 0) > 0
+            ? PedidoBma::query()->find((int) $local['pedido_principal_id'])
+            : null;
+        if (! $principal || (int) $principal->cliente_id !== (int) $custodia->cliente_id) {
+            return null;
+        }
+        $fila = collect(PoliticaResguardoEnvio::vinculos($principal))
+            ->first(fn (array $v) => (int) $v['origen_id'] === (int) $custodia->id && $v['mecanismo'] === PoliticaResguardoEnvio::MECANISMO_LOCAL);
+        if (! $fila) {
+            return null;
+        }
+
+        return [
+            'pedido_id' => (int) $principal->id,
+            'puede_confirmar' => PoliticaResguardoEnvio::puedeConfirmarIntegracionFisica($user, $custodia, PoliticaResguardoEnvio::MECANISMO_LOCAL),
+            'resguardo_envio' => ['activo' => true, 'estados' => [], 'vinculos' => [$fila]],
         ];
     }
 

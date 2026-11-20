@@ -147,6 +147,22 @@ class SolicitudTag extends Model
             app(ConciliacionSolicitudEscalonamiento::class)->resolverObsolescencia($solicitud);
         };
 
+        // Una solicitud que deja de estar autorizada (cancelada, incorrecta o vencida)
+        // no puede conservar una aplicación pendiente: ningún job la recuperaría.
+        static::updating(function (SolicitudTag $solicitud) {
+            if (! $solicitud->isDirty('catalogo_estado_solicitud_id')
+                || ! in_array($solicitud->aplicacion_cliente, ['pendiente', 'fallida'], true)) {
+                return;
+            }
+            $autorizados = array_filter([
+                (int) CatalogoEstadoSolicitud::idDe('Respondida'),
+                (int) CatalogoEstadoSolicitud::idDe('Verificada'),
+            ]);
+            if (! in_array((int) $solicitud->catalogo_estado_solicitud_id, $autorizados, true)) {
+                $solicitud->aplicacion_cliente = 'no_aplica';
+            }
+        });
+
         static::updated(function (SolicitudTag $solicitud) use ($resolver) {
             $campos = [
                 'numero_remision',

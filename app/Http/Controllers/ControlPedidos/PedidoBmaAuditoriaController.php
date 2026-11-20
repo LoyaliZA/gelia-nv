@@ -326,6 +326,13 @@ class PedidoBmaAuditoriaController extends Controller
     ): RedirectResponse {
         Gate::authorize('control_pedidos.liberar_resguardo');
         $this->assertPedidoVisible($pedidoBma);
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedidoBma)
+            && \App\Support\ControlPedidos\PoliticaResguardoEnvio::intencionActiva($pedidoBma)) {
+            Gate::authorize('control_pedidos.auditar');
+            if ((int) $pedidoBma->vendedor_id === (int) Auth::id()) {
+                return redirect()->back()->with('error', 'Quien registró la venta no libera el resguardo.');
+            }
+        }
 
         try {
             $datos = $request->validated();

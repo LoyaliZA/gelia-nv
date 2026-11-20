@@ -3,6 +3,7 @@ import IndicadoresSolicitudes from '@/Components/Solicitudes/IndicadoresSolicitu
 import ModalAccionSolicitud from './Partials/ModalAccionSolicitud';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
+import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import React, { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router } from '@inertiajs/react';
@@ -10,7 +11,7 @@ import {
     Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon, Sparkles,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert,
     ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown, ArrowRight, Store
+    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown, ArrowRight, Store, Info
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -27,7 +28,7 @@ import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 import useIconoHover from '@/hooks/useIconoHover';
 import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
-import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente, PANEL_AVISO, PANEL_ERROR, PANEL_EXITO, PANEL_NOTA } from './Partials/solicitudesStyles';
+import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 
@@ -118,6 +119,16 @@ const formatearTiempoRelativo = (fechaString, compacto = false) => {
     return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}${aLas}${horaFormateada}`;
 };
 
+// «Ascenso a» cuando la lista destino exige un monto mayor al de la lista actual; «Cambio a» si es una rebaja.
+const etiquetaDestinoLista = (solicitud, listaDestino) => {
+    const actual = solicitud.cliente?.lista_descuento || solicitud.cliente?.listaDescuento;
+    const montoActual = Number(actual?.monto_requerido);
+    const montoDestino = Number(listaDestino?.monto_requerido);
+    return Number.isFinite(montoActual) && Number.isFinite(montoDestino) && actual && montoDestino < montoActual
+        ? 'Cambio a'
+        : 'Ascenso a';
+};
+
 const EtiquetasOperacion = ({ solicitud, children }) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
     const esTag = nombreProceso.toUpperCase().includes('TAG');
@@ -153,21 +164,27 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
         <div className="gelia-tag-etiquetas flex flex-col items-start">
             <div className="gelia-tag-flujo">
                 <span className="gelia-tag-flujo-paso">
-                    <span className="gelia-tag-flujo-etiqueta">Lista almacenada</span>
+                    <span className="gelia-tag-flujo-etiqueta">Lista actual</span>
                     {etiquetaLista(listaAlmacenada)}
                 </span>
                 {listaEfectiva !== listaAlmacenada && (
                     <span className="gelia-tag-flujo-paso">
                         <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="gelia-tag-flujo-etiqueta">Efectiva</span>
+                        <span className="gelia-tag-flujo-etiqueta">Lista aplicada</span>
                         {etiquetaLista(listaEfectiva)}
                     </span>
                 )}
                 {esCambioLista && objLista && (
+                    <span className="gelia-tag-flujo-paso gelia-tag-flujo-paso--destino">
+                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
+                        <span className="gelia-tag-flujo-etiqueta">{etiquetaDestinoLista(solicitud, objLista)}</span>
+                        {etiquetaLista(objLista.nombre)}
+                    </span>
+                )}
+                {esCambioLista && !objLista && !solicitud.compra_en_tienda_solo_tag && (
                     <span className="gelia-tag-flujo-paso">
                         <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="gelia-tag-flujo-etiqueta">Ascenso a</span>
-                        {etiquetaLista(objLista.nombre)}
+                        <span className="gelia-tag-flujo-etiqueta">Mantiene lista actual</span>
                     </span>
                 )}
             </div>
@@ -188,14 +205,20 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
                     </EtiquetaConIcono>
                 )}
                 {solicitud.cliente && (
-                    <span className={CHIP_NEUTRO}>
-                        Cliente: {clienteInactivo ? 'Inactivo' : 'Activo'}
+                    <span className="gelia-tag-dato-estado" data-activo={!clienteInactivo}>
+                        <span className="gelia-tag-dato-estado-punto" aria-hidden="true" />
+                        Cliente {clienteInactivo ? 'inactivo' : 'activo'}
                     </span>
                 )}
                 {(aplicacion === 'pendiente' || aplicacion === 'fallida') && (
-                    <span className={CHIP_NEUTRO}>
-                        Aplicación {aplicacion}
-                    </span>
+                    <EtiquetaConIcono
+                        icon={aplicacion === 'fallida' ? AlertOctagon : Clock}
+                        className={aplicacion === 'fallida' ? CHIP_ERROR : CHIP_AVISO}
+                        iconClassName="h-3 w-3"
+                        size={12}
+                    >
+                        {aplicacion === 'fallida' ? 'Aplicación fallida' : 'Aplicación pendiente'}
+                    </EtiquetaConIcono>
                 )}
                 {solicitud.compra_en_tienda && (
                     <EtiquetaConIcono icon={Store} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
@@ -231,85 +254,71 @@ const esMotivoVencimientoPago = (motivo) => {
     return m.includes('PLAZO DE PAGO') || m.includes('PAGO RECHAZADO') || m.includes('PAGO VENCIDO');
 };
 
-const FeedbackYComentarios = ({ solicitud }) => {
+// Clasifica la última respuesta de la solicitud: color (tono), título con quién respondió, texto, fecha y evidencia.
+// Lo usan el detalle y el resumen de cada fila para que ambos digan lo mismo.
+const clasificarRespuesta = (solicitud) => {
+    const estadoNombre = solicitud.estado?.nombre;
     const esVencimiento = solicitud.motivo_incorrecta === 'vencimiento_pago';
-    const esErrorEstado = solicitud.estado?.nombre === 'Incorrecta';
-    const esAprobada = solicitud.estado?.nombre === 'Respondida' || solicitud.estado?.nombre === 'Verificada';
-
-    const auditoriasOrdenadas = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id);
-    const ultimaAuditoria = auditoriasOrdenadas[0] || null;
+    const esAprobada = estadoNombre === 'Respondida' || estadoNombre === 'Verificada';
+    const ultimaAuditoria = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id)[0] || null;
     const motivoUltimo = ultimaAuditoria?.motivo_reporte || '';
     const esSistema = esMotivoSistema(motivoUltimo) || esMotivoVencimientoPago(motivoUltimo) || esVencimiento;
     const esAlertaPago = !esSistema && motivoUltimo.toUpperCase().includes('ALERTA DE PAGO');
-    const esError = esErrorEstado || esVencimiento || esMotivoVencimientoPago(motivoUltimo);
-
-    const tieneObservacion = solicitud.observaciones_vendedor && solicitud.observaciones_vendedor.trim() !== '';
-    const tieneFeedback = (esError || esAprobada || esAlertaPago) && motivoUltimo;
-
-    let evidenciaAdmin = solicitud.evidencia_respuesta_path;
-    if (!evidenciaAdmin && ultimaAuditoria?.datos_snapshot) {
-        const snap = typeof ultimaAuditoria.datos_snapshot === 'string' ? leerSnapshot(ultimaAuditoria.datos_snapshot) : ultimaAuditoria.datos_snapshot;
-        if (snap?.evidencia_respuesta_path) evidenciaAdmin = snap.evidencia_respuesta_path;
-    }
-
-    if (!tieneObservacion && !tieneFeedback && !evidenciaAdmin) return null;
-
-    const Icono = esAlertaPago ? AlertTriangle : (esError ? AlertOctagon : CheckCircle2);
-    const tono = esAlertaPago ? 'theme-text-aviso' : (esError ? 'theme-text-peligro' : 'theme-text-exito');
+    const esError = estadoNombre === 'Incorrecta' || esVencimiento || esMotivoVencimientoPago(motivoUltimo);
+    const esVerificada = estadoNombre === 'Verificada';
+    const esPagoAprobado = !esError && !esAlertaPago && !esSistema && /PAGO/i.test(motivoUltimo)
+        && (solicitud.pago_confirmado || /PAGO (CONFIRMADO|APROBADO)/i.test(motivoUltimo));
     const autor = ultimaAuditoria?.usuario?.name?.trim();
-    const estadoAnteriorNombre = ultimaAuditoria?.estado_anterior?.nombre
-        || ultimaAuditoria?.estadoAnterior?.nombre
-        || '';
-    const esRespuestaACorreccion = !esError && esAprobada && estadoAnteriorNombre === 'Incorrecta';
+    const estadoAnterior = ultimaAuditoria?.estado_anterior?.nombre || ultimaAuditoria?.estadoAnterior?.nombre || '';
+    const esRespuestaACorreccion = !esError && esAprobada && estadoAnterior === 'Incorrecta';
+
+    let evidencia = solicitud.evidencia_respuesta_path;
+    if (!evidencia && ultimaAuditoria?.datos_snapshot) {
+        const snap = typeof ultimaAuditoria.datos_snapshot === 'string' ? leerSnapshot(ultimaAuditoria.datos_snapshot) : ultimaAuditoria.datos_snapshot;
+        if (snap?.evidencia_respuesta_path) evidencia = snap.evidencia_respuesta_path;
+    }
 
     let titulo;
-        if (esAlertaPago) {
-        titulo = 'Alerta de ajuste de lista';
-    } else if (esVencimiento || esMotivoVencimientoPago(motivoUltimo)) {
-        titulo = 'Pago vencido · Sistema';
-    } else if (esSistema) {
-        titulo = 'Respuesta del sistema';
-    } else if (esError) {
-        titulo = autor ? `Error reportado por ${autor}` : 'Corrección requerida';
-    } else if (esRespuestaACorreccion) {
-        titulo = autor ? `Respuesta a corrección · ${autor}` : 'Respuesta a corrección';
-    } else {
-        titulo = autor ? `Respuesta de ${autor}` : 'Respuesta';
-    }
+    if (esAlertaPago) titulo = 'Alerta de ajuste de lista';
+    else if (esVencimiento || esMotivoVencimientoPago(motivoUltimo)) titulo = 'Pago vencido · Sistema';
+    else if (esSistema) titulo = 'Respuesta del sistema';
+    else if (esError) titulo = autor ? `Error reportado por ${autor}` : 'Corrección requerida';
+    else if (esVerificada) titulo = autor ? `Validada por ${autor}` : 'Solicitud validada';
+    else if (esPagoAprobado) titulo = autor ? `Pago aprobado por ${autor}` : 'Pago aprobado';
+    else if (esRespuestaACorreccion) titulo = autor ? `Aprobada tras corrección · ${autor}` : 'Aprobada tras corrección';
+    else titulo = autor ? `Aprobada por ${autor}` : 'Aprobada';
 
-    const panel = esAlertaPago ? PANEL_AVISO : (esError ? PANEL_ERROR : PANEL_EXITO);
+    const tono = esAlertaPago ? 'aviso' : esError ? 'peligro' : esVerificada ? 'verificado' : esPagoAprobado ? 'pago' : 'exito';
+    return {
+        hay: Boolean((esError || esAprobada || esAlertaPago) && motivoUltimo),
+        esVencimiento, esAprobada, esError, esAlertaPago, motivoUltimo, evidencia, titulo, tono,
+        fecha: ultimaAuditoria?.created_at ? formatearTiempoRelativo(ultimaAuditoria.created_at) : '',
+        icono: esAlertaPago ? AlertTriangle : esError ? AlertOctagon : undefined,
+    };
+};
+
+const FeedbackYComentarios = ({ solicitud }) => {
+    const r = clasificarRespuesta(solicitud);
+    const tieneObservacion = solicitud.observaciones_vendedor && solicitud.observaciones_vendedor.trim() !== '';
+
+    if (!tieneObservacion && !r.hay && !r.evidencia) return null;
 
     return (
-        <div className="mt-2 flex flex-col gap-1.5">
-            {tieneObservacion && !esAlertaPago && (
-                <div className={`${PANEL_NOTA} flex items-start gap-2`}>
-                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0 theme-text-muted" aria-hidden="true" />
-                    <div className="min-w-0">
-                        <p className="mb-0.5 text-xs font-medium theme-text-muted">Nota</p>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words theme-text-main">{solicitud.observaciones_vendedor}</p>
-                    </div>
-                </div>
+        <div className="mt-2 flex flex-col gap-2">
+            {tieneObservacion && !r.esAlertaPago && (
+                <AvisoSolicitud tono="neutro" titulo="Nota de la solicitud" icono={MessageSquare}>
+                    {solicitud.observaciones_vendedor}
+                </AvisoSolicitud>
             )}
 
-            {(esError || esAprobada || esAlertaPago) && (
-                <div className={`${panel} flex flex-col gap-1.5`}>
-                    <div className="flex items-start gap-2">
-                        <Icono className={`mt-0.5 h-4 w-4 shrink-0 ${tono}`} aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                            <p className={`mb-0.5 text-xs font-medium ${tono}`}>
-                                {titulo}
-                            </p>
-                            {motivoUltimo && (
-                                <p className="text-sm leading-relaxed whitespace-pre-wrap break-words theme-text-main">
-                                    {motivoUltimo}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                    {evidenciaAdmin && !esVencimiento && !esMotivoVencimientoPago(motivoUltimo) && (
-                        <EvidenciaSolicitud path={evidenciaAdmin} dialogClassName="gelia-tag-lista-overlay" />
+            {(r.esError || r.esAprobada || r.esAlertaPago) && (
+                <AvisoSolicitud tono={r.tono} titulo={r.titulo} icono={r.icono}>
+                    {r.motivoUltimo}
+                    {r.fecha && <span className="block text-xs theme-text-muted">{r.fecha}</span>}
+                    {r.evidencia && !r.esVencimiento && !esMotivoVencimientoPago(r.motivoUltimo) && (
+                        <EvidenciaSolicitud path={r.evidencia} dialogClassName="gelia-tag-lista-overlay" />
                     )}
-                </div>
+                </AvisoSolicitud>
             )}
         </div>
     );
@@ -343,7 +352,7 @@ const ClienteSolicitud = ({ solicitud, esHeredado, copiadoId, onCopiar }) => (
             )}
             {esHeredado && <span className={CHIP_NEUTRO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
         </div>
-        <div className="line-clamp-2 text-sm font-semibold break-words theme-text-main" title={solicitud.cliente?.nombre || undefined}>{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
+        <div className="line-clamp-2 text-base font-semibold break-words theme-text-main" title={solicitud.cliente?.nombre || undefined}>{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
     </div>
 );
 
@@ -357,7 +366,7 @@ const CotizacionSolicitud = ({ solicitud, alinearDerecha = false }) => {
     const mostrarPago = solicitud.estado?.nombre !== 'Cancelada' && (aprobada || solicitud.pago_confirmado || vencido);
     return (
         <div className={`inline-flex flex-col gap-1 ${alinearDerecha ? 'items-end text-right' : 'items-start'}`}>
-            <div className="text-sm font-semibold tabular-nums theme-text-main">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</div>
+            <div className="gelia-tag-monto tabular-nums">{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</div>
             {mostrarPago
                 ? <div className="gelia-tag-pago" data-tono={tono}>{etiqueta}</div>
                 : <div className="text-xs theme-text-muted"><span className="sr-only">Sin pago aplicable</span><span aria-hidden="true">—</span></div>}
@@ -428,38 +437,22 @@ const tieneMotivoCancelacionVisible = (solicitud) => {
     return !!solicitud.cancelacion_solicitada_at || solicitud.estado?.nombre === 'Cancelada';
 };
 
-const MotivoCancelacionBloque = ({ solicitud, compacto = false }) => {
+const MotivoCancelacionBloque = ({ solicitud }) => {
     if (!tieneMotivoCancelacionVisible(solicitud)) return null;
 
     const pendiente = solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada';
-    const titulo = pendiente ? 'Motivo de cancelación solicitada' : 'Motivo de cancelación';
+    const titulo = pendiente ? 'Cancelación solicitada' : 'Solicitud cancelada';
     const fechaSolicitud = solicitud.cancelacion_solicitada_at
         ? formatearTiempoRelativo(solicitud.cancelacion_solicitada_at)
         : null;
     const listaRebajaNombre = obtenerListaRebajaNombre(solicitud);
 
     return (
-        <div className={`${compacto ? 'mt-2' : 'mt-2'} flex flex-col gap-1`}>
-            <div className="flex items-start gap-2">
-                <Ban className={`mt-0.5 h-4 w-4 shrink-0 ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`} aria-hidden="true" />
-                <div className="min-w-0 flex-1">
-                    <p className={`mb-0.5 text-xs font-medium ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`}>
-                        {titulo}
-                    </p>
-                    {fechaSolicitud && pendiente && (
-                        <p className="mb-1 text-xs theme-text-muted">Solicitada {fechaSolicitud}</p>
-                    )}
-                    {listaRebajaNombre && (
-                        <p className={`mb-1 text-xs ${pendiente ? 'theme-text-peligro' : 'theme-text-muted'}`}>
-                            Lista de rebaja: {listaRebajaNombre}
-                        </p>
-                    )}
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed theme-text-main">
-                        {solicitud.motivo_cancelacion}
-                    </p>
-                </div>
-            </div>
-        </div>
+        <AvisoSolicitud tono={pendiente ? 'peligro' : 'neutro'} titulo={titulo} icono={Ban} className="mt-2">
+            {fechaSolicitud && pendiente && <span className="block text-xs theme-text-muted">Solicitada {fechaSolicitud}</span>}
+            {listaRebajaNombre && <span className="block text-xs theme-text-muted">Lista de rebaja: {listaRebajaNombre}</span>}
+            <span className="block">{solicitud.motivo_cancelacion}</span>
+        </AvisoSolicitud>
     );
 };
 
@@ -468,38 +461,48 @@ const leerSnapshot = (snapshot) => {
     try { return JSON.parse(snapshot); } catch { return null; }
 };
 
-// Texto del motivo: resalta el origen en mayúsculas ("SISTEMA AUTOMÁTICO:") o el estado inicial
-// ("Aprobado (Compra en tienda).") y deja el resto como contenido. Solo presentación.
-const ORIGEN_RESUMEN = /^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,39}):\s*([\s\S]+)$/;
+// Resumen de la fila: el origen en mayúsculas ("SISTEMA AUTOMÁTICO:", "PAGO CONFIRMADO.") o el estado inicial
+// ("Aprobado (Compra en tienda).") pasa a ser el título del aviso y el resto su contenido. Solo presentación.
+const ORIGEN_RESUMEN = /^([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]{3,39})[:.]\s*([\s\S]+)$/;
 const ESTADO_RESUMEN = /^(Aprobad[oa]|Verificad[oa])\b(\s*\([^)]{1,60}\))?\s*[.:]?\s*([\s\S]*)$/i;
+const sentencia = (texto) => texto[0] + texto.slice(1).toLowerCase();
 
 const separarResumen = (texto) => {
     const estado = ESTADO_RESUMEN.exec(texto);
-    if (estado) return { etiqueta: estado[1] + (estado[2] || ''), resto: estado[3], tono: 'exito' };
+    if (estado) return { titulo: estado[1] + (estado[2] || ''), resto: estado[3], tono: /^verificad/i.test(estado[1]) ? 'verificado' : 'exito' };
     const origen = ORIGEN_RESUMEN.exec(texto);
-    if (origen) return { etiqueta: origen[1][0] + origen[1].slice(1).toLowerCase(), resto: origen[2] };
+    if (origen) return { titulo: sentencia(origen[1].trim()), resto: origen[2], tono: /PAGO (CONFIRMADO|APROBADO)/.test(origen[1]) ? 'pago' : undefined };
     return { resto: texto };
 };
 
-const TextoResumen = ({ texto, tono }) => {
-    const { etiqueta, resto, tono: tonoEtiqueta } = separarResumen(texto.trim());
+const ICONO_RESUMEN = { peligro: AlertOctagon, aviso: AlertTriangle, exito: CheckCircle2, info: Info, pago: CreditCard, verificado: CheckSquare };
+
+const TextoResumen = ({ texto, tono, respuesta }) => {
+    const { titulo, resto, tono: tonoTexto } = separarResumen(texto.trim());
+    // Con una respuesta registrada, el color y el título vienen del estado (quién aprobó, pago, validación, error).
+    const tonoAviso = respuesta?.tono ?? tonoTexto ?? tono ?? 'info';
     return (
-        <p className="gelia-tag-resumen-texto line-clamp-2 m-0 text-sm" data-tono={tonoEtiqueta ?? tono}>
-            {etiqueta
-                ? <><span className="gelia-tag-resumen-origen">{etiqueta}{resto ? ':' : ''}</span> {resto}</>
-                : resto}
-        </p>
+        <AvisoSolicitud tono={tonoAviso} titulo={respuesta?.titulo ?? titulo} icono={ICONO_RESUMEN[tonoAviso]} compacto className="gelia-tag-resumen-aviso">
+            <span className="line-clamp-2">{respuesta ? respuesta.motivoUltimo : resto}</span>
+            {respuesta && (respuesta.fecha || respuesta.evidencia) && (
+                <span className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs theme-text-muted">
+                    {respuesta.fecha && <span>{respuesta.fecha}</span>}
+                    {respuesta.evidencia && <span className="inline-flex items-center gap-1"><FileImage className="h-3 w-3" aria-hidden="true" />Con evidencia</span>}
+                </span>
+            )}
+        </AvisoSolicitud>
     );
 };
 
 const ResumenDetalle = ({ solicitud, auth, onAbrir, tono }) => {
     const sinLeer = (solicitud.consultas || []).filter(c => c.estado === 'respondida' && !c.leido_vendedor_at && Number(solicitud.vendedor_id) === Number(auth?.user?.id)).length;
     const cancelacion = tieneMotivoCancelacionVisible(solicitud);
+    const respuesta = clasificarRespuesta(solicitud);
     const ultima = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id)[0];
     const resumen = cancelacion ? solicitud.motivo_cancelacion : ultima?.motivo_reporte || solicitud.observaciones_vendedor;
     return <div className="gelia-tag-resumen">
         {sinLeer > 0 && <span className="gelia-tag-unread"><MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />{sinLeer} {sinLeer === 1 ? 'respuesta sin leer' : 'respuestas sin leer'}</span>}
-        {resumen && <TextoResumen texto={resumen} tono={tono} />}
+        {resumen && <TextoResumen texto={resumen} tono={cancelacion ? 'peligro' : tono} respuesta={!cancelacion && respuesta.hay ? respuesta : null} />}
         <button type="button" onClick={onAbrir} className="gelia-tag-detail-link"><Eye className="w-4 h-4" aria-hidden="true" />{cancelacion ? 'Ver cancelación y detalle' : sinLeer ? 'Leer respuesta' : 'Ver detalle y respuestas'}</button>
     </div>;
 };
@@ -512,7 +515,7 @@ const ModalDetalleSolicitud = ({ solicitud, auth, onClose, onMarcarLeido, proces
                 <dl className="gelia-respuesta-contexto"><div><dt>Cliente</dt><dd>{solicitud.cliente?.nombre || 'Nuevo prospecto'} · {solicitud.cliente?.numero_cliente || 'Sin número'}</dd></div><div><dt>Responsable</dt><dd>{solicitud.vendedor?.name || 'Sin asignar'}</dd></div><div><dt>Estado</dt><dd>{solicitud.estado?.nombre || 'Pendiente'}</dd></div><div><dt>Cotización</dt><dd>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</dd></div></dl>
                 <EtiquetasOperacion solicitud={solicitud} />
                 <section className="gelia-tag-detail-section"><h3>Notas y resolución</h3><FeedbackYComentarios solicitud={solicitud} />{!solicitud.observaciones_vendedor && !solicitud.auditorias?.length && <p className="text-sm theme-text-muted">La solicitud todavía no tiene una respuesta.</p>}{solicitud.evidencia_path && <EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" />}</section>
-                {tieneMotivoCancelacionVisible(solicitud) && <section className="gelia-tag-message" data-tone="peligro"><MotivoCancelacionBloque solicitud={solicitud} /></section>}
+                {tieneMotivoCancelacionVisible(solicitud) && <MotivoCancelacionBloque solicitud={solicitud} />}
                 {!!solicitud.consultas?.length && <section className="gelia-tag-detail-section"><h3>Consultas y respuestas de supervisión</h3><div className="space-y-4">{[...solicitud.consultas].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(c => <div key={c.id} className="gelia-tag-message"><div className="flex flex-wrap justify-between gap-2"><h4 className="m-0 text-sm font-medium theme-text-main">{[c.consulta_tag && 'TAG', c.consulta_lista && 'Lista'].filter(Boolean).join(' y ')}</h4><span className="text-xs theme-text-muted">{c.estado === 'pendiente' ? 'Pendiente de respuesta' : c.respuesta_positiva ? 'Confirmada' : 'Rechazada'}</span></div>{c.comentario_vendedor && <p>{c.comentario_vendedor}</p>}{c.estado === 'respondida' && <><p className="text-xs theme-text-muted">Respuesta de {c.encargada?.name || 'Supervisión'}</p><p>{c.comentario_encargada || 'Sin comentario adicional.'}</p>{c.evidencia_respuesta_path && <EvidenciaSolicitud path={c.evidencia_respuesta_path} dialogClassName="gelia-tag-lista-overlay" />}{Number(solicitud.vendedor_id) === Number(auth?.user?.id) && !c.leido_vendedor_at && <button type="button" disabled={procesando} className="theme-btn-secondary mt-3" onClick={() => onMarcarLeido(solicitud.id, c.id)}><Check className="w-4 h-4" aria-hidden="true" />Marcar como leída</button>}</>}</div>)}</div></section>}
             </div>
             <footer className="gelia-modal-footer gelia-workflow-actions">{onBitacora && <button type="button" className="theme-btn-secondary" onClick={onBitacora}><History className="w-4 h-4" aria-hidden="true" />Ver bitácora</button>}<button type="button" data-dialog-close className="theme-btn-primary">Cerrar detalle</button></footer>
@@ -799,7 +802,7 @@ export default function Index({
         fechaInicio,
         fechaFin,
         filtroVendedor,
-        filtroMotivo, filtroLista, filtroTipoCliente, filtroTag,
+        filtroMotivo, filtroLista, filtroTipoCliente, filtroTag, filtrosExtra,
         filtrosAdicionalesActivos,
         construirParams,
         exportParams,
@@ -917,6 +920,7 @@ export default function Index({
         tipo_fecha: 'TODAS',
         fecha_inicio: '',
         fecha_fin: '',
+        proceso_id: '', cliente_numero: '', es_heredado: '', pago: '', consulta: '', cancelacion: '',
     });
 
     const obtenerEstiloEstado = (nombreEstado) => {
@@ -1064,6 +1068,9 @@ export default function Index({
                 {resumen ? (
                     <ResumenSolicitudes
                         resumen={resumen}
+                        metricas={metricas}
+                        tabActiva={tabActiva}
+                        onSeleccionarTab={(tab) => aplicarFiltros({ tab })}
                         filtroTipoCliente={filtroTipoCliente}
                         onFiltrarTipo={(tipoClienteId) => aplicarFiltros({ tipo_cliente_id: tipoClienteId })}
                         onLimpiarTipo={() => aplicarFiltros({ tipo_cliente_id: '' })}
@@ -1081,6 +1088,8 @@ export default function Index({
                     filtroLista={filtroLista} filtroTipoCliente={filtroTipoCliente} filtroTag={filtroTag}
                     listas={listas_filtro} tiposCliente={tipos_cliente_filtro}
                     vendedores={vendedores}
+                    procesos={procesos}
+                    filtrosExtra={filtrosExtra}
                     variante="tag-lista"
                     mostrarEliminadas={can('solicitudes.eliminadas')}
                     filtrosActivos={filtrosAdicionalesActivos}

@@ -83,7 +83,7 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
     public function test_aprobar_no_suma_monto_precargado(): void
     {
         $cliente = $this->cliente(1000);
-        $solicitud = $this->solicitud($cliente, 6000, $this->listaPlata->id);
+        $solicitud = $this->solicitud($cliente, 6000, $this->listaPlata->id, $this->idRespondida);
 
         app(AjustarMontoPorSolicitudService::class)->aplicarBeneficios($solicitud);
 
@@ -123,7 +123,8 @@ class MontoSolicitudVsCargaMasivaTest extends TestCase
 
         $cliente->refresh();
         $this->assertEquals(13000.0, (float) $cliente->monto_venta_actual);
-        $this->assertSame($this->listaPlata->id, $cliente->lista_actual_id);
+        // Revertir una solicitud sin concesión no asciende al cliente por monto: la lista administrativa no cambia.
+        $this->assertSame($this->listaBronce->id, $cliente->lista_actual_id);
         $this->assertEquals(0.0, (float) $solicitud->fresh()->monto_aplicado_al_cliente);
         $this->assertSame(0, EscalonamientoPeriodo::count());
     }

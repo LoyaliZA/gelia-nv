@@ -1,16 +1,45 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useForm, usePage } from '@inertiajs/react';
+import { router, useForm, usePage } from '@inertiajs/react';
 import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle, MapPin } from 'lucide-react';
 import useClienteDialog from './useClienteDialog';
 import { soloDigitosNumeroCliente } from '../../../utils/numeroClienteInput';
 
 const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
 
+function CorreccionModalidad({ cliente }) {
+    const actual = cliente.es_menudeo === true || cliente.es_menudeo === 1;
+    const [motivo, setMotivo] = useState('');
+    const [enviando, setEnviando] = useState(false);
+    const destino = !actual;
+    const aplicar = () => {
+        if (enviando || motivo.trim().length < 5) return;
+        setEnviando(true);
+        router.post(route('admin.clientes.modalidad', cliente.id), { es_menudeo: destino, motivo }, {
+            preserveScroll: true,
+            onFinish: () => setEnviando(false),
+        });
+    };
+    return (
+        <div className="p-4 theme-element border theme-border rounded-xl space-y-2">
+            <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Modalidad: {actual ? 'Menudeo' : 'Mayoreo'}</span>
+            <span className="text-[11px] theme-text-muted block">Corrige una modalidad errónea sin esperar la siguiente carga. No cambia el estado comercial, la lista ni el monto oficial.</span>
+            <label htmlFor="cliente-modalidad-motivo" className="text-[9px] font-black uppercase theme-text-muted tracking-widest">Motivo (obligatorio)</label>
+            <input id="cliente-modalidad-motivo" type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aplicar(); } }}
+                className="w-full px-3 py-2 theme-surface border theme-border rounded-xl text-sm theme-text-main outline-none" />
+            <button type="button" onClick={aplicar} disabled={enviando || motivo.trim().length < 5} className="theme-btn-secondary text-xs">
+                {enviando ? 'Aplicando…' : `Cambiar a ${destino ? 'Menudeo' : 'Mayoreo'}`}
+            </button>
+        </div>
+    );
+}
+
 export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
     const dialogRef = useClienteDialog(onClose);
     const { auth } = usePage().props;
     const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
+    const puedeCorregirModalidad = auth?.user?.permissions?.includes('clientes.corregir_modalidad') || auth?.user?.roles?.includes('Super Admin');
     const puedeEditarCredito = auth?.user?.permissions?.includes('cobranza.editar_credito') || auth?.user?.roles?.includes('Super Admin');
     
     // --- SECCIÓN: INICIALIZACIÓN DE FORMULARIO 360 ---
@@ -151,12 +180,14 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                         type="number" 
                                         step="0.01"
                                         value={data.monto_venta_actual} 
-                                        onChange={e => setData('monto_venta_actual', e.target.value)}
+                                        readOnly
+                                        aria-describedby="cliente-monto_venta_actual-ayuda"
                                         className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm"
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
                                         onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
                                         onBlur={e => e.target.style.borderColor = ''}
                                     />
+                                    <p id="cliente-monto_venta_actual-ayuda" className="m-0 text-[10px] theme-text-muted">Monto oficial: solo cambia con la importación de Wizerp.</p>
                                 </div>
                                 <div className="space-y-2">
                                     <label htmlFor="cliente-lista_actual_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Lista de Descuento</label>
@@ -446,6 +477,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Estado comercial</span>
                                 <span className="text-[11px] theme-text-muted">{clienteActual ? (clienteActual.es_inactivo ? 'Inactivo' : 'Activo') : 'Sin sincronizar'} · El estado comercial llega por importación o por una autorización</span>
                             </div>
+                            {clienteActual && puedeCorregirModalidad && <CorreccionModalidad cliente={clienteActual} />}
                         </div>
                     </div>
 

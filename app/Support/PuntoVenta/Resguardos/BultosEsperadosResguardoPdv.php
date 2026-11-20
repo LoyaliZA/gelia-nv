@@ -27,7 +27,8 @@ final class BultosEsperadosResguardoPdv
                 ->map(function (PedidoBmaBultoEmpaque $bulto, int $indice) use ($pedido, $piezasPorBulto) {
                     return [
                         'folio' => GeneradorFolioBultoResguardoPdv::desdeNumero($pedido, (int) $bulto->numero),
-                        'tipo' => ResguardoPdvBulto::TIPO_CAJA,
+                        'tipo' => \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
+                            ? ResguardoPdvBulto::TIPO_BOLSA : ResguardoPdvBulto::TIPO_CAJA,
                         'piezas' => $piezasPorBulto[$indice] ?? 1,
                         'numero_cedis' => (int) $bulto->numero,
                     ];

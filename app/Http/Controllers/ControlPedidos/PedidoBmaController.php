@@ -77,7 +77,7 @@ class PedidoBmaController extends Controller
         return Inertia::render('ControlPedidos/Index', [
             'pedidos' => fn () => $listarService->ejecutar(Auth::user(), $request->all()),
             'metricas' => fn () => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => $request->only(['tab', 'q', 'page', 'desde', 'hasta', 'almacen_id', 'mios']),
             'catalogos' => fn () => $catalogosService->ejecutar(),
             'direcciones_normalizadas' => (bool) config('control_pedidos.direcciones_normalizadas'),
             'registrar_tienda' => [
@@ -100,7 +100,7 @@ class PedidoBmaController extends Controller
         return response()->json([
             'pedidos' => $listarService->ejecutar(Auth::user(), $request->all()),
             'metricas' => $listarService->metricas(Auth::user()),
-            'filtros' => $request->only(['tab', 'q', 'page']),
+            'filtros' => $request->only(['tab', 'q', 'page', 'desde', 'hasta', 'almacen_id', 'mios']),
         ]);
     }
 
