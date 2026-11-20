@@ -17,7 +17,7 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacen
     }, []);
     const elegir = valor => { if (menuRef.current) menuRef.current.open = false; setAccion(valor); setError(''); };
     const [accion, setAccion] = useState('');
-    const [entrada, setEntrada] = useState('catalogo');
+    const [entrada, setEntrada] = useState('documento');
     const [producto, setProducto] = useState(null);
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState([]);
@@ -56,8 +56,9 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacen
             <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('sustituir')}><ArrowRightLeft size={16} />Sustituir</button>
         </div> : <div className="tienda-accion-formulario grid gap-3 rounded-xl border theme-border p-3">
             <p className="text-sm font-semibold m-0 theme-text-main">{accion === 'confirmar' ? 'Confirmar la pieza en el estado reportado con el cliente' : accion === 'retirar' ? 'Retirar esta pieza del pedido' : 'Solicitar otra pieza en su lugar'}</p>
-            {accion === 'sustituir' && <><div className="flex flex-wrap gap-2"><button type="button" aria-pressed={entrada === 'catalogo'} className={GELIA_BTN_OUTLINE} onClick={() => setEntrada('catalogo')}><Search size={16} />Por SKU</button><button type="button" aria-pressed={entrada === 'documento'} className={GELIA_BTN_OUTLINE} onClick={() => setEntrada('documento')}><FileImage size={16} />Por captura o PDF</button></div>
-                {entrada === 'catalogo' ? <SelectorProducto almacenId={almacenId} incluirSinInventario value={producto?.id || ''} onChange={(_, p) => setProducto(p)} disabled={ocupado} /> : <GaleriaEvidenciasPedido compacto label="Pieza alternativa" maxArchivos={1} archivos={archivos} previews={previews} onChange={(a,p) => { setArchivos(a); setPreviews(p); }} onVer={onVer} disabled={ocupado} />}
+            {accion === 'sustituir' && <><div className="tienda-sustitucion-modos" role="group" aria-label="Cómo indicar la pieza alternativa"><button type="button" aria-pressed={entrada === 'documento'} onClick={() => setEntrada('documento')}><FileImage size={16} aria-hidden />Por captura o PDF</button><button type="button" aria-pressed={entrada === 'catalogo'} onClick={() => setEntrada('catalogo')}><Search size={16} aria-hidden />Por SKU</button></div>
+                <p className="text-xs theme-text-muted m-0">{entrada === 'documento' ? 'Adjunta la captura o el PDF donde aparece la pieza que el cliente quiere en su lugar.' : 'Busca la pieza alternativa por SKU o nombre.'}</p>
+                {entrada === 'catalogo' ? <SelectorProducto almacenId={almacenId} incluirSinInventario value={producto?.id || ''} onChange={(_, p) => setProducto(p)} disabled={ocupado} /> : <GaleriaEvidenciasPedido compacto accionesCamara zonaPegado mensajeLimite="La sustitución admite una sola captura o PDF. Si necesitas más piezas, usa «Modificar pedido» más abajo." label="Captura de la pieza alternativa" maxArchivos={1} archivos={archivos} previews={previews} onChange={(a,p) => { setArchivos(a); setPreviews(p); }} onVer={onVer} disabled={ocupado} />}
                 <p className="text-xs theme-text-muted m-0">Quien revisó confirmará la disponibilidad de la alternativa. No cambia el pago ni confirma separación.</p>
             </>}
             <div className="flex gap-2 flex-wrap"><button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={enviar}><Send size={16} />{ocupado ? 'Enviando…' : accion === 'confirmar' ? 'Confirmar estado' : accion === 'retirar' ? 'Confirmar retiro' : 'Solicitar sustitución'}</button><button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setAccion('')}><X size={16} />Volver</button></div>

@@ -32,7 +32,7 @@ it('un detalle permite confirmar estado y una sustitución admite captura pegada
     await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} />));
     expect(boton('Confirmar estado')).toBeDefined();
     await act(() => boton('Sustituir').click()); await act(() => boton('Por captura o PDF').click());
-    expect(container.textContent).toContain('Arrastra o pega');
+    expect(container.textContent).toContain('pega con Ctrl+V');
     await act(() => boton('Solicitar sustitución').click()); expect(axios.post).not.toHaveBeenCalled(); expect(container.textContent).toContain('Seleccione la alternativa');
 });
 it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste detallado plegado', async () => {

@@ -11,6 +11,7 @@ import {
     STORAGE_VISTA_LISTADO,
     avisoParaTarea,
     claseBadgeEstadoTienda,
+    novedadTienda,
     fmtRelativo,
     fmtVencimiento,
     accionPrincipalTienda,
@@ -103,6 +104,7 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                                     )}
                                 </td>
                                 <td>
+                                    {novedadTienda(t) && <span className={`gelia-estado-vivo gelia-estado-vivo--compacto inline-flex text-[11px] font-semibold mr-1 ${novedadTienda(t).tipo === 'actualizacion' ? 'gelia-estado-vivo--aviso' : 'gelia-estado-vivo--exito'}`}>{novedadTienda(t).label}</span>}
                                     <span className={badge.className}>{badge.label}</span>
                                 </td>
                                 <td className="max-w-[9rem]">

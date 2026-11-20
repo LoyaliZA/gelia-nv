@@ -61,14 +61,17 @@ class ActivarResguardoEnvioService
             }
 
             $motivo = $activo ? ($datos['motivo'] ?? null) : null;
+            // Una acumulación ya cerrada no se reabre al guardar de nuevo la instrucción.
+            $cerrada = ! empty(PoliticaResguardoEnvio::datos($pedido)['acumulacion_cerrada_at']);
+            $acumula = $activo && $motivo === PoliticaResguardoEnvio::MOTIVO_ACUMULACION;
             $json = PoliticaResguardoEnvio::fusionarJson($pedido, [
                 'activo' => $activo,
                 'motivo' => $motivo,
                 'fecha_solicitada' => $activo && $motivo === PoliticaResguardoEnvio::MOTIVO_FECHA
                     ? $datos['fecha_solicitada']
                     : null,
-                'acumulacion' => $activo && $motivo === PoliticaResguardoEnvio::MOTIVO_ACUMULACION ? 'abierta' : null,
-                'acumulacion_abierta' => $activo && $motivo === PoliticaResguardoEnvio::MOTIVO_ACUMULACION,
+                'acumulacion' => $cerrada ? 'cerrada' : ($acumula ? 'abierta' : null),
+                'acumulacion_abierta' => $acumula && ! $cerrada,
                 'causa_flag' => $activo ? PoliticaResguardoEnvio::CAUSA_MUNICIPAL : (PoliticaResguardoEnvio::datos($pedido)['causa_flag'] ?? null),
                 'solicitado_at' => $activo ? now()->toIso8601String() : (PoliticaResguardoEnvio::datos($pedido)['solicitado_at'] ?? null),
                 'solicitado_por_id' => $activo ? $usuario->id : (PoliticaResguardoEnvio::datos($pedido)['solicitado_por_id'] ?? null),

@@ -67,8 +67,13 @@ class AutorizarSalidaPreparacionService
             $caratulaMunicipal = SalidaMunicipalPreparacion::assertCaratulaColocada($tarea);
         }
 
-        return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $politica, $caratulaMunicipal) {
+        return DB::transaction(function () use ($tarea, $usuario, $versionEsperada, $politica, $caratulaMunicipal, $pedido) {
             $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
+            try {
+                \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespacharBloqueado($pedido);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['resguardo' => $e->getMessage()]);
+            }
             $this->asegurar->ejecutar($tarea);
             $cumplimiento = PedidoBmaCumplimientoFisico::query()
                 ->where('pedido_bma_tarea_preparacion_id', $tarea->id)

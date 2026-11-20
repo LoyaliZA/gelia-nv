@@ -37,7 +37,12 @@ class RetirarCustodiaParaIntegracionLocalService
             if (! $custodia || ! $principal) {
                 throw ValidationException::withMessages(['pedido' => 'No se encontraron los pedidos.']);
             }
-            PoliticaResguardoEnvio::assertConjuntoMutable($principal);
+            try {
+                PoliticaResguardoEnvio::assertConjuntoEditable($principal);
+                PoliticaResguardoEnvio::assertUbicacionIntegracionLocal($custodia, $principal);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['ubicacion' => $e->getMessage()]);
+            }
             try {
                 ExclusividadRemisionEnvio::assertDisponible($custodia, $principal);
             } catch (\InvalidArgumentException $e) {

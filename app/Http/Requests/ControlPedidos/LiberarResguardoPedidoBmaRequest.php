@@ -21,7 +21,7 @@ class LiberarResguardoPedidoBmaRequest extends FormRequest
         if ($pedido
             && \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
             && \App\Support\ControlPedidos\PoliticaResguardoEnvio::intencionActiva($pedido)) {
-            return ['huella_conjunto' => ['nullable', 'string', 'max:255']];
+            return ['huella_conjunto' => ['nullable', 'string', 'max:128']];
         }
         $pedido?->loadMissing('tipoOperacionEnvio');
 

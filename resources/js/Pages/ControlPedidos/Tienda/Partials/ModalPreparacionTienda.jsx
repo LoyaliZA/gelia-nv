@@ -57,14 +57,15 @@ export default function ModalPreparacionTienda({ tareaId, atender = false, auth,
 
     const enviar = async (url, payload, opciones = {}) => {
         if (ocupado) return;
+        // Guardar una unidad revisada es un borrador: no es la respuesta enviada a Ventas.
+        const borrador = typeof FormData !== 'undefined' && payload instanceof FormData && payload.get('persistir_unidad') === '1';
         setProcesando(true);
         setError('');
-        setMensaje('');
+        if (!borrador) setMensaje('');
         try {
             const respuesta = await axios.post(url, payload, { headers: { Accept: 'application/json' } });
             await cargar();
-            setMensaje(respuesta.data.message || 'Preparación actualizada.');
-            setDirty(false);
+            if (!borrador) { setMensaje(respuesta.data.message || 'Preparación actualizada.'); setDirty(false); }
             onActualizado?.();
             opciones.onSuccess?.();
         } catch (e) {

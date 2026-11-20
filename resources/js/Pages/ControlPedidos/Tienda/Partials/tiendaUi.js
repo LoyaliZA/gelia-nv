@@ -34,6 +34,13 @@ export const TONO_ESTADO_TIENDA = {
     SUSTITUIDA: 'neutro',
 };
 
+/** Novedad que el auxiliar debe notar de inmediato: actualización de consulta o pedido sin tomar. */
+export function novedadTienda(tarea) {
+    if ((tarea.pedido?.anexos_pendientes || []).length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { tipo: 'actualizacion', label: 'Actualización' };
+    if (tarea.estado === 'PENDIENTE') return { tipo: 'nuevo', label: 'Nuevo pedido' };
+    return null;
+}
+
 export function accionPrincipalTienda(tarea, puedeTomar = false) {
     if ((tarea.pedido?.anexos_pendientes || []).length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
     const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);

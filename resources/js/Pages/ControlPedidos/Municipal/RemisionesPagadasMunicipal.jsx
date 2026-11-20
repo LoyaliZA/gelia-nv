@@ -23,6 +23,13 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
     const vinculos = pedido?.resguardo_envio?.vinculos || [];
     const caps = pedido?.resguardo_envio?.capacidades || {};
     const puedeVincular = Boolean(caps.puede_vincular);
+    const resguardoActual = pedido?.resguardo_envio || {};
+    // Cerrado o ya salido: la lista se protege y se explica por qué, sin ocultar las operaciones físicas pendientes.
+    const avisoConjunto = resguardoActual.envio_salio
+        ? 'El envío ya salió: no se agregan ni se quitan remisiones. La salida registrada no se modifica.'
+        : resguardoActual.conjunto_cerrado
+            ? 'El cliente ya definió el conjunto al cerrar la acumulación. No se agregan ni se quitan remisiones por este medio; las confirmaciones físicas pendientes continúan.'
+            : '';
     const candidato = candidatos.find((item) => String(item.id) === String(origenId));
     const mecanismosPosibles = candidato?.mecanismos || [];
     const sinMercanciaNueva = Number(pedido?.total_mercancia || 0) === 0 && vinculos.length > 0;
@@ -108,6 +115,7 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
             {sinMercanciaNueva && (
                 <p className="text-sm theme-text-main mt-0 mb-3" role="status">Este envío no tiene mercancía nueva: solo incorpora remisiones ya pagadas, y no hay nada nuevo por cobrar.</p>
             )}
+            {avisoConjunto && <p className="text-sm theme-text-main mt-0 mb-3" role="status" data-conjunto-protegido>{avisoConjunto}</p>}
             <div className="mb-4">
                 <ConjuntoRemisionesMunicipal
                     vinculos={vinculos}

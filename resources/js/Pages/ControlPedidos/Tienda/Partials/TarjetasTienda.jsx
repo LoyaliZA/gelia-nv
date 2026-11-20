@@ -13,6 +13,7 @@ import {
     fmtRelativo,
     fmtVencimiento,
     accionPrincipalTienda,
+    novedadTienda,
 } from './tiendaUi';
 
 export function TarjetaTareaVacia({ hayFiltrosActivos, onLimpiarFiltros }) {
@@ -41,6 +42,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
     const aviso = avisoParaTarea(t, venc);
     const folio = t.pedido?.folio_visible || t.pedido?.folio_remision || t.pedido?.folio || `#${t.pedido?.id || t.id}`;
     const showUrl = route('control_pedidos.tienda.show', t.id);
+    const novedad = novedadTienda(t);
     const ringAlerta = ['CON_INCIDENCIA', 'RECHAZADA_CEDIS'].includes(t.estado)
         || Boolean(venc?.urgente);
 
@@ -99,6 +101,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
 
     return (
         <article
+            data-novedad={novedad?.tipo}
             className={`${geliaCardClass()} gelia-tienda-op-tarjeta p-4 space-y-3 ${
                 ringAlerta ? 'ring-1 ring-[color-mix(in_srgb,var(--color-peligro)_35%,transparent)]' : ''
             }`}
@@ -140,6 +143,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
                     )}
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0 max-w-[50%]">
+                    {novedad && <span className={`gelia-estado-vivo gelia-estado-vivo--compacto inline-flex text-[11px] font-semibold ${novedad.tipo === 'actualizacion' ? 'gelia-estado-vivo--aviso' : 'gelia-estado-vivo--exito'}`}>{novedad.label}</span>}
                     <span className={badge.className}>{badge.label}</span>
                     {t.modalidad?.es_transferencia && (
                         <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--aviso text-[10px] font-semibold">

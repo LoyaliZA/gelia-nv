@@ -180,6 +180,13 @@ class SolicitudMunicipalController extends Controller
             ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
             ->exists();
 
+        $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
+        $traslado = in_array($json['retiro_recoleccion']['estado'] ?? null, ['pendiente_traslado', 'en_traslado'], true);
+        if ($traslado) {
+            // En traslado no es «resguardada en CEDIS»: se espera la recepción antes de vincularla.
+            return [];
+        }
+
         return $enCustodia
             ? [PoliticaResguardoEnvio::MECANISMO_LOCAL, PoliticaResguardoEnvio::MECANISMO_CEDIS]
             : [PoliticaResguardoEnvio::MECANISMO_RESGUARDO];
