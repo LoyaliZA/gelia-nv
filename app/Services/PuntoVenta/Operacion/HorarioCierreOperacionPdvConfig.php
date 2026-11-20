@@ -233,10 +233,9 @@ final class HorarioCierreOperacionPdvConfig
      */
     public function normalizarCompleto(array $configuracion): array
     {
-        $zona = trim((string) ($configuracion['zona_horaria'] ?? ''));
-        if ($zona === '') {
-            $zona = (string) config('app.timezone', 'America/Mexico_City');
-        }
+        // La operación PDV usa siempre la zona de la aplicación (México). Un valor guardado
+        // distinto desplazaba el día operativo y dejaba turnos sin asignar; se ignora.
+        $zona = (string) config('app.timezone', 'America/Mexico_City');
 
         $horaApertura = $this->normalizarHora($configuracion['hora_apertura'] ?? null);
         $horaCierre = $this->normalizarHora($configuracion['hora_cierre'] ?? null);

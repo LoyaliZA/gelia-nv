@@ -21,7 +21,7 @@ class ActualizarHorarioCierreSucursalPdvRequest extends PdvOperacionPisoRequest
         return [
             'hora_apertura' => ['nullable', 'string', 'regex:/^([01]\d|2[0-3]):([0-5]\d)$/'],
             'hora_cierre' => ['required', 'string', 'regex:/^([01]\d|2[0-3]):([0-5]\d)$/'],
-            'zona_horaria' => ['nullable', 'string', 'max:64'],
+            'zona_horaria' => ['nullable', 'string', 'in:'.config('app.timezone', 'America/Mexico_City')],
             'dias_operacion' => ['nullable', 'array', 'min:1'],
             'dias_operacion.*' => ['integer', 'between:1,7'],
             'hora_apertura_sabado' => ['nullable', 'string', 'regex:/^([01]\d|2[0-3]):([0-5]\d)$/'],

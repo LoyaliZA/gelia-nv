@@ -108,7 +108,7 @@ class ConsultaPersonaDisponiblePdvService implements ConsultaPersonaDisponiblePd
         }
 
         $inicioDia = $this->config->inicioDiaOperativo($sucursalId);
-        $finDia = $inicioDia->copy()->endOfDay();
+        $finDia = $this->config->finDiaOperativo($sucursalId);
         $ahora = now();
 
         $consulta = $this->vendedoresElegibles->query($sucursalId)

@@ -60,6 +60,7 @@ Schedule::command('pdv:depurar-publicidad')->dailyAt('02:40');
 Schedule::command('visitas-programadas:cerrar-dia')->dailyAt('23:55');
 Schedule::command('pdv:evaluar-cierre-horario-operacion')->everyFiveMinutes();
 Schedule::command('pdv:evaluar-apertura-horario-operacion')->everyFiveMinutes();
+Schedule::command('pdv:reconciliar-cola-turnos')->everyMinute()->withoutOverlapping();
 Schedule::command('medios:limpiar-cargas')->hourly();
 Schedule::command('tiendanube:recuperar-webhooks')->everyMinute();
 Schedule::job(new RecuperarPrecioEjecucionesJob)
