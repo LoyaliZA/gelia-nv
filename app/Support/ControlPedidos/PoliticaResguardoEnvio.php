@@ -61,6 +61,14 @@ final class PoliticaResguardoEnvio
 
     public const MENSAJE_IRREVERSIBLE = 'Esa remisión ya se movió o se integró. No se desvincula desde el selector.';
 
+    public const MENSAJE_CERRADO = 'El cliente ya definió el conjunto al cerrar la acumulación. No se agregan ni se quitan remisiones por el flujo ordinario; las operaciones físicas pendientes continúan.';
+
+    public const MENSAJE_SALIO = 'El envío ya salió. No se agregan ni se quitan remisiones y las salidas registradas no se reescriben.';
+
+    public const MENSAJE_INCIDENCIA_PAGO = 'Una remisión del conjunto tiene una incidencia de pago. La persona auxiliar debe revisarla antes de liberar o despachar.';
+
+    public const MENSAJE_UBICACION_LOCAL = 'La integración local solo aplica cuando la mercancía y el envío se reúnen en la misma sucursal.';
+
     /** @var list<string> */
     private const ESTADOS_IRREVERSIBLES = ['en_traslado', 'recibido_cedis', 'pendiente_integracion', 'integrado'];
 
@@ -179,6 +187,26 @@ final class PoliticaResguardoEnvio
         }
 
         return $pedido->exists && $pedido->envioQueLoAnexa()->exists();
+    }
+
+    /**
+     * Integrante de un envío municipal. Los complementos de Nacional o Tienda empacan en grupo y no pasan por esta regla.
+     */
+    public static function esMiembroConjuntoMunicipal(PedidoBma $pedido): bool
+    {
+        if ($pedido->pedido_principal_id !== null) {
+            $principal = PedidoBma::query()->find($pedido->pedido_principal_id);
+            if ($principal && ConsultaMunicipal::es($principal)) {
+                return true;
+            }
+        }
+        if (! $pedido->exists) {
+            return false;
+        }
+        $anexo = $pedido->envioQueLoAnexa;
+        $envio = $anexo ? PedidoBma::query()->find($anexo->pedido_envio_id) : null;
+
+        return $envio !== null && ConsultaMunicipal::es($envio);
     }
 
     /** @return \Illuminate\Support\Collection<int, PedidoBma> */
@@ -319,6 +347,7 @@ final class PoliticaResguardoEnvio
             'estado' => $estado,
             'integrado' => $integrado,
             'pago_auditado' => $origen->pago_validado_at !== null,
+            'incidencia_pago' => self::incidenciaPagoMiembro($origen),
             'estatus_sucursal' => $origen->estatus_sucursal,
             'area_responsable' => $integrado ? null : ($mecanismo === self::MECANISMO_LOCAL ? 'sucursal' : 'cedis'),
             'etapas' => [
@@ -360,7 +389,7 @@ final class PoliticaResguardoEnvio
 
     public static function puedeDesvincular(PedidoBma $envio, PedidoBma $origen, ?string $estado = null): bool
     {
-        if (self::datos($envio)['liberado_at'] ?? null) {
+        if (self::motivoConjuntoNoEditable($envio) !== null) {
             return false;
         }
         $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
@@ -378,11 +407,12 @@ final class PoliticaResguardoEnvio
     {
         $partes = [];
         foreach (self::vinculos($pedido) as $vinculo) {
-            $partes[] = $vinculo['origen_id'].':'.$vinculo['mecanismo'].':'.$vinculo['estado'];
+            $partes[] = [(int) $vinculo['origen_id'], $vinculo['mecanismo'], $vinculo['estado'], (bool) $vinculo['incidencia_pago']];
         }
         sort($partes);
 
-        return implode('|', $partes).'#'.self::huellaFinanciera($pedido);
+        // Longitud fija (64 hex) sin importar el tamaño del conjunto; el formato anterior contenía «#» y nunca coincide.
+        return hash('sha256', json_encode([2, $partes, self::huellaFinanciera($pedido)]));
     }
 
     public static function huellaFinanciera(PedidoBma $pedido): string
@@ -453,26 +483,124 @@ final class PoliticaResguardoEnvio
             && (bool) (self::datos($pedido)['acumulacion_abierta'] ?? false);
     }
 
-    public static function puedeReconducir(PedidoBma $pedido): bool
+    /**
+     * Hecho canónico de salida física: el estatus del pedido ya es enviado/en ruta/entregado o alguna tarea de
+     * preparación tiene su despacho registrado. Pago, remisión, aprobación o «pendiente de envío» no lo acreditan.
+     */
+    public static function envioYaSalio(PedidoBma $pedido): bool
     {
-        if ($pedido->cancelado_at) {
-            return false;
-        }
-        $fase = $pedido->estatus?->fase_ciclo;
-        if (in_array($fase, [
+        $pedido->loadMissing('estatus');
+        if (in_array($pedido->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_ENVIADO,
             CatalogoEstatusPedido::FASE_EN_RUTA,
             CatalogoEstatusPedido::FASE_ENTREGADO,
         ], true)) {
-            return false;
-        }
-        if ($pedido->tareasPreparacion()
-            ->whereHas('cumplimientoFisico', fn ($q) => $q->whereNotNull('despachada_at'))
-            ->exists()) {
-            return false;
+            return true;
         }
 
-        return true;
+        return $pedido->exists && $pedido->tareasPreparacion()
+            ->whereHas('cumplimientoFisico', fn ($q) => $q->whereNotNull('despachada_at'))
+            ->exists();
+    }
+
+    public static function puedeReconducir(PedidoBma $pedido): bool
+    {
+        return ! $pedido->cancelado_at && ! self::envioYaSalio($pedido);
+    }
+
+    /** Conjunto comercial cerrado: el cliente lo declaró definitivo. Persiste aunque se guarde de nuevo la instrucción. */
+    public static function acumulacionCerrada(PedidoBma $pedido): bool
+    {
+        $datos = self::datos($pedido);
+
+        return ! empty($datos['acumulacion_cerrada_at']) && empty($datos['acumulacion_abierta']);
+    }
+
+    /** Motivo por el que la lista de remisiones ya no se edita por el flujo ordinario; null si aún es editable. */
+    public static function motivoConjuntoNoEditable(PedidoBma $pedido): ?string
+    {
+        if (self::datos($pedido)['liberado_at'] ?? null) {
+            return self::MENSAJE_LIBERADO;
+        }
+        if (self::envioYaSalio($pedido)) {
+            return self::MENSAJE_SALIO;
+        }
+        if (self::acumulacionCerrada($pedido)) {
+            return self::MENSAJE_CERRADO;
+        }
+
+        return null;
+    }
+
+    /** Vincular, desvincular o retirar custodia para el envío: modifica la lista de remisiones. */
+    public static function assertConjuntoEditable(PedidoBma $pedido): void
+    {
+        $motivo = self::motivoConjuntoNoEditable($pedido);
+        if ($motivo !== null) {
+            throw new \RuntimeException($motivo);
+        }
+    }
+
+    /** Integración física de una remisión ya vinculada: sigue permitida tras cerrar la acumulación, no tras liberar ni salir. */
+    public static function assertIntegracionPermitida(PedidoBma $pedido): void
+    {
+        if (self::datos($pedido)['liberado_at'] ?? null) {
+            throw new \RuntimeException(self::MENSAJE_LIBERADO);
+        }
+        if (self::envioYaSalio($pedido)) {
+            throw new \RuntimeException(self::MENSAJE_SALIO);
+        }
+    }
+
+    /** Sucursal donde se prepara el envío principal según su almacén; null si no se puede determinar. */
+    public static function sucursalPreparacion(PedidoBma $principal): ?int
+    {
+        $principal->loadMissing('almacen');
+        $id = $principal->almacen?->sucursal_id;
+
+        return $id ? (int) $id : null;
+    }
+
+    /** Sucursal donde está la custodia vigente de la remisión; null si no hay custodia. */
+    public static function sucursalCustodia(PedidoBma $origen): ?int
+    {
+        $id = \App\Models\PuntoVenta\ResguardoPdv::query()
+            ->where('pedido_bma_id', $origen->id)
+            ->where('estado', \App\Models\PuntoVenta\ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->value('sucursal_id');
+
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * La integración local exige custodia vigente y, si la preparación del principal está determinada,
+     * que sea la misma sucursal. Si no está determinada no se inventa: confirma el personal de la sucursal.
+     */
+    public static function assertUbicacionIntegracionLocal(PedidoBma $origen, PedidoBma $principal): void
+    {
+        $custodia = self::sucursalCustodia($origen);
+        if ($custodia === null) {
+            throw new \RuntimeException('La mercancía ya no está en custodia vigente de la sucursal.');
+        }
+        $principal->loadMissing('almacen');
+        if ($principal->almacen_id && $principal->almacen) {
+            $preparacion = self::sucursalPreparacion($principal);
+            if ($preparacion === null || $preparacion !== $custodia) {
+                throw new \RuntimeException(self::MENSAJE_UBICACION_LOCAL);
+            }
+        }
+    }
+
+    /** Remisión integrante con pago no vigente (cancelada, rechazada, sustituida sin verificar o modificada tras auditar). */
+    public static function incidenciaPagoMiembro(PedidoBma $origen): bool
+    {
+        return (bool) $origen->cancelado_at || ! self::pagoAuditadoVigente($origen);
+    }
+
+    /** @return list<array<string, mixed>> Vínculos con incidencia de pago. */
+    public static function vinculosConIncidenciaPago(PedidoBma $pedido): array
+    {
+        return array_values(array_filter(self::vinculos($pedido), fn ($v) => $v['incidencia_pago']));
     }
 
     public static function assertPuedeEnviarAuditoria(PedidoBma $pedido): void
@@ -499,7 +627,7 @@ final class PoliticaResguardoEnvio
         if (! $pedido) {
             return;
         }
-        if (self::esMiembroConjunto($pedido)) {
+        if (self::esMiembroConjuntoMunicipal($pedido)) {
             throw new \RuntimeException(self::MENSAJE_MIEMBRO);
         }
         if (self::intencionActiva($pedido)) {
@@ -509,6 +637,36 @@ final class PoliticaResguardoEnvio
         if ($conjunto) {
             throw new \RuntimeException($conjunto);
         }
+        if (ConsultaMunicipal::es($pedido)) {
+            if ($pedido->esperando_pago_at) {
+                throw new \RuntimeException('El pedido está en espera de pago; no se empaca ni se despacha.');
+            }
+            if (self::vinculosConIncidenciaPago($pedido) !== []) {
+                throw new \RuntimeException(self::MENSAJE_INCIDENCIA_PAGO);
+            }
+            $datos = self::datos($pedido);
+            if (! empty($datos['liberado_at']) && ! empty($datos['continuacion_huella'])
+                && ! hash_equals((string) $datos['continuacion_huella'], self::huellaConjunto($pedido))) {
+                throw new \RuntimeException(self::MENSAJE_CONTINUACION_OBSOLETA);
+            }
+        }
+    }
+
+    /**
+     * Revalida la salida dentro de la sección crítica: recarga el principal con bloqueo y luego a sus miembros
+     * por id ascendente (el mismo orden de vinculación y liberación), en lugar de confiar en el modelo cargado antes.
+     */
+    public static function assertPuedeDespacharBloqueado(?PedidoBma $pedido): void
+    {
+        if (! $pedido) {
+            return;
+        }
+        $vigente = PedidoBma::query()->lockForUpdate()->with('estatus')->find($pedido->id) ?? $pedido;
+        $miembros = self::miembros($vigente);
+        if ($miembros->isNotEmpty()) {
+            PedidoBma::query()->whereIn('id', $miembros->pluck('id'))->orderBy('id')->lockForUpdate()->get();
+        }
+        self::assertPuedeDespachar($vigente);
     }
 
     /**
@@ -540,6 +698,9 @@ final class PoliticaResguardoEnvio
         }
         if (! self::pagoAuditadoVigente($pedido)) {
             return self::MENSAJE_PAGO_SIN_AUDITAR;
+        }
+        if (self::vinculosConIncidenciaPago($pedido) !== []) {
+            return self::MENSAJE_INCIDENCIA_PAGO;
         }
         if ($motivo === self::MOTIVO_FECHA && ! self::m09Validado($pedido, $finanzas)) {
             return self::MENSAJE_M09;
@@ -622,6 +783,7 @@ final class PoliticaResguardoEnvio
         $conjuntoListo = self::conjuntoListoParaLiberar($pedido);
         $puedeContinuacion = $activo
             && ! ($datos['liberado_at'] ?? null)
+            && self::vinculosConIncidenciaPago($pedido) === []
             && (
                 (self::motivo($pedido) === self::MOTIVO_FECHA && $m09)
                 || (self::motivo($pedido) === self::MOTIVO_ACUMULACION && ! $acumulacionAbierta && $conjuntoListo)
@@ -637,6 +799,9 @@ final class PoliticaResguardoEnvio
             'fecha_solicitada' => $datos['fecha_solicitada'] ?? null,
             'acumulacion' => $acumulacionAbierta ? 'abierta' : (($datos['acumulacion_cerrada_at'] ?? null) ? 'cerrada' : null),
             'acumulacion_abierta' => $acumulacionAbierta,
+            'conjunto_cerrado' => self::acumulacionCerrada($pedido),
+            'envio_salio' => self::envioYaSalio($pedido),
+            'motivo_conjunto_no_editable' => $solicitud ? self::motivoConjuntoNoEditable($pedido) : null,
             'continuacion_solicitada_at' => $datos['continuacion_solicitada_at'] ?? null,
             'liberado_at' => $datos['liberado_at'] ?? null,
             'causa_flag' => $datos['causa_flag'] ?? null,
@@ -661,8 +826,8 @@ final class PoliticaResguardoEnvio
             'capacidades' => [
                 'puede_activar_intencion' => $solicitud && self::puedeReconducir($pedido) && ! $credito,
                 'puede_enviar_auditoria' => $consultaCerrada && $mercancia && ! $credito && ! ($activo && $motivoBloqueo),
-                'puede_vincular' => $solicitud && empty($datos['liberado_at']),
-                'puede_desvincular' => $solicitud && empty($datos['liberado_at']),
+                'puede_vincular' => $solicitud && self::motivoConjuntoNoEditable($pedido) === null,
+                'puede_desvincular' => $solicitud && self::motivoConjuntoNoEditable($pedido) === null,
                 'puede_cerrar_acumulacion' => $activo && self::motivo($pedido) === self::MOTIVO_ACUMULACION && $acumulacionAbierta,
                 'puede_solicitar_continuacion' => $puedeContinuacion,
                 'puede_liberar' => $bloqueoLiberacion === null,

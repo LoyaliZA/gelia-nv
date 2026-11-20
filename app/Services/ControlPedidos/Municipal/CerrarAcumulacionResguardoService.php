@@ -32,9 +32,14 @@ class CerrarAcumulacionResguardoService
                 || PoliticaResguardoEnvio::motivo($pedido) !== PoliticaResguardoEnvio::MOTIVO_ACUMULACION) {
                 throw ValidationException::withMessages(['resguardo' => 'Este envío no está acumulando mercancía.']);
             }
-            PoliticaResguardoEnvio::assertConjuntoMutable($pedido);
             if (! (PoliticaResguardoEnvio::datos($pedido)['acumulacion_abierta'] ?? false)) {
+                // Cierre repetido: idempotente, sin nuevo historial ni cambios.
                 return $pedido->fresh();
+            }
+            try {
+                PoliticaResguardoEnvio::assertIntegracionPermitida($pedido);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['conjunto' => $e->getMessage()]);
             }
 
             $json = PoliticaResguardoEnvio::fusionarJson($pedido, [

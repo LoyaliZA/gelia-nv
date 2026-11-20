@@ -40,13 +40,28 @@ class IntegrarRemisionEnCedisMunicipalService
             if ((int) $origen->cliente_id !== (int) $envio->cliente_id) {
                 throw ValidationException::withMessages(['cliente' => 'La remisión no pertenece al cliente del envío.']);
             }
-            PoliticaResguardoEnvio::assertConjuntoMutable($envio);
             $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
             if (($json['integracion_envio']['estado'] ?? null) === 'integrado') {
                 return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
             }
+            try {
+                PoliticaResguardoEnvio::assertIntegracionPermitida($envio);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['conjunto' => $e->getMessage()]);
+            }
+            // La mercancía debe estar en CEDIS: ni en custodia de sucursal ni en un traslado abierto.
+            if (PoliticaResguardoEnvio::sucursalCustodia($origen) !== null) {
+                throw ValidationException::withMessages(['ubicacion' => 'Esa remisión sigue en custodia de sucursal. No se integra directamente en CEDIS.']);
+            }
+            if (in_array($json['retiro_recoleccion']['estado'] ?? null, ['pendiente_traslado', 'en_traslado'], true)) {
+                throw ValidationException::withMessages(['ubicacion' => 'Esa remisión está en traslado. Confirme su recepción en CEDIS antes de integrarla.']);
+            }
+            if (PoliticaResguardoEnvio::incidenciaPagoMiembro($origen)) {
+                throw ValidationException::withMessages(['pago' => PoliticaResguardoEnvio::MENSAJE_INCIDENCIA_PAGO]);
+            }
             $json['integracion_envio'] = [
                 'estado' => 'integrado',
+                'ubicacion' => 'cedis',
                 'pedido_envio_id' => $envio->id,
                 'integrado_at' => now()->toIso8601String(),
                 'integrado_por_id' => $usuario->id,

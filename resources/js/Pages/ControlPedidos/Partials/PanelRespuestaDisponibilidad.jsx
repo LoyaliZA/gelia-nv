@@ -10,7 +10,7 @@ import { anexosPendientesRevision, cambiosDisponibilidad } from './cambiosDispon
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
-import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_TEXTAREA } from '../../../utils/geliaTheme';
 import { presentacionPedidoCedis } from './presentacionPedidoCedis';
 
@@ -43,6 +43,12 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState(() => actualizacion || !puedeLeerDocumentos ? [] : [...evidenciasGuardadas.map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })), ...(pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }))]);
     const [vista, setVista] = useState(null);
+    // Captura vigente del pedido: se conserva a la vista; una nueva solo se adjunta si el pedido cambió.
+    const capturaAnterior = !actualizacion || !puedeLeerDocumentos ? [] : (() => {
+        const generales = (pedido.documentos || documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.activo !== false && d.url && (!d.relacion_tipo || d.relacion_tipo === 'revision_general'));
+        const vigentes = revision?.evidencia_actual_ids ? generales.filter(d => revision.evidencia_actual_ids.includes(d.id)) : [];
+        return vigentes.length ? vigentes : generales;
+    })();
     const secuencia = useRef(0);
     const incidenciasRef = useRef(null);
     useEffect(() => { if (origenIncidencia) incidenciasRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [origenIncidencia]);
@@ -189,7 +195,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.archivos?.length)) return setError('Adjunta una foto de cada producto con detalle.');
-        if (!archivos.length && (actualizacion || !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
+        if (!archivos.length && (actualizacion ? !capturaAnterior.length : !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
         setOcupado(true);
         try {
             const form = formDataDe({ confirmacion: actualizacion ? afectadas.length === 0 : estado === 'correcto', excepciones: afectadas, archivos });
@@ -231,7 +237,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
                     onVer={(documentos, indice) => setVista({ documentos, indice })} />
                     : mostrarCambios && <AlternativasDisponibilidadCedis pedido={pedido} puedeVerDocumentos={puedeLeerDocumentos} onVer={(documentos, indice) => setVista({ documentos, indice })} />}
 
-                {actualizacion && !respondida && <p className="text-sm theme-text-main m-0" role="status">Revise las capturas de los anexos. Los retiros ya quedaron informados. Al terminar, tome una nueva captura del pedido completo.</p>}
+                {actualizacion && !respondida && <p className="text-sm theme-text-main m-0" role="status">Revise las capturas de los anexos. Los retiros ya quedaron informados. La captura vigente se conserva; tome una nueva solo si el pedido cambió.</p>}
                 {respondida ? <div className="grid gap-3" role="status">
                     <span className="gelia-estado-vivo gelia-estado-vivo--compacto gelia-estado-vivo--exito justify-self-start">Consulta respondida</span>
                     <p className="text-sm theme-text-muted m-0">Ventas confirma las piezas con el cliente.</p>
@@ -265,7 +271,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
                     </section>}
 
                 </>}
-                {(actualizacion || estado || respondida) && <section className="gelia-cedis-panel" aria-label="Captura del pedido"><GaleriaEvidenciasPedido compacto accionesCamara id="cedis-evidencias-disponibilidad" label="Captura del pedido" obligatorio={!respondida} maxArchivos={8} archivos={archivos} previews={previews} disabled={guardando || respondida} onChange={(files, vistas) => { setArchivos(files); setPreviews(vistas); }} onVer={(docs, indice) => setVista({ documentos: docs, indice })} /></section>}
+                {(actualizacion || estado || respondida) && <section className="gelia-cedis-panel" aria-label="Captura del pedido">{capturaAnterior.length > 0 && !respondida && <div className="grid gap-2 mb-3"><p className="text-sm font-semibold theme-text-main m-0">Captura vigente del pedido</p><div className="flex flex-wrap gap-2">{capturaAnterior.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => setVista({ documentos: capturaAnterior, indice: i })} />)}</div><p className="text-xs theme-text-muted m-0">Se conserva. Adjunta una nueva solo si el pedido completo cambió.</p></div>}<GaleriaEvidenciasPedido compacto accionesCamara id="cedis-evidencias-disponibilidad" label={capturaAnterior.length > 0 && !respondida ? 'Nueva captura (opcional)' : 'Captura del pedido'} obligatorio={!respondida && !capturaAnterior.length} maxArchivos={8} archivos={archivos} previews={previews} disabled={guardando || respondida} onChange={(files, vistas) => { setArchivos(files); setPreviews(vistas); }} onVer={(docs, indice) => setVista({ documentos: docs, indice })} /></section>}
             </div>
 
         </div>

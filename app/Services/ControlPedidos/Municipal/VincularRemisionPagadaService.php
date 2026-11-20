@@ -69,7 +69,7 @@ class VincularRemisionPagadaService
             })
             ->orderByDesc('id')
             ->limit(40)
-            ->get(['id', 'folio', 'folio_remision', 'numero_remision', 'cliente_id', 'total_mercancia', 'estatus_sucursal']);
+            ->get(['id', 'folio', 'folio_remision', 'numero_remision', 'cliente_id', 'total_mercancia', 'estatus_sucursal', 'solicitud_preparacion_json']);
     }
 
     public function ejecutar(PedidoBma $envio, PedidoBma $origen, User $usuario, string $mecanismo): PedidoBma
@@ -87,10 +87,13 @@ class VincularRemisionPagadaService
         return ExclusividadRemisionEnvio::conLockEnvio($envio, $origen, function ($bloqueados) use ($origen, $envio, $usuario, $mecanismo) {
             $origen = $bloqueados->get($origen->id);
             $envio = $bloqueados->get($envio->id);
-            PoliticaResguardoEnvio::assertConjuntoMutable($envio);
             if ($this->yaVinculado($origen, $envio)) {
+                // Reintento del mismo vínculo: idempotente mientras el envío no haya salido ni se haya liberado.
+                PoliticaResguardoEnvio::assertIntegracionPermitida($envio);
+
                 return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
             }
+            $this->assertEditable($envio);
             try {
                 ExclusividadRemisionEnvio::assertDisponible($origen, $envio);
             } catch (\InvalidArgumentException $e) {
@@ -99,9 +102,10 @@ class VincularRemisionPagadaService
             if (! $origen->tieneRemision() && ! filled($origen->numero_remision)) {
                 throw ValidationException::withMessages(['remision' => 'La remisión pagada debe tener número o PDF.']);
             }
-            if ($origen->pago_validado_at === null) {
-                throw ValidationException::withMessages(['pago' => 'Solo se vincula una remisión con cobertura verificada. No se cobra de nuevo.']);
+            if ($origen->pago_validado_at === null || PoliticaResguardoEnvio::incidenciaPagoMiembro($origen)) {
+                throw ValidationException::withMessages(['pago' => 'Solo se vincula una remisión con pago auditado y vigente. No se cobra de nuevo.']);
             }
+            $this->assertUbicacion($origen, $mecanismo);
             $enCustodia = ResguardoPdv::query()
                 ->where('pedido_bma_id', $origen->id)
                 ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
@@ -145,7 +149,7 @@ class VincularRemisionPagadaService
         return ExclusividadRemisionEnvio::conLockEnvio($envio, $origen, function ($bloqueados) use ($origen, $envio, $usuario) {
             $origen = $bloqueados->get($origen->id);
             $envio = $bloqueados->get($envio->id);
-            PoliticaResguardoEnvio::assertConjuntoMutable($envio);
+            $this->assertEditable($envio);
             $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
             if (! $this->yaVinculado($origen, $envio)) {
                 throw ValidationException::withMessages(['remision' => 'Esa remisión no forma parte de este envío.']);
@@ -204,6 +208,26 @@ class VincularRemisionPagadaService
         foreach ($resguardos as $resguardo) {
             $otraRetencion = method_exists($origen, 'tieneCancelacionOperativaActiva') && $origen->tieneCancelacionOperativaActiva();
             $resguardo->update(['entrega_bloqueada' => $otraRetencion || (bool) ($previo[$resguardo->id] ?? false)]);
+        }
+    }
+
+    /** Cierre de acumulación, salida física y liberación: una sola comprobación para vincular y desvincular. */
+    private function assertEditable(PedidoBma $envio): void
+    {
+        try {
+            PoliticaResguardoEnvio::assertConjuntoEditable($envio);
+        } catch (\RuntimeException $e) {
+            throw ValidationException::withMessages(['conjunto' => $e->getMessage()]);
+        }
+    }
+
+    /** La ubicación declarada para integrar debe corresponder con dónde está la mercancía. */
+    private function assertUbicacion(PedidoBma $origen, string $mecanismo): void
+    {
+        $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
+        $traslado = in_array($json['retiro_recoleccion']['estado'] ?? null, ['pendiente_traslado', 'en_traslado'], true);
+        if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_RESGUARDO && $traslado) {
+            throw ValidationException::withMessages(['remision' => 'Esa remisión está en traslado. No se anexa como resguardada en CEDIS hasta recibirla.']);
         }
     }
 

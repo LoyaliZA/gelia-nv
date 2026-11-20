@@ -160,14 +160,16 @@ class ResponderDisponibilidadInicialService
             if ($excepciones === [] && ! $confirmada) {
                 throw ValidationException::withMessages(['confirmacion_explicita' => self::MENSAJE_INCOMPLETA]);
             }
-            if ($tarea !== null && $imagenesNuevas === [] && $guardadas === []) {
+            $capturaVigente = $actualizacion && $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->where('activo', true)->exists();
+            if ($tarea !== null && $imagenesNuevas === [] && $guardadas === [] && ! $capturaVigente) {
                 throw ValidationException::withMessages(['evidencias' => self::MENSAJE_FOTO]);
             }
             if ($tarea === null && $archivos === []) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte la evidencia de la revisión.']);
             }
 
-            if ($actualizacion && $archivos === [] && ActualizacionConsulta::requiereRespuesta($json)) {
+            if ($actualizacion && $archivos === [] && ActualizacionConsulta::requiereRespuesta($json)
+                && ! $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)->where('relacion_tipo', PedidoBmaDocumento::RELACION_REVISION_GENERAL)->where('activo', true)->exists()) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte una nueva captura del pedido actualizado.']);
             }
             $documentosAntes = $pedido->documentos()->pluck('id')->all();
@@ -487,7 +489,9 @@ class ResponderDisponibilidadInicialService
             throw ValidationException::withMessages(['unidad_id' => 'Indique la unidad a guardar.']);
         }
         $json = UnidadesRevisionConsulta::materializar($json);
-        $hallada = UnidadesRevisionConsulta::localizar($json, $unidadId);
+        // Una línea aún sin solicitud_id/unidades (p. ej. la alternativa pedida por Ventas) no tiene id canónico
+        // hasta materializarse: se resuelve por su posición y documento, nunca por otra unidad.
+        $hallada = UnidadesRevisionConsulta::localizar($json, $unidadId) ?? $this->unidadPorIndice($json, $cambio);
         if ($hallada === null) {
             throw ValidationException::withMessages(['unidad_id' => 'La unidad no pertenece a esta consulta.']);
         }

@@ -18,6 +18,15 @@ export function unidadRevisionId(tipo, linea = {}, clase = 'sku', documentoId = 
     return `${tipo}:legacy:${indice ?? 0}:${sku}`;
 }
 
+/** Identidad canónica del servidor: si la línea ya trae sus unidades, se reutiliza su unidad_id. */
+function idCanonico(linea, documentoId, calculado) {
+    const unidades = (linea.unidades || []).filter((unidad) => unidad?.unidad_id);
+    const porDocumento = documentoId ? unidades.find((unidad) => Number(unidad.documento_id) === Number(documentoId)) : null;
+    if (porDocumento) return porDocumento.unidad_id;
+    if (!documentoId && unidades.length === 1) return unidades[0].unidad_id;
+    return calculado;
+}
+
 function persistidaDe(linea, unidadId) {
     return (linea.unidades || []).find((unidad) => unidad?.unidad_id === unidadId);
 }
@@ -100,7 +109,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         const retirada = decisiones.find(d => d.accion === 'sustituir' && Number(d.revision_id) === Number(a.sustituye_revision_id));
         if (docs.length) {
             return docs.map((documento) => {
-                const unidad_id = unidadRevisionId('anexo', a, 'captura', documento.id, {}, indice);
+                const unidad_id = idCanonico(a, documento.id, unidadRevisionId('anexo', a, 'captura', documento.id, {}, indice));
                 return ficha(a, {
                     clave: unidad_id, unidad_id, tipo: 'anexo', clase: 'captura', indice,
                     documento_id: documento.id, documentos: [documento], esDocumento: true, retirada,
@@ -109,7 +118,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
             });
         }
         const esDocumento = a.entrada === 'documento';
-        const unidad_id = unidadRevisionId('anexo', a, esDocumento ? 'captura' : 'sku', null, {}, indice);
+        const unidad_id = idCanonico(a, null, unidadRevisionId('anexo', a, esDocumento ? 'captura' : 'sku', null, {}, indice));
         return [ficha(a, {
             clave: unidad_id, unidad_id, tipo: 'anexo', clase: esDocumento ? 'captura' : 'sku', indice,
             documentos: [], esDocumento, retirada,
@@ -121,7 +130,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         const descripcion = (r.piezas_solicitadas || r.piezas || []).map(p => `${p.descripcion}${p.sku ? ` · ${p.sku}` : ''}`).join(', ');
         if (docs.length) {
             return docs.map((documento) => {
-                const unidad_id = unidadRevisionId('retiro', r, 'captura', documento.id, {}, indice);
+                const unidad_id = idCanonico(r, documento.id, unidadRevisionId('retiro', r, 'captura', documento.id, {}, indice));
                 return ficha(r, {
                     clave: unidad_id, unidad_id, tipo: 'retiro', clase: 'captura', indice,
                     documento_id: documento.id, documentos: [documento], documentosPeticion: peticion,

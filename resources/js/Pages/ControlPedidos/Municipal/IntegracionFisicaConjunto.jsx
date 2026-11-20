@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PackageCheck } from 'lucide-react';
 import { GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
 import ConjuntoRemisionesMunicipal from './ConjuntoRemisionesMunicipal';
 import EstadosResguardoMunicipal from './EstadosResguardoMunicipal';
 
 const RUTAS = {
-    resguardo_envio: { ruta: 'control_pedidos.municipal.remisiones.integrar_cedis', boton: 'Confirmar integración en CEDIS', exito: 'Integración en CEDIS confirmada.' },
-    custodia_local: { ruta: 'control_pedidos.municipal.remisiones.integrar_local', boton: 'Confirmar integración en sucursal', exito: 'Integración en sucursal confirmada.' },
+    resguardo_envio: { ruta: 'control_pedidos.municipal.remisiones.integrar_cedis', boton: 'Confirmar integración en CEDIS', ubicacion: 'CEDIS', exito: 'Integración en CEDIS confirmada.' },
+    custodia_local: { ruta: 'control_pedidos.municipal.remisiones.integrar_local', boton: 'Confirmar integración en sucursal', ubicacion: 'sucursal donde está la custodia', exito: 'Integración en sucursal confirmada.' },
 };
 
 /**
@@ -16,23 +16,32 @@ const RUTAS = {
 export default function IntegracionFisicaConjunto({ pedido, mecanismos = ['resguardo_envio'], onActualizado }) {
     const [ocupado, setOcupado] = useState(false);
     const [aviso, setAviso] = useState('');
+    const [porConfirmar, setPorConfirmar] = useState(null);
+    const enCurso = useRef(false);
+    const montado = useRef(true);
+    useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
     const resguardo = pedido?.resguardo_envio;
     const vinculos = resguardo?.vinculos || [];
     if (!resguardo?.activo || !vinculos.length) return null;
 
     const confirmar = async (item) => {
         const definicion = RUTAS[item.mecanismo];
-        if (!definicion || ocupado) return;
+        // Bloqueo de doble clic: la referencia cierra la puerta antes de que React pinte el estado ocupado.
+        if (!definicion || ocupado || enCurso.current) return;
+        enCurso.current = true;
         setOcupado(true);
         setAviso('');
         try {
             const { data } = await window.axios.post(route(definicion.ruta, [pedido.id, item.origen_id]), {}, { headers: { Accept: 'application/json' } });
+            // Solo se marca integrado con la respuesta real del servidor.
             onActualizado?.({ ...pedido, ...data });
-            setAviso(definicion.exito);
+            if (montado.current) { setAviso(definicion.exito); setPorConfirmar(null); }
         } catch (error) {
-            setAviso(error.response?.data?.message || 'No se pudo confirmar la integración. Revise e intente de nuevo.');
+            // El error es recuperable: la confirmación sigue abierta para reintentar o cancelar.
+            if (montado.current) setAviso(error.response?.data?.message || 'No se pudo confirmar la integración. Revise e intente de nuevo.');
         } finally {
-            setOcupado(false);
+            enCurso.current = false;
+            if (montado.current) setOcupado(false);
         }
     };
 
@@ -45,9 +54,23 @@ export default function IntegracionFisicaConjunto({ pedido, mecanismos = ['resgu
                 vinculos={vinculos}
                 acciones={(item) => (!item.integrado && mecanismos.includes(item.mecanismo) && RUTAS[item.mecanismo]
                     && (item.mecanismo !== 'resguardo_envio' || item.estado === 'anexado') ? (
-                        <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={() => confirmar(item)}>
-                            {RUTAS[item.mecanismo].boton}
-                        </button>
+                        porConfirmar === item.origen_id ? (
+                            <div role="group" aria-label={`Confirmar integración de ${item.folio}`} className="grid gap-2 border theme-border rounded-xl px-3 py-2 w-full">
+                                <p className="text-sm theme-text-main m-0">
+                                    <strong>{item.folio}</strong> · Remisión {item.remision || 'sin número'} · Envío principal {pedido.folio}<br />
+                                    Ubicación: {RUTAS[item.mecanismo].ubicacion}.<br />
+                                    Confirma que las piezas de esta remisión ya están físicamente identificadas e integradas al envío indicado.
+                                </p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={() => confirmar(item)}>{ocupado ? 'Confirmando…' : 'Confirmar integración'}</button>
+                                    <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={() => setPorConfirmar(null)}>Cancelar</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={() => { setAviso(''); setPorConfirmar(item.origen_id); }}>
+                                {RUTAS[item.mecanismo].boton}
+                            </button>
+                        )
                     ) : null)}
             />
             {aviso && <p className="text-sm theme-text-main m-0" role="status" aria-live="polite">{aviso}</p>}

@@ -42,6 +42,10 @@ export default function FormularioRegistrarMunicipal({
     // Estado de la instrucción de resguardo: guardado | sin_guardar | guardando | error.
     const [resguardoEstado, setResguardoEstado] = useState('guardado');
     const resguardoEnCurso = useRef(null);
+    // Secuencia de capturas locales: una respuesta solo marca «Guardado» si corresponde a la última captura vigente.
+    const capturaVersion = useRef(0);
+    const montado = useRef(true);
+    useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
     const [confirmaCierre, setConfirmaCierre] = useState(false);
     const [guardando, setGuardando] = useState(false);
     const [etapa, setEtapa] = useState('');
@@ -188,25 +192,40 @@ export default function FormularioRegistrarMunicipal({
         base_captura: actual.base_captura,
     });
 
-    const marcarResguardoSinGuardar = () => { setResguardoEstado('sin_guardar'); setCambios(true); setAviso(''); };
+    const marcarResguardoSinGuardar = () => { capturaVersion.current += 1; setResguardoEstado('sin_guardar'); setCambios(true); setAviso(''); };
 
     // Escritura serializada: nunca hay dos peticiones de resguardo a la vez ni una respuesta vieja sobre una nueva.
+    // Devuelve { pedido, vigente }: «vigente» es false si hubo cambios locales después de enviar la captura.
     const persistirResguardo = () => {
         if (resguardoEnCurso.current) return resguardoEnCurso.current;
         const captura = capturaResguardo();
+        const versionEnviada = capturaVersion.current;
         setResguardoEstado('guardando');
         const peticion = (async () => {
             try {
                 const { data } = await window.axios.post(route('control_pedidos.municipal.resguardo', actual.id), captura, { headers: { Accept: 'application/json' } });
                 const siguiente = { ...actual, ...data };
+                const vigente = capturaVersion.current === versionEnviada;
+                if (!montado.current) return { pedido: siguiente, vigente };
+                // La revisión del servidor avanza siempre; los controles solo se tocan si la captura sigue vigente.
                 actualizar(siguiente);
-                setResguardoEstado('guardado');
-                return siguiente;
+                if (vigente) {
+                    setResguardoEstado('guardado');
+                } else {
+                    setResguardoEstado('sin_guardar');
+                    setAviso('Hay cambios nuevos sin guardar en la instrucción de resguardo.');
+                }
+                return { pedido: siguiente, vigente };
             } catch (error) {
                 // Se conservan motivo, fecha y selección locales para reintentar.
-                const mensaje = Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || error.message || 'No se pudo guardar la instrucción de resguardo.';
-                setAviso(mensaje);
-                setResguardoEstado('error');
+                const conflicto = error.response?.status === 409;
+                const mensaje = conflicto
+                    ? 'Otra sesión modificó este pedido. Actualice para ver los cambios; la instrucción no se guardó.'
+                    : Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || error.message || 'No se pudo guardar la instrucción de resguardo.';
+                if (montado.current) {
+                    setAviso(mensaje);
+                    setResguardoEstado('error');
+                }
                 throw error;
             } finally {
                 resguardoEnCurso.current = null;
@@ -223,7 +242,11 @@ export default function FormularioRegistrarMunicipal({
         operacionRef.current = true;
         setGuardando(true); setAviso('');
         try {
-            if (resguardoEstado !== 'guardado') await persistirResguardo();
+            if (resguardoEstado !== 'guardado') {
+                const { vigente } = await persistirResguardo();
+                // Nunca se envía a revisión una instrucción desactualizada.
+                if (!vigente) throw new Error('Hay cambios sin guardar en la instrucción de resguardo. Guárdelos y envíe de nuevo.');
+            }
             const { data } = await window.axios.put(route('control_pedidos.enviar', actual.id), {}, { headers: { Accept: 'application/json' } });
             actualizar({ ...actual, ...data });
             setAviso('Pedido enviado a revisión.');
@@ -366,7 +389,7 @@ export default function FormularioRegistrarMunicipal({
                     {solicitudGuardada && !conversion && (
                         <section className="registrar-tienda-panel">
                             <div className="registrar-tienda-seccion-titulo"><PauseCircle size={18} /><h3>Resguardo de envío</h3></div>
-                            <fieldset disabled={guardando || ocupado || enRevision} className="grid gap-4 min-w-0">
+                            <fieldset disabled={guardando || ocupado || enRevision || resguardoEstado === 'guardando'} aria-busy={resguardoEstado === 'guardando'} className="grid gap-4 min-w-0">
                                 <label className="flex items-start gap-3 text-sm theme-text-main">
                                     <input type="checkbox" className="mt-1 w-5 h-5" checked={resguardoActivo} onChange={(evento) => {
                                         setResguardoActivo(evento.target.checked);
@@ -409,6 +432,7 @@ export default function FormularioRegistrarMunicipal({
                                 <span className="text-sm theme-text-main" role="status" aria-live="polite" data-estado-resguardo={resguardoEstado}>
                                     {{ guardado: 'Guardado', sin_guardar: 'Sin guardar', guardando: 'Guardando…', error: 'Error al guardar' }[resguardoEstado]}
                                 </span>
+                                {resguardoEstado === 'error' && aviso && <span className="text-sm theme-text-peligro" role="alert" data-error-resguardo>{aviso}</span>}
                             </div>
                             <div className="mt-3"><EstadosResguardoMunicipal estados={actual.resguardo_envio?.estados} /></div>
                             <p className="text-xs theme-text-muted mt-3 mb-0">El transporte pendiente o diferido no cuenta como pagado. Un crédito de Wizerp no habilita este resguardo.</p>

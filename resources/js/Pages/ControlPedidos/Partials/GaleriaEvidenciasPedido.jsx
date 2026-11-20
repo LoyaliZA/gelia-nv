@@ -8,7 +8,7 @@ import ModalConfirmarAccion from './ModalConfirmarAccion';
 
 export default function GaleriaEvidenciasPedido({
     archivos = [], previews = [], onChange, onVer, label = 'Evidencias', etiquetaAdjuntar = null, obligatorio = false,
-    id, error, compacto = false, accionesCamara = false, capturaExterna = false, controlRef = null, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, maxBytesTotal = null, bytesUsados = 0, disabled = false,
+    id, error, compacto = false, accionesCamara = false, capturaExterna = false, controlRef = null, soloImagenes = false, maxArchivos = Infinity, maxMb = 10, maxBytesTotal = null, bytesUsados = 0, disabled = false, zonaPegado = false, mensajeLimite = null,
 }) {
     const uid = useId();
     const controlId = id || `evidencias-${uid}`;
@@ -18,6 +18,7 @@ export default function GaleriaEvidenciasPedido({
     const [quitarIdx, setQuitarIdx] = useState(null);
     const [errorArchivo, setErrorArchivo] = useState('');
     const [arrastrando, setArrastrando] = useState(false);
+    const zonaRef = useRef(null);
     const esMovil = esDispositivoCampo();
     const formatos = soloImagenes ? 'JPG, PNG o WEBP' : 'JPG, PNG, WEBP o PDF';
     const accept = `image/jpeg,image/png,image/webp${soloImagenes ? '' : ',application/pdf'}`;
@@ -43,7 +44,7 @@ export default function GaleriaEvidenciasPedido({
             return true;
         });
         const cupo = Math.max(0, maxArchivos - previews.length);
-        if (maxBytesTotal == null && validos.length > cupo) aviso = `Puedes adjuntar hasta ${maxArchivos} fotos. Quita una para agregar otra.`;
+        if (maxBytesTotal == null && validos.length > cupo) aviso = mensajeLimite || `Puedes adjuntar hasta ${maxArchivos} fotos. Quita una para agregar otra.`;
         const nuevos = maxBytesTotal == null ? validos.slice(0, cupo) : validos;
         setErrorArchivo(aviso);
         if (!nuevos.length) return;
@@ -77,7 +78,8 @@ export default function GaleriaEvidenciasPedido({
                     {previews.length} {previews.length === 1 ? 'archivo' : 'archivos'}
                 </span>
             </div>}
-            <div className={capturaExterna ? 'hidden' : 'gelia-pedidos-adjuntos-control'} data-dragging={arrastrando}>
+            <div ref={zonaRef} className={capturaExterna ? 'hidden' : 'gelia-pedidos-adjuntos-control'} data-dragging={arrastrando} data-pegado={zonaPegado && !disabled ? 'true' : undefined}
+                {...(zonaPegado && !disabled ? { tabIndex: 0, role: 'group', 'aria-label': `${label}: haz clic aquí y pega con Ctrl+V, o arrastra el archivo`, onClick: (event) => { if (!event.target.closest('button')) zonaRef.current?.focus(); } } : {})}>
                 <div className="flex flex-wrap gap-2">
                     {(esMovil || accionesCamara) && <button type="button" disabled={disabled} onClick={() => camaraRef.current?.click()} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-2 flex-1`}>
                         <Camera className="w-4 h-4" aria-hidden="true" /> Tomar foto
@@ -95,6 +97,7 @@ export default function GaleriaEvidenciasPedido({
                 <p id={`${controlId}-ayuda`} className="text-xs theme-text-muted m-0 mt-2">
                     {maxBytesTotal != null
                         ? `${textoTamano(consumo)} de 50 MB en esta consulta. ${soloImagenes ? 'Imágenes' : 'PDF o imágenes'}, sin límite de cantidad.`
+                        : zonaPegado ? `Haz clic aquí y pega con Ctrl+V, o arrastra el archivo · ${soloImagenes ? 'Imágenes' : 'PDF / imágenes'} · ${maxMb} MB`
                         : compacto ? `Arrastra o pega · ${soloImagenes ? 'Imágenes' : 'PDF / imágenes'} · ${maxMb} MB por archivo` : <>{esMovil ? 'Revisa la foto antes de registrar.' : 'Arrastra archivos aquí o pega capturas con Ctrl+V.'} {formatos}, hasta {maxMb} MB por archivo.</>}
                 </p>
             </div>

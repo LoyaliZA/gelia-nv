@@ -30,6 +30,9 @@ export default function ConjuntoRemisionesMunicipal({ vinculos = [], acciones = 
                                 {pendiente.area ? ` · Pendiente: ${pendiente.texto} (${pendiente.area})` : ''}
                                 {!item.integrado && !item.puede_desvincular ? ' · Ya no se puede desvincular' : ''}
                             </p>
+                            {item.incidencia_pago && (
+                                <p className="text-xs theme-text-aviso m-0" role="status">Revisión de pago pendiente: la persona auxiliar debe revisar esta remisión antes de liberar o despachar.</p>
+                            )}
                             {acciones && <div className="flex flex-wrap gap-2">{acciones(item)}</div>}
                         </li>
                     );

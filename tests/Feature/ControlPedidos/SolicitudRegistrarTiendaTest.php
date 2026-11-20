@@ -1580,6 +1580,43 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame(PedidoBmaDocumento::TIPO_PDF_PEDIDO, $pedido->fresh()->documentos()->where('tipo', PedidoBmaDocumento::TIPO_PDF_PEDIDO)->value('tipo'));
     }
 
+    public function test_nueva_pieza_por_sustitucion_se_responde_con_la_identidad_que_ve_tienda(): void
+    {
+        $pedido = $this->consultaConExcepcion();
+        $pieza = $pedido->revisionesProducto()->firstOrFail();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(),
+            'evidencias' => [UploadedFile::fake()->createWithContent('a.pdf', 'captura-a')],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $anexo = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
+        // El anexo documental ya revisado conserva su respuesta y su evidencia.
+        $this->post($url, ['persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId, 'cambios_revisados' => [[
+            'tipo' => 'anexo', 'indice' => 0, 'unidad_id' => 'anexo:'.$anexo['solicitud_id'].':doc:'.$anexo['documento_id'],
+            'documento_id' => $anexo['documento_id'], 'resultado' => 'correcto']]], ['Accept' => 'application/json'])->assertOk();
+        // Ventas pide una alternativa por documento: línea sin solicitud_id ni unidades materializadas.
+        $this->post('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', [
+            'revision_id' => $pieza->id, 'accion' => 'sustituir', 'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(), 'evidencia' => UploadedFile::fake()->image('alternativa.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido->refresh();
+        $json = $pedido->solicitud_preparacion_json;
+        $nueva = $json['anexo_sin_remision'][1];
+        $actualizacionId = $json['revision_disponibilidad']['actualizacion_id'];
+        // Identidad que calcula el formulario cuando la línea aún no trae solicitud_id/unidades.
+        $idFormulario = 'anexo:doc:'.$nueva['documento_id'];
+        $this->post($url, ['persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId, 'cambios_revisados' => [[
+            'tipo' => 'anexo', 'indice' => 1, 'unidad_id' => $idFormulario, 'documento_id' => $nueva['documento_id'], 'resultado' => 'correcto']]],
+            ['Accept' => 'application/json'])->assertOk();
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertSame('correcto', $json['anexo_sin_remision'][1]['unidades'][0]['resultado']);
+        $this->assertSame('correcto', $json['anexo_sin_remision'][0]['unidades'][0]['resultado']);
+        $this->assertNotEmpty($pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->get());
+    }
+
     public function test_persistir_unidad_no_escribe_la_hermana_por_indice(): void
     {
         $pedido = $this->consultaConExcepcion();

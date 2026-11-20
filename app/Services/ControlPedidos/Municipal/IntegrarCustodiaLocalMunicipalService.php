@@ -3,7 +3,6 @@
 namespace App\Services\ControlPedidos\Municipal;
 
 use App\Models\ControlPedidos\PedidoBma;
-use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -50,18 +49,19 @@ class IntegrarCustodiaLocalMunicipalService
             if ((int) $custodia->cliente_id !== (int) $principal->cliente_id) {
                 throw ValidationException::withMessages(['cliente' => 'La remisión no pertenece al cliente del envío.']);
             }
-            PoliticaResguardoEnvio::assertConjuntoMutable($principal);
+            try {
+                PoliticaResguardoEnvio::assertIntegracionPermitida($principal);
+                PoliticaResguardoEnvio::assertUbicacionIntegracionLocal($custodia, $principal);
+            } catch (\RuntimeException $e) {
+                throw ValidationException::withMessages(['ubicacion' => $e->getMessage()]);
+            }
             if (in_array($json['retiro_recoleccion']['estado'] ?? null, ['pendiente_traslado', 'en_traslado', 'recibido_cedis'], true)) {
                 throw ValidationException::withMessages([
                     'retiro' => 'Esta remisión tiene un traslado activo a CEDIS. No se confirma como integración local.',
                 ]);
             }
-            $custodiaVigente = ResguardoPdv::query()
-                ->where('pedido_bma_id', $custodia->id)
-                ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
-                ->exists();
-            if (! $custodiaVigente) {
-                throw ValidationException::withMessages(['ubicacion' => 'La mercancía ya no está en custodia vigente de la sucursal.']);
+            if (PoliticaResguardoEnvio::incidenciaPagoMiembro($custodia)) {
+                throw ValidationException::withMessages(['pago' => PoliticaResguardoEnvio::MENSAJE_INCIDENCIA_PAGO]);
             }
 
             $json['integracion_local'] = array_merge($local, [

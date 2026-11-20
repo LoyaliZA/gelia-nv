@@ -47,7 +47,7 @@ class ConfirmarEmpaqueMunicipioService
             $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $tarea->loadMissing(['documentos', 'productos', 'paqueteria', 'modalidad', 'pedido']);
             try {
-                \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($tarea->pedido);
+                \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespacharBloqueado($tarea->pedido);
             } catch (\RuntimeException $e) {
                 throw ValidationException::withMessages(['resguardo' => $e->getMessage()]);
             }

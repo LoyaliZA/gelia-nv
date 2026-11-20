@@ -75,9 +75,9 @@ it('conserva las miniaturas enviadas sin descargar documentos fuera de etapa y l
     expect([...container.querySelectorAll('button')].find(b => b.textContent.startsWith('Ver pedido')).disabled).toBe(true);
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
     await montar({ pedido: guardada, revision: { ...revision, actualizacion_id: 'siguiente', actualizacion_pendiente: true }, puedeLeerDocumentos: true });
-    await click('Enviar respuesta');
-    expect(onEnviar).toHaveBeenCalledOnce();
-    expect(container.textContent).toContain('Adjunta evidencia en Captura del pedido.');
+    expect(container.textContent).toContain('Captura vigente del pedido');
+    expect(container.querySelector('img[src="/etapa-terminada.png"]')).not.toBeNull();
+    expect(container.textContent).toContain('Nueva captura (opcional)');
 });
 beforeEach(() => {
  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -187,16 +187,17 @@ it('un defecto sin atributos sigue exigiendo descripción aunque tenga fotos', a
  await montar();await estado(1);await click('Elegir perfume');await foto('Fotos del producto');await foto();await click('Enviar respuesta');
  expect(onEnviar).not.toHaveBeenCalled();expect(container.textContent).toContain('Describe el defecto');
 });
-it('una actualización por captura reutiliza la respuesta por conjunto y exige evidencia nueva', async () => {
+it('una actualización por captura conserva la captura vigente y la nueva es opcional', async () => {
  const revision={estado:'sin_excepciones',actualizacion_pendiente:true,actualizacion_id:'123e4567-e89b-42d3-a456-426614174000'};
  await montar({revision,pedido:{documentos:[{id:1,tipo:'evidencia_condicion',relacion_tipo:'revision_general',url:'/anterior.jpg'}],solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento',documento_id:2}]}}});
  expect(container.textContent).toContain('Actualización de consulta');
  expect(container.textContent).not.toContain('Confirmar disponibilidad');
- expect(container.querySelector('img[src="/anterior.jpg"]')).toBeNull();
+ expect(container.querySelector('img[src="/anterior.jpg"]')).not.toBeNull();
+ expect(container.textContent).toContain('Captura vigente del pedido');
  expect(container.querySelector('input[type=radio]')).toBeNull();
  await click('Enviar respuesta');expect(onEnviar).not.toHaveBeenCalled();
  await click('Todo OK');
- await foto();await click('Enviar respuesta');
+ await foto('Nueva captura (opcional)');await click('Enviar respuesta');
  expect(envioFinal().get('actualizacion_id')).toBe(revision.actualizacion_id);
  expect(envioFinal().get('evidencias[]').name).toBe('evidencia-0.png');
  expect([...envioFinal().keys()].some(k=>k.startsWith('excepciones'))).toBe(false);

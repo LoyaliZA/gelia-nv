@@ -127,6 +127,120 @@ it('CEDIS confirma solo lo anexado y recibe la respuesta del servidor', async ()
     const alActualizar = vi.fn();
     await act(() => root.render(<IntegracionFisicaConjunto pedido={{ ...pedido, resguardo_envio: { ...resguardoBase, activo: true, vinculos } }} onActualizado={alActualizar} />));
     await act(async () => button('Confirmar integración en CEDIS').click());
+    expect(window.axios.post).not.toHaveBeenCalled();
+    await act(async () => button('Confirmar integración').click());
     expect(window.axios.post).toHaveBeenCalledWith(expect.stringContaining('integrar_cedis'), {}, expect.anything());
     expect(alActualizar).toHaveBeenCalled();
+});
+
+// ───── Guardado concurrente de la instrucción ─────
+const cambiar = (el, valor) => act(async () => { el.value = valor; el.dispatchEvent(new Event('change', { bubbles: true })); });
+const prepararInstruccion = async () => {
+    await renderForm();
+    await act(async () => document.querySelector('input[type=checkbox]').click());
+    const motivo = [...document.querySelectorAll('select')].find((el) => [...el.options].some((o) => o.value === 'fecha_posterior'));
+    await cambiar(motivo, 'fecha_posterior');
+    await escribir(document.querySelector('input[type=date]'), '2026-12-01');
+    return motivo;
+};
+
+it('un cambio hecho mientras guarda no se presenta como guardado y no se pisa con la respuesta anterior', async () => {
+    let resolver;
+    window.axios.post = vi.fn(() => new Promise((res) => { resolver = res; }));
+    const motivo = await prepararInstruccion();
+    await act(async () => button('Guardar instrucción').click());
+    expect(estado()).toBe('Guardando…');
+    expect(document.querySelector('input[type=checkbox]').closest('fieldset').disabled).toBe(true);
+    // Un cambio llega antes de la respuesta (p. ej. un evento que la interfaz no alcanzó a bloquear).
+    await cambiar(motivo, 'acumulacion');
+    await act(async () => { resolver({ data: { revision_registro: 4, base_captura: 'b2', resguardo_envio: { activo: true, motivo: 'fecha_posterior', fecha_solicitada: '2026-12-01' } } }); });
+    expect(estado()).toBe('Sin guardar');
+    expect(motivo.value).toBe('acumulacion');
+    expect(button('Guardar instrucción').disabled).toBe(false);
+});
+
+it('un guardado sin cambios intermedios queda Guardado y reabre los controles', async () => {
+    window.axios.post = vi.fn(async () => ({ data: { revision_registro: 4, base_captura: 'b2', resguardo_envio: { activo: true, motivo: 'fecha_posterior' } } }));
+    await prepararInstruccion();
+    await act(async () => button('Guardar instrucción').click());
+    expect(estado()).toBe('Guardado');
+    expect(document.querySelector('input[type=checkbox]').closest('fieldset').disabled).toBe(false);
+});
+
+it('error de red conserva la captura y el reintento envía la misma instrucción', async () => {
+    window.axios.post = vi.fn()
+        .mockRejectedValueOnce({ message: 'Network Error' })
+        .mockResolvedValueOnce({ data: { revision_registro: 4, base_captura: 'b2', resguardo_envio: { activo: true } } });
+    await prepararInstruccion();
+    await act(async () => button('Guardar instrucción').click());
+    expect(estado()).toBe('Error al guardar');
+    expect(document.querySelector('input[type=date]').value).toBe('2026-12-01');
+    await act(async () => button('Reintentar guardado').click());
+    expect(estado()).toBe('Guardado');
+    expect(window.axios.post.mock.calls[1][1]).toMatchObject({ activo: true, motivo: 'fecha_posterior', fecha_solicitada: '2026-12-01' });
+});
+
+it('un conflicto de revisión avisa que otra sesión modificó el pedido y no marca Guardado', async () => {
+    window.axios.post = vi.fn().mockRejectedValue({ response: { status: 409, data: { message: 'x' } } });
+    await prepararInstruccion();
+    await act(async () => button('Guardar instrucción').click());
+    expect(estado()).toBe('Error al guardar');
+    expect(document.querySelector('[data-error-resguardo]').textContent).toContain('Otra sesión modificó este pedido');
+});
+
+it('desmontar durante la petición no deja actualizaciones ni errores', async () => {
+    let resolver;
+    window.axios.post = vi.fn(() => new Promise((res) => { resolver = res; }));
+    await prepararInstruccion();
+    await act(async () => button('Guardar instrucción').click());
+    await act(() => root.render(<div />));
+    await act(async () => { resolver({ data: { revision_registro: 4, resguardo_envio: { activo: true } } }); });
+    expect(document.body.textContent).not.toContain('Guardado');
+});
+
+// ───── Confirmación física y conjunto protegido ─────
+const vinculoCedis = { origen_id: 7, folio: 'F-7', remision: 'R-7', mecanismo: 'resguardo_envio', estado: 'anexado', integrado: false, pago_auditado: true, puede_desvincular: false };
+
+it('la confirmación muestra folio, remisión, envío y consecuencia, y Cancelar no envía nada', async () => {
+    await act(() => root.render(<IntegracionFisicaConjunto pedido={{ ...pedido, resguardo_envio: { ...resguardoBase, activo: true, vinculos: [vinculoCedis] } }} />));
+    await act(async () => button('Confirmar integración en CEDIS').click());
+    const texto = document.body.textContent;
+    expect(texto).toContain('F-7');
+    expect(texto).toContain('R-7');
+    expect(texto).toContain('PBMA-44');
+    expect(texto).toContain('CEDIS');
+    expect(texto).toContain('Confirma que las piezas de esta remisión ya están físicamente identificadas e integradas al envío indicado');
+    await act(async () => button('Cancelar').click());
+    expect(window.axios.post).not.toHaveBeenCalled();
+    expect(button('Confirmar integración en CEDIS')).toBeTruthy();
+});
+
+it('el doble clic envía una sola confirmación y un error deja reintentar', async () => {
+    let rechazar;
+    window.axios.post = vi.fn(() => new Promise((_, rej) => { rechazar = rej; }));
+    const alActualizar = vi.fn();
+    await act(() => root.render(<IntegracionFisicaConjunto pedido={{ ...pedido, resguardo_envio: { ...resguardoBase, activo: true, vinculos: [vinculoCedis] } }} onActualizado={alActualizar} />));
+    await act(async () => button('Confirmar integración en CEDIS').click());
+    const confirmar = button('Confirmar integración');
+    await act(async () => { confirmar.click(); confirmar.click(); });
+    expect(window.axios.post).toHaveBeenCalledTimes(1);
+    expect(alActualizar).not.toHaveBeenCalled();
+    await act(async () => { rechazar({ response: { data: { message: 'Esa remisión sigue en custodia de sucursal.' } } }); });
+    expect(document.body.textContent).toContain('Esa remisión sigue en custodia de sucursal.');
+    expect(button('Confirmar integración').disabled).toBe(false);
+});
+
+it('con la acumulación cerrada no se ofrece agregar ni quitar y se explica el motivo', async () => {
+    const resguardo = { ...resguardoBase, activo: true, conjunto_cerrado: true, capacidades: { puede_vincular: false }, vinculos: [{ ...vinculoCedis, incidencia_pago: true }] };
+    await act(() => root.render(<RemisionesPagadasMunicipal pedido={{ ...pedido, resguardo_envio: resguardo }} />));
+    expect(button('Vincular remisión')).toBeUndefined();
+    expect(button('Desvincular')).toBeUndefined();
+    expect(document.querySelector('[data-conjunto-protegido]').textContent).toContain('ya definió el conjunto');
+    expect(document.body.textContent).toContain('Revisión de pago pendiente');
+});
+
+it('un envío que ya salió explica que la salida está registrada', async () => {
+    const resguardo = { ...resguardoBase, activo: true, envio_salio: true, capacidades: { puede_vincular: false }, vinculos: [] };
+    await act(() => root.render(<RemisionesPagadasMunicipal pedido={{ ...pedido, resguardo_envio: resguardo }} />));
+    expect(document.querySelector('[data-conjunto-protegido]').textContent).toContain('ya salió');
 });
