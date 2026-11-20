@@ -3,7 +3,7 @@
 - Propósito: conservar la captura comercial y dirigir cada modalidad al recorrido compatible.
 - Ubicación: `routes/web/modules/control-pedidos/core.php`; `app/Http/Controllers/ControlPedidos/PedidoBmaController.php`; `app/Services/ControlPedidos/{CrearPedidoBmaService,ActualizarPedidoBmaService}.php`.
 - Frontend: `resources/js/Pages/ControlPedidos/{Index.jsx,Partials/ModalFormPedido.jsx,Partials/FormularioRegistrarTienda.jsx,Partials/ModalFormPedidoLegado.jsx}`.
-- Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest,NacionalAltaConsultaTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
+- Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest,NacionalAltaConsultaTest,NacionalOla3CierreTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
 
 ## Estado actual
 - [verificado] Tienda, Municipal marcado y Nacional 2.0 (`captura_nacional=compartida`) comparten captura. Nacional histórico y el borrador legado siguen en el formulario anterior; abrirlos no escribe la marca: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:13`.
@@ -28,7 +28,9 @@
 ## Puntos blandos
 - [verificado] «Legado» sigue importado y ejecutado; no es un archivo huérfano: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:38`.
 - [verificado] El identificador histórico `folio_remision` no autoriza editar el número de pedido desde Auditoría: `app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php:86`.
-- [verificado] El alta nacional 2.0 envía pesaje comercial a CEDIS; anexo o retiro sin remisión sigue en el mismo pedido y pide otra respuesta. Con remisión, el ajuste se rechaza: `app/Services/ControlPedidos/Nacional/RegistrarAjusteConsultaNacional.php`.
+- [verificado] El alta nacional 2.0 envía pesaje comercial a CEDIS. Sin remisión, anexo o retiro sigue en el mismo pedido. Con remisión o pago, el complemento captura piezas reales (SKU o captura sin SKU), crea revisiones solo en el hijo y conserva `solicitud_id` hasta el éxito: `app/Services/ControlPedidos/Nacional/RegistrarComplementoNacional.php`.
+- [verificado] Antes de la salida, Ventas solicita recolección en sucursal sin convertir `modalidad_entrega`; conserva costo de envío y no cancela la guía ante la paquetería: `app/Services/ControlPedidos/Nacional/CambiarNacionalATienda.php`.
 - [verificado] Tras el cierre, la misma captura puede cambiar la paquetería, incluida PAQ. PENDIENTE. El importe lo calcula el servidor y un costo mayor que cero no pasa a cero: `app/Services/ControlPedidos/Nacional/CambiarPaqueteriaNacional.php`.
+- [verificado] El alta nacional lista paqueterías comerciales con logística (`sin_logistica` falso), aunque `requiere_peso` sea falso. Omite las marcadas sin logística y deja PAQ. PENDIENTE para el cambio posterior: `resources/js/Pages/ControlPedidos/Nacional/FormularioRegistrarNacional.jsx`.
 
-- Última verificación: 2026-11-20, working tree, sin commit.
+- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, filtro de paquetería nacional sin commit.

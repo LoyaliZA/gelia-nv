@@ -28,6 +28,23 @@ class RegistrarEntregaResguardoPdvRequest extends PdvOperacionPisoRequest
      */
     public function rules(): array
     {
+        if ($this->resguardoNacional()) {
+            return [
+                'version' => ['required', 'integer', 'min:1'],
+                'idempotency_key' => ['required', 'string', 'max:64'],
+                'relacion' => ['required', 'string', Rule::in([
+                    ResguardoPdvEntrega::RELACION_TITULAR,
+                    ResguardoPdvEntrega::RELACION_TERCERO,
+                ])],
+                'nombre_quien_retira' => ['required', 'string', 'max:255'],
+                'metodo_validacion' => ['required', 'string', Rule::in([
+                    RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FOTOGRAFIA_T02,
+                ])],
+                'evidencias' => ['required', 'array', 'min:1'],
+                'evidencias.*' => ['file', 'image', 'max:10240'],
+            ];
+        }
+
         return [
             'version' => ['required', 'integer', 'min:1'],
             'idempotency_key' => ['required', 'string', 'max:64'],
@@ -54,5 +71,12 @@ class RegistrarEntregaResguardoPdvRequest extends PdvOperacionPisoRequest
     public function payloadOperacion(): array
     {
         return $this->validated();
+    }
+
+    private function resguardoNacional(): bool
+    {
+        $resguardo = $this->route('resguardo');
+
+        return $resguardo instanceof ResguardoPdv && $resguardo->esOrigenNacional();
     }
 }

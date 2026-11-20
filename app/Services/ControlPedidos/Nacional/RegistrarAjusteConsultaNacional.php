@@ -37,6 +37,17 @@ class RegistrarAjusteConsultaNacional
                 return ['pedido' => $pedido->fresh(), 'idempotente' => true];
             }
 
+            $tipo = (string) ($datos['tipo'] ?? '');
+            if ($tipo === 'anexo' && ($pedido->numero_remision || $pedido->pago_validado_at)) {
+                if (! CapturaNacional::es($pedido)) {
+                    throw new \InvalidArgumentException('Este ajuste solo aplica a un envío nacional de la captura actual.');
+                }
+                $ya = $this->complementoPrevio($pedido, $solicitudId);
+                app(RegistrarComplementoNacional::class)->ejecutar($pedido, $usuario, $datos, $archivos);
+
+                return ['pedido' => $pedido->fresh(), 'idempotente' => $ya];
+            }
+
             RevisionCapturaPedido::comprobar($pedido, $datos);
             if (! CapturaNacional::es($pedido)) {
                 throw new \InvalidArgumentException('Este ajuste solo aplica a un envío nacional de la captura actual.');
@@ -44,8 +55,6 @@ class RegistrarAjusteConsultaNacional
             if ($pedido->numero_remision || $pedido->pago_validado_at) {
                 throw new \InvalidArgumentException('La mercancía ya tiene remisión o pago. El complemento se registra aparte y no modifica este pedido.');
             }
-
-            $tipo = (string) ($datos['tipo'] ?? '');
             $motivo = match ($tipo) {
                 'anexo' => PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS,
                 'retiro' => PedidoBma::MOTIVO_REPESAJE_QUITA_PIEZAS,
@@ -108,6 +117,17 @@ class RegistrarAjusteConsultaNacional
         }
 
         return null;
+    }
+
+    private function complementoPrevio(PedidoBma $pedido, string $solicitudId): bool
+    {
+        foreach ((array) ($pedido->solicitud_preparacion_json['complementos_nacionales'] ?? []) as $item) {
+            if (is_array($item) && (string) ($item['solicitud_id'] ?? '') === $solicitudId && $solicitudId !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

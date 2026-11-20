@@ -313,15 +313,27 @@ class ConsultaBandejasResguardoPdvService
             : BandejaResguardoPdv::PASO_GERENTE;
 
         if ($paso === BandejaResguardoPdv::PASO_RECEPCIONISTA) {
-            $query->where('estado', ResguardoPdv::ESTADO_EN_RECEPCION);
+            $query->where(function (Builder $pasoQuery) {
+                $pasoQuery->where('estado', ResguardoPdv::ESTADO_EN_RECEPCION)
+                    ->orWhere(function (Builder $nacional) {
+                        $nacional->where('estado', ResguardoPdv::ESTADO_RECIBIDO)
+                            ->where('snapshot_json->origen', 'nacional');
+                    });
+            });
 
             return;
         }
 
-        $query->whereIn('estado', [
-            ResguardoPdv::ESTADO_PENDIENTE_RECEPCION,
-            ResguardoPdv::ESTADO_RECIBIDO,
-        ]);
+        $query->where(function (Builder $pasoQuery) {
+            $pasoQuery->where('estado', ResguardoPdv::ESTADO_PENDIENTE_RECEPCION)
+                ->orWhere(function (Builder $recibido) {
+                    $recibido->where('estado', ResguardoPdv::ESTADO_RECIBIDO)
+                        ->where(function (Builder $origen) {
+                            $origen->whereNull('snapshot_json->origen')
+                                ->orWhere('snapshot_json->origen', '!=', 'nacional');
+                        });
+                });
+        });
     }
 
     /**
@@ -587,6 +599,7 @@ class ConsultaBandejasResguardoPdvService
         $cantidadEnCustodia = EstadoResguardoPdv::cantidadEnCustodia($resguardo);
         $cantidadPendienteCustodia = EstadoResguardoPdv::cantidadPendienteCustodia($resguardo);
         $retiro = SerializadorRetiroPedidoResguardoPdv::desdeResguardo($resguardo);
+        $origenNacional = $resguardo->esOrigenNacional();
 
         return [
             'id' => $resguardo->id,
@@ -604,6 +617,7 @@ class ConsultaBandejasResguardoPdvService
             'cantidad_bultos_pendiente' => $cantidadPendienteGerente,
             'cantidad_bultos_en_custodia' => $cantidadEnCustodia,
             'cantidad_bultos_pendiente_custodia' => $cantidadPendienteCustodia,
+            'origen_nacional' => $origenNacional,
             'admite_recepcion' => EstadoResguardoPdv::admiteRecepcionGerente($resguardo),
             'admite_pasar_a_recepcion' => EstadoResguardoPdv::admitePasarARecepcion($resguardo),
             'admite_confirmacion_custodia' => EstadoResguardoPdv::admiteConfirmacionCustodia($resguardo),

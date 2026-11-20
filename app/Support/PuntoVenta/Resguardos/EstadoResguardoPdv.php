@@ -86,12 +86,20 @@ final class EstadoResguardoPdv
 
     public static function admitePasarARecepcion(ResguardoPdv $resguardo): bool
     {
+        if ($resguardo->esOrigenNacional()) {
+            return false;
+        }
+
         return $resguardo->estado === ResguardoPdv::ESTADO_RECIBIDO
             && self::recepcionGerenteCompleta($resguardo);
     }
 
     public static function admiteConfirmacionCustodia(ResguardoPdv $resguardo): bool
     {
+        if ($resguardo->esOrigenNacional()) {
+            return $resguardo->estado === ResguardoPdv::ESTADO_RECIBIDO;
+        }
+
         if ($resguardo->estado !== ResguardoPdv::ESTADO_EN_RECEPCION) {
             return false;
         }

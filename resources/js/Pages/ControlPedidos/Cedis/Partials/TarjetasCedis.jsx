@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import axios from 'axios';
 import { router, usePage } from '@inertiajs/react';
 import {
     Eye, CheckCircle2, AlertTriangle, FileText, Truck, PackageCheck, Scale, History, Undo2, User,
@@ -38,6 +39,12 @@ import BotonGuiaPdf from '../../Partials/BotonGuiaPdf';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import { esRegistroMunicipal } from '../../Municipal/terminalMunicipal';
 import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
+import {
+    cambioATiendaNacional,
+    integracionFisicaPendiente,
+    sucursalRecoleccionNacional,
+    vinculoFisicoNacional,
+} from '../../Nacional/superficieNacional';
 
 const remisionDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'remision');
 const pdfPedidoDe = (pedido) => (pedido?.documentos || []).find((d) => d.tipo === 'pdf_pedido')
@@ -75,8 +82,12 @@ function TarjetaPedido({
     const mensajeConsulta = actualizacionMercanciaPendiente || pendientePesaje && (revision?.estado || pedido.motivo_repesaje)
         ? 'Actualización de consulta solicitada'
         : consultaRespondida ? 'Consulta respondida' : soloMercancia || esConsultaDisponibilidad ? 'Nueva consulta solicitada' : 'Consulta de pesaje solicitada';
-    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !actualizacionMercanciaPendiente;
-    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
+    const recolectaSucursal = cambioATiendaNacional(pedido);
+    const vinculoDato = vinculoFisicoNacional(pedido);
+    const esperaIntegracion = integracionFisicaPendiente(pedido);
+    const sucursalRecoleccion = sucursalRecoleccionNacional(pedido);
+    const puedeEmpacar = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !actualizacionMercanciaPendiente && !recolectaSucursal && !esperaIntegracion;
+    const puedeMarcarEnviado = fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente && !recolectaSucursal && !esperaIntegracion;
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPedido = pedido.cajas || [];
     const cajasPendientesCount = pedido.cajas_pendientes
@@ -136,6 +147,11 @@ function TarjetaPedido({
             </div>
 
             {mostrarAvisoConsulta && <AvisoOperativoPedido tono={consultaRespondida ? 'success' : 'warning'} icon={consultaRespondida ? CheckCircle2 : Scale} className="gelia-cedis-aviso-consulta">{mensajeConsulta}</AvisoOperativoPedido>}
+            {recolectaSucursal && (
+                <AvisoOperativoPedido tono="warning" icon={PackageCheck}>
+                    No despachar por paquetería. Recolección en {sucursalRecoleccion || 'sucursal'}.
+                </AvisoOperativoPedido>
+            )}
             {complementos.length > 0 && (
                 <div className="rounded-xl border theme-border theme-element p-2.5 space-y-1">
                     <p className="text-xs font-semibold theme-text-info m-0">Complementos</p>
@@ -222,7 +238,7 @@ function TarjetaPedido({
             )}
             {fase === 'PENDIENTE_GUIA_CLIENTE' && (
                 <AvisoOperativoPedido label={etiquetaOrigenGuia(pedido)} tono="info">
-                    Esperando guía del cliente (vendedora). Solo lectura hasta que cargue la guía.
+                    Esperando guía del cliente (Ventas). Solo lectura hasta que cargue la guía.
                 </AvisoOperativoPedido>
             )}
 
@@ -236,6 +252,24 @@ function TarjetaPedido({
                 {pendientePesaje && !consultaMunicipalCedis && (
                     <button type="button" onClick={() => onResponderPesaje?.(pedido)} className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}>
                         <Scale className="w-4 h-4" aria-hidden="true" /> {pedido.solicitud_preparacion?.area_revision === 'control_pedidos' ? (actualizacionMercanciaPendiente ? 'Actualización de consulta' : pedido.solicitud_preparacion?.revision_disponibilidad?.estado ? 'Ver disponibilidad' : 'Nueva consulta') : (soloMercancia ? 'Responder consulta' : 'Responder pesaje')}
+                    </button>
+                )}
+                {vinculoDato?.vinculo?.estado === 'en_traslado' && (
+                    <button
+                        type="button"
+                        onClick={() => onSolicitarConfirmacion({ accion: 'recepcion_nacional', pedido, vinculoPedidoId: vinculoDato.pedidoId })}
+                        className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
+                    >
+                        Confirmar recepción
+                    </button>
+                )}
+                {vinculoDato?.vinculo?.estado === 'recibido_cedis' && vinculoDato?.vinculo?.integrado !== true && (
+                    <button
+                        type="button"
+                        onClick={() => onSolicitarConfirmacion({ accion: 'liberar_nacional', pedido, vinculoPedidoId: vinculoDato.pedidoId })}
+                        className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
+                    >
+                        Liberar integración
                     </button>
                 )}
                 {puedeMarcarEnviado && (
@@ -269,7 +303,7 @@ function TarjetaPedido({
                     {(pendientePesaje || municipal) && pdfPedido && (
                         <BotonAccionCubico icon={FileText} label="PDF pedido" onClick={() => onVerDocumento(pdfPedido)} conLabel />
                     )}
-                    {esEmpacado && tieneGuiaPdf && (
+                    {esEmpacado && tieneGuiaPdf && !recolectaSucursal && !esperaIntegracion && (
                         <div className="col-span-2 sm:col-span-1 [&_button]:w-full [&_button]:min-h-[44px]">
                             <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[44px]" />
                         </div>
@@ -337,6 +371,13 @@ export default function TarjetasCedis({
             router.post(route('control_pedidos.cedis.marcar_enviado', pedido.id), {}, { preserveScroll: true });
         } else if (accion === 'reabrir') {
             router.post(route('control_pedidos.cedis.reabrir_envio', pedido.id), {}, { preserveScroll: true });
+        } else if (accion === 'recepcion_nacional' || accion === 'liberar_nacional') {
+            const destino = confirmacion.vinculoPedidoId || pedido.id;
+            axios.post(`/control-pedidos/cedis/${destino}/custodia-nacional`, {
+                accion: accion === 'recepcion_nacional' ? 'recepcion' : 'liberar',
+            }, { headers: { Accept: 'application/json' } }).then(() => {
+                router.reload({ preserveScroll: true });
+            });
         }
     };
 
@@ -354,7 +395,11 @@ export default function TarjetasCedis({
             ? { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' }
             : confirmacion?.accion === 'reabrir'
                 ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
-                : null;
+                : confirmacion?.accion === 'recepcion_nacional'
+                    ? { titulo: 'Confirmar recepción', mensaje: 'Confirme la recepción física en CEDIS. Esto no libera empaque, guía ni salida.', etiquetaConfirmar: 'Confirmar recepción', variante: 'primary' }
+                    : confirmacion?.accion === 'liberar_nacional'
+                        ? { titulo: 'Liberar integración', mensaje: 'Libere la integración después de la recepción física. Entonces podrá empacar, asignar guía y dar salida.', etiquetaConfirmar: 'Liberar integración', variante: 'primary' }
+                        : null;
 
     if (items.length === 0) {
         return (

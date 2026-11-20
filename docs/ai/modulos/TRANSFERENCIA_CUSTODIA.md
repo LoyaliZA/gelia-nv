@@ -17,6 +17,8 @@
 - [verificado] Segundo traslado exige facultad específica de gerencia y recorrido; autorizar conserva ubicación física hasta salida: `app/Services/ControlPedidos/ResolverSegundoTrasladoTiendaService.php:22` y `:54`.
 - [verificado] Salida requiere custodia PDV activa en destino y actor de origen; recepción corresponde al destino: `app/Services/ControlPedidos/MovimientosTiendaService.php:65`.
 - [verificado] Movimientos comprueban versión bajo bloqueo: `app/Services/ControlPedidos/MovimientosTiendaService.php:77`.
+- [verificado] La custodia nacional de sucursal recorre `pendiente_recepcion → recibido → en_custodia → entregado` en las bandejas PDV. Crear el resguardo no marca recepción. Origen nacional no abre bultos. La entrega exige foto. `cambio-tienda-nacional` solo solicita recolección; recepción, custodia y entrega no pasan por `control_pedidos.crear`: `app/Services/ControlPedidos/Nacional/EventosCustodiaSucursalNacional.php` y `PedidoBmaController::cambioTiendaNacional`.
+- [verificado] El vínculo físico recorre `vinculado → en_traslado → recibido_cedis → integrado`. Recepción CEDIS no libera empaque; liberar integración es un hecho aparte: `app/Services/ControlPedidos/Nacional/CustodiaComplementoNacional.php`.
 
 ## Dependencias con otros módulos
 - PDV Resguardos, sucursales/almacenes operables, [Auditoría](AUDITORIA_PAGOS.md), [Preparación](PREPARACION_TIENDA.md).
@@ -31,4 +33,4 @@
 - [verificado] `InstruccionEntrega::assertSegundoTraslado` conserva una regla distinta y no tiene llamadas encontradas en app/; no conectarla como atajo: `app/Support/ControlPedidos/InstruccionEntrega.php:124`.
 - [inferido] Usar ese helper reintroduciría veto a gerencia que vendió; por confirmar con prueba de actor dual antes de reutilizarlo: `app/Support/ControlPedidos/InstruccionEntrega.php:130`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, autorización de piso PDV en cambio-tienda-nacional.

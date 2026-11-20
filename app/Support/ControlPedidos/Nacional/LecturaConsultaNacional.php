@@ -12,7 +12,20 @@ final class LecturaConsultaNacional
     /** @return array<string, mixed> */
     public static function de(PedidoBma $pedido): array
     {
-        $pedido->loadMissing(['estatus', 'cajas', 'revisionesProducto']);
+        $pedido->loadMissing(['estatus', 'cajas', 'revisionesProducto', 'complementos.revisionesProducto', 'complementos.documentos', 'sucursalDestino']);
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+        $vinculo = is_array($json['vinculo_resguardo'] ?? null) ? $json['vinculo_resguardo'] : null;
+        $vinculoPedidoId = $pedido->id;
+        if ($vinculo === null) {
+            foreach ($pedido->complementos as $hijo) {
+                $marca = $hijo->solicitud_preparacion_json['vinculo_resguardo'] ?? null;
+                if (is_array($marca) && isset($marca['estado'])) {
+                    $vinculo = $marca;
+                    $vinculoPedidoId = (int) $hijo->id;
+                    break;
+                }
+            }
+        }
 
         return [
             'id' => $pedido->id,
@@ -32,6 +45,15 @@ final class LecturaConsultaNacional
             'costo_envio' => $pedido->costo_envio,
             'peso_real_kg' => $pedido->peso_real_kg,
             'numero_cajas' => $pedido->numero_cajas,
+            'sucursal_destino_id' => $pedido->sucursal_destino_id,
+            'sucursal_destino' => $pedido->sucursalDestino ? [
+                'id' => $pedido->sucursalDestino->id,
+                'nombre' => $pedido->sucursalDestino->nombre,
+            ] : null,
+            'cambio_a_tienda' => is_array($json['cambio_a_tienda'] ?? null) ? $json['cambio_a_tienda'] : null,
+            'vinculo_resguardo' => $vinculo,
+            'vinculo_pedido_id' => $vinculoPedidoId,
+            'invalidacion_guia' => is_array($json['invalidacion_guia'] ?? null) ? $json['invalidacion_guia'] : null,
             'version_consulta' => (int) $pedido->historial()->max('id'),
             'cajas' => $pedido->cajas->map(fn (PedidoBmaCaja $caja) => [
                 'id' => $caja->id,
@@ -48,6 +70,28 @@ final class LecturaConsultaNacional
                 'cantidad_solicitada' => $revision->cantidad_solicitada,
                 'cantidad_encontrada' => $revision->cantidad_encontrada,
                 'estado_fisico' => $revision->estado_fisico,
+            ])->values()->all(),
+            'complementos' => $pedido->complementos->map(fn (PedidoBma $hijo) => [
+                'id' => $hijo->id,
+                'folio' => $hijo->folio,
+                'folio_remision' => $hijo->folio_remision,
+                'solicitud_preparacion' => $hijo->solicitud_preparacion,
+                'revisiones_producto' => $hijo->revisionesProducto->map(fn (PedidoBmaRevisionProducto $revision) => [
+                    'id' => $revision->id,
+                    'sku' => $revision->sku,
+                    'descripcion_producto' => $revision->descripcion_producto,
+                    'cantidad_solicitada' => $revision->cantidad_solicitada,
+                    'cantidad_encontrada' => $revision->cantidad_encontrada,
+                    'estado_fisico' => $revision->estado_fisico,
+                ])->values()->all(),
+                'documentos' => $hijo->documentos->map(fn ($documento) => [
+                    'id' => $documento->id,
+                    'tipo' => $documento->tipo,
+                    'nombre_original' => $documento->nombre_original,
+                    'url' => $documento->url ?? null,
+                    'relacion_tipo' => $documento->relacion_tipo,
+                    'relacion_id' => $documento->relacion_id,
+                ])->values()->all(),
             ])->values()->all(),
         ];
     }

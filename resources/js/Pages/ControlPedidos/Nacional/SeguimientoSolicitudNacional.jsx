@@ -3,6 +3,7 @@ import axios from 'axios';
 import { AjustePiezas } from '../Partials/AjustePiezas';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
+import { vinculoFisicoNacional } from './superficieNacional';
 
 function mensajeDe(error, reserva) {
     const datos = error?.response?.data;
@@ -20,6 +21,8 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
     const adaptador = adaptadorConsultaNacional({ pedidoId: pedido?.id, pedido });
     const puedeAjustar = !cerrada && (adaptador.capacidades.anexar || adaptador.capacidades.retirar);
     const puedeCerrar = !cerrada && Boolean(pedido?.puede_cerrar_consulta);
+    const vinculo = vinculoFisicoNacional(pedido);
+    const puedeRegistrarSalida = Boolean(vinculo && vinculo.vinculo.estado === 'vinculado');
 
     const refrescar = async () => {
         const { data } = await axios.get(`/control-pedidos/${pedido.id}/consulta-nacional`, {
@@ -101,6 +104,20 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                         })}
                     >
                         {ocupado ? 'Cerrando…' : 'Cerrar consulta'}
+                    </button>
+                )}
+                {puedeRegistrarSalida && (
+                    <button
+                        type="button"
+                        className={`${THEME_BTN_PRIMARY} min-h-[44px]`}
+                        onClick={() => ejecutar(async () => {
+                            await axios.post(`/control-pedidos/${vinculo.pedidoId}/custodia-nacional`, {
+                                accion: 'salida',
+                            }, { headers: { Accept: 'application/json' } });
+                            await refrescar();
+                        })}
+                    >
+                        {ocupado ? 'Registrando…' : 'Registrar salida'}
                     </button>
                 )}
             </div>

@@ -8,7 +8,6 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ActualizarCostosCajasPedidoBmaService;
-use App\Services\ControlPedidos\CalcularSeguroPedidoService;
 use App\Services\ControlPedidos\Direcciones\InvalidarGuiaPorCambioDireccion;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -24,7 +23,6 @@ class CambiarPaqueteriaNacional
     public function __construct(
         private InvalidarGuiaPorCambioDireccion $invalidarGuia,
         private ActualizarCostosCajasPedidoBmaService $costos,
-        private CalcularSeguroPedidoService $seguro,
         private RegistrarHistorialPedidoService $historial,
     ) {}
 
@@ -147,25 +145,13 @@ class CambiarPaqueteriaNacional
     /** @param  list<array<string, mixed>>  $lineas */
     private function cotizar(PedidoBma $pedido, array $lineas, CatalogoPaqueteriaPedido $paqueteria, bool $aplica, int $usuarioId): PedidoBma
     {
-        $activas = $pedido->cajas->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva());
-        if ($aplica && $activas->count() > 1) {
-            throw new RuntimeException('El seguro de varias cajas queda bloqueado hasta asignar cada remisión a una caja.');
-        }
-
-        $flete = 0.0;
-        foreach ($lineas as $linea) {
-            $flete += round((float) ($linea['costo_envio'] ?? 0), 2);
-        }
-        $flete = round($flete, 2);
-        $montoSeguro = $aplica
-            ? $this->seguro->calcularCosto($paqueteria->nombre, $flete, (float) ($pedido->total_mercancia ?? 0))
-            : 0.0;
+        $montos = app(DistribuirSeguroCajaNacional::class)->porLinea($pedido, $paqueteria, $lineas, $aplica);
         $preparadas = [];
         foreach (array_values($lineas) as $indice => $linea) {
             $preparadas[] = [
                 'uuid_operativo' => (string) ($linea['uuid_operativo'] ?? ''),
                 'costo_envio' => $linea['costo_envio'],
-                'costo_seguro' => $indice === 0 ? $montoSeguro : 0,
+                'costo_seguro' => $montos[$indice] ?? 0,
                 'costo_adicional' => 0,
             ];
         }

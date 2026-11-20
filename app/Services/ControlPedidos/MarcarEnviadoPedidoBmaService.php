@@ -35,6 +35,10 @@ class MarcarEnviadoPedidoBmaService
 
     private function enviar(PedidoBma $pedido, int $usuarioId, ?array $cajasSeleccion): PedidoBma
     {
+        $this->assertCajaRecolectadaNoCambiaGuia($pedido, $cajasSeleccion);
+        \App\Support\ControlPedidos\Nacional\BarreraRecepcionComplementoNacional::assert($pedido);
+        \App\Support\ControlPedidos\Nacional\BarreraSeguroCajaNacional::assert($pedido);
+
         if ($pedido->estatus?->fase_ciclo !== CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO) {
             throw new \RuntimeException('El pedido no está pendiente de recolección o envío.');
         }
@@ -185,6 +189,28 @@ class MarcarEnviadoPedidoBmaService
 
             return $pedido;
         });
+    }
+
+    /** @param  list<array{id?: int|string, numero_rastreo?: string|null}>|null  $seleccion */
+    private function assertCajaRecolectadaNoCambiaGuia(PedidoBma $pedido, ?array $seleccion): void
+    {
+        if (! is_array($seleccion)) {
+            return;
+        }
+        $pedido->loadMissing('cajas');
+        foreach ($seleccion as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $nuevo = trim((string) ($row['numero_rastreo'] ?? ''));
+            if ($nuevo === '') {
+                continue;
+            }
+            $caja = $pedido->cajas->firstWhere('id', (int) ($row['id'] ?? 0));
+            if ($caja && $caja->estaRecolectada() && $nuevo !== trim((string) $caja->numero_rastreo)) {
+                throw new \RuntimeException('Una caja recolectada no cambia de guía.');
+            }
+        }
     }
 
     private function assertGuiaVigente(PedidoBma $pedido): void

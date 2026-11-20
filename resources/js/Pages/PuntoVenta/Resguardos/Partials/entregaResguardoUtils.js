@@ -86,8 +86,15 @@ export function validarPasoReceptor({ relacion, nombreQuienRetira }) {
     return errores;
 }
 
-export function validarPasoEvidencia({ tieneFirma }) {
+export function validarPasoEvidencia({ tieneFirma, requiereFoto = false, tieneFoto = false }) {
     const errores = {};
+    if (requiereFoto) {
+        if (!tieneFoto) {
+            errores.evidencias = 'Adjunte la fotografía de la entrega.';
+        }
+
+        return errores;
+    }
     if (!tieneFirma) {
         errores.firma = 'La firma es obligatoria para confirmar la entrega.';
     }
@@ -104,7 +111,7 @@ export function validarPasoBultos({ bultoIds }) {
 
 export function validarFormularioEntrega(datos) {
     return {
-        ...validarPasoBultos(datos),
+        ...(datos.omitirBultos ? {} : validarPasoBultos(datos)),
         ...validarPasoReceptor(datos),
         ...validarPasoEvidencia(datos),
     };
@@ -168,7 +175,9 @@ export function armarFormDataEntrega({
     if (observaciones?.trim()) {
         form.append('observaciones', observaciones.trim());
     }
-    form.append('firma', firma);
+    if (firma) {
+        form.append('firma', firma);
+    }
 
     evidencias.forEach((archivo, indice) => {
         form.append(`evidencias[${indice}]`, archivo);

@@ -60,6 +60,24 @@ it('cierra la consulta con el contexto nacional y publica la lectura nueva', asy
     expect(onPedidoActualizado).toHaveBeenCalledWith(lectura);
 });
 
+it('registra la salida del vínculo físico', async () => {
+    axios.post.mockResolvedValue({ data: { ok: true } });
+    axios.get.mockResolvedValue({ data: { id: 9, vinculo_resguardo: { estado: 'en_traslado' } } });
+    await render(vi.fn(), {
+        vinculo_resguardo: { estado: 'vinculado' },
+        vinculo_pedido_id: 22,
+        puede_cerrar_consulta: false,
+    });
+    await act(async () => {
+        [...document.querySelectorAll('button')].find((boton) => boton.textContent.includes('Registrar salida')).click();
+    });
+    expect(axios.post).toHaveBeenCalledWith(
+        '/control-pedidos/22/custodia-nacional',
+        { accion: 'salida' },
+        expect.anything(),
+    );
+});
+
 it('muestra el conflicto y no da la consulta por cerrada', async () => {
     axios.post.mockRejectedValue({ response: { status: 409, data: { message: 'La consulta cambió. Actualice para continuar.', codigo: 'vista_atrasada' } } });
     const onPedidoActualizado = await render();

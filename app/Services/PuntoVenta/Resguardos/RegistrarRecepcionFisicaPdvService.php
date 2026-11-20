@@ -87,6 +87,23 @@ class RegistrarRecepcionFisicaPdvService
                     return $reintento;
                 }
 
+                if ($resguardo->esOrigenNacional()) {
+                    if ((int) $resguardo->version !== $versionEsperada) {
+                        throw ValidationException::withMessages([
+                            'version' => 'Otro usuario modificó este resguardo. Actualice la página e intente de nuevo.',
+                        ]);
+                    }
+                    $pedido = $resguardo->pedido;
+                    if (! $pedido) {
+                        throw ValidationException::withMessages(['estado' => 'La sucursal no tiene este pedido en su bandeja.']);
+                    }
+                    $recibido = app(\App\Services\ControlPedidos\Nacional\EventosCustodiaSucursalNacional::class)
+                        ->recibir($pedido, $actor->id, ['idempotency_key' => $idempotencyKey]);
+                    $recibido->increment('version');
+
+                    return $recibido->fresh(['bultos', 'almacen', 'evidencias']);
+                }
+
                 if ((int) $resguardo->cantidad_bultos_esperada < 1) {
                     $resguardo = app(SincronizarCantidadBultosEsperadaResguardoPdvService::class)->ejecutar($resguardo);
                 }

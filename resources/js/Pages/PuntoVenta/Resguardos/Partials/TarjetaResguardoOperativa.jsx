@@ -67,9 +67,10 @@ export default function TarjetaResguardoOperativa({
             ? (resguardo.cantidad_bultos_en_custodia ?? resguardo.cantidad_bultos_esperada ?? 0)
             : (resguardo.cantidad_bultos_recibida ?? 0);
     const faltaEvidencia = faltaEvidenciaManual(resguardo);
+    const origenNacional = Boolean(resguardo.origen_nacional);
     const admiteRecepcion = esPorRecibir && !esPasoRecepcionista && puedeConfirmarLlegada && resguardoAdmiteRecepcion(resguardo);
-    const admitePasarARecepcion = esPorRecibir && !esPasoRecepcionista && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
-    const admiteCustodia = esPasoRecepcionista && puedeConfirmarCustodia && Boolean(resguardo?.admite_confirmacion_custodia ?? resguardo?.puede_confirmar_custodia);
+    const admitePasarARecepcion = !origenNacional && esPorRecibir && !esPasoRecepcionista && puedeEnviarACustodia && Boolean(resguardo?.admite_pasar_a_recepcion ?? resguardo?.puede_pasar_a_recepcion);
+    const admiteCustodia = (esPasoRecepcionista || origenNacional) && puedeConfirmarCustodia && Boolean(resguardo?.admite_confirmacion_custodia ?? resguardo?.puede_confirmar_custodia);
     const admiteEntrega = puedeEntregar && resguardo.estado === 'en_custodia' && !resguardo.entrega_bloqueada;
     const plazos = plazosOperativosResguardo(resguardo);
     const clasificaciones = Object.entries(resguardo.clasificaciones || {})
@@ -185,7 +186,7 @@ export default function TarjetaResguardoOperativa({
                 )}
             </div>
 
-            {esPorRecibir && !esPasoRecepcionista && pendientes > 0 && (
+            {esPorRecibir && !esPasoRecepcionista && pendientes > 0 && !origenNacional && (
                 <p className="text-[10px] font-bold text-[var(--color-aviso)] m-0">
                     {pendientes} bulto{pendientes === 1 ? '' : 's'} pendiente{pendientes === 1 ? '' : 's'}
                 </p>

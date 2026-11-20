@@ -25,6 +25,9 @@ class AsignarGuiaPedidoBmaService
             throw new \InvalidArgumentException('El número de guía es obligatorio.');
         }
 
+        \App\Support\ControlPedidos\Nacional\BarreraRecepcionComplementoNacional::assert($pedido);
+        \App\Support\ControlPedidos\Nacional\BarreraSeguroCajaNacional::assert($pedido);
+
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen']);
         InstruccionEntrega::assertGuiaNoPosterior($pedido);
 

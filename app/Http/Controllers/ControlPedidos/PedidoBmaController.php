@@ -944,6 +944,8 @@ class PedidoBmaController extends Controller
             'piezas.*.sku' => ['nullable', 'string', 'max:80'],
             'piezas.*.descripcion' => ['nullable', 'string', 'max:180'],
             'piezas.*.cantidad' => ['nullable', 'integer', 'min:1'],
+            'piezas.*.evidencia' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'total_mercancia_nueva' => ['nullable', 'numeric', 'min:0'],
             'revision_esperada' => ['required', 'integer', 'min:0'],
             'base_captura' => ['required', 'string', 'size:64'],
             'lote' => ['nullable', 'integer', 'min:0'],
@@ -958,6 +960,12 @@ class PedidoBmaController extends Controller
             ...$this->archivosSubidos($request, 'documentos'),
             $request->file('evidencia'),
         ]));
+        foreach (array_keys($datos['piezas'] ?? []) as $indice) {
+            $archivoPieza = $request->file('piezas.'.$indice.'.evidencia');
+            if ($archivoPieza) {
+                $datos['piezas'][$indice]['evidencia'] = $archivoPieza;
+            }
+        }
 
         try {
             $resultado = $servicio->ejecutar($pedidoBma, Auth::user(), $datos, $archivos);
@@ -1008,6 +1016,134 @@ class PedidoBmaController extends Controller
             'ok' => true,
             'pedido_id' => $pedido->id,
         ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($pedido)));
+    }
+
+    public function custodiaNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\CustodiaComplementoNacional $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'accion' => ['required', 'in:vincular,salida'],
+            'resguardo_id' => ['nullable', 'integer'],
+        ]);
+        try {
+            $resguardo = $datos['accion'] === 'vincular'
+                ? PedidoBma::query()->findOrFail((int) ($datos['resguardo_id'] ?? 0))
+                : $pedidoBma;
+            $pedido = match ($datos['accion']) {
+                'vincular' => $servicio->vincular($pedidoBma, $resguardo, (int) Auth::id()),
+                'salida' => $servicio->registrarSalidaOrigen($pedidoBma, (int) Auth::id()),
+            };
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(array_merge([
+            'ok' => true,
+            'pedido_id' => $pedido->id,
+            'vinculo' => $pedido->solicitud_preparacion_json['vinculo_resguardo'] ?? null,
+        ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($pedidoBma->fresh())));
+    }
+
+    public function remisionCajaNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\AsignarRemisionCajaNacional $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'caja_id' => ['required', 'integer'],
+            'solicitud_id' => ['required', 'uuid'],
+            'pedido_bma_id' => ['nullable', 'integer'],
+            'folio_externo' => ['nullable', 'string', 'max:80'],
+            'contenido' => ['nullable', 'string', 'max:500'],
+            'valor_asegurado' => ['nullable', 'numeric', 'min:0'],
+            'mercancia_nueva_por_cobrar' => ['nullable', 'numeric', 'min:0'],
+            'cabe' => ['nullable', 'boolean'],
+            'evidencia_documento_id' => ['nullable', 'integer'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string', 'size:64'],
+        ]);
+        $caja = $pedidoBma->cajas()->whereKey($datos['caja_id'])->first();
+        if (! $caja) {
+            return response()->json(['message' => 'La caja no pertenece a este pedido.'], 422);
+        }
+        try {
+            $fila = $servicio->ejecutar($caja, (int) Auth::id(), $datos);
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'id' => $fila->id, 'uuid_operativo' => $caja->uuid_operativo]);
+    }
+
+    public function cambioTiendaNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\CambiarNacionalATienda $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        if (in_array($request->input('accion'), ['recibir', 'custodiar', 'entregar'], true)) {
+            abort(403);
+        }
+        $datos = $request->validate([
+            'sucursal_destino_id' => ['required', 'integer'],
+            'solicitud_id' => ['required', 'uuid'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string', 'size:64'],
+        ]);
+        try {
+            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), (int) $datos['sucursal_destino_id'], $datos);
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $lectura = $pedido instanceof \App\Models\ControlPedidos\PedidoBma ? $pedido : $pedidoBma->fresh();
+
+        return response()->json(array_merge([
+            'ok' => true,
+            'pedido_id' => $lectura->id,
+            'sucursal_destino_id' => $lectura->sucursal_destino_id,
+        ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($lectura)));
+    }
+
+    public function cancelacionNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\RegistrarHechoCancelacionNacional $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'solicitud_id' => ['required', 'uuid'],
+            'motivo' => ['required', 'string', 'max:180'],
+            'cedis_notificado' => ['required', 'boolean'],
+            'liberar_reserva' => ['required', 'boolean'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string', 'size:64'],
+        ]);
+        try {
+            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), $datos);
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'pedido_id' => $pedido->id]);
     }
 
     /** @return list<\Illuminate\Http\UploadedFile> */

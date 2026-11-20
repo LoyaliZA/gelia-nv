@@ -25,6 +25,8 @@ use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\SesionEvidenciaCedisService;
+use App\Services\ControlPedidos\Nacional\CustodiaComplementoNacional;
+use App\Services\ControlPedidos\Nacional\ResponderPiezasComplementoNacional;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -204,7 +206,7 @@ class PedidoBmaCedisController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Error de datos reportado. Encargado de guías, auxiliar y vendedora fueron notificados.');
+        return redirect()->back()->with('success', 'Error de datos reportado. Guías, auxiliar y Ventas fueron notificados.');
     }
 
     public function marcarResguardoApartado(
@@ -430,6 +432,55 @@ class PedidoBmaCedisController extends Controller
         return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
             request(), 'public', $foto->ruta_archivo, $foto->nombre_original, $foto->mime_type
         );
+    }
+
+    public function responderComplementoNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ResponderPiezasComplementoNacional $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        $datos = $request->validate([
+            'solicitud_id' => ['required', 'uuid'],
+            'piezas' => ['required', 'array', 'min:1'],
+            'piezas.*.revision_id' => ['required', 'integer'],
+            'piezas.*.cantidad_encontrada' => ['required', 'integer', 'min:0'],
+            'piezas.*.estado_fisico' => ['required', 'string', 'in:bueno,regular,malo,danado,sin_existencia'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string', 'size:64'],
+        ]);
+        try {
+            $pedido = $servicio->ejecutar($pedidoBma, Auth::user(), $datos);
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'pedido_id' => $pedido->id]);
+    }
+
+    public function custodiaNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        CustodiaComplementoNacional $servicio,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.cedis');
+        VisibilidadPedidoBma::assertPuedeConsultar(Auth::user(), $pedidoBma);
+        $datos = $request->validate([
+            'accion' => ['required', 'in:recepcion,liberar'],
+        ]);
+        try {
+            $pedido = match ($datos['accion']) {
+                'recepcion' => $servicio->confirmarRecepcionCedis($pedidoBma, (int) Auth::id()),
+                'liberar' => $servicio->liberar($pedidoBma, (int) Auth::id()),
+            };
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['ok' => true, 'pedido_id' => $pedido->id, 'vinculo' => $pedido->solicitud_preparacion_json['vinculo_resguardo'] ?? null]);
     }
 
     public function liberarTarea(

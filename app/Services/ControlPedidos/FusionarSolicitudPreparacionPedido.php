@@ -378,6 +378,11 @@ class FusionarSolicitudPreparacionPedido
         if (is_array($base['cambio_paqueteria'] ?? null)) {
             $salida['cambio_paqueteria'] = $base['cambio_paqueteria'];
         }
+        foreach (['complementos_nacionales', 'complemento_nacional', 'respuesta_complemento_nacional', 'vinculo_resguardo', 'cambio_a_tienda', 'cancelacion_nacional'] as $clave) {
+            if (is_array($base[$clave] ?? null)) {
+                $salida[$clave] = $base[$clave];
+            }
+        }
 
         if (($salida['modalidad_entrega'] ?? null) !== 'nacional') {
             return;

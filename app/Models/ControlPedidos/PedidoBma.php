@@ -267,7 +267,7 @@ class PedidoBma extends Model
             }
         }
         if (is_array($solicitud) && ($this->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'nacional') {
-            foreach (['captura_nacional', 'ajustes_nacionales', 'invalidacion_guia'] as $clave) {
+            foreach (['captura_nacional', 'ajustes_nacionales', 'invalidacion_guia', 'complementos_nacionales', 'complemento_nacional', 'respuesta_complemento_nacional', 'vinculo_resguardo', 'cambio_a_tienda', 'cancelacion_nacional'] as $clave) {
                 if (array_key_exists($clave, $this->solicitud_preparacion_json) && ! array_key_exists($clave, $solicitud)) {
                     $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
                 }

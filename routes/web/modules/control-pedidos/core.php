@@ -79,6 +79,10 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::get('/{pedidoBma}/consulta-nacional', [PedidoBmaController::class, 'consultaNacional'])->name('consulta_nacional.show');
         Route::post('/{pedidoBma}/ajuste-nacional', [PedidoBmaController::class, 'ajusteNacional'])->name('ajuste_nacional');
         Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
+        Route::post('/{pedidoBma}/custodia-nacional', [PedidoBmaController::class, 'custodiaNacional'])->name('custodia_nacional');
+        Route::post('/{pedidoBma}/remision-caja', [PedidoBmaController::class, 'remisionCajaNacional'])->name('remision_caja_nacional');
+        Route::post('/{pedidoBma}/cambio-tienda-nacional', [PedidoBmaController::class, 'cambioTiendaNacional'])->name('cambio_tienda_nacional');
+        Route::post('/{pedidoBma}/cancelacion-nacional', [PedidoBmaController::class, 'cancelacionNacional'])->name('cancelacion_nacional');
         Route::post('/{pedidoBma}/solicitar-preparacion-tienda', [PedidoBmaController::class, 'solicitarPreparacionTienda'])->name('solicitar_preparacion_tienda');
         Route::post('/{pedidoBma}/desglose-preparacion', [PedidoBmaController::class, 'guardarDesglosePreparacion'])->name('desglose_preparacion');
         Route::post('/{pedidoBma}/solicitar-repesaje', [PedidoBmaController::class, 'solicitarRepesaje'])->name('solicitar_repesaje');
