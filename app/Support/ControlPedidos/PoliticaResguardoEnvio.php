@@ -51,10 +51,18 @@ final class PoliticaResguardoEnvio
 
     public const MENSAJE_LIBERADO = 'El resguardo ya fue liberado. No se modifica el conjunto.';
 
+    public const MENSAJE_RECHAZO = 'Hay exhibiciones de pago rechazadas sin corregir.';
+
+    public const MENSAJE_PAGO_SIN_AUDITAR = 'La mercancía no tiene un pago auditado vigente. La persona auxiliar debe verificarlo antes de liberar.';
+
+    public const MENSAJE_CONTINUACION_OBSOLETA = 'El conjunto o sus condiciones cambiaron después de solicitar la continuación. Vuelva a solicitarla.';
+
+    public const MENSAJE_REACTIVAR = 'El resguardo ya fue liberado. No se reactiva sobre este envío.';
+
     public const MENSAJE_IRREVERSIBLE = 'Esa remisión ya se movió o se integró. No se desvincula desde el selector.';
 
     /** @var list<string> */
-    private const ESTADOS_IRREVERSIBLES = ['en_traslado', 'recibido_cedis', 'integrado'];
+    private const ESTADOS_IRREVERSIBLES = ['en_traslado', 'recibido_cedis', 'pendiente_integracion', 'integrado'];
 
     /** @return array<string, mixed> */
     public static function datos(PedidoBma $pedido): array
@@ -91,11 +99,12 @@ final class PoliticaResguardoEnvio
         if (self::transporteDiferido($pedido)) {
             return true;
         }
-        if ($fase === RegistrarPagoPedidoBmaService::FASE_APROBAR) {
-            return false;
-        }
         if (! self::intencionActiva($pedido)) {
             return false;
+        }
+        if ($fase === RegistrarPagoPedidoBmaService::FASE_APROBAR) {
+            // M-10: la aprobación documental no exige transporte pagado mientras el envío acumula o espera complemento.
+            return in_array(self::motivo($pedido), [self::MOTIVO_ACUMULACION, self::MOTIVO_COMPLEMENTO], true);
         }
         if ($fase === RegistrarPagoPedidoBmaService::FASE_ENVIAR) {
             return true;
@@ -195,6 +204,16 @@ final class PoliticaResguardoEnvio
             return self::MENSAJE_CONJUNTO;
         }
         $pedido->loadMissing(['complementos', 'resguardosAnexados']);
+        if (ConsultaMunicipal::es($pedido)) {
+            // Una remisión vinculada no es una remisión integrada: cada una necesita su confirmación física.
+            foreach (self::vinculos($pedido) as $vinculo) {
+                if (! $vinculo['integrado']) {
+                    return self::MENSAJE_CONJUNTO;
+                }
+            }
+
+            return null;
+        }
         foreach ($pedido->complementos as $complemento) {
             $json = is_array($complemento->solicitud_preparacion_json) ? $complemento->solicitud_preparacion_json : [];
             $retiro = $json['retiro_recoleccion']['estado'] ?? null;
@@ -242,34 +261,101 @@ final class PoliticaResguardoEnvio
                 continue;
             }
             $vistos[(int) $origen->id] = true;
-            $filas[] = self::filaVinculo($pedido, $origen, self::MECANISMO_RESGUARDO, 'anexado');
+            $filas[] = self::filaVinculo($pedido, $origen, self::MECANISMO_RESGUARDO);
         }
         foreach ($pedido->complementos as $origen) {
             if (isset($vistos[(int) $origen->id])) {
                 continue;
             }
             $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
-            $local = $json['integracion_local']['estado'] ?? null;
-            $retiro = $json['retiro_recoleccion']['estado'] ?? null;
-            $mecanismo = $local ? self::MECANISMO_LOCAL : self::MECANISMO_CEDIS;
-            $filas[] = self::filaVinculo($pedido, $origen, $mecanismo, $local ?: ($retiro ?: 'vinculado'));
+            $mecanismo = ! empty($json['integracion_local']['estado']) ? self::MECANISMO_LOCAL : self::MECANISMO_CEDIS;
+            $filas[] = self::filaVinculo($pedido, $origen, $mecanismo);
         }
 
         return $filas;
     }
 
-    /** @return array<string, mixed> */
-    private static function filaVinculo(PedidoBma $envio, PedidoBma $origen, string $mecanismo, string $estado): array
+    /**
+     * Estado físico por mecanismo. «integrado» solo con confirmación efectiva:
+     * local confirmada en sucursal, recepción en CEDIS tras traslado, o identificación confirmada en CEDIS.
+     */
+    public static function estadoFisicoOrigen(PedidoBma $origen, string $mecanismo): string
     {
+        $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
+        if ($mecanismo === self::MECANISMO_LOCAL) {
+            return (string) ($json['integracion_local']['estado'] ?? 'pendiente');
+        }
+        if ($mecanismo === self::MECANISMO_CEDIS) {
+            $retiro = is_array($json['retiro_recoleccion'] ?? null) ? $json['retiro_recoleccion'] : [];
+            $estado = (string) ($retiro['estado'] ?? 'pendiente_traslado');
+            if ($estado === 'recibido_cedis' && empty($retiro['integrado_cedis'])) {
+                return 'pendiente_integracion';
+            }
+
+            return $estado === '' ? 'pendiente_traslado' : $estado;
+        }
+
+        return ($json['integracion_envio']['estado'] ?? null) === 'integrado' ? 'integrado' : 'anexado';
+    }
+
+    public static function origenIntegrado(string $mecanismo, string $estado): bool
+    {
+        return $mecanismo === self::MECANISMO_CEDIS ? $estado === 'recibido_cedis' : $estado === 'integrado';
+    }
+
+    /** @return array<string, mixed> */
+    private static function filaVinculo(PedidoBma $envio, PedidoBma $origen, string $mecanismo): array
+    {
+        $estado = self::estadoFisicoOrigen($origen, $mecanismo);
+        $integrado = self::origenIntegrado($mecanismo, $estado);
+        $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
+        $retiro = is_array($json['retiro_recoleccion'] ?? null) ? $json['retiro_recoleccion'] : [];
+
         return [
             'origen_id' => (int) $origen->id,
             'folio' => $origen->folio,
             'remision' => $origen->numero_remision ?: $origen->folio_remision,
             'mecanismo' => $mecanismo,
             'estado' => $estado,
+            'integrado' => $integrado,
+            'pago_auditado' => $origen->pago_validado_at !== null,
+            'estatus_sucursal' => $origen->estatus_sucursal,
+            'area_responsable' => $integrado ? null : ($mecanismo === self::MECANISMO_LOCAL ? 'sucursal' : 'cedis'),
+            'etapas' => [
+                'seleccionada' => true,
+                'vinculada' => true,
+                'custodia_reservada' => $mecanismo === self::MECANISMO_RESGUARDO || $origen->pedido_principal_id !== null,
+                'retirada_origen' => $mecanismo === self::MECANISMO_CEDIS ? in_array($estado, ['en_traslado', 'recibido_cedis', 'pendiente_integracion'], true) : $mecanismo === self::MECANISMO_LOCAL,
+                'traslado_iniciado' => $mecanismo === self::MECANISMO_CEDIS && ! empty($retiro['salida_at']),
+                'recibida' => $mecanismo === self::MECANISMO_CEDIS && ! empty($retiro['recibido_at']),
+                'integrada' => $integrado,
+            ],
             'exclusivo' => true,
             'puede_desvincular' => self::puedeDesvincular($envio, $origen, $estado),
         ];
+    }
+
+    /**
+     * Facultad operativa física. Ventas (crear) y auditoría (auditar) no confirman hechos físicos.
+     * Local: personal de la sucursal donde está la custodia. CEDIS/anexada: personal CEDIS con alcance sobre el pedido.
+     */
+    public static function puedeConfirmarIntegracionFisica(\App\Models\User $usuario, PedidoBma $origen, string $mecanismo): bool
+    {
+        if ($mecanismo === self::MECANISMO_LOCAL) {
+            if (! ($usuario->can('pdv.resguardos.confirmar_custodia')
+                || $usuario->can('control_pedidos.tienda.responder')
+                || $usuario->can('control_pedidos.tienda.trasladar'))) {
+                return false;
+            }
+            $sucursalId = (int) (\App\Models\PuntoVenta\ResguardoPdv::query()
+                ->where('pedido_bma_id', $origen->id)
+                ->where('estado', \App\Models\PuntoVenta\ResguardoPdv::ESTADO_EN_CUSTODIA)
+                ->value('sucursal_id') ?: $origen->sucursal_destino_id);
+
+            return $sucursalId > 0 && $usuario->idsSucursalesOperables()->contains($sucursalId);
+        }
+
+        return $usuario->can('control_pedidos.cedis') && VisibilidadPedidoBma::puedeVerEnCedis($usuario, $origen);
     }
 
     public static function puedeDesvincular(PedidoBma $envio, PedidoBma $origen, ?string $estado = null): bool
@@ -281,11 +367,13 @@ final class PoliticaResguardoEnvio
         $estado = $estado
             ?? ($json['integracion_local']['estado'] ?? null)
             ?? ($json['retiro_recoleccion']['estado'] ?? null)
+            ?? ($json['integracion_envio']['estado'] ?? null)
             ?? 'anexado';
 
         return ! in_array($estado, self::ESTADOS_IRREVERSIBLES, true);
     }
 
+    /** Huella de lo que decide si el conjunto puede salir: vínculos, estado físico y condiciones financieras. */
     public static function huellaConjunto(PedidoBma $pedido): string
     {
         $partes = [];
@@ -294,7 +382,52 @@ final class PoliticaResguardoEnvio
         }
         sort($partes);
 
-        return implode('|', $partes);
+        return implode('|', $partes).'#'.self::huellaFinanciera($pedido);
+    }
+
+    public static function huellaFinanciera(PedidoBma $pedido): string
+    {
+        $datos = self::datos($pedido);
+        $pagos = $pedido->exists
+            ? PedidoBmaPago::query()->where('pedido_bma_id', $pedido->id)->activosParaCobertura()
+                ->orderBy('id')->get(['id', 'monto'])
+                ->map(fn ($p) => $p->id.':'.$p->monto)->implode(',')
+            : '';
+        $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+
+        return md5(json_encode([
+            (string) $pedido->total_mercancia,
+            (string) $pedido->costo_envio,
+            (string) $pedido->saldo_a_favor,
+            $pagos,
+            $json['finanzas_municipales'] ?? null,
+            $datos['motivo'] ?? null,
+            $datos['fecha_solicitada'] ?? null,
+            ! empty($datos['acumulacion_abierta']),
+        ]));
+    }
+
+    public static function tieneRechazoSinCorregir(PedidoBma $pedido): bool
+    {
+        return $pedido->exists && PedidoBmaPago::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->where('estado_revision', PedidoBmaPago::REVISION_RECHAZADO)
+            ->whereDoesntHave('sustituto')
+            ->exists();
+    }
+
+    /** Pago de mercancía auditado y vigente: ningún pago activo cambió o se agregó después de la auditoría. */
+    public static function pagoAuditadoVigente(PedidoBma $pedido): bool
+    {
+        if (! $pedido->pago_validado_at || ! $pedido->exists || self::tieneRechazoSinCorregir($pedido)) {
+            return false;
+        }
+        $pagos = PedidoBmaPago::query()->where('pedido_bma_id', $pedido->id)->activosParaCobertura();
+        if ((clone $pagos)->where('estado_revision', '!=', PedidoBmaPago::REVISION_VERIFICADO)->exists()) {
+            return false;
+        }
+
+        return ! (clone $pagos)->where('created_at', '>', $pedido->pago_validado_at->copy()->addSecond())->exists();
     }
 
     public static function m09Validado(PedidoBma $pedido, ?array $finanzas = null): bool
@@ -308,7 +441,7 @@ final class PoliticaResguardoEnvio
         $fecha = self::datos($pedido)['fecha_solicitada'] ?? null;
 
         return $fecha
-            && $pedido->pago_validado_at
+            && self::pagoAuditadoVigente($pedido)
             && (bool) ($finanzas['mercancia_cubierta'] ?? false)
             && (bool) ($finanzas['transporte_cubierto'] ?? false);
     }
@@ -378,32 +511,63 @@ final class PoliticaResguardoEnvio
         }
     }
 
+    /**
+     * Único criterio de liberación. Lo usan la capacidad mostrada y la ejecución (esta última dentro de la transacción,
+     * con el principal y los miembros bloqueados). Devuelve el bloqueo concreto o null si es ejecutable.
+     */
+    public static function motivoBloqueoLiberacion(PedidoBma $pedido): ?string
+    {
+        $datos = self::datos($pedido);
+        if (! self::intencionActiva($pedido)) {
+            return 'Este pedido no tiene un resguardo municipal activo.';
+        }
+        if (! empty($datos['liberado_at'])) {
+            return self::MENSAJE_LIBERADO;
+        }
+        if (empty($datos['continuacion_solicitada_at'])) {
+            return self::MENSAJE_CONTINUACION;
+        }
+        $motivo = self::motivo($pedido);
+        if ($motivo === self::MOTIVO_ACUMULACION && ($datos['acumulacion_abierta'] ?? false)) {
+            return self::MENSAJE_ACUMULACION;
+        }
+        if (self::tieneRechazoSinCorregir($pedido)) {
+            return self::MENSAJE_RECHAZO;
+        }
+        $finanzas = app(PoliticaFinancieraMunicipal::class)->evaluar($pedido);
+        if (! ($finanzas['mercancia_cubierta'] ?? false)) {
+            return self::MENSAJE_SIN_PAGO;
+        }
+        if (! self::pagoAuditadoVigente($pedido)) {
+            return self::MENSAJE_PAGO_SIN_AUDITAR;
+        }
+        if ($motivo === self::MOTIVO_FECHA && ! self::m09Validado($pedido, $finanzas)) {
+            return self::MENSAJE_M09;
+        }
+        if (($datos['continuacion_huella'] ?? null) !== self::huellaConjunto($pedido)) {
+            return self::MENSAJE_CONTINUACION_OBSOLETA;
+        }
+        if (! self::conjuntoListoParaLiberar($pedido)) {
+            return self::MENSAJE_CONJUNTO;
+        }
+
+        return null;
+    }
+
     public static function assertPuedeLiberar(PedidoBma $pedido): void
     {
         $datos = self::datos($pedido);
         if (! empty($datos['liberado_at']) && ! self::intencionActiva($pedido)) {
             return;
         }
+        $motivo = self::motivoBloqueoLiberacion($pedido);
+        if ($motivo === null) {
+            return;
+        }
         if (! self::intencionActiva($pedido)) {
-            throw new \InvalidArgumentException('Este pedido no tiene un resguardo municipal activo.');
+            throw new \InvalidArgumentException($motivo);
         }
-        if (empty($datos['continuacion_solicitada_at'])) {
-            throw new \RuntimeException(self::MENSAJE_CONTINUACION);
-        }
-        $huella = $datos['continuacion_huella'] ?? null;
-        if ($huella !== null && $huella !== self::huellaConjunto($pedido)) {
-            throw new \RuntimeException('El conjunto cambió después de solicitar la continuación. Vuelva a solicitarla.');
-        }
-        if (! self::conjuntoListoParaLiberar($pedido)) {
-            throw new \RuntimeException(self::MENSAJE_CONJUNTO);
-        }
-        $finanzas = app(PoliticaFinancieraMunicipal::class)->evaluar($pedido);
-        if (self::motivo($pedido) === self::MOTIVO_FECHA && ! self::m09Validado($pedido, $finanzas)) {
-            throw new \RuntimeException(self::MENSAJE_M09);
-        }
-        if (self::motivo($pedido) === self::MOTIVO_ACUMULACION && ($datos['acumulacion_abierta'] ?? false)) {
-            throw new \RuntimeException(self::MENSAJE_ACUMULACION);
-        }
+        throw new \RuntimeException($motivo);
     }
 
     public static function assertConjuntoMutable(PedidoBma $pedido): void
@@ -464,6 +628,8 @@ final class PoliticaResguardoEnvio
                 || (self::motivo($pedido) === self::MOTIVO_COMPLEMENTO && $conjuntoListo)
             );
         $liberado = ! empty($datos['liberado_at']) && ! $activo;
+        $bloqueoLiberacion = $activo ? self::motivoBloqueoLiberacion($pedido) : self::MENSAJE_LIBERADO;
+        $estados = self::estadosVisibles($pedido, $finanzas, $conjunto, $liberado);
 
         return [
             'activo' => $activo,
@@ -487,6 +653,11 @@ final class PoliticaResguardoEnvio
             'vinculos' => $solicitud ? self::vinculos($pedido) : [],
             'conjunto' => $conjunto,
             'motivo_bloqueo_resguardo' => $motivoBloqueo,
+            'bloqueo_liberacion' => $activo ? $bloqueoLiberacion : null,
+            'pago_auditado_vigente' => self::pagoAuditadoVigente($pedido),
+            'pago_rechazado' => self::tieneRechazoSinCorregir($pedido),
+            'huella_conjunto' => $activo ? self::huellaConjunto($pedido) : null,
+            'estados' => $estados,
             'capacidades' => [
                 'puede_activar_intencion' => $solicitud && self::puedeReconducir($pedido) && ! $credito,
                 'puede_enviar_auditoria' => $consultaCerrada && $mercancia && ! $credito && ! ($activo && $motivoBloqueo),
@@ -494,12 +665,63 @@ final class PoliticaResguardoEnvio
                 'puede_desvincular' => $solicitud && empty($datos['liberado_at']),
                 'puede_cerrar_acumulacion' => $activo && self::motivo($pedido) === self::MOTIVO_ACUMULACION && $acumulacionAbierta,
                 'puede_solicitar_continuacion' => $puedeContinuacion,
-                'puede_liberar' => $activo && $continuacion && $conjuntoListo,
+                'puede_liberar' => $bloqueoLiberacion === null,
                 'puede_empacar' => $liberado || (! $activo && ! self::esMiembroConjunto($pedido) && self::motivoConjuntoIncompleto($pedido) === null),
                 'puede_despachar' => $liberado || (! $activo && ! self::esMiembroConjunto($pedido) && self::motivoConjuntoIncompleto($pedido) === null),
                 'puede_reconducir' => self::puedeReconducir($pedido),
             ],
         ];
+    }
+
+    /**
+     * Estados distinguibles para la interfaz, derivados de campos existentes (sin máquina de estados nueva).
+     *
+     * @param  array<string, mixed>|null  $finanzas
+     * @return list<string>
+     */
+    private static function estadosVisibles(PedidoBma $pedido, ?array $finanzas, string $conjunto, bool $liberado): array
+    {
+        $datos = self::datos($pedido);
+        $activo = self::intencionActiva($pedido);
+        if (! $activo && ! $liberado) {
+            return [];
+        }
+        $e = [];
+        $mercancia = (bool) ($finanzas['mercancia_cubierta'] ?? false);
+        $exhibiciones = $pedido->exists && PedidoBmaPago::query()->where('pedido_bma_id', $pedido->id)->activosParaCobertura()->exists();
+        $auditado = self::pagoAuditadoVigente($pedido);
+        if ($activo) {
+            $e[] = 'intencion_registrada';
+            $e[] = 'resguardo_vigente';
+        }
+        if (self::tieneRechazoSinCorregir($pedido)) {
+            $e[] = 'pago_rechazado';
+        } elseif ($auditado) {
+            $e[] = 'pago_auditado';
+        } elseif ($mercancia) {
+            $e[] = $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR ? 'pendiente_auditoria' : 'pago_registrado_ventas';
+        } elseif ($exhibiciones) {
+            $e[] = 'pago_pendiente_registro';
+        } else {
+            $e[] = 'pago_pendiente_registro';
+        }
+        if (self::motivo($pedido) === self::MOTIVO_ACUMULACION) {
+            $e[] = ($datos['acumulacion_abierta'] ?? false) ? 'acumulacion_abierta' : 'acumulacion_cerrada';
+        }
+        if (! empty($datos['continuacion_solicitada_at'])) {
+            $e[] = 'continuacion_solicitada';
+        }
+        if ($conjunto === 'recepcion_pendiente') {
+            $e[] = 'pendiente_integracion';
+        }
+        if ($liberado) {
+            $e[] = 'liberacion_autorizada';
+            if (self::motivoConjuntoIncompleto($pedido) === null) {
+                $e[] = 'listo_continuar';
+            }
+        }
+
+        return $e;
     }
 
     private static function coberturaMercancia(PedidoBma $pedido, bool $mercancia): string

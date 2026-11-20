@@ -237,20 +237,28 @@ class ResguardoMunicipalOla1Test extends TestCase
         $this->assertNull(app(RegistrarPagoPedidoBmaService::class)->generarExcedenteSiAplica($this->pedido->fresh(), $this->ventas->id));
     }
 
-    public function test_aprobar_sigue_exigiendo_transporte_conocido_en_m10(): void
+    public function test_aprobar_m10_admite_transporte_pendiente_y_ordinario_lo_sigue_exigiendo(): void
     {
         $this->cerrarConsultaConocida(30);
         $this->pagoEtapa(100);
-        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        // Ordinario (sin intención de resguardo): el transporte conocido sigue siendo exigible al aprobar.
         try {
             app(RegistrarPagoPedidoBmaService::class)->assertPagoListoParaAvanzar(
                 $this->pedido->fresh(),
                 RegistrarPagoPedidoBmaService::FASE_APROBAR
             );
-            $this->fail('Aprobar no debe tratar el flete impago como cubierto.');
+            $this->fail('El ordinario no trata el flete impago como cubierto.');
         } catch (\InvalidArgumentException $e) {
             $this->assertStringContainsString('Falta', $e->getMessage());
         }
+        // M-10: mercancía cubierta y transporte pendiente aprueban sin declarar pagado el transporte.
+        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        PedidoBmaPago::query()->where('pedido_bma_id', $this->pedido->id)->update(['estado_revision' => PedidoBmaPago::REVISION_VERIFICADO]);
+        app(RegistrarPagoPedidoBmaService::class)->assertPagoListoParaAvanzar(
+            $this->pedido->fresh(),
+            RegistrarPagoPedidoBmaService::FASE_APROBAR
+        );
+        $this->assertFalse(app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->evaluar($this->pedido->fresh())['transporte_cubierto']);
     }
 
     public function test_exclusividad_t05_bloquea_anexo_y_pivot_bloquea_otro_principal(): void
@@ -296,7 +304,10 @@ class ResguardoMunicipalOla1Test extends TestCase
         PedidoBmaEnvioResguardo::query()->create(['pedido_envio_id' => $this->pedido->id, 'pedido_resguardo_id' => $a->id]);
         PedidoBmaEnvioResguardo::query()->create(['pedido_envio_id' => $this->pedido->id, 'pedido_resguardo_id' => $b->id]);
         $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo($this->pedido->fresh()))->assertOk();
+        $this->confirmarIntegracionCedis($a);
+        $this->confirmarIntegracionCedis($b);
         $this->cerrarAcumulacionYContinuacion();
+        $this->auditarPagos();
         $principal = app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
 
         $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($principal));
@@ -321,7 +332,9 @@ class ResguardoMunicipalOla1Test extends TestCase
         ]);
         PedidoBmaEnvioResguardo::query()->create(['pedido_envio_id' => $this->pedido->id, 'pedido_resguardo_id' => $anexo->id]);
         $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        $this->confirmarIntegracionCedis($anexo);
         $this->cerrarAcumulacionYContinuacion();
+        $this->auditarPagos();
         $principal = app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
 
         $eval = app(\App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal::class)->evaluar($principal);
@@ -341,6 +354,7 @@ class ResguardoMunicipalOla1Test extends TestCase
         $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
         $this->pedido->update(['esperando_pago_at' => now(), 'es_resguardo' => true]);
         $this->cerrarAcumulacionYContinuacion();
+        $this->auditarPagos();
         $fresco = app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
         $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($fresco));
         $this->assertNotNull($fresco->esperando_pago_at);
@@ -475,6 +489,21 @@ class ResguardoMunicipalOla1Test extends TestCase
         return app(RegistrarPagoPedidoBmaService::class)->handle($this->pedido->fresh(), [
             'monto' => $monto, 'forma_pago' => 'efectivo', 'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
         ], UploadedFile::fake()->image('pago.jpg'), $this->ventas->id);
+    }
+
+    /** La persona auxiliar verifica los pagos activos y cierra la auditoría de la mercancía. */
+    private function auditarPagos(?PedidoBma $pedido = null): void
+    {
+        $pedido ??= $this->pedido;
+        PedidoBmaPago::query()->where('pedido_bma_id', $pedido->id)->update(['estado_revision' => PedidoBmaPago::REVISION_VERIFICADO]);
+        $pedido->update(['pago_validado_at' => now()->addSeconds(5), 'pago_validado_por_id' => $this->auxiliar->id]);
+    }
+
+    private function confirmarIntegracionCedis(PedidoBma $origen): void
+    {
+        $json = $origen->solicitud_preparacion_json ?? [];
+        $json['integracion_envio'] = ['estado' => 'integrado', 'integrado_at' => now()->toIso8601String()];
+        $origen->update(['solicitud_preparacion_json' => $json]);
     }
 
     private function pasarAAuxiliar(): void

@@ -20,39 +20,45 @@ class LiberarResguardoMunicipalService
         private RegistrarHistorialPedidoService $historial,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, int $usuarioId): PedidoBma
+    /**
+     * @param  string|null  $huellaEsperada  Huella del conjunto que vio quien libera; una versión distinta se rechaza.
+     */
+    public function ejecutar(PedidoBma $pedido, int $usuarioId, ?string $huellaEsperada = null): PedidoBma
     {
         $actor = User::findOrFail($usuarioId);
         if (! $actor->can('control_pedidos.liberar_resguardo') || ! $actor->can('control_pedidos.auditar')) {
             throw new \RuntimeException('Se requiere auditar y el permiso de liberar resguardo.');
         }
-        if ((int) $pedido->vendedor_id === (int) $actor->id) {
-            throw new \RuntimeException('Quien registró la venta no libera el resguardo.');
-        }
         if (! ConsultaMunicipal::es($pedido)) {
             throw new \InvalidArgumentException('Este pedido no tiene un resguardo municipal activo.');
         }
-        if (! empty(PoliticaResguardoEnvio::datos($pedido)['liberado_at'])
-            && ! PoliticaResguardoEnvio::intencionActiva($pedido)) {
-            return $pedido->fresh(['resguardosAnexados.resguardo', 'complementos']);
-        }
-        PoliticaResguardoEnvio::assertPuedeLiberar($pedido);
 
-        $fase = $pedido->estatus?->fase_ciclo;
-        if (! in_array($fase, [
-            CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
-            CatalogoEstatusPedido::FASE_EN_CEDIS,
-            CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
-            CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
-        ], true)) {
-            throw new \RuntimeException('Solo se libera el resguardo municipal en revisión o preparación.');
-        }
-
-        return DB::transaction(function () use ($pedido, $actor) {
-            $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+        return DB::transaction(function () use ($pedido, $actor, $huellaEsperada) {
+            // Orden de bloqueo: principal primero y miembros por id ascendente. Todo se revalida ya bloqueado.
+            $pedido = PedidoBma::query()->lockForUpdate()->with('estatus')->findOrFail($pedido->id);
             $miembros = PoliticaResguardoEnvio::miembros($pedido);
             if ($miembros->isNotEmpty()) {
                 PedidoBma::query()->whereIn('id', $miembros->pluck('id'))->orderBy('id')->lockForUpdate()->get();
+            }
+            if ((int) $pedido->vendedor_id === (int) $actor->id) {
+                throw new \RuntimeException('Quien registró la venta no libera el resguardo.');
+            }
+            if (! empty(PoliticaResguardoEnvio::datos($pedido)['liberado_at'])
+                && ! PoliticaResguardoEnvio::intencionActiva($pedido)) {
+                return $pedido->fresh(['resguardosAnexados.resguardo', 'complementos']);
+            }
+            $fase = $pedido->estatus?->fase_ciclo;
+            if (! in_array($fase, [
+                CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+                CatalogoEstatusPedido::FASE_EN_CEDIS,
+                CatalogoEstatusPedido::FASE_PESAJE_PENDIENTE,
+                CatalogoEstatusPedido::FASE_PESAJE_RESPONDIDO,
+            ], true)) {
+                throw new \RuntimeException('Solo se libera el resguardo municipal en revisión o preparación.');
+            }
+            PoliticaResguardoEnvio::assertPuedeLiberar($pedido);
+            if ($huellaEsperada !== null && ! hash_equals(PoliticaResguardoEnvio::huellaConjunto($pedido), $huellaEsperada)) {
+                throw new \RuntimeException('El conjunto cambió mientras revisaba. Actualice y vuelva a revisar antes de liberar.');
             }
 
             $json = PoliticaResguardoEnvio::fusionarJson($pedido, [

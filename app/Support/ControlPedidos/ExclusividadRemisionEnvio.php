@@ -67,6 +67,25 @@ final class ExclusividadRemisionEnvio
     }
 
     /**
+     * Orden único de bloqueos para vinculación, integración y liberación: el envío principal primero y después
+     * los miembros por id ascendente. Recarga los modelos ya bloqueados (sin relaciones en caché).
+     *
+     * @template T
+     *
+     * @param  callable(\Illuminate\Support\Collection<int, PedidoBma>): T  $then
+     * @return T
+     */
+    public static function conLockEnvio(PedidoBma $envio, PedidoBma $origen, callable $then)
+    {
+        return DB::transaction(function () use ($envio, $origen, $then) {
+            $principal = PedidoBma::query()->lockForUpdate()->findOrFail($envio->id);
+            $miembros = PedidoBma::query()->whereIn('id', [$origen->id])->orderBy('id')->lockForUpdate()->get();
+
+            return $then($miembros->push($principal)->keyBy('id'));
+        });
+    }
+
+    /**
      * @template T
      *
      * @param  callable(\Illuminate\Support\Collection<int, PedidoBma>): T  $then

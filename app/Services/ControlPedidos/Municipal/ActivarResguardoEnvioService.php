@@ -37,6 +37,9 @@ class ActivarResguardoEnvioService
             }
 
             $activo = filter_var($datos['activo'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if (! empty(PoliticaResguardoEnvio::datos($pedido)['liberado_at'])) {
+                throw ValidationException::withMessages(['resguardo' => PoliticaResguardoEnvio::MENSAJE_REACTIVAR]);
+            }
             $fase = $pedido->estatus?->fase_ciclo;
             if (! $activo && $fase && ! $pedido->esEditablePorVendedora()) {
                 throw ValidationException::withMessages([

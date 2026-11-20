@@ -48,6 +48,10 @@ class ResguardoMunicipalOla2Test extends TestCase
 
     private Almacen $pdv;
 
+    private User $pdvUser;
+
+    private User $cedisUser;
+
     public function createApplication()
     {
         $app = parent::createApplication();
@@ -137,6 +141,13 @@ class ResguardoMunicipalOla2Test extends TestCase
             'permite_por_cobrar' => false,
             'reglas_municipio_pendientes' => false,
         ]);
+        $this->pdvUser = User::factory()->create(['departamento_id' => $departamento->id]);
+        $this->pdvUser->givePermissionTo(Permission::findOrCreate('pdv.resguardos.confirmar_custodia', 'web'));
+        $this->pdvUser->concederAccesoSucursal($this->sucursal, true);
+        $this->cedisUser = User::factory()->create(['departamento_id' => $departamento->id]);
+        foreach (['control_pedidos.cedis', 'control_pedidos.cedis.ver_todos'] as $permiso) {
+            $this->cedisUser->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
+        }
         $this->actingAs($this->ventas);
     }
 
@@ -269,7 +280,7 @@ class ResguardoMunicipalOla2Test extends TestCase
         $servicio->ejecutar($this->pedido->fresh(), $local, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
         $this->assertSame('pendiente', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
         $this->assertArrayNotHasKey('retiro_recoleccion', $local->fresh()->solicitud_preparacion_json);
-        app(IntegrarCustodiaLocalMunicipalService::class)->ejecutar($local->fresh(), $this->ventas);
+        app(IntegrarCustodiaLocalMunicipalService::class)->ejecutar($local->fresh(), $this->pdvUser, $this->pedido->fresh());
         $this->assertSame('integrado', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         $servicio->desvincular($this->pedido->fresh(), $local->fresh(), $this->ventas);
@@ -329,6 +340,7 @@ class ResguardoMunicipalOla2Test extends TestCase
         $this->postJson(route('control_pedidos.municipal.resguardo.acumulacion', $this->pedido), $this->capturaRevision())->assertOk();
         $this->pasarAAuxiliar();
         $this->postJson(route('control_pedidos.municipal.resguardo.continuacion', $this->pedido), $this->capturaRevision())->assertOk();
+        $this->auditarPagos();
         $principal = app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
         $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($principal));
         $this->assertNotSame('ENVIADO', $principal->estatus?->fase_ciclo);
@@ -486,6 +498,262 @@ class ResguardoMunicipalOla2Test extends TestCase
     }
 
     /** @param  array<string, mixed>  $attrs */
+    // ---- Corrección integral: pago auditado, integración física, permisos, concurrencia ----
+
+    public function test_m10_sin_pago_auditado_no_libera_ni_cambia_nada(): void
+    {
+        $this->solicitarContinuacionAcumulacion();
+        $antes = $this->pedido->fresh()->solicitud_preparacion_json;
+        $this->assertNotNull(PoliticaResguardoEnvio::evaluar($this->pedido->fresh())['bloqueo_liberacion']);
+        try {
+            app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+            $this->fail('Sin pago auditado no se libera.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame(PoliticaResguardoEnvio::MENSAJE_PAGO_SIN_AUDITAR, $e->getMessage());
+        }
+        $this->assertEquals($antes, $this->pedido->fresh()->solicitud_preparacion_json);
+        $this->assertTrue(PoliticaResguardoEnvio::intencionActiva($this->pedido->fresh()));
+    }
+
+    public function test_pago_auditado_obsoleto_o_rechazado_bloquea_la_liberacion(): void
+    {
+        $this->solicitarContinuacionAcumulacion();
+        $this->auditarPagos();
+        $this->assertNull(PoliticaResguardoEnvio::evaluar($this->pedido->fresh())['bloqueo_liberacion']);
+
+        // Un pago nuevo después de la auditoría deja obsoleto el pago_validado_at.
+        $this->pagoEtapa(5);
+        $pedido = $this->pedido->fresh();
+        $this->assertFalse(PoliticaResguardoEnvio::pagoAuditadoVigente($pedido));
+        $this->assertSame(PoliticaResguardoEnvio::MENSAJE_PAGO_SIN_AUDITAR, PoliticaResguardoEnvio::motivoBloqueoLiberacion($pedido));
+
+        // Exhibición rechazada sin corregir.
+        \App\Models\SaldosAFavor\PedidoBmaPago::query()->where('pedido_bma_id', $this->pedido->id)->update([
+            'estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_RECHAZADO,
+        ]);
+        $this->assertTrue(PoliticaResguardoEnvio::tieneRechazoSinCorregir($this->pedido->fresh()));
+        $this->expectException(\RuntimeException::class);
+        app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+    }
+
+    public function test_conjunto_de_tres_remisiones_con_dos_integradas_sigue_bloqueado(): void
+    {
+        $this->cerrarConsultaConocida(30);
+        $this->pagoEtapa(100);
+        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        $remisiones = [];
+        foreach (['A', 'B', 'C'] as $letra) {
+            $remisiones[$letra] = $this->remisionPagada("RG2-T{$letra}", "REM-T{$letra}");
+            app(VincularRemisionPagadaService::class)->ejecutar($this->pedido->fresh(), $remisiones[$letra], $this->ventas, PoliticaResguardoEnvio::MECANISMO_RESGUARDO);
+        }
+        // Vinculada no es integrada: ninguna cuenta todavía.
+        $this->assertSame('recepcion_pendiente', PoliticaResguardoEnvio::estadoConjunto($this->pedido->fresh()));
+        $this->assertFalse(PoliticaResguardoEnvio::evaluar($this->pedido->fresh())['capacidades']['puede_empacar']);
+
+        foreach (['A', 'B'] as $letra) {
+            $this->actingAs($this->cedisUser)
+                ->postJson(route('control_pedidos.municipal.remisiones.integrar_cedis', [$this->pedido, $remisiones[$letra]]))
+                ->assertOk();
+        }
+        $this->assertSame('recepcion_pendiente', PoliticaResguardoEnvio::estadoConjunto($this->pedido->fresh()));
+        $this->actingAs($this->ventas);
+        $this->postJson(route('control_pedidos.municipal.resguardo.acumulacion', $this->pedido), $this->capturaRevision())->assertOk();
+        $this->postJson(route('control_pedidos.municipal.resguardo.continuacion', $this->pedido), $this->capturaRevision())->assertUnprocessable();
+
+        $this->actingAs($this->cedisUser)
+            ->postJson(route('control_pedidos.municipal.remisiones.integrar_cedis', [$this->pedido, $remisiones['C']]))
+            ->assertOk();
+        $this->assertSame('completo', PoliticaResguardoEnvio::estadoConjunto($this->pedido->fresh()));
+        $this->actingAs($this->ventas);
+        $this->pasarAAuxiliar();
+        $this->postJson(route('control_pedidos.municipal.resguardo.continuacion', $this->pedido), $this->capturaRevision())->assertOk();
+        $this->auditarPagos();
+        $principal = app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($principal));
+        foreach ($remisiones as $remision) {
+            $this->assertTrue(PoliticaResguardoEnvio::esMiembroConjunto($remision->fresh()));
+        }
+    }
+
+    public function test_detalle_de_custodia_entrega_la_integracion_local_solo_al_personal_de_la_sucursal(): void
+    {
+        $this->guardarSolicitud(0);
+        $local = $this->remisionEnCustodia('RG2-DET', 'REM-DET');
+        app(VincularRemisionPagadaService::class)->ejecutar($this->pedido->fresh(), $local, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
+        $resguardo = ResguardoPdv::query()->where('pedido_bma_id', $local->id)->firstOrFail();
+        \App\Models\ConfiguracionSistema::query()->updateOrCreate(['clave' => \App\Services\PuntoVenta\PuntoVentaModulo::CLAVE_FLAG], ['valor' => '1']);
+        foreach (\App\Services\PuntoVenta\PuntoVentaModulo::permisosIniciales() as $permiso) {
+            Permission::findOrCreate($permiso, 'web');
+        }
+        $this->pdvUser->givePermissionTo([\App\Services\PuntoVenta\PuntoVentaModulo::PERMISO_ACCEDER, \App\Services\PuntoVenta\PuntoVentaModulo::PERMISO_RESGUARDOS_VER]);
+
+        $datos = $this->actingAs($this->pdvUser)->getJson(route('punto_venta.resguardos.show', $resguardo))->assertOk()->json('resguardo.integracion_municipal');
+        $this->assertSame($this->pedido->id, $datos['pedido_id']);
+        $this->assertTrue($datos['puede_confirmar']);
+        $this->assertCount(1, $datos['resguardo_envio']['vinculos']);
+        $this->assertSame('custodia_local', $datos['resguardo_envio']['vinculos'][0]['mecanismo']);
+
+        $ruta = route('control_pedidos.municipal.remisiones.integrar_local', [$this->pedido, $local]);
+        $this->actingAs($this->pdvUser)->postJson($ruta)->assertOk();
+        $despues = $this->actingAs($this->pdvUser)->getJson(route('punto_venta.resguardos.show', $resguardo))->json('resguardo.integracion_municipal');
+        $this->assertTrue($despues['resguardo_envio']['vinculos'][0]['integrado']);
+
+        // Quien no opera la sucursal no recibe la facultad de confirmar.
+        $otra = $this->remisionEnCustodia('RG2-DET2', 'REM-DET2');
+        app(VincularRemisionPagadaService::class)->ejecutar($this->pedido->fresh(), $otra, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
+        $this->assertFalse(PoliticaResguardoEnvio::puedeConfirmarIntegracionFisica($this->ventas, $otra->fresh(), PoliticaResguardoEnvio::MECANISMO_LOCAL));
+    }
+
+    public function test_integracion_local_solo_la_confirma_quien_opera_la_sucursal(): void
+    {
+        $this->guardarSolicitud(0);
+        $local = $this->remisionEnCustodia('RG2-IL', 'REM-IL');
+        app(VincularRemisionPagadaService::class)->ejecutar($this->pedido->fresh(), $local, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
+        $ruta = route('control_pedidos.municipal.remisiones.integrar_local', [$this->pedido, $local]);
+
+        // Ventas y auxiliar no confirman un hecho físico.
+        foreach ([$this->ventas, $this->auxiliar] as $actor) {
+            $this->actingAs($actor)->postJson($ruta)->assertUnprocessable();
+            $this->assertSame('pendiente', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
+        }
+        // Personal físico de otra sucursal tampoco.
+        $ajeno = User::factory()->create();
+        $ajeno->givePermissionTo(Permission::findOrCreate('pdv.resguardos.confirmar_custodia', 'web'));
+        $this->actingAs($ajeno)->postJson($ruta)->assertUnprocessable();
+        $this->assertSame('pendiente', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
+
+        $this->actingAs($this->pdvUser)->postJson($ruta)->assertOk();
+        $this->assertSame('integrado', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
+        // Idempotente.
+        $this->actingAs($this->pdvUser)->postJson($ruta)->assertOk();
+    }
+
+    public function test_integrar_con_la_url_de_otro_envio_responde_404_sin_cambios(): void
+    {
+        $this->guardarSolicitud(0);
+        $local = $this->remisionEnCustodia('RG2-U', 'REM-U');
+        app(VincularRemisionPagadaService::class)->ejecutar($this->pedido->fresh(), $local, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
+        $otroEnvio = $this->pedidoHermano('RG2-OTRO', ['total_mercancia' => 10]);
+        $this->actingAs($this->pdvUser)
+            ->postJson(route('control_pedidos.municipal.remisiones.integrar_local', [$otroEnvio, $local]))
+            ->assertNotFound();
+        $this->assertSame('pendiente', $local->fresh()->solicitud_preparacion_json['integracion_local']['estado']);
+        // Cliente ajeno tampoco filtra información.
+        $this->actingAs($this->cedisUser)
+            ->postJson(route('control_pedidos.municipal.remisiones.integrar_cedis', [$otroEnvio, $local]))
+            ->assertNotFound();
+    }
+
+    public function test_lectura_de_remisiones_exige_visibilidad_del_principal(): void
+    {
+        $this->guardarSolicitud(0);
+        $this->remisionPagada('RG2-L', 'REM-L');
+        $this->getJson(route('control_pedidos.municipal.remisiones', $this->pedido))->assertOk()->assertJsonCount(1, 'data');
+        $intruso = User::factory()->create();
+        $this->actingAs($intruso)->getJson(route('control_pedidos.municipal.remisiones', $this->pedido))->assertForbidden();
+    }
+
+    public function test_desvincular_restaura_la_custodia_y_conserva_otras_retenciones(): void
+    {
+        $this->guardarSolicitud(0);
+        $limpia = $this->remisionEnCustodia('RG2-R1', 'REM-R1');
+        $retenida = $this->remisionEnCustodia('RG2-R2', 'REM-R2');
+        ResguardoPdv::query()->where('pedido_bma_id', $retenida->id)->update(['entrega_bloqueada' => true]);
+        $servicio = app(VincularRemisionPagadaService::class);
+        foreach ([$limpia, $retenida] as $origen) {
+            $servicio->ejecutar($this->pedido->fresh(), $origen, $this->ventas, PoliticaResguardoEnvio::MECANISMO_LOCAL);
+            $this->assertTrue((bool) ResguardoPdv::query()->where('pedido_bma_id', $origen->id)->value('entrega_bloqueada'));
+        }
+        foreach ([$limpia, $retenida] as $origen) {
+            $servicio->desvincular($this->pedido->fresh(), $origen->fresh(), $this->ventas);
+            $this->assertNull($origen->fresh()->pedido_principal_id);
+        }
+        $this->assertFalse((bool) ResguardoPdv::query()->where('pedido_bma_id', $limpia->id)->value('entrega_bloqueada'));
+        $this->assertTrue((bool) ResguardoPdv::query()->where('pedido_bma_id', $retenida->id)->value('entrega_bloqueada'));
+    }
+
+    public function test_una_remision_no_se_incorpora_a_dos_envios(): void
+    {
+        $this->guardarSolicitud(0);
+        $segundo = $this->pedidoHermano('RG2-E2', ['total_mercancia' => 10]);
+        $json = $segundo->solicitud_preparacion_json;
+        $segundo->update(['solicitud_preparacion_json' => $json]);
+        $origen = $this->remisionPagada('RG2-DOS', 'REM-DOS');
+        $servicio = app(VincularRemisionPagadaService::class);
+        $servicio->ejecutar($this->pedido->fresh(), $origen, $this->ventas, PoliticaResguardoEnvio::MECANISMO_RESGUARDO);
+        try {
+            $servicio->ejecutar($segundo->fresh(), $origen->fresh(), $this->ventas, PoliticaResguardoEnvio::MECANISMO_RESGUARDO);
+            $this->fail('La misma compra no entra por dos rutas.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('remision', $e->errors());
+        }
+        $this->assertSame(1, PedidoBmaEnvioResguardo::query()->where('pedido_resguardo_id', $origen->id)->count());
+    }
+
+    public function test_liberacion_con_huella_obsoleta_se_rechaza_sin_cambios_parciales(): void
+    {
+        $this->solicitarContinuacionAcumulacion();
+        $this->auditarPagos();
+        $huellaVista = PoliticaResguardoEnvio::huellaConjunto($this->pedido->fresh());
+        // El conjunto cambia mientras la auxiliar revisaba.
+        $nuevo = $this->remisionPagada('RG2-NEW', 'REM-NEW');
+        PedidoBmaEnvioResguardo::query()->create(['pedido_envio_id' => $this->pedido->id, 'pedido_resguardo_id' => $nuevo->id]);
+        $antes = $this->pedido->fresh()->solicitud_preparacion_json;
+        try {
+            app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id, $huellaVista);
+            $this->fail('Versión obsoleta.');
+        } catch (\RuntimeException $e) {
+            $this->assertNotSame('', $e->getMessage());
+        }
+        $this->assertEquals($antes, $this->pedido->fresh()->solicitud_preparacion_json);
+    }
+
+    public function test_resguardo_liberado_no_admite_reactivacion(): void
+    {
+        $this->solicitarContinuacionAcumulacion();
+        $this->auditarPagos();
+        app(LiberarResguardoMunicipalService::class)->ejecutar($this->pedido->fresh(), $this->auxiliar->id);
+        $this->actingAs($this->ventas);
+        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertUnprocessable();
+        $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($this->pedido->fresh()));
+    }
+
+    public function test_cerrar_acumulacion_exige_revision_y_invalida_la_continuacion(): void
+    {
+        $this->cerrarConsultaConocida(30);
+        $this->pagoEtapa(100);
+        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        $this->postJson(route('control_pedidos.municipal.resguardo.acumulacion', $this->pedido), [])->assertUnprocessable();
+        $this->assertTrue(PoliticaResguardoEnvio::datos($this->pedido->fresh())['acumulacion_abierta']);
+    }
+
+    public function test_el_modal_de_liberacion_municipal_no_exige_datos_nacionales(): void
+    {
+        $this->solicitarContinuacionAcumulacion();
+        $this->auditarPagos();
+        $this->actingAs($this->auxiliar)
+            ->post(route('control_pedidos.auditar.liberar_resguardo', $this->pedido))
+            ->assertSessionHasNoErrors();
+        $this->assertFalse(PoliticaResguardoEnvio::intencionActiva($this->pedido->fresh()));
+    }
+
+    private function solicitarContinuacionAcumulacion(): void
+    {
+        $this->cerrarConsultaConocida(30);
+        $this->pagoEtapa(100);
+        $this->postJson(route('control_pedidos.municipal.resguardo', $this->pedido), $this->capturaResguardo())->assertOk();
+        $this->postJson(route('control_pedidos.municipal.resguardo.acumulacion', $this->pedido), $this->capturaRevision())->assertOk();
+        $this->pasarAAuxiliar();
+        $this->postJson(route('control_pedidos.municipal.resguardo.continuacion', $this->pedido), $this->capturaRevision())->assertOk();
+    }
+
+    private function auditarPagos(): void
+    {
+        \App\Models\SaldosAFavor\PedidoBmaPago::query()->where('pedido_bma_id', $this->pedido->id)
+            ->update(['estado_revision' => \App\Models\SaldosAFavor\PedidoBmaPago::REVISION_VERIFICADO]);
+        $this->pedido->update(['pago_validado_at' => now()->addSeconds(5), 'pago_validado_por_id' => $this->auxiliar->id]);
+    }
+
     private function pedidoHermano(string $folio, array $attrs): PedidoBma
     {
         return PedidoBma::query()->create(array_merge([

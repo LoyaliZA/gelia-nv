@@ -40,6 +40,7 @@ import ModalMotivoRechazo from '../../Partials/ModalMotivoRechazo';
 import ModalReportarErrorDatos from '../../Partials/ModalReportarErrorDatos';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
+import PanelResguardoMunicipalAuditoria from '../../Municipal/PanelResguardoMunicipalAuditoria';
 import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
 import EncabezadoRevisionPedido, { AvisosRevisionPedido, indicacionRevisionPedido } from './EncabezadoRevisionPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
@@ -224,10 +225,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const badgeRemision = tieneErrorRemision(pedido) ? badgeCorregirRemision() : null;
     const reRevision = esPendienteReRevision(pedido);
     const esPendiente = fase === 'PENDIENTE_AUXILIAR';
-    const puedeLiberarResguardo = Boolean(pedido.es_resguardo)
-        && (esPendiente || fase === 'EN_CEDIS')
-        && can('control_pedidos.liberar_resguardo');
-    const requiereCapturaLiberacion = Boolean(pedido.es_resguardo)
+    const resguardoMunicipal = pedido.resguardo_envio?.activo ? pedido.resguardo_envio : null;
+    // En un resguardo de envío municipal la acción solo aparece si es ejecutable; si no, el panel explica el bloqueo.
+    const puedeLiberarResguardo = resguardoMunicipal
+        ? (esPendiente || fase === 'EN_CEDIS') && can('control_pedidos.liberar_resguardo') && can('control_pedidos.auditar')
+            && Boolean(resguardoMunicipal.capacidades?.puede_liberar)
+        : Boolean(pedido.es_resguardo)
+            && (esPendiente || fase === 'EN_CEDIS')
+            && can('control_pedidos.liberar_resguardo');
+    const requiereCapturaLiberacion = !resguardoMunicipal && Boolean(pedido.es_resguardo)
         && (pedido.tipo_operacion_envio?.codigo === 'RESGUARDO_ABIERTO'
             || pedido.estatus_envio === 'pendiente_liberacion');
     const esRechazado = fase === 'RECHAZADO_VENDEDORA';
@@ -476,7 +482,8 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
         if (accion === 'liberar') {
             setProcesando(true);
-            router.post(route('control_pedidos.auditar.liberar_resguardo', pedido.id), {}, {
+            // El resguardo municipal no pide guía, peso ni domicilio; envía la versión del conjunto que vio la persona auxiliar.
+            router.post(route('control_pedidos.auditar.liberar_resguardo', pedido.id), resguardoMunicipal ? { huella_conjunto: resguardoMunicipal.huella_conjunto } : {}, {
                 preserveScroll: true,
                 onSuccess: (page) => recargarPedido('Resguardo liberado correctamente.', page),
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo liberar el resguardo.' }),
@@ -522,7 +529,9 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         },
         liberar: {
             titulo: 'Liberar resguardo',
-            mensaje: '¿Liberar el resguardo de este pedido?',
+            mensaje: resguardoMunicipal
+                ? `¿Liberar el resguardo del envío ${pedido.folio}? Queda autorizado para continuar su preparación. No se marca como enviado ni se despachan por su cuenta las remisiones que lo integran.`
+                : '¿Liberar el resguardo de este pedido?',
             etiquetaConfirmar: 'Liberar',
             variante: 'primary',
         },
@@ -808,6 +817,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                             ))}
                                         </div>
                                     )}
+                                    <PanelResguardoMunicipalAuditoria resguardo={resguardoMunicipal} />
                                     <SeccionPagosExhibicion
                                         key={creditoTienda ? pedido.pago_validado_at : undefined}
                                         pedidoId={pedido.id}

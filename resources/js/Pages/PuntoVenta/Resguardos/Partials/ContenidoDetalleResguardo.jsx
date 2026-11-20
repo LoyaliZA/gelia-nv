@@ -19,6 +19,7 @@ import AccionEvidenciaRegistroManual from './AccionEvidenciaRegistroManual';
 import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
+import IntegracionFisicaConjunto from '../../../ControlPedidos/Municipal/IntegracionFisicaConjunto';
 import MiniaturaEvidenciaResguardo, { GaleriaEvidenciasResguardo } from './MiniaturaEvidenciaResguardo';
 
 export default function ContenidoDetalleResguardo({
@@ -129,6 +130,14 @@ export default function ContenidoDetalleResguardo({
             </div>
 
             <PanelPedidoRevisionResguardo resguardo={resguardo} />
+
+            {resguardo.integracion_municipal && (
+                <IntegracionFisicaConjunto
+                    pedido={{ id: resguardo.integracion_municipal.pedido_id, resguardo_envio: resguardo.integracion_municipal.resguardo_envio }}
+                    mecanismos={!modoAuditoria && resguardo.integracion_municipal.puede_confirmar ? ['custodia_local'] : []}
+                    onActualizado={() => onAccionExito?.()}
+                />
+            )}
 
             {resguardo.ultima_entrega && (
                 <PanelEntregaCompletada entrega={resguardo.ultima_entrega} />

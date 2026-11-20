@@ -83,30 +83,14 @@ class VincularRemisionPagadaService
         if (! in_array($mecanismo, PoliticaResguardoEnvio::MECANISMOS, true)) {
             throw ValidationException::withMessages(['mecanismo' => 'Indique si la remisión se integra en sucursal, se traslada a CEDIS o se anexa al resguardo.']);
         }
-        PoliticaResguardoEnvio::assertConjuntoMutable($envio);
-
-        $ya = $this->yaVinculado($origen, $envio);
-        if ($ya) {
-            return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
-        }
-
-        if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_CEDIS) {
-            $this->cedis->ejecutar($origen, $envio, $usuario);
-            $this->invalidarContinuacionSiAplica($envio);
-
-            return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
-        }
-        if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_LOCAL) {
-            $this->local->ejecutar($origen, $envio, $usuario);
-            $this->invalidarContinuacionSiAplica($envio);
-
-            return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
-        }
-
-        return ExclusividadRemisionEnvio::conLock($origen, $envio, function ($bloqueados) use ($origen, $envio, $usuario) {
+        // Un solo orden de bloqueo (envío principal y luego la remisión) para vinculación, integración y liberación.
+        return ExclusividadRemisionEnvio::conLockEnvio($envio, $origen, function ($bloqueados) use ($origen, $envio, $usuario, $mecanismo) {
             $origen = $bloqueados->get($origen->id);
             $envio = $bloqueados->get($envio->id);
             PoliticaResguardoEnvio::assertConjuntoMutable($envio);
+            if ($this->yaVinculado($origen, $envio)) {
+                return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
+            }
             try {
                 ExclusividadRemisionEnvio::assertDisponible($origen, $envio);
             } catch (\InvalidArgumentException $e) {
@@ -118,23 +102,35 @@ class VincularRemisionPagadaService
             if ($origen->pago_validado_at === null) {
                 throw ValidationException::withMessages(['pago' => 'Solo se vincula una remisión con cobertura verificada. No se cobra de nuevo.']);
             }
-
-            PedidoBmaEnvioResguardo::query()->firstOrCreate([
-                'pedido_envio_id' => $envio->id,
-                'pedido_resguardo_id' => $origen->id,
-            ]);
-            $this->invalidarContinuacionSiAplica($envio);
-
-            if ($origen->catalogo_estatus_pedido_id) {
-                $this->historial->ejecutar(
-                    $origen->id,
-                    $usuario->id,
-                    $origen->catalogo_estatus_pedido_id,
-                    $origen->catalogo_estatus_pedido_id,
-                    "Vinculada al envío {$envio->folio}. No se cobra de nuevo ni se activa el resguardo por este vínculo.",
-                    AccionesHistorialPedidoBma::VINCULAR_REMISION_PAGADA
-                );
+            $enCustodia = ResguardoPdv::query()
+                ->where('pedido_bma_id', $origen->id)
+                ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+                ->exists();
+            if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_RESGUARDO && $enCustodia) {
+                throw ValidationException::withMessages(['remision' => 'Esa remisión sigue en custodia de sucursal. Elija integrarla en sucursal o trasladarla a CEDIS.']);
             }
+
+            if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_CEDIS) {
+                $this->cedis->ejecutar($origen, $envio, $usuario);
+            } elseif ($mecanismo === PoliticaResguardoEnvio::MECANISMO_LOCAL) {
+                $this->local->ejecutar($origen, $envio, $usuario);
+            } else {
+                PedidoBmaEnvioResguardo::query()->firstOrCreate([
+                    'pedido_envio_id' => $envio->id,
+                    'pedido_resguardo_id' => $origen->id,
+                ]);
+                if ($origen->catalogo_estatus_pedido_id) {
+                    $this->historial->ejecutar(
+                        $origen->id,
+                        $usuario->id,
+                        $origen->catalogo_estatus_pedido_id,
+                        $origen->catalogo_estatus_pedido_id,
+                        "Vinculada al envío {$envio->folio}. Falta confirmar su integración física en CEDIS. No se cobra de nuevo.",
+                        AccionesHistorialPedidoBma::VINCULAR_REMISION_PAGADA
+                    );
+                }
+            }
+            $this->invalidarContinuacionSiAplica($envio);
 
             return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
         });
@@ -145,13 +141,19 @@ class VincularRemisionPagadaService
         if (! $usuario->can('control_pedidos.crear') || ! VisibilidadPedidoBma::puedeMutarComoVendedora($usuario, $envio)) {
             throw ValidationException::withMessages(['pedido' => 'No puede desvincular remisiones de este envío.']);
         }
-        PoliticaResguardoEnvio::assertConjuntoMutable($envio);
 
-        return ExclusividadRemisionEnvio::conLock($origen, $envio, function ($bloqueados) use ($origen, $envio, $usuario) {
+        return ExclusividadRemisionEnvio::conLockEnvio($envio, $origen, function ($bloqueados) use ($origen, $envio, $usuario) {
             $origen = $bloqueados->get($origen->id);
             $envio = $bloqueados->get($envio->id);
+            PoliticaResguardoEnvio::assertConjuntoMutable($envio);
             $json = is_array($origen->solicitud_preparacion_json) ? $origen->solicitud_preparacion_json : [];
-            $estado = $json['integracion_local']['estado'] ?? $json['retiro_recoleccion']['estado'] ?? 'anexado';
+            if (! $this->yaVinculado($origen, $envio)) {
+                throw ValidationException::withMessages(['remision' => 'Esa remisión no forma parte de este envío.']);
+            }
+            $estado = $json['integracion_local']['estado']
+                ?? $json['retiro_recoleccion']['estado']
+                ?? $json['integracion_envio']['estado']
+                ?? 'anexado';
             if (! PoliticaResguardoEnvio::puedeDesvincular($envio, $origen, $estado)) {
                 throw ValidationException::withMessages(['remision' => PoliticaResguardoEnvio::MENSAJE_IRREVERSIBLE]);
             }
@@ -162,11 +164,13 @@ class VincularRemisionPagadaService
                 ->delete();
 
             if ((int) $origen->pedido_principal_id === (int) $envio->id) {
+                $previo = $json['integracion_local']['bloqueo_previo'] ?? $json['retiro_recoleccion']['bloqueo_previo'] ?? [];
                 unset($json['integracion_local'], $json['retiro_recoleccion']);
                 $origen->update([
                     'pedido_principal_id' => null,
                     'solicitud_preparacion_json' => $json,
                 ]);
+                $this->restaurarCustodia($origen, is_array($previo) ? $previo : []);
             }
             $this->invalidarContinuacionSiAplica($envio);
 
@@ -183,6 +187,24 @@ class VincularRemisionPagadaService
 
             return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
         });
+    }
+
+    /**
+     * Devuelve cada custodia al bloqueo que tenía antes del vínculo. No libera una retención ajena
+     * (cancelación, devolución, conversión): solo quita lo que puso este envío.
+     *
+     * @param  array<int|string, bool>  $previo
+     */
+    private function restaurarCustodia(PedidoBma $origen, array $previo): void
+    {
+        $resguardos = ResguardoPdv::query()
+            ->where('pedido_bma_id', $origen->id)
+            ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->get();
+        foreach ($resguardos as $resguardo) {
+            $otraRetencion = method_exists($origen, 'tieneCancelacionOperativaActiva') && $origen->tieneCancelacionOperativaActiva();
+            $resguardo->update(['entrega_bloqueada' => $otraRetencion || (bool) ($previo[$resguardo->id] ?? false)]);
+        }
     }
 
     private function yaVinculado(PedidoBma $origen, PedidoBma $envio): bool

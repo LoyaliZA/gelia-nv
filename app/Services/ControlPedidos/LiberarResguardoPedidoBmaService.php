@@ -25,7 +25,7 @@ class LiberarResguardoPedidoBmaService
     {
         if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
             && \App\Support\ControlPedidos\PoliticaResguardoEnvio::intencionActiva($pedido)) {
-            return app(Municipal\LiberarResguardoMunicipalService::class)->ejecutar($pedido, $usuarioId);
+            return app(Municipal\LiberarResguardoMunicipalService::class)->ejecutar($pedido, $usuarioId, $captura['huella_conjunto'] ?? null);
         }
 
         if (!$pedido->es_resguardo) {

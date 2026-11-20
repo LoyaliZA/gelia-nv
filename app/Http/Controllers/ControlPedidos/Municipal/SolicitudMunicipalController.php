@@ -8,7 +8,11 @@ use App\Services\ControlPedidos\Municipal\ActivarResguardoEnvioService;
 use App\Services\ControlPedidos\Municipal\CerrarAcumulacionResguardoService;
 use App\Services\ControlPedidos\Municipal\EnviarConsultaMunicipalService;
 use App\Services\ControlPedidos\Municipal\EtiquetaConsultaMunicipal;
+use App\Models\ControlPedidos\PedidoBmaEnvioResguardo;
+use App\Models\PuntoVenta\ResguardoPdv;
 use App\Services\ControlPedidos\Municipal\IntegrarCustodiaLocalMunicipalService;
+use App\Services\ControlPedidos\Municipal\IntegrarRemisionEnCedisMunicipalService;
+use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Services\ControlPedidos\Municipal\PoliticaFinancieraMunicipal;
 use App\Services\ControlPedidos\Municipal\RegistrarSolicitudMunicipalService;
 use App\Services\ControlPedidos\Municipal\SolicitarContinuacionResguardoService;
@@ -71,8 +75,8 @@ class SolicitudMunicipalController extends Controller
     public function cerrarAcumulacion(Request $request, PedidoBma $pedidoBma, CerrarAcumulacionResguardoService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
     {
         $datos = $request->validate([
-            'revision_esperada' => ['nullable', 'integer'],
-            'base_captura' => ['nullable', 'string'],
+            'revision_esperada' => ['required', 'integer'],
+            'base_captura' => ['required', 'string'],
         ]);
         $pedido = $servicio->ejecutar($pedidoBma, $request->user(), $datos);
 
@@ -81,6 +85,8 @@ class SolicitudMunicipalController extends Controller
 
     public function remisiones(Request $request, PedidoBma $pedidoBma, VincularRemisionPagadaService $servicio): JsonResponse
     {
+        VisibilidadPedidoBma::assertPuedeConsultar($request->user(), $pedidoBma);
+        abort_unless(ConsultaMunicipal::es($pedidoBma), 404);
         $q = trim((string) $request->query('q', ''));
 
         return response()->json([
@@ -91,6 +97,7 @@ class SolicitudMunicipalController extends Controller
                 'folio_remision' => $item->folio_remision,
                 'total_mercancia' => $item->total_mercancia,
                 'estatus_sucursal' => $item->estatus_sucursal,
+                'mecanismos' => $this->mecanismosDisponibles($item),
             ])->values(),
             'vinculos' => PoliticaResguardoEnvio::vinculos($pedidoBma),
         ]);
@@ -98,11 +105,13 @@ class SolicitudMunicipalController extends Controller
 
     public function vincular(Request $request, PedidoBma $pedidoBma, VincularRemisionPagadaService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
     {
+        VisibilidadPedidoBma::assertPuedeConsultar($request->user(), $pedidoBma);
         $datos = $request->validate([
             'origen_id' => ['required', 'integer'],
             'mecanismo' => ['required', 'in:custodia_cedis,custodia_local,resguardo_envio'],
         ]);
         $origen = PedidoBma::query()->findOrFail((int) $datos['origen_id']);
+        abort_unless((int) $origen->cliente_id === (int) $pedidoBma->cliente_id, 404);
         try {
             $pedido = $servicio->ejecutar($pedidoBma, $origen, $request->user(), $datos['mecanismo']);
         } catch (\RuntimeException|\InvalidArgumentException $e) {
@@ -112,10 +121,12 @@ class SolicitudMunicipalController extends Controller
         return response()->json($this->presentar($pedido, $politica));
     }
 
-    public function desvincular(PedidoBma $pedidoBma, PedidoBma $origen, VincularRemisionPagadaService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
+    public function desvincular(Request $request, PedidoBma $pedidoBma, PedidoBma $origen, VincularRemisionPagadaService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
     {
+        VisibilidadPedidoBma::assertPuedeConsultar($request->user(), $pedidoBma);
+        $this->assertOrigenDelEnvio($pedidoBma, $origen);
         try {
-            $pedido = $servicio->desvincular($pedidoBma, $origen, request()->user());
+            $pedido = $servicio->desvincular($pedidoBma, $origen, $request->user());
         } catch (\RuntimeException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
@@ -123,15 +134,55 @@ class SolicitudMunicipalController extends Controller
         return response()->json($this->presentar($pedido, $politica));
     }
 
-    public function integrarLocal(PedidoBma $pedidoBma, PedidoBma $origen, IntegrarCustodiaLocalMunicipalService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
+    /** Confirmación física de una custodia de sucursal integrada localmente. */
+    public function integrarLocal(Request $request, PedidoBma $pedidoBma, PedidoBma $origen, IntegrarCustodiaLocalMunicipalService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
     {
+        $this->assertOrigenDelEnvio($pedidoBma, $origen);
         try {
-            $servicio->ejecutar($origen, request()->user());
+            $servicio->ejecutar($origen, $request->user(), $pedidoBma);
         } catch (\RuntimeException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return response()->json($this->presentar($pedidoBma->fresh(), $politica));
+    }
+
+    /** Confirmación física, dentro de CEDIS, de una remisión anexada al envío. */
+    public function integrarCedis(Request $request, PedidoBma $pedidoBma, PedidoBma $origen, IntegrarRemisionEnCedisMunicipalService $servicio, PoliticaFinancieraMunicipal $politica): JsonResponse
+    {
+        $this->assertOrigenDelEnvio($pedidoBma, $origen);
+        try {
+            $pedido = $servicio->ejecutar($pedidoBma, $origen, $request->user());
+        } catch (\RuntimeException|\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($this->presentar($pedido, $politica));
+    }
+
+    /** Una URL con otro envío principal o una remisión ajena responde 404, sin revelar datos. */
+    private function assertOrigenDelEnvio(PedidoBma $envio, PedidoBma $origen): void
+    {
+        abort_unless(ConsultaMunicipal::es($envio) && (int) $origen->cliente_id === (int) $envio->cliente_id, 404);
+        $vinculada = (int) $origen->pedido_principal_id === (int) $envio->id
+            || PedidoBmaEnvioResguardo::query()
+                ->where('pedido_envio_id', $envio->id)
+                ->where('pedido_resguardo_id', $origen->id)
+                ->exists();
+        abort_unless($vinculada, 404);
+    }
+
+    /** @return list<string> Mecanismos físicamente posibles según dónde está la remisión. */
+    private function mecanismosDisponibles(PedidoBma $origen): array
+    {
+        $enCustodia = ResguardoPdv::query()
+            ->where('pedido_bma_id', $origen->id)
+            ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+            ->exists();
+
+        return $enCustodia
+            ? [PoliticaResguardoEnvio::MECANISMO_LOCAL, PoliticaResguardoEnvio::MECANISMO_CEDIS]
+            : [PoliticaResguardoEnvio::MECANISMO_RESGUARDO];
     }
 
     /** @return array<string, mixed> */

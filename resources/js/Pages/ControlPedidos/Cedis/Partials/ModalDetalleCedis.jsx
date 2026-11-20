@@ -1,4 +1,5 @@
 import { esRegistroMunicipal } from '../../Municipal/terminalMunicipal';
+import IntegracionFisicaConjunto from '../../Municipal/IntegracionFisicaConjunto';
 import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
 import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
 import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
@@ -391,6 +392,7 @@ export default function ModalDetalleCedis({
                         <section id="cedis-estado" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Estado de empaque</h3>
                             <div className="space-y-3">
+                                <IntegracionFisicaConjunto pedido={pedido} mecanismos={['resguardo_envio']} onActualizado={() => router.reload({ preserveScroll: true })} />
                                 {(fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && pedido.es_resguardo && (
                                     <AvisoOperativoPedido
                                         label="Resguardo"

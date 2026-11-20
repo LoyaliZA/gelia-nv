@@ -27,9 +27,7 @@ class CerrarAcumulacionResguardoService
 
         return DB::transaction(function () use ($pedido, $usuario, $datos) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
-            if ($datos !== []) {
-                RevisionCapturaPedido::comprobar($pedido, $datos);
-            }
+            RevisionCapturaPedido::comprobar($pedido, $datos);
             if (! PoliticaResguardoEnvio::intencionActiva($pedido)
                 || PoliticaResguardoEnvio::motivo($pedido) !== PoliticaResguardoEnvio::MOTIVO_ACUMULACION) {
                 throw ValidationException::withMessages(['resguardo' => 'Este envío no está acumulando mercancía.']);
@@ -46,6 +44,10 @@ class CerrarAcumulacionResguardoService
                 'acumulacion_cerrada_por_id' => $usuario->id,
             ]);
             $pedido->update(['solicitud_preparacion_json' => $json]);
+            // El conjunto cambió: la continuación solicitada antes ya no es válida.
+            if (PoliticaResguardoEnvio::datos($pedido)['continuacion_solicitada_at'] ?? null) {
+                $pedido->update(['solicitud_preparacion_json' => PoliticaResguardoEnvio::invalidarContinuacion($pedido)]);
+            }
 
             $this->historial->ejecutar(
                 $pedido->id,

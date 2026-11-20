@@ -85,10 +85,19 @@ final class RetirarCustodiaParaEnvioService
                 'solicitud_preparacion_json' => $json,
             ]);
 
+            // Se recuerda el bloqueo previo para restaurar la custodia exacta si el vínculo se deshace.
+            $previo = ResguardoPdv::query()
+                ->where('pedido_bma_id', $custodia->id)
+                ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
+                ->pluck('entrega_bloqueada', 'id')
+                ->map(fn ($v) => (bool) $v)->all();
             ResguardoPdv::query()
                 ->where('pedido_bma_id', $custodia->id)
                 ->where('estado', ResguardoPdv::ESTADO_EN_CUSTODIA)
                 ->update(['entrega_bloqueada' => true]);
+            $json = is_array($custodia->fresh()->solicitud_preparacion_json) ? $custodia->fresh()->solicitud_preparacion_json : [];
+            $json['retiro_recoleccion']['bloqueo_previo'] = $previo;
+            $custodia->update(['solicitud_preparacion_json' => $json]);
 
             $estatusId = $custodia->catalogo_estatus_pedido_id;
             if ($estatusId) {

@@ -17,6 +17,12 @@ class LiberarResguardoPedidoBmaRequest extends FormRequest
     {
         /** @var PedidoBma|null $pedido */
         $pedido = $this->route('pedidoBma');
+        // El resguardo municipal no pide peso, guía, domicilio ni comprobante de liberación nacional.
+        if ($pedido
+            && \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)
+            && \App\Support\ControlPedidos\PoliticaResguardoEnvio::intencionActiva($pedido)) {
+            return ['huella_conjunto' => ['nullable', 'string', 'max:255']];
+        }
         $pedido?->loadMissing('tipoOperacionEnvio');
 
         $requiereCaptura = $pedido
