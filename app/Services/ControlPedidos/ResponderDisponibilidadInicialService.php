@@ -97,6 +97,9 @@ class ResponderDisponibilidadInicialService
                 }
             }
 
+            if ($actualizacion && ($json['modalidad_entrega'] ?? '') === 'tienda' && $area === DestinoRevisionRegistrarPedidos::PREPARACION_TIENDA) {
+                [$json, $datos] = UnidadesRevisionConsulta::normalizarReferenciasTienda($json, $datos);
+            }
             $guardada = is_array($json['revision_disponibilidad'] ?? null) ? $json['revision_disponibilidad'] : null;
             if (! empty($datos['persistir_unidad'])) {
                 return $this->guardarUnidadBloqueada($pedido, $usuario, $datos, $json, $nuevos, $area);

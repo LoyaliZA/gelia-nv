@@ -9,7 +9,7 @@ function idsDocumentosAnexo(anexo) {
 }
 
 export function unidadRevisionId(tipo, linea = {}, clase = 'sku', documentoId = null, pieza = {}, indice = null) {
-    const ancla = linea.solicitud_id || linea.linea_id || '';
+    const ancla = linea.linea_id || linea.solicitud_id || '';
     if (documentoId) return ancla ? `${tipo}:${ancla}:doc:${documentoId}` : `${tipo}:doc:${documentoId}`;
     const revision = pieza.revision_id || linea.sustituye_revision_id;
     if (revision) return ancla ? `${tipo}:${ancla}:rev:${revision}` : `${tipo}:rev:${revision}`;
@@ -29,6 +29,22 @@ function idCanonico(linea, documentoId, calculado) {
 
 function persistidaDe(linea, unidadId) {
     return (linea.unidades || []).find((unidad) => unidad?.unidad_id === unidadId);
+}
+
+/** Reconciliación de una identidad provisional con la misma línea/documento ya materializados. */
+export function equivalenciasUnidades(anteriores, actuales) {
+    const equivalencias = new Map();
+    for (const anterior of anteriores) {
+        if (anteriores.filter(c => c.clave === anterior.clave).length !== 1) continue;
+        if (actuales.some(c => c.clave === anterior.clave)) continue;
+        const candidatas = actuales.filter(c => c.tipo === anterior.tipo
+            && Number(c.documento_id || 0) === Number(anterior.documento_id || 0)
+            && (anterior.linea_id && c.linea_id ? anterior.linea_id === c.linea_id
+                : c.indice === anterior.indice && (!anterior.solicitud_id || anterior.solicitud_id === c.solicitud_id))
+            && (anterior.esDocumento || c.sku === anterior.sku));
+        if (candidatas.length === 1) equivalencias.set(anterior.clave, candidatas[0]);
+    }
+    return equivalencias;
 }
 
 function anexoPendienteRevision(anexo) {

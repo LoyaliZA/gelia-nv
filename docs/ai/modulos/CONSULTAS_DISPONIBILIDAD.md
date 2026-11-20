@@ -8,7 +8,7 @@
 ## Estado actual
 - [verificado] Consulta inicial y actualización comparten servicio, con contratos distintos de evidencia/ciclo: `app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php`.
 - [verificado] Se registran excepciones; la respuesta no aparta, traslada ni paga. `persistir_unidad` guarda una unidad sin cerrar la consulta ni tocar a las hermanas.
-- [verificado] Cada captura o SKU revisable tiene `unidad_id` estable en `solicitud_preparacion_json`; `documentos_soporte` y `documentos_peticion` no son unidades. El índice del array no es identidad.
+- [verificado] Los anexos nuevos de Preparación Tienda reciben `linea_id` y unidades persistentes distintas aunque compartan solicitud, SKU o documento. Se conservan las claves existentes; los alias se resuelven antes del guardado parcial/final y se rechazan si son ambiguos o ajenos. `UnidadesRevisionConsulta` y `cambiosDisponibilidad` reconcilian la captura sin reidentificar históricos. El índice no es identidad; `documentos_soporte` y `documentos_peticion` no son unidades.
 - [verificado] El retiro se informa; no pide reconfirmación ni recaptura. Cerrar consulta se habilita, no se dispara solo; Ventas puede seguir anexando o retirando.
 - [verificado] `AjustePiezas` consume adaptadores. Tienda conserva sus rutas. Municipal usa el mismo editor sin pedido relacionado ni pesaje: `PersistenciaAdjuntosConsulta`.
 - [verificado] Ventas ve respuestas del almacén desplegadas y anexos/retiros contraídos. CEDIS y Tienda ven el ciclo pedido desplegado y lo anterior contraído. Captura vigente al final del seguimiento de Ventas. Nacional sin interfaz.
@@ -38,4 +38,4 @@
 - Archivos de consulta: PHP efectivo `sail` UID 1000. Si un directorio `storage/app/public/pedidos_bma/{id}` quedó `root:root`, `chown` solo esos ids en pruebas. Receta: `gestion-pedidos-docs/CONSULTAS_COMPARTIDAS_IMPLEMENTACION_Y_AUTOEVALUACION.md`.
 - [verificado] `ActualizacionConsulta::solicitar` no marca ronda si solo hay retiro; la reapertura sí (`forzar`). Anexos sí exigen respuesta y captura nueva.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd847` + cambios locales etapa 3.1 / retiro-informe.
+- Última verificación: 2026-11-20, `aux-sistemas/activos-update` @ `8beacee2` + cambios locales identidad de anexos Tienda; pruebas dirigidas y navegador con datos ficticios.

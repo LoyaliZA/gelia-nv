@@ -6,7 +6,7 @@ import RutaPedidoTienda from './RutaPedidoTienda';
 import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from './ModalSeleccionProductosDetalle';
-import { anexosPendientesRevision, cambiosDisponibilidad } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, cambiosDisponibilidad, equivalenciasUnidades } from './cambiosDisponibilidad';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
@@ -41,6 +41,9 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const temporizadorRef = useRef(null);
     const erroresGuardadoRef = useRef(new Map());
     const fotosRecuperadasRef = useRef(new Map());
+    const cambiosPreviosRef = useRef(null);
+    const identidadesRef = useRef(new Map());
+    const identidadActual = clave => identidadesRef.current.get(clave) || clave;
     const tienda = origen === 'Tienda';
     const [capturaRapida, setCapturaRapida] = useState(null);
     const [estado, setEstado] = useState('');
@@ -59,7 +62,26 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     // Recuperar las piezas de las unidades guardadas sin convertirlas en una respuesta enviada.
     useEffect(() => {
         if (!tienda || !actualizacion) return;
+        // Solo reconciliar referencias de esta misma consulta; no cambia el tratamiento de ciclos.
+        const equivalencias = cambiosPreviosRef.current && cambiosPreviosRef.current.consulta === revision?.actualizacion_id
+            ? equivalenciasUnidades(cambiosPreviosRef.current.cambios, cambios) : new Map();
+        cambiosPreviosRef.current = { consulta: revision?.actualizacion_id, cambios };
+        for (const [anterior, nueva] of equivalencias) {
+            identidadesRef.current.set(anterior, nueva.clave);
+            if (persistidasRef.current[anterior]) { persistidasRef.current[nueva.clave] = persistidasRef.current[anterior]; delete persistidasRef.current[anterior]; }
+            if (erroresGuardadoRef.current.has(anterior)) { erroresGuardadoRef.current.set(nueva.clave, erroresGuardadoRef.current.get(anterior)); erroresGuardadoRef.current.delete(anterior); }
+            if (pendientesRef.current.has(anterior)) {
+                const [, resultado, filas] = pendientesRef.current.get(anterior);
+                pendientesRef.current.delete(anterior);
+                pendientesRef.current.set(nueva.clave, [nueva, resultado, filas.map(p => ({ ...p, origen_cambio: nueva.clave }))]);
+            }
+        }
+        if (equivalencias.size) {
+            setRespuestasCambios(actual => Object.fromEntries(Object.entries(actual).map(([clave, valor]) => [identidadActual(clave), valor])));
+            setOrigenIncidencia(actual => equivalencias.get(actual?.clave) || actual);
+        }
         setExcepciones(actual => {
+            actual = actual.map(p => identidadActual(p.origen_cambio) !== p.origen_cambio ? { ...p, origen_cambio: identidadActual(p.origen_cambio) } : p);
             const recuperadas = cambios.flatMap(cambio => {
                 if (actual.some(fila => fila.origen_cambio === cambio.clave) || cambio.resultado !== 'incidencia') return [];
                 const unidad = (solicitud.anexo_sin_remision || []).flatMap(a => a.unidades || []).find(u => u.unidad_id === cambio.unidad_id);
@@ -148,7 +170,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (revision?.actualizacion_id) form.append('actualizacion_id', revision.actualizacion_id);
         try {
             await onEnviar?.(form);
-            persistidasRef.current[cambio.clave] = firma;
+            persistidasRef.current[identidadActual(cambio.clave)] = firma;
         } catch (e) {
             const errores = e?.response?.data?.errors;
             setError(errores ? Object.values(errores).flat().join(' ') : e?.response?.data?.message || 'No se pudo guardar la revisión.');
@@ -161,8 +183,8 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         pendientesRef.current.clear();
         if (pendientes.length) colaRef.current = colaRef.current.then(async () => {
             for (const args of pendientes) {
-                try { await guardarUnidad(...args); erroresGuardadoRef.current.delete(args[0].clave); }
-                catch (e) { erroresGuardadoRef.current.set(args[0].clave, e); setError(e?.response?.data?.message || e.message || 'No se pudo guardar la revisión.'); }
+                try { await guardarUnidad(...args); erroresGuardadoRef.current.delete(identidadActual(args[0].clave)); }
+                catch (e) { erroresGuardadoRef.current.set(identidadActual(args[0].clave), e); setError(e?.response?.data?.message || e.message || 'No se pudo guardar la revisión.'); }
             }
         });
         return colaRef.current;

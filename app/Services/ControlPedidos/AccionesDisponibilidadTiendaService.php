@@ -97,6 +97,9 @@ final class AccionesDisponibilidadTiendaService
                 $nueva['sustituye_revision_id'] = $revision->id;
                 $nueva['solicitado_por'] = $actor->name;
                 $nueva['solicitado_at'] = now()->toIso8601String();
+                if (($json['modalidad_entrega'] ?? '') === 'tienda' && ($json['area_revision'] ?? '') === 'preparacion_tienda') {
+                    $nueva = \App\Support\ControlPedidos\UnidadesRevisionConsulta::nuevaLineaTienda($nueva);
+                }
                 $json['anexo_sin_remision'][] = $nueva;
                 $evento['alternativa'] = $nueva;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;

@@ -2360,6 +2360,92 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertSame('sin_excepciones', $pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad']['estado']);
     }
 
+    public function test_identidad_tienda_distingue_lineas_y_piezas_repetidas_al_guardar_retirar_recuperar_y_completar(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->postJson($url.'/tomar', ['version' => $tarea->version])->assertOk();
+        $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('anterior.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $pedido = $tarea->pedido->fresh();
+        $anterior = $pedido->solicitud_preparacion_json['revision_disponibilidad'];
+        $solicitud = (string) Str::uuid();
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'catalogo', 'solicitud_id' => $solicitud,
+            'piezas' => [['sku' => 'MISMO', 'descripcion' => 'Primera línea', 'cantidad' => 1], ['sku' => 'MISMO', 'descripcion' => 'Segunda línea', 'cantidad' => 1]],
+            'evidencia' => UploadedFile::fake()->image('anexo-compartido.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $json = $pedido->fresh()->solicitud_preparacion_json;
+        $lineas = $json['anexo_sin_remision'];
+        $this->assertNotSame($lineas[0]['linea_id'], $lineas[1]['linea_id']);
+        $this->assertSame($lineas[0]['documento_id'], $lineas[1]['documento_id']);
+        $cambios = array_map(fn ($i) => ['tipo' => 'anexo', 'indice' => $i, 'documento_id' => $lineas[$i]['documento_id'], 'unidad_id' => $lineas[$i]['unidades'][0]['unidad_id'], 'resultado' => 'incidencia'], [0, 1]);
+        $this->assertNotSame($cambios[0]['unidad_id'], $cambios[1]['unidad_id']);
+        $base = ['actualizacion_id' => $json['revision_disponibilidad']['actualizacion_id']];
+        $pieza = fn ($descripcion, $origen) => ['descripcion' => $descripcion, 'sku' => 'MISMO', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Defecto de '.$descripcion, 'origen_unidad_id' => $origen, 'evidencias' => [UploadedFile::fake()->image($descripcion.'.jpg')]];
+        $a = $pieza('Pieza A', $cambios[0]['unidad_id']);
+        $b = $pieza('Pieza B', $cambios[0]['unidad_id']);
+        $c = $pieza('Pieza C', $cambios[0]['unidad_id']);
+        $d = $pieza('Pieza D', $cambios[1]['unidad_id']);
+        foreach ([[$cambios[0], [$a, $b, $c]], [$cambios[1], [$d]], [$cambios[0], [$a, $c]]] as [$cambio, $piezas]) {
+            $this->post($url.'/disponibilidad', $base + ['persistir_unidad' => 1, 'cambios_revisados' => [$cambio], 'excepciones' => $piezas], ['Accept' => 'application/json'])->assertOk();
+        }
+        $this->assertSame(3, $pedido->revisionesProducto()->count());
+        $this->assertFalse($pedido->revisionesProducto()->where('descripcion_producto', 'Pieza B')->exists());
+        $actual = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertSame($lineas[0]['linea_id'], $actual['anexo_sin_remision'][0]['linea_id']);
+        $this->assertSame($lineas[1]['linea_id'], $actual['anexo_sin_remision'][1]['linea_id']);
+        $this->assertSame($anterior['respuesta_id'], $actual['revision_disponibilidad']['respuesta_id']);
+        $lectura = $this->getJson($url)->assertOk()->assertJsonCount(3, 'tarea.pedido.excepciones')->assertJsonCount(0, 'tarea.respuesta.excepciones');
+        $this->assertEqualsCanonicalizing(['Pieza A', 'Pieza C', 'Pieza D'], array_column($lectura->json('tarea.pedido.excepciones'), 'descripcion'));
+        foreach ($lectura->json('tarea.pedido.excepciones') as $recuperada) {
+            $this->assertCount(1, $recuperada['documentos']);
+            $this->assertSame('Defecto de '.$recuperada['descripcion'], $recuperada['detalle']);
+        }
+        $this->post($url.'/disponibilidad', $base + ['persistir_unidad' => 1, 'cambios_revisados' => [$cambios[0]], 'excepciones' => [$d]], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post($url.'/disponibilidad', $base + ['cambios_revisados' => $cambios, 'excepciones' => [$a, $c, $d]], ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(3, $pedido->revisionesProducto()->count());
+        $this->assertSame($anterior['respuesta_id'], $pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad']['historial_respuestas'][0]['respuesta_id']);
+        foreach ($pedido->revisionesProducto()->get() as $revision) {
+            $this->postJson('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', ['accion' => 'confirmar', 'revision_id' => $revision->id, 'solicitud_id' => (string) Str::uuid()])->assertOk();
+        }
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cerrar-consulta')->assertOk();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/cobertura-tienda', ['cobertura' => 'apartado'])->assertOk();
+        $this->postJson('/control-pedidos/'.$pedido->id.'/confirmar-pedido-tienda')->assertOk();
+        $this->postJson($url.'/apartado/confirmar', ['version' => $tarea->fresh()->cumplimientoFisico->version])->assertOk();
+        $this->assertSame('APARTADO_CONFIRMADO', $tarea->fresh()->cumplimientoFisico->estado);
+    }
+
+    public function test_identidad_provisional_de_anexo_legado_funciona_en_guardado_parcial_y_envio_final(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $url = '/control-pedidos/tienda/tareas/'.$tarea->id;
+        $this->postJson($url.'/tomar', ['version' => $tarea->version])->assertOk();
+        $this->post($url.'/disponibilidad', ['confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('anterior.jpg')]], ['Accept' => 'application/json'])->assertOk();
+        $pedido = $tarea->pedido->fresh();
+        $doc = $pedido->documentos()->create(['tipo' => 'anexo_piezas', 'ruta_archivo' => 'ficticio.png', 'nombre_original' => 'ficticio.png', 'mime_type' => 'image/png', 'orden' => 99, 'activo' => true]);
+        $json = $pedido->solicitud_preparacion_json;
+        $json['anexo_sin_remision'] = [['entrada' => 'documento', 'documento_id' => $doc->id, 'pendiente_revision' => true]];
+        ActualizacionConsulta::solicitar($json);
+        $pedido->update(['solicitud_preparacion_json' => $json]); // Fixture legado en SQLite, sin modificar datos reales.
+        $alias = 'anexo:doc:'.$doc->id;
+        $datos = ['actualizacion_id' => $json['revision_disponibilidad']['actualizacion_id'],
+            'cambios_revisados' => [['tipo' => 'anexo', 'indice' => 0, 'documento_id' => $doc->id, 'unidad_id' => $alias, 'resultado' => 'incidencia']],
+            'excepciones' => [['descripcion' => 'Legada', 'sku' => '', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Defecto conservado', 'origen_unidad_id' => $alias, 'evidencias' => [UploadedFile::fake()->image('defecto.jpg')]]]];
+        $this->post($url.'/disponibilidad', $datos + ['persistir_unidad' => 1], ['Accept' => 'application/json'])->assertOk();
+        $canonica = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades'][0]['unidad_id'];
+        $this->assertNotSame($alias, $canonica);
+        $this->post($url.'/disponibilidad', $datos, ['Accept' => 'application/json'])->assertOk();
+        $this->assertSame(1, $pedido->revisionesProducto()->count());
+        $this->assertSame($canonica, $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades'][0]['unidad_id']);
+        $this->getJson($url)->assertOk()->assertJsonPath('tarea.respuesta.excepciones.0.detalle', 'Defecto conservado')->assertJsonCount(1, 'tarea.respuesta.excepciones.0.documentos');
+    }
+
     private function permitirRevision(): void
     {
         foreach ([
