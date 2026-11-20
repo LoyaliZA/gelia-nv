@@ -18,6 +18,8 @@ class GestionarGuiaPdfPedidoBmaService
 
     public function subir(PedidoBma $pedido, UploadedFile $archivo, int $usuarioId): PedidoBma
     {
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
         if (!$pedido->puedeGestionarGuiaPdf()) {
             throw new \RuntimeException('Solo se puede adjuntar PDF de guía en pedidos pendientes de guía o enviados.');
         }
@@ -27,6 +29,11 @@ class GestionarGuiaPdfPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $archivo, $usuarioId) {
+            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+            }
+
             $this->eliminarGuiasPdf($pedido);
 
             $ruta = $archivo->store("pedidos_bma/guias/{$pedido->id}", 'public');

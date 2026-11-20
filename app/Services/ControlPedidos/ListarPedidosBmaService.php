@@ -147,6 +147,16 @@ class ListarPedidosBmaService
 
         $pedido->setAttribute('departamento_operacion_id', ContextoDepartamentoPedido::dePedido($pedido));
         $pedido->setAttribute('puede_editar', $puedeEditar);
+        $pedido->setAttribute('puede_continuar_nacional', $puedeEditar
+            && \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)
+            && $pedido->consultaCerrada()
+            && in_array($pedido->estatus?->fase_ciclo, [
+                CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR,
+                CatalogoEstatusPedido::FASE_EN_CEDIS,
+                CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+                CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+            ], true)
+            && ! $pedido->cajas->contains(fn ($caja) => $caja->estaActiva() && $caja->estaRecolectada()));
         $pedido->setAttribute('puede_anexar_pago_envio', $pedido->puedeAnexarPagoEnvio());
         $pedido->setAttribute('puede_mutar', $puedeEditar);
         $pedido->setAttribute('puede_cancelar', $puedeEditar && $pedido->puedeCancelarDirecto());

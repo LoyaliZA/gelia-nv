@@ -32,6 +32,9 @@ final class AccionesDisponibilidadTiendaService
                 throw ValidationException::withMessages(['consulta' => 'Falta una respuesta de disponibilidad vigente.']);
             }
             $revision = $pedido->revisionesProducto()->lockForUpdate()->findOrFail($datos['revision_id']);
+            if (in_array((int) $revision->id, \App\Support\ControlPedidos\RespuestaPreparacionTienda::revisionesNoEnviadas($json), true)) {
+                throw ValidationException::withMessages(['pieza' => 'La pieza pertenece a un avance pendiente de envío. Espere la respuesta de Tienda.']);
+            }
             $accion = $datos['accion'];
             $anterior = $json['acciones_disponibilidad'][(string) $revision->id] ?? null;
             if ($anterior) {
@@ -94,6 +97,9 @@ final class AccionesDisponibilidadTiendaService
                 $nueva['sustituye_revision_id'] = $revision->id;
                 $nueva['solicitado_por'] = $actor->name;
                 $nueva['solicitado_at'] = now()->toIso8601String();
+                if (($json['modalidad_entrega'] ?? '') === 'tienda' && ($json['area_revision'] ?? '') === 'preparacion_tienda') {
+                    $nueva = \App\Support\ControlPedidos\UnidadesRevisionConsulta::nuevaLineaTienda($nueva);
+                }
                 $json['anexo_sin_remision'][] = $nueva;
                 $evento['alternativa'] = $nueva;
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;

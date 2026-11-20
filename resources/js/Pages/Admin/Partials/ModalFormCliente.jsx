@@ -2,12 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { X, User, ChevronDown, Check, TrendingUp, ShieldCheck, ListOrdered, FileText, AlertTriangle, MapPin } from 'lucide-react';
+import ModalConfirmarAccion from '../../ControlPedidos/Partials/ModalConfirmarAccion';
 import useClienteDialog from './useClienteDialog';
+import { formularioClienteSucio } from './formularioClienteSucio';
 import { soloDigitosNumeroCliente } from '../../../utils/numeroClienteInput';
 
 const nombrePareceNumero = (valor) => /^\d+(\.\d+)?$/.test(String(valor || '').trim());
 
-function CorreccionModalidad({ cliente }) {
+function CorreccionModalidad({ cliente, onPendiente }) {
     const actual = cliente.es_menudeo === true || cliente.es_menudeo === 1;
     const [motivo, setMotivo] = useState('');
     const [enviando, setEnviando] = useState(false);
@@ -25,7 +27,7 @@ function CorreccionModalidad({ cliente }) {
             <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Modalidad: {actual ? 'Menudeo' : 'Mayoreo'}</span>
             <span className="text-[11px] theme-text-muted block">Corrige una modalidad errónea sin esperar la siguiente carga. No cambia el estado comercial, la lista ni el monto oficial.</span>
             <label htmlFor="cliente-modalidad-motivo" className="text-[9px] font-black uppercase theme-text-muted tracking-widest">Motivo (obligatorio)</label>
-            <input id="cliente-modalidad-motivo" type="text" value={motivo} onChange={(e) => setMotivo(e.target.value)}
+            <input id="cliente-modalidad-motivo" type="text" value={motivo} onChange={(e) => { setMotivo(e.target.value); onPendiente?.(e.target.value.trim().length > 0); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); aplicar(); } }}
                 className="w-full px-3 py-2 theme-surface border theme-border rounded-xl text-sm theme-text-main outline-none" />
             <button type="button" onClick={aplicar} disabled={enviando || motivo.trim().length < 5} className="theme-btn-secondary text-xs">
@@ -35,15 +37,8 @@ function CorreccionModalidad({ cliente }) {
     );
 }
 
-export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
-    const dialogRef = useClienteDialog(onClose);
-    const { auth } = usePage().props;
-    const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
-    const puedeCorregirModalidad = auth?.user?.permissions?.includes('clientes.corregir_modalidad') || auth?.user?.roles?.includes('Super Admin');
-    const puedeEditarCredito = auth?.user?.permissions?.includes('cobranza.editar_credito') || auth?.user?.roles?.includes('Super Admin');
-    
-    // --- SECCIÓN: INICIALIZACIÓN DE FORMULARIO 360 ---
-    const { data, setData, post, put, processing, errors } = useForm({
+function datosFormularioCliente(clienteActual) {
+    return {
         numero_cliente: soloDigitosNumeroCliente(clienteActual?.numero_cliente || ''),
         nombre: clienteActual?.nombre || '',
         vendedor_id: clienteActual?.vendedor_id || '',
@@ -76,8 +71,28 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
         pais_contacto: clienteActual?.pais_contacto || '',
         cp_contacto: clienteActual?.cp_contacto || '',
         telefono: clienteActual?.telefono || '',
+        es_inactivo: clienteActual?.es_inactivo === 1 || clienteActual?.es_inactivo === true,
         correccion_emergencia: false,
-    });
+    };
+}
+
+export default function ModalFormCliente({ onClose, modoModal, clienteActual, tiposCliente = [], vendedores = [], listas = [] }) {
+    const { auth } = usePage().props;
+    const puedeCorreccionEmergencia = auth?.user?.permissions?.includes('clientes.correccion_emergencia') ?? false;
+    const puedeCorregirModalidad = auth?.user?.permissions?.includes('clientes.corregir_modalidad') || auth?.user?.roles?.includes('Super Admin');
+    const puedeEditarCredito = auth?.user?.permissions?.includes('cobranza.editar_credito') || auth?.user?.roles?.includes('Super Admin');
+    const puedeEditarMontoOficial = auth?.user?.permissions?.includes('clientes.editar') || auth?.user?.roles?.includes('Super Admin');
+    const [confirmarCierre, setConfirmarCierre] = useState(false);
+    const [modalidadPendiente, setModalidadPendiente] = useState(false);
+    const inicial = useMemo(() => datosFormularioCliente(clienteActual), [clienteActual]);
+    const { data, setData, post, put, processing, errors } = useForm(inicial);
+    const sucio = formularioClienteSucio(data, inicial) || modalidadPendiente;
+    const pedirCerrar = () => {
+        if (confirmarCierre) return;
+        if (sucio) setConfirmarCierre(true);
+        else onClose();
+    };
+    const dialogRef = useClienteDialog(pedirCerrar);
 
     const alertaIntercambio = useMemo(() => {
         if (nombrePareceNumero(data.nombre)) {
@@ -100,10 +115,11 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
     };
 
     return createPortal(
-        <div className="clientes-form fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={onClose}>
+        <>
+        <div className="clientes-form fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-xl animate-fade-in" onClick={pedirCerrar}>
             <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="cliente-form-title" tabIndex={-1} className="clientes-form-shell w-full max-w-xl theme-surface theme-border border shadow-2xl rounded-[2.5rem] p-8 md:p-10 flex flex-col space-y-6 relative modal-pop max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
                 
-                <button type="button" aria-label="Cerrar formulario de cliente" onClick={onClose} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main rounded-full transition-colors outline-none">
+                <button type="button" aria-label="Cerrar formulario de cliente" onClick={pedirCerrar} className="absolute top-5 right-5 p-2 theme-text-muted hover:theme-text-main rounded-full transition-colors outline-none">
                     <X className="w-5 h-5" />
                 </button>
                 
@@ -179,15 +195,20 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                     <input id="cliente-monto_venta_actual" name="monto_venta_actual"
                                         type="number" 
                                         step="0.01"
-                                        value={data.monto_venta_actual} 
-                                        readOnly
+                                        value={data.monto_venta_actual}
+                                        onChange={e => puedeEditarMontoOficial && setData('monto_venta_actual', e.target.value)}
+                                        readOnly={!puedeEditarMontoOficial}
                                         aria-describedby="cliente-monto_venta_actual-ayuda"
-                                        className="w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm"
+                                        className={`w-full px-5 py-3.5 theme-surface border theme-border rounded-xl font-bold text-sm theme-text-main outline-none focus:ring-2 transition-all shadow-sm ${!puedeEditarMontoOficial ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         style={{ '--tw-ring-color': 'var(--color-primario)' }}
-                                        onFocus={e => e.target.style.borderColor = 'var(--color-primario)'}
+                                        onFocus={e => puedeEditarMontoOficial && (e.target.style.borderColor = 'var(--color-primario)')}
                                         onBlur={e => e.target.style.borderColor = ''}
                                     />
-                                    <p id="cliente-monto_venta_actual-ayuda" className="m-0 text-[10px] theme-text-muted">Monto oficial: solo cambia con la importación de Wizerp.</p>
+                                    <p id="cliente-monto_venta_actual-ayuda" className="m-0 text-[10px] theme-text-muted">
+                                        {puedeEditarMontoOficial
+                                            ? 'Corrección manual del monto oficial. Una importación posterior puede reemplazarlo.'
+                                            : 'Monto oficial: solo cambia con la importación de Wizerp.'}
+                                    </p>
                                 </div>
                                 <div className="space-y-2">
                                     <label htmlFor="cliente-lista_actual_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Lista de Descuento</label>
@@ -276,7 +297,7 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                         {/* --- BLOQUE 3: ASIGNACIÓN Y SEGURIDAD --- */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              <div className="space-y-2">
-                                <label htmlFor="cliente-vendedor_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Vendedora_</label>
+                                <label htmlFor="cliente-vendedor_id" className="text-[9px] font-black uppercase theme-text-muted tracking-widest ml-1">Asignación</label>
                                 <div className="relative">
                                     <select id="cliente-vendedor_id" name="vendedor_id"
                                         value={data.vendedor_id} 
@@ -473,11 +494,22 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                                 </div>
                             </button>
 
-                            <div className="p-4 theme-element border theme-border rounded-xl">
-                                <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block">Estado comercial</span>
-                                <span className="text-[11px] theme-text-muted">{clienteActual ? (clienteActual.es_inactivo ? 'Inactivo' : 'Activo') : 'Sin sincronizar'} · El estado comercial llega por importación o por una autorización</span>
-                            </div>
-                            {clienteActual && puedeCorregirModalidad && <CorreccionModalidad cliente={clienteActual} />}
+                            <button type="button" role="switch" aria-checked={!data.es_inactivo} disabled={!puedeEditarMontoOficial}
+                                className={`p-4 theme-element border theme-border rounded-xl flex items-center justify-between transition-all ${puedeEditarMontoOficial ? 'cursor-pointer hover:shadow-md' : 'cursor-not-allowed opacity-70'}`}
+                                style={{ borderColor: !data.es_inactivo && puedeEditarMontoOficial ? 'var(--color-primario)' : '' }}
+                                onClick={() => puedeEditarMontoOficial && setData('es_inactivo', !data.es_inactivo)}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div>
+                                        <span className="text-[11px] font-black theme-text-main uppercase tracking-widest block leading-tight">Estado comercial: {data.es_inactivo ? 'Inactivo' : 'Activo'}</span>
+                                        <span className="text-[9px] font-bold theme-text-muted uppercase">La importación lo actualiza. Un cambio manual corrige un error hasta la siguiente importación.</span>
+                                    </div>
+                                </div>
+                                <div className="gelia-switch shrink-0 pointer-events-none" data-active={!data.es_inactivo}>
+                                    <div className="gelia-switch-thumb shadow-md" />
+                                </div>
+                            </button>
+                            {clienteActual && puedeCorregirModalidad && <CorreccionModalidad cliente={clienteActual} onPendiente={setModalidadPendiente} />}
                         </div>
                     </div>
 
@@ -486,7 +518,16 @@ export default function ModalFormCliente({ onClose, modoModal, clienteActual, ti
                     </button>
                 </form>
             </div>
-        </div>,
+        </div>
+        <ModalConfirmarAccion
+            abierto={confirmarCierre}
+            titulo="Hay cambios sin guardar"
+            mensaje="Puede seguir editando o cerrar y descartar lo que no se guardó."
+            etiquetaConfirmar="Cerrar sin guardar"
+            onClose={() => setConfirmarCierre(false)}
+            onConfirm={onClose}
+        />
+        </>,
         document.body
     );
 }

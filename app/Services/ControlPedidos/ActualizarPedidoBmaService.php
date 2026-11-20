@@ -257,6 +257,8 @@ class ActualizarPedidoBmaService
                 );
             }
 
+            $pedido = $pedido->fresh();
+            app(Nacional\GuardarMercanciaNacional::class)->ejecutar($pedido, $datos, $usuarioId);
             $pedido->increment('revision_registro');
             return $pedido->fresh(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'cajas.tipoCaja', 'cajas.tipoGuia', 'direccionVigente', 'sucursalDestino']);
         });

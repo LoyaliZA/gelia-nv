@@ -191,6 +191,11 @@ trait ResuelveDatosPedidoBma
             )?->id ?? CatalogoTipoOperacionEnvio::idNormal();
         }
 
+        if (($datos['solicitud_preparacion']['modalidad_entrega'] ?? null) === 'nacional'
+            && ($datos['solicitud_preparacion']['captura_nacional'] ?? null) === 'compartida') {
+            return CatalogoTipoOperacionEnvio::idNormal();
+        }
+
         // No resguardo: nunca persistir tipos de resguardo aunque el FE envíe id viejo.
         if (array_key_exists('costo_transporte', $datos)) {
             $paqueteria = CatalogoPaqueteriaPedido::find($datos['catalogo_paqueteria_id'] ?? null);
@@ -250,8 +255,16 @@ trait ResuelveDatosPedidoBma
             $datos['costo_envio'] = null;
         }
 
+        $pendienteNacional = ($datos['solicitud_preparacion']['captura_nacional'] ?? null) === 'compartida'
+            && ($datos['solicitud_preparacion']['modalidad_entrega'] ?? null) === 'nacional'
+            && CatalogoPaqueteriaPedido::find($datos['catalogo_paqueteria_id'] ?? null)?->esPendienteConfirmacion();
+        if ($pendienteNacional) {
+            $datos['costo_envio'] = null;
+            $datos['aplica_seguro'] = false;
+            $datos['costo_seguro'] = null;
+        }
         $costoVacio = ! isset($datos['costo_envio']) || $datos['costo_envio'] === '' || $datos['costo_envio'] === null;
-        if (! $clienteProporcionaGuia && ! $envioPorCobrar && $costoVacio && ! empty($datos['catalogo_paqueteria_id'])) {
+        if (! $pendienteNacional && ! $clienteProporcionaGuia && ! $envioPorCobrar && $costoVacio && ! empty($datos['catalogo_paqueteria_id'])) {
             $paqTarifa = CatalogoPaqueteriaPedido::find($datos['catalogo_paqueteria_id']);
             $pesoTarifa = isset($datos['peso_cobrado_guia_kg']) && $datos['peso_cobrado_guia_kg'] !== '' && $datos['peso_cobrado_guia_kg'] !== null
                 ? (float) $datos['peso_cobrado_guia_kg']

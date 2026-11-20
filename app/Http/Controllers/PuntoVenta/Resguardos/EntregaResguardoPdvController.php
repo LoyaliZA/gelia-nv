@@ -31,7 +31,9 @@ class EntregaResguardoPdvController extends Controller
             (string) $datos['metodo_validacion'],
             $request->file('firma'),
             isset($datos['observaciones']) ? (string) $datos['observaciones'] : null,
-            $request->file('evidencias', []) ?? [],
+            array_values(array_filter(
+                is_array($request->file('evidencias')) ? $request->file('evidencias') : [$request->file('evidencias')],
+            )),
             isset($datos['bulto_ids']) ? array_map('intval', $datos['bulto_ids']) : null,
         );
 

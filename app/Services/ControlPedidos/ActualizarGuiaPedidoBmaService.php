@@ -17,6 +17,8 @@ class ActualizarGuiaPedidoBmaService
 
     public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
     {
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
         $guia = trim($numeroRastreo);
 
         if ($guia === '') {
@@ -32,6 +34,11 @@ class ActualizarGuiaPedidoBmaService
         }
 
         return DB::transaction(function () use ($pedido, $guia, $usuarioId) {
+            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+            }
+
             $anterior = $pedido->numero_rastreo;
 
             $attrsCola = [];

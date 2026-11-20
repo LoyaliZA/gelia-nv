@@ -27,6 +27,13 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
      */
     public function rules(): array
     {
+        if ($this->resguardoNacional()) {
+            return [
+                'version' => ['required', 'integer', 'min:1'],
+                'idempotency_key' => ['required', 'string', 'max:64'],
+            ];
+        }
+
         return [
             'condicion' => ['required', 'in:bueno,regular,malo,danado'],
             'observacion' => ['nullable', 'string', 'max:2000'],
@@ -60,5 +67,12 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
         }
 
         return $datos;
+    }
+
+    private function resguardoNacional(): bool
+    {
+        $resguardo = $this->route('resguardo');
+
+        return $resguardo instanceof ResguardoPdv && $resguardo->esOrigenNacional();
     }
 }

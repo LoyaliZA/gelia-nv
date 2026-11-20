@@ -22,6 +22,7 @@ export const DESCRIPCIONES_PERMISOS = {
     'solicitudes.consultar': 'Permiso legado de consulta TAG/lista (usar emitir/responder consulta).',
     'clientes.ver': 'Permite consultar el catálogo de clientes.',
     'clientes.crear': 'Permite registrar clientes manualmente.',
+    'clientes.editar': 'Permite corregir el monto oficial, la lista y el estado comercial de un cliente desde administración.',
     'clientes.carga_masiva': 'Permite importar clientes de forma masiva.',
     'mis_clientes.gestionar': 'Permite ver la cartera propia y registrar clientes en Mis Clientes.',
     'visitas_programadas.gestionar': 'Permite registrar y consultar visitas programadas de clientes a sucursal.',
@@ -761,6 +762,7 @@ export const SUBMODULOS_UI_POR_MODULO = {
             permisos: [
                 'clientes.ver',
                 'clientes.crear',
+                'clientes.editar',
                 'clientes.carga_masiva',
                 'clientes.correccion_emergencia',
                 'clientes.limpieza',

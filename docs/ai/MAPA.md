@@ -14,7 +14,7 @@
 - [Invariantes](INVARIANTES.md) · [Glosario](GLOSARIO.md) · [Pruebas](PRUEBAS.md) · [Estado](ESTADO.md).
 - [verificado] Entrada de rutas del área: `routes/web/modules/control-pedidos/index.php:3`.
 - [verificado] M-02 P0 convierte el mismo `PedidoBma` de Tienda a Municipal solo antes del primer cierre; la consulta heredada abierta sigue bloqueando exhibiciones: `modulos/ENVIO_MUNICIPAL.md`.
-- Última verificación: 2026-11-20, corrección integral de resguardos municipales (ver modulos/ENVIO_MUNICIPAL.md).
+- Última verificación: 2026-11-20, captura nacional, consulta CEDIS y cobertura de paquetería pendiente (ver Registro, Consultas y Auditoría).
 - Alcance: dependencias de PDV, Traspasos, Clientes, SAF y reportes; sus módulos completos quedan fuera de esta auditoría.
 - `[verificado]`: lectura de código/documento citado; no implica prueba ejecutada. `[inferido]`: consecuencia razonada; confirmar antes de cambiar comportamiento.
 - Las referencias `ruta:línea` parten de la raíz del repositorio. Las decisiones explícitas posteriores del usuario prevalecen.

@@ -130,7 +130,57 @@ class ClienteUpdateSwappedTest extends TestCase
         $datos = ['numero_cliente' => '990055', 'nombre' => 'Nombre corregido', 'lista_actual_id' => $lista->id];
         $this->actingAs($this->admin())->put(route('admin.clientes.update', $cliente), $datos)->assertSessionHasNoErrors();
         $this->assertTrue($cliente->fresh()->es_inactivo);
-        $this->put(route('admin.clientes.update', $cliente), $datos + ['es_inactivo' => false])->assertSessionHasErrors('es_inactivo');
-        $this->assertTrue($cliente->fresh()->es_inactivo);
+        $this->put(route('admin.clientes.update', $cliente), $datos + ['es_inactivo' => false])->assertSessionHasNoErrors();
+        $this->assertTrue($cliente->fresh()->es_inactivo, 'Sin clientes.editar el estado comercial no cambia.');
+    }
+
+    public function test_super_admin_persiste_monto_oficial(): void
+    {
+        Permission::findOrCreate('clientes.ver', 'web');
+        Permission::findOrCreate('clientes.editar', 'web');
+        $role = Role::findOrCreate('Super Admin', 'web');
+        $user = User::factory()->create();
+        $user->assignRole($role);
+
+        $lista = $this->listaPg();
+        $cliente = Cliente::create([
+            'numero_cliente' => '990066',
+            'nombre' => 'Cliente monto',
+            'lista_actual_id' => $lista->id,
+            'monto_venta_actual' => 1000,
+        ]);
+
+        $this->actingAs($user)->put(route('admin.clientes.update', $cliente), [
+            'numero_cliente' => '990066',
+            'nombre' => 'Cliente monto',
+            'monto_venta_actual' => 2500.5,
+            'lista_actual_id' => $lista->id,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('2500.50', $cliente->fresh()->monto_venta_actual);
+    }
+
+    public function test_super_admin_corrige_estado_comercial(): void
+    {
+        Permission::findOrCreate('clientes.ver', 'web');
+        Permission::findOrCreate('clientes.editar', 'web');
+        $user = User::factory()->create();
+        $user->assignRole(Role::findOrCreate('Super Admin', 'web'));
+        $lista = $this->listaPg();
+        $cliente = Cliente::create([
+            'numero_cliente' => '990077',
+            'nombre' => 'Cliente inactivo',
+            'lista_actual_id' => $lista->id,
+            'es_inactivo' => true,
+        ]);
+
+        $this->actingAs($user)->put(route('admin.clientes.update', $cliente), [
+            'numero_cliente' => '990077',
+            'nombre' => 'Cliente inactivo',
+            'lista_actual_id' => $lista->id,
+            'es_inactivo' => false,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertFalse($cliente->fresh()->es_inactivo);
     }
 }

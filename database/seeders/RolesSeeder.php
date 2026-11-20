@@ -26,6 +26,7 @@ class RolesSeeder extends Seeder
             'solicitudes.eliminar',
             'clientes.ver',
             'clientes.crear',
+            'clientes.editar',
             'clientes.carga_masiva',
             'mis_clientes.gestionar',
             'clientes.correccion_emergencia',

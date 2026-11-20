@@ -9,7 +9,7 @@ function idsDocumentosAnexo(anexo) {
 }
 
 export function unidadRevisionId(tipo, linea = {}, clase = 'sku', documentoId = null, pieza = {}, indice = null) {
-    const ancla = linea.solicitud_id || linea.linea_id || '';
+    const ancla = linea.linea_id || linea.solicitud_id || '';
     if (documentoId) return ancla ? `${tipo}:${ancla}:doc:${documentoId}` : `${tipo}:doc:${documentoId}`;
     const revision = pieza.revision_id || linea.sustituye_revision_id;
     if (revision) return ancla ? `${tipo}:${ancla}:rev:${revision}` : `${tipo}:rev:${revision}`;
@@ -29,6 +29,22 @@ function idCanonico(linea, documentoId, calculado) {
 
 function persistidaDe(linea, unidadId) {
     return (linea.unidades || []).find((unidad) => unidad?.unidad_id === unidadId);
+}
+
+/** Reconciliación de una identidad provisional con la misma línea/documento ya materializados. */
+export function equivalenciasUnidades(anteriores, actuales) {
+    const equivalencias = new Map();
+    for (const anterior of anteriores) {
+        if (anteriores.filter(c => c.clave === anterior.clave).length !== 1) continue;
+        if (actuales.some(c => c.clave === anterior.clave)) continue;
+        const candidatas = actuales.filter(c => c.tipo === anterior.tipo
+            && Number(c.documento_id || 0) === Number(anterior.documento_id || 0)
+            && (anterior.linea_id && c.linea_id ? anterior.linea_id === c.linea_id
+                : c.indice === anterior.indice && (!anterior.solicitud_id || anterior.solicitud_id === c.solicitud_id))
+            && (anterior.esDocumento || c.sku === anterior.sku));
+        if (candidatas.length === 1) equivalencias.set(anterior.clave, candidatas[0]);
+    }
+    return equivalencias;
 }
 
 function anexoPendienteRevision(anexo) {
@@ -52,6 +68,21 @@ export function revisionesDelCicloEnCurso(solicitud = {}) {
     return ids;
 }
 
+export function revisionesNoEnviadasTienda(solicitud = {}) {
+    const ids = new Set();
+    if (solicitud.modalidad_entrega !== 'tienda' || solicitud.area_revision !== 'preparacion_tienda') return ids;
+    for (const anexo of solicitud.anexo_sin_remision || []) {
+        for (const unidad of anexo.unidades || []) {
+            const vigentes = unidad.resultado === 'incidencia' ? (unidad.revision_ids || []).map(Number) : [];
+            for (const [id, origen] of Object.entries(solicitud.revision_origenes || {})) {
+                if (origen === unidad.unidad_id && (anexoPendienteRevision(anexo) || !vigentes.includes(Number(id)))) ids.add(Number(id));
+            }
+            if (anexoPendienteRevision(anexo)) for (const id of unidad.revision_ids || []) ids.add(Number(id));
+        }
+    }
+    return ids;
+}
+
 /** El ciclo vigente es lo pedido después de la última respuesta; lo anterior queda en historial. */
 export function cambioDelCicloActual(cambio, solicitud = {}) {
     const corte = solicitud.revision_disponibilidad?.respondida_at;
@@ -67,7 +98,7 @@ export function cambioDelCicloActual(cambio, solicitud = {}) {
 export function esRespuestaAlmacen(cambio) {
     if (cambio.tipo === 'confirmacion') return true;
     if (cambio.tipo === 'retiro') return false;
-    return Boolean(!cambio.pendiente && (cambio.resultado || cambio.respondida_at));
+    return Boolean(!cambio.avance_pendiente && !cambio.pendiente && (cambio.resultado || cambio.respondida_at));
 }
 
 /** Ventas ve respuestas abiertas y solicitudes contraídas; CEDIS/Tienda ve el ciclo pedido abierto. */
@@ -80,9 +111,11 @@ export function particionarCambiosConsulta(cambios, solicitud = {}, vista = 'ven
     return { actuales, anteriores: cambios.filter((cambio) => !esRespuestaAlmacen(cambio)) };
 }
 
-function ficha(linea, extra) {
+function ficha(linea, extra, tienda = false) {
     const guardada = persistidaDe(linea, extra.unidad_id);
     const retiro = extra.tipo === 'retiro';
+    // El envío pertenece al anexo original; la fecha de una unidad solo acredita su avance.
+    const avancePendiente = tienda && anexoPendienteRevision(linea);
     const atendida = retiro
         || linea.pendiente_revision === false
         || ['disponible', 'con_detalle', 'rechazado'].includes(linea.estado)
@@ -95,12 +128,16 @@ function ficha(linea, extra) {
         persistida: Boolean(guardada?.resultado) || (atendida && !guardada),
         pendiente: retiro ? false : !resultado,
         respuesta_cambio: resultado || linea.respuesta_cambio,
-        respondida_at: guardada?.respondida_at || (resultado ? linea.respondida_at : null),
-        respondida_por: guardada?.respondida_por,
+        avance_pendiente: avancePendiente,
+        guardada_at: guardada?.respondida_at,
+        guardada_por: guardada?.respondida_por,
+        respondida_at: tienda ? linea.respondida_at || (!avancePendiente ? guardada?.respondida_at : null) : guardada?.respondida_at || (resultado ? linea.respondida_at : null),
+        respondida_por: tienda ? linea.respondida_por || (!avancePendiente ? guardada?.respondida_por : null) : guardada?.respondida_por,
     };
 }
 
 export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
+    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
     const decisiones = Object.values(solicitud.acciones_disponibilidad || {});
     const corte = solicitud.revision_disponibilidad?.respondida_at;
     const anexos = (solicitud.anexo_sin_remision || []).flatMap((a, indice) => {
@@ -114,7 +151,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
                     clave: unidad_id, unidad_id, tipo: 'anexo', clase: 'captura', indice,
                     documento_id: documento.id, documentos: [documento], esDocumento: true, retirada,
                     sku: a.sku, descripcion: a.descripcion, cantidad: a.cantidad,
-                });
+                }, tienda);
             });
         }
         const esDocumento = a.entrada === 'documento';
@@ -122,7 +159,7 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         return [ficha(a, {
             clave: unidad_id, unidad_id, tipo: 'anexo', clase: esDocumento ? 'captura' : 'sku', indice,
             documentos: [], esDocumento, retirada,
-        })];
+        }, tienda)];
     });
     const retiros = (solicitud.retiro_piezas || []).flatMap((r, indice) => {
         const docs = (r.documentos_piezas || []).map(d => documentoDe(documentos, d.id) || (d.url ? d : null)).filter(Boolean);

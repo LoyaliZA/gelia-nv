@@ -6,10 +6,19 @@ import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import { esTransferenciaDocumental } from '../../Partials/SeguimientoTransferenciaTienda';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
+import { uuidSolicitud } from '../../../../utils/uuidSolicitud';
+import {
+    cambioATiendaNacional,
+    integracionFisicaPendiente,
+    piezasComplementoNacional,
+    sucursalRecoleccionNacional,
+    vinculoFisicoNacional,
+} from '../../Nacional/superficieNacional';
 import ListaProductosOk from '../../Partials/ListaProductosOk';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import NavegacionPedido from '../../Partials/NavegacionPedido';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import axios from 'axios';
 import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
 import {
@@ -57,7 +66,7 @@ import ModalAlertaPedido from '../../Partials/ModalAlertaPedido';
 import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import ListaErroresPedido from '../../Partials/ListaErroresPedido';
-import { THEME_INPUT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
+import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA } from '../../../../utils/geliaTheme';
 import useDispositivoCampo from '../../../Activos/Partials/useDispositivoCampo';
 
 const SECCION = `${THEME_LABEL} mb-3 block`;
@@ -92,6 +101,9 @@ export default function ModalDetalleCedis({
     const [seleccionEnvios, setSeleccionEnvios] = useState({});
     const [guiasEnvio, setGuiasEnvio] = useState({});
     const [revisionExistenciasId, setRevisionExistenciasId] = useState(null);
+    const [respuestasComplemento, setRespuestasComplemento] = useState({});
+    const [errorComplemento, setErrorComplemento] = useState('');
+    const claveComplemento = useRef(uuidSolicitud());
     const { esCampo } = useDispositivoCampo();
 
     useEffect(() => {
@@ -172,9 +184,13 @@ export default function ModalDetalleCedis({
     const esEmpacado = esPedidoEmpacadoCedis(fase);
     const haySinExAbierta = revisiones.some(revisionSinExistenciaAbierta);
     const actualizacionMercanciaPendiente = Boolean(pedido.consulta_actualizacion_pendiente);
-    const puedeEmpacar = !esTransferenciaDocumental(pedido) && (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta && !actualizacionMercanciaPendiente;
+    const recolectaSucursal = cambioATiendaNacional(pedido);
+    const vinculoDato = vinculoFisicoNacional(pedido);
+    const esperaIntegracion = integracionFisicaPendiente(pedido);
+    const hijosComplemento = piezasComplementoNacional(pedido);
+    const puedeEmpacar = !esTransferenciaDocumental(pedido) && (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.es_resguardo && !haySinExAbierta && !actualizacionMercanciaPendiente && !recolectaSucursal && !esperaIntegracion;
     const puedeReportarSinEx = (fase === 'EN_CEDIS' || fase === 'INCIDENCIA_CEDIS') && !pedido.empacado_at;
-    const puedeMarcarEnviado = !esTransferenciaDocumental(pedido) && fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente;
+    const puedeMarcarEnviado = !esTransferenciaDocumental(pedido) && fase === 'PENDIENTE_DE_ENVIO' && Boolean(puedeEnviar) && !actualizacionMercanciaPendiente && !recolectaSucursal && !esperaIntegracion;
     const puedeReabrirEnvio = fase === 'ENVIADO' && Boolean(puedeReabrir);
     const cajasPendientes = cajasOrdenadas.filter((c) => (c.estatus_recoleccion || 'pendiente') === 'pendiente');
     const cajasRecolectadasCount = pedido.cajas_recolectadas
@@ -445,7 +461,7 @@ export default function ModalDetalleCedis({
                                 )}
                                 {fase === 'PENDIENTE_GUIA_CLIENTE' && (
                                     <AvisoOperativoPedido label="Estatus" tono="info">
-                                        Esperando guía del cliente (vendedora). No liberar el paquete hasta que cargue la guía.
+                                        Esperando guía del cliente (Ventas). No liberar el paquete hasta que cargue la guía.
                                     </AvisoOperativoPedido>
                                 )}
                                 {fase === 'PENDIENTE_DE_ENVIO' && (
@@ -472,7 +488,7 @@ export default function ModalDetalleCedis({
                                         : 'No incluir nota de compra (dropshipping)'}
                                 </AvisoOperativoPedido>
                                 )}
-                                {mostrarGuia && (
+                                {mostrarGuia && !recolectaSucursal && !esperaIntegracion && (
                                     <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
                                 )}
                             </div>
@@ -511,6 +527,100 @@ export default function ModalDetalleCedis({
                         ))}
 
                         <ConsultaSolicitudTienda pedido={pedido} operarTransferencia onTransferenciaActualizada={avance => setPedido(actual => ({ ...actual, estatus: avance.estatus, estatus_sucursal: avance.estatus_sucursal, empacado_at: avance.empacado_at, solicitud_preparacion: avance.solicitud_preparacion || actual.solicitud_preparacion }))} />
+                        {recolectaSucursal && (
+                            <AvisoOperativoPedido tono="warning" icon={PackageCheck}>
+                                No despachar por paquetería. Recolección en {sucursalRecoleccionNacional(pedido) || 'sucursal'}.
+                            </AvisoOperativoPedido>
+                        )}
+                        {hijosComplemento.length > 0 && (
+                            <section className={`${SECCION_WRAP} gelia-pedidos-seccion`} aria-label="Piezas del complemento nacional">
+                                <h3 className="gelia-pedidos-seccion-titulo mb-3">Piezas del complemento</h3>
+                                <div className="space-y-3">
+                                    {hijosComplemento.map((hijo) => (
+                                        <div key={hijo.id} className="space-y-2">
+                                            <p className="text-xs font-semibold theme-text-muted m-0">{hijo.folio}{hijo.folio_remision ? ` · ${hijo.folio_remision}` : ''}</p>
+                                            {(hijo.revisiones_producto || hijo.revisionesProducto || []).map((pieza) => {
+                                                const docs = (hijo.documentos || []).filter((d) => d.relacion_tipo === 'revision_producto' && String(d.relacion_id) === String(pieza.id));
+                                                const respondida = pieza.cantidad_encontrada != null;
+                                                const valor = respuestasComplemento[pieza.id] || {
+                                                    cantidad_encontrada: pieza.cantidad_encontrada ?? pieza.cantidad_solicitada ?? 0,
+                                                    estado_fisico: pieza.estado_fisico || 'bueno',
+                                                };
+                                                return (
+                                                    <div key={pieza.id} className="p-3 rounded-xl border theme-border space-y-2">
+                                                        <p className="text-sm font-bold theme-text-main m-0">{pieza.sku ? `${pieza.sku} · ` : ''}{pieza.descripcion_producto} · {pieza.cantidad_solicitada}</p>
+                                                        {docs.map((doc) => (
+                                                            <button key={doc.id} type="button" className={`${BTN_SECONDARY} min-h-[44px]`} onClick={() => setDocPreview({ documentos: [doc], indice: 0 })}>
+                                                                {doc.nombre_original || 'Evidencia'}
+                                                            </button>
+                                                        ))}
+                                                        {respondida ? (
+                                                            <p className="text-sm theme-text-main m-0">Encontradas: {pieza.cantidad_encontrada} · {pieza.estado_fisico}</p>
+                                                        ) : (
+                                                            <div className="grid gap-2 sm:grid-cols-2">
+                                                                <label className={THEME_LABEL} htmlFor={`comp-cant-${pieza.id}`}>Cantidad encontrada
+                                                                    <input id={`comp-cant-${pieza.id}`} className={`${THEME_INPUT} w-full min-h-[44px] mt-1`} inputMode="numeric" value={valor.cantidad_encontrada} onChange={(evento) => setRespuestasComplemento((actual) => ({ ...actual, [pieza.id]: { ...valor, cantidad_encontrada: evento.target.value } }))} />
+                                                                </label>
+                                                                <label className={THEME_LABEL} htmlFor={`comp-est-${pieza.id}`}>Estado
+                                                                    <select id={`comp-est-${pieza.id}`} className={`${THEME_SELECT} w-full min-h-[44px] mt-1`} value={valor.estado_fisico} onChange={(evento) => setRespuestasComplemento((actual) => ({ ...actual, [pieza.id]: { ...valor, estado_fisico: evento.target.value } }))}>
+                                                                        <option value="bueno">Bueno</option>
+                                                                        <option value="regular">Regular</option>
+                                                                        <option value="malo">Malo</option>
+                                                                        <option value="danado">Dañado</option>
+                                                                        <option value="sin_existencia">Sin existencias</option>
+                                                                    </select>
+                                                                </label>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className={`${BTN_PRIMARY} min-h-[44px]`}
+                                        disabled={procesando}
+                                        onClick={async () => {
+                                            const pendientes = hijosComplemento.flatMap((hijo) => (hijo.revisiones_producto || hijo.revisionesProducto || [])
+                                                .filter((pieza) => pieza.cantidad_encontrada == null)
+                                                .map((pieza) => {
+                                                    const valor = respuestasComplemento[pieza.id] || {
+                                                        cantidad_encontrada: pieza.cantidad_solicitada ?? 0,
+                                                        estado_fisico: pieza.estado_fisico || 'bueno',
+                                                    };
+                                                    return {
+                                                        revision_id: pieza.id,
+                                                        cantidad_encontrada: Number(valor.cantidad_encontrada),
+                                                        estado_fisico: valor.estado_fisico,
+                                                    };
+                                                }));
+                                            if (!pendientes.length) return;
+                                            setProcesando(true);
+                                            setErrorComplemento('');
+                                            try {
+                                                await axios.post(`/control-pedidos/cedis/${pedido.id}/responder-complemento-nacional`, {
+                                                    solicitud_id: claveComplemento.current,
+                                                    piezas: pendientes,
+                                                    revision_esperada: pedido.revision_registro,
+                                                    base_captura: pedido.base_captura,
+                                                }, { headers: { Accept: 'application/json' } });
+                                                claveComplemento.current = uuidSolicitud();
+                                                setAlerta({ abierto: true, tipo: 'success', titulo: 'Complemento', mensaje: 'Se registró la respuesta de las piezas del complemento.' });
+                                                router.reload({ preserveScroll: true });
+                                            } catch (fallo) {
+                                                setErrorComplemento(fallo?.response?.data?.message || 'No se registró la respuesta del complemento.');
+                                            } finally {
+                                                setProcesando(false);
+                                            }
+                                        }}
+                                    >
+                                        Registrar respuesta del complemento
+                                    </button>
+                                    {errorComplemento && <p className="text-sm theme-text-aviso m-0" role="alert">{errorComplemento}</p>}
+                                </div>
+                            </section>
+                        )}
                         {!esCapturaTienda(pedido) && tieneRevisionFisica && (
                             <section id="cedis-revision" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                                 <h3 className="gelia-pedidos-seccion-titulo mb-3">{esTienda ? 'Registro de productos' : 'Revisión física'}</h3>
@@ -944,6 +1054,42 @@ export default function ModalDetalleCedis({
                                 className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
                             >
                                 <PackageCheck className="w-4 h-4" /> Marcar apartado
+                            </button>
+                        )}
+                        {vinculoDato?.vinculo?.estado === 'en_traslado' && (
+                            <button
+                                type="button"
+                                disabled={procesando}
+                                onClick={async () => {
+                                    setProcesando(true);
+                                    try {
+                                        await axios.post(`/control-pedidos/cedis/${vinculoDato.pedidoId}/custodia-nacional`, { accion: 'recepcion' }, { headers: { Accept: 'application/json' } });
+                                        router.reload({ preserveScroll: true });
+                                    } finally {
+                                        setProcesando(false);
+                                    }
+                                }}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
+                            >
+                                Confirmar recepción
+                            </button>
+                        )}
+                        {vinculoDato?.vinculo?.estado === 'recibido_cedis' && vinculoDato?.vinculo?.integrado !== true && (
+                            <button
+                                type="button"
+                                disabled={procesando}
+                                onClick={async () => {
+                                    setProcesando(true);
+                                    try {
+                                        await axios.post(`/control-pedidos/cedis/${vinculoDato.pedidoId}/custodia-nacional`, { accion: 'liberar' }, { headers: { Accept: 'application/json' } });
+                                        router.reload({ preserveScroll: true });
+                                    } finally {
+                                        setProcesando(false);
+                                    }
+                                }}
+                                className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto`}
+                            >
+                                Liberar integración
                             </button>
                         )}
                         {puedeMarcarEnviado && (

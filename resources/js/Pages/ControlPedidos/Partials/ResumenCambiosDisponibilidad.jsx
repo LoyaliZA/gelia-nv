@@ -34,7 +34,7 @@ export default function ResumenCambiosDisponibilidad({ solicitud = {}, documento
                     <button type="button" className={GELIA_BTN_OUTLINE} aria-pressed={estado === 'correcto'} disabled={disabled} onClick={() => onResponder?.(cambio, 'correcto')}><CheckCircle2 size={16} aria-hidden />Todo OK</button>
                     <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'detalle')}><AlertTriangle size={16} aria-hidden />{cambio.esDocumento ? 'Registrar detalle' : 'Con detalle'}</button>
                     {!cambio.esDocumento && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'faltante')}><PackageX size={16} aria-hidden />Sin existencias</button>}
-                </div> : <p className="consulta-cambio-estado">{retiro ? 'Informe de retiro' : estado === 'incidencia' || cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' || cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respondida_at ? 'Respuesta registrada' : 'Pendiente de revisión'}</p>}
+                </div> : <p className="consulta-cambio-estado">{retiro ? 'Informe de retiro' : vista === 'ventas' && cambio.avance_pendiente ? 'Pendiente de revisión' : estado === 'incidencia' || cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' || cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respondida_at ? 'Respuesta registrada' : 'Pendiente de revisión'}</p>}
             </div>
         </article>;
     };

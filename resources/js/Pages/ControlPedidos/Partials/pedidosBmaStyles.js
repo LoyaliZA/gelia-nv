@@ -1,5 +1,6 @@
 import { esRegistroMunicipal } from '../Municipal/terminalMunicipal';
 import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
+import { anexosPendientesRevision } from './cambiosDisponibilidad';
 import {
     THEME_BTN_PRIMARY,
     THEME_BTN_SECONDARY,
@@ -144,7 +145,9 @@ export const estadoConsultaPedido = (pedido) => {
         || Boolean(pedido.pesaje_respondido_at)
         || ['pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio)
         || fase === 'PESAJE_RESPONDIDO';
-    return pedido.consulta_actualizacion_pendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
+    const actualizacionTiendaPendiente = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda'
+        && (solicitud.revision_disponibilidad?.actualizacion_pendiente || anexosPendientesRevision(solicitud));
+    return pedido.consulta_actualizacion_pendiente || actualizacionTiendaPendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
 };
 
 export const apartadoConfirmadoPedido = (pedido) => Boolean(pedido && (
@@ -1318,11 +1321,17 @@ export const pedidoModoRevisionMercancia = (pedido, paqueteria, requiereLogistic
 };
 
 /** Misma regla que PedidoBma::consultaCedisModoRevisionMercancia. */
-export const cedisConsultaEsRevisionMercancia = (pedido) => pedidoModoRevisionMercancia(
+export const cedisConsultaEsRevisionMercancia = (pedido) => {
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'nacional'
+        && pedido.solicitud_preparacion.captura_nacional === 'compartida') {
+        return pedido.consulta_cedis_modo_revision_mercancia === true;
+    }
+    return pedidoModoRevisionMercancia(
     pedido,
     pedido?.paqueteria,
     !(pedido?.es_consulta_mercancia || pedido?.origen?.requiere_logistica === false),
 ) || pedido?.consulta_cedis_modo_revision_mercancia === true;
+};
 
 /**
  * Terminología contextual de empaque en consulta CEDIS (QF-01).

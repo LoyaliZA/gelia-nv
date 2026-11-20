@@ -50,6 +50,7 @@ class ConsultaFormularioEntregaResguardoPdvService
         ]);
 
         [$puedeEntregar, $motivo] = $this->evaluarEntregabilidad($resguardo);
+        $origenNacional = $resguardo->esOrigenNacional();
 
         return [
             'resguardo' => $this->serializarResguardo($resguardo),
@@ -57,7 +58,9 @@ class ConsultaFormularioEntregaResguardoPdvService
                 'estados' => EtiquetasResguardoPdv::estados(),
                 'relaciones' => EtiquetasResguardoPdv::relacionesEntrega(),
                 'tipos_incidencia' => EtiquetasResguardoPdv::tiposIncidencia(),
-                'metodo_validacion' => RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
+                'metodo_validacion' => $origenNacional
+                    ? RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FOTOGRAFIA_T02
+                    : RegistrarEntregaResguardoPdvService::METODO_VALIDACION_FIRMA,
             ],
             'puede_entregar' => $puedeEntregar,
             'motivo_no_entregable' => $motivo,
@@ -94,6 +97,10 @@ class ConsultaFormularioEntregaResguardoPdvService
             return [false, 'Existen incidencias abiertas de daño o faltante que bloquean la entrega.'];
         }
 
+        if ($resguardo->esOrigenNacional()) {
+            return [true, null];
+        }
+
         $bultosRecibidos = $resguardo->bultos
             ->filter(fn ($bulto) => ResguardoPdvBulto::estaEnCustodiaOperativa($bulto->estado));
 
@@ -113,6 +120,7 @@ class ConsultaFormularioEntregaResguardoPdvService
 
         return [
             'id' => $resguardo->id,
+            'origen_nacional' => $resguardo->esOrigenNacional(),
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'version' => (int) $resguardo->version,

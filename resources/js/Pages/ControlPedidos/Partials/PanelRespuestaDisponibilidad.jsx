@@ -6,7 +6,7 @@ import RutaPedidoTienda from './RutaPedidoTienda';
 import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from './ModalSeleccionProductosDetalle';
-import { anexosPendientesRevision, cambiosDisponibilidad } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, cambiosDisponibilidad, equivalenciasUnidades } from './cambiosDisponibilidad';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
@@ -36,6 +36,15 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const [respuestasCambios, setRespuestasCambios] = useState({});
     const [origenIncidencia, setOrigenIncidencia] = useState(null);
     const persistidasRef = useRef({});
+    const colaRef = useRef(Promise.resolve());
+    const pendientesRef = useRef(new Map());
+    const temporizadorRef = useRef(null);
+    const erroresGuardadoRef = useRef(new Map());
+    const fotosRecuperadasRef = useRef(new Map());
+    const cambiosPreviosRef = useRef(null);
+    const identidadesRef = useRef(new Map());
+    const identidadActual = clave => identidadesRef.current.get(clave) || clave;
+    const tienda = origen === 'Tienda';
     const [capturaRapida, setCapturaRapida] = useState(null);
     const [estado, setEstado] = useState('');
     const [excepciones, setExcepciones] = useState([]);
@@ -50,6 +59,45 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         return vigentes.length ? vigentes : generales;
     })();
     const secuencia = useRef(0);
+    // Recuperar las piezas de las unidades guardadas sin convertirlas en una respuesta enviada.
+    useEffect(() => {
+        if (!tienda || !actualizacion) return;
+        // Solo reconciliar referencias de esta misma consulta; no cambia el tratamiento de ciclos.
+        const equivalencias = cambiosPreviosRef.current && cambiosPreviosRef.current.consulta === revision?.actualizacion_id
+            ? equivalenciasUnidades(cambiosPreviosRef.current.cambios, cambios) : new Map();
+        cambiosPreviosRef.current = { consulta: revision?.actualizacion_id, cambios };
+        for (const [anterior, nueva] of equivalencias) {
+            identidadesRef.current.set(anterior, nueva.clave);
+            if (persistidasRef.current[anterior]) { persistidasRef.current[nueva.clave] = persistidasRef.current[anterior]; delete persistidasRef.current[anterior]; }
+            if (erroresGuardadoRef.current.has(anterior)) { erroresGuardadoRef.current.set(nueva.clave, erroresGuardadoRef.current.get(anterior)); erroresGuardadoRef.current.delete(anterior); }
+            if (pendientesRef.current.has(anterior)) {
+                const [, resultado, filas] = pendientesRef.current.get(anterior);
+                pendientesRef.current.delete(anterior);
+                pendientesRef.current.set(nueva.clave, [nueva, resultado, filas.map(p => ({ ...p, origen_cambio: nueva.clave }))]);
+            }
+        }
+        if (equivalencias.size) {
+            setRespuestasCambios(actual => Object.fromEntries(Object.entries(actual).map(([clave, valor]) => [identidadActual(clave), valor])));
+            setOrigenIncidencia(actual => equivalencias.get(actual?.clave) || actual);
+        }
+        setExcepciones(actual => {
+            actual = actual.map(p => identidadActual(p.origen_cambio) !== p.origen_cambio ? { ...p, origen_cambio: identidadActual(p.origen_cambio) } : p);
+            const recuperadas = cambios.flatMap(cambio => {
+                if (actual.some(fila => fila.origen_cambio === cambio.clave) || cambio.resultado !== 'incidencia') return [];
+                const unidad = (solicitud.anexo_sin_remision || []).flatMap(a => a.unidades || []).find(u => u.unidad_id === cambio.unidad_id);
+                return (unidad?.revision_ids || []).flatMap(id => {
+                    const pieza = (pedido.excepciones || []).find(p => Number(p.id) === Number(id));
+                    if (!pieza) return [];
+                    return [{ ...pieza, clave: ++secuencia.current, origen_cambio: cambio.clave, cantidad: pieza.cantidad || 1,
+                        condicion: pieza.estado_fisico === 'sin_existencia' ? 'faltante' : 'detalle', archivos: [],
+                        previews: (pieza.documentos || []).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })),
+                    }];
+                });
+            });
+            return recuperadas.length ? [...actual, ...recuperadas] : actual;
+        });
+    }, [pedido.excepciones, solicitud.anexo_sin_remision, tienda, actualizacion]);
+    useEffect(() => () => clearTimeout(temporizadorRef.current), []);
     const incidenciasRef = useRef(null);
     useEffect(() => { if (origenIncidencia) incidenciasRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); }, [origenIncidencia]);
     const excepcionesRef = useRef([]);
@@ -96,9 +144,22 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     }, [ciclo, guardando, tieneCaptura, cicloEnviado, actualizacion, pedido.documentos, revision?.evidencia_actual_ids, puedeLeerDocumentos]);
     const editable = tomada && puedeResponder && !respondida;
     const dialogo = usePedidoDialog({ abierto: modo === 'dialogo' && abierto, onClose, bloqueado: guardando });
-    const persistirUnidad = async (cambio, resultado, afectadas = []) => {
-        const firma = `${resultado}:${afectadas.map(pieza => `${pieza.descripcion}|${pieza.condicion}|${pieza.cantidad}`).join(';')}`;
+    const firmaDe = (resultado, afectadas) => JSON.stringify([resultado, afectadas.map(p => [p.descripcion, p.sku, p.condicion, p.cantidad, p.detalle, p.unica_pieza, p.mejor_ejemplar,
+        (p.archivos || []).map(f => [f.name, f.size, f.lastModified]), (p.previews || []).filter(v => v.remoto).map(v => v.url)])]);
+    const completarFotos = afectadas => Promise.all(afectadas.map(async pieza => ({ ...pieza, archivos: [
+        ...await Promise.all((pieza.previews || []).filter(v => v.remoto).map(async vista => {
+            if (!fotosRecuperadasRef.current.has(vista.url)) {
+                const respuesta = await fetch(vista.url);
+                if (!respuesta.ok) throw new Error('No se pudo recuperar la foto guardada. Intente de nuevo.');
+                fotosRecuperadasRef.current.set(vista.url, new File([await respuesta.blob()], vista.name, { type: vista.mime }));
+            }
+            return fotosRecuperadasRef.current.get(vista.url);
+        })), ...(pieza.archivos || []),
+    ] })));
+    const guardarUnidad = async (cambio, resultado, afectadas = []) => {
+        const firma = tienda ? firmaDe(resultado, afectadas) : `${resultado}:${afectadas.map(pieza => `${pieza.descripcion}|${pieza.condicion}|${pieza.cantidad}`).join(';')}`;
         if (persistidasRef.current[cambio.clave] === firma || (cambio.persistida && cambio.resultado === resultado && afectadas.length === 0)) return;
+        if (tienda) afectadas = await completarFotos(afectadas);
         const form = formDataDe({ confirmacion: false, excepciones: afectadas.map(pieza => ({ ...pieza, origen_cambio: cambio.unidad_id || cambio.clave })), archivos: [] });
         form.append('persistir_unidad', '1');
         form.append('cambios_revisados[0][tipo]', cambio.tipo);
@@ -107,21 +168,39 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (cambio.documento_id) form.append('cambios_revisados[0][documento_id]', String(cambio.documento_id));
         form.append('cambios_revisados[0][resultado]', resultado);
         if (revision?.actualizacion_id) form.append('actualizacion_id', revision.actualizacion_id);
-        persistidasRef.current[cambio.clave] = firma;
         try {
             await onEnviar?.(form);
+            persistidasRef.current[identidadActual(cambio.clave)] = firma;
         } catch (e) {
-            delete persistidasRef.current[cambio.clave];
             const errores = e?.response?.data?.errors;
             setError(errores ? Object.values(errores).flat().join(' ') : e?.response?.data?.message || 'No se pudo guardar la revisión.');
+            if (tienda) throw e;
         }
+    };
+    const vaciarGuardados = () => {
+        clearTimeout(temporizadorRef.current);
+        const pendientes = [...pendientesRef.current.values()];
+        pendientesRef.current.clear();
+        if (pendientes.length) colaRef.current = colaRef.current.then(async () => {
+            for (const args of pendientes) {
+                try { await guardarUnidad(...args); erroresGuardadoRef.current.delete(identidadActual(args[0].clave)); }
+                catch (e) { erroresGuardadoRef.current.set(identidadActual(args[0].clave), e); setError(e?.response?.data?.message || e.message || 'No se pudo guardar la revisión.'); }
+            }
+        });
+        return colaRef.current;
+    };
+    const persistirUnidad = (cambio, resultado, afectadas = []) => {
+        if (!tienda) return guardarUnidad(cambio, resultado, afectadas);
+        pendientesRef.current.set(cambio.clave, [cambio, resultado, afectadas]);
+        clearTimeout(temporizadorRef.current);
+        temporizadorRef.current = setTimeout(vaciarGuardados, 450);
     };
     const piezasCompletasDe = (clave, filas) => {
         const de = filas.filter(fila => fila.origen_cambio === clave);
         if (!de.length) return [];
         if (de.some(pieza => !String(pieza.descripcion || '').trim())) return [];
         if (de.some(pieza => pieza.condicion === 'detalle' && !pieza.unica_pieza && !pieza.mejor_ejemplar && !String(pieza.detalle || '').trim())) return [];
-        if (de.some(pieza => pieza.condicion === 'detalle' && !pieza.archivos?.length)) return [];
+        if (de.some(pieza => pieza.condicion === 'detalle' && !(tienda ? pieza.previews?.length : pieza.archivos?.length))) return [];
         return de;
     };
     const persistirSiCompleta = (clave, filas) => {
@@ -138,9 +217,13 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
                 ...(cambiosPieza.condicion === 'faltante' ? { archivos: [], previews: [], unica_pieza: false, mejor_ejemplar: false } : {}),
             } : {}) };
         });
-        persistirSiCompleta(siguiente[indice]?.origen_cambio, siguiente);
+        if (!tienda) persistirSiCompleta(siguiente[indice]?.origen_cambio, siguiente);
         return siguiente;
     });
+    useEffect(() => {
+        if (!tienda || !actualizacion) return;
+        for (const clave of new Set(excepciones.map(p => p.origen_cambio).filter(Boolean))) persistirSiCompleta(clave, excepciones);
+    }, [excepciones]);
     const quitar = indice => {
         liberarPreviews(excepciones[indice]?.previews);
         setExcepciones(actual => actual.filter((_, i) => i !== indice));
@@ -194,11 +277,21 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (actualizacion && cambios.some(c => (respuestasCambios[c.clave] || c.resultado) === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave) && !(c.persistida && c.resultado === 'incidencia'))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
         if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
         if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
-        if (afectadas.some(p => p.condicion === 'detalle' && !p.archivos?.length)) return setError('Adjunta una foto de cada producto con detalle.');
+        if (afectadas.some(p => p.condicion === 'detalle' && !(tienda ? p.previews?.length : p.archivos?.length))) return setError('Adjunta una foto de cada producto con detalle.');
         if (!archivos.length && (actualizacion ? !capturaAnterior.length : !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
         setOcupado(true);
         try {
-            const form = formDataDe({ confirmacion: actualizacion ? afectadas.length === 0 : estado === 'correcto', excepciones: afectadas, archivos });
+            if (tienda && actualizacion) {
+                // Reintentar el último contenido local y esperar todos los avances antes del envío explícito.
+                for (const cambio of cambios) {
+                    const resultado = respuestasCambios[cambio.clave] || cambio.resultado;
+                    if (resultado) persistirUnidad(cambio, resultado, afectadas.filter(p => p.origen_cambio === cambio.clave));
+                }
+                await vaciarGuardados();
+                if (erroresGuardadoRef.current.size) throw erroresGuardadoRef.current.values().next().value;
+            }
+            const finales = tienda && actualizacion ? await completarFotos(afectadas) : afectadas;
+            const form = formDataDe({ confirmacion: actualizacion ? finales.length === 0 : estado === 'correcto', excepciones: finales, archivos });
             if (!actualizacion) evidenciasGuardadas.forEach(d => form.append('evidencias_guardadas[]', String(d.id)));
             if (actualizacion) cambios.filter(c => c.indice !== undefined && (respuestasCambios[c.clave] || c.resultado)).forEach((c, i) => {
                 form.append(`cambios_revisados[${i}][tipo]`, c.tipo);

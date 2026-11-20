@@ -266,6 +266,13 @@ class PedidoBma extends Model
                 }
             }
         }
+        if (is_array($solicitud) && ($this->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'nacional') {
+            foreach (['captura_nacional', 'piezas_nacionales', 'piezas_nacionales_vigentes', 'respuestas_piezas_nacionales', 'pago_solo_mercancia_nacional', 'cambio_paqueteria_cobertura', 'cotizacion_nacional', 'ajustes_nacionales', 'invalidacion_guia', 'complementos_nacionales', 'complemento_nacional', 'respuesta_complemento_nacional', 'vinculo_resguardo', 'cambio_a_tienda', 'cancelacion_nacional'] as $clave) {
+                if (array_key_exists($clave, $this->solicitud_preparacion_json) && ! array_key_exists($clave, $solicitud)) {
+                    $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
+                }
+            }
+        }
         if (($solicitud['modalidad_entrega'] ?? null) === 'tienda') {
             $config = app(\App\Services\ControlPedidos\ConfiguracionOperativaTienda::class);
             $solicitud['horarios_operativos'] = ['activos' => $config->horariosActivos(), 'detalle_apartado' => $config->detalleHorarioApartado()];
@@ -557,7 +564,12 @@ class PedidoBma extends Model
 
         $this->loadMissing('paqueteria');
 
-        return (bool) $this->paqueteria?->sinLogistica();
+        return ! $this->tienePaqueteriaNacionalPendiente() && (bool) $this->paqueteria?->sinLogistica();
+    }
+
+    public function tienePaqueteriaNacionalPendiente(): bool
+    {
+        return \App\Support\ControlPedidos\Nacional\CapturaNacional::es($this) && $this->tienePaqueteriaPendiente();
     }
 
     public function tienePaqueteriaPendiente(): bool
@@ -1034,6 +1046,12 @@ class PedidoBma extends Model
 
     public function tieneSoporteSolicitud(): bool
     {
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($this)
+            && $this->documentos()->where('relacion_tipo', \App\Support\ControlPedidos\Nacional\CapturaNacional::RELACION_PIEZA_SOLICITADA)
+                ->where('activo', true)->exists()) {
+            return true;
+        }
+
         return $this->documentos()
             ->whereIn('tipo', [
                 PedidoBmaDocumento::TIPO_PDF_PEDIDO,
@@ -1108,6 +1126,9 @@ class PedidoBma extends Model
         $this->loadMissing('paqueteria');
         $paqueteria = $this->paqueteria;
         if ($paqueteria === null) {
+            return false;
+        }
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($this) && $paqueteria->esPendienteConfirmacion()) {
             return false;
         }
         if ($paqueteria->sinLogistica()) {
@@ -1501,7 +1522,7 @@ class PedidoBma extends Model
 
     public function puedeGestionarGuiaPdf(): bool
     {
-        if ($this->es_resguardo) {
+        if ($this->es_resguardo || $this->tienePaqueteriaNacionalPendiente()) {
             return false;
         }
 
@@ -1518,6 +1539,7 @@ class PedidoBma extends Model
     public function puedeCargarGuiaCliente(): bool
     {
         return (bool) $this->cliente_proporciona_guia
+            && ! $this->tienePaqueteriaNacionalPendiente()
             && empty($this->numero_rastreo)
             && ! $this->es_resguardo
             && $this->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_GUIA_CLIENTE;
@@ -1537,7 +1559,7 @@ class PedidoBma extends Model
 
     public function puedeAsignarGuia(): bool
     {
-        if ($this->es_resguardo || ! empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
+        if ($this->es_resguardo || $this->tienePaqueteriaNacionalPendiente() || ! empty($this->numero_rastreo) || $this->cliente_proporciona_guia) {
             return false;
         }
 
@@ -1675,7 +1697,7 @@ class PedidoBma extends Model
 
     public function puedeMarcarEmpacado(): bool
     {
-        return in_array($this->estatus?->fase_ciclo, [
+        return ! $this->tienePaqueteriaNacionalPendiente() && in_array($this->estatus?->fase_ciclo, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,
             CatalogoEstatusPedido::FASE_INCIDENCIA_CEDIS,
         ], true) && ! $this->consulta_actualizacion_pendiente;

@@ -18,6 +18,8 @@ class CompletarMantenimientoActivoService
 
     public function ejecutar(Activo $activo, ActivoMantenimiento $mantenimiento, User $actor, ?string $notas = null): Activo
     {
+        abort_if((int) $mantenimiento->activo_id !== (int) $activo->id, 404);
+
         if (!in_array($mantenimiento->estado, ['programado', 'en_proceso'], true)) {
             throw ValidationException::withMessages([
                 'mantenimiento' => 'Este mantenimiento ya fue cerrado.',

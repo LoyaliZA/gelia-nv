@@ -51,6 +51,9 @@ class SincronizarCajasPedidoBmaService
             $uuidsVistos[$uuid] = true;
 
             $caja = $existentes->get($uuid);
+            if ($caja && $caja->estaRecolectada() && \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $this->assertCajaRecolectadaIntacta($caja, $linea);
+            }
             if ($caja && $caja->estaRetirada()) {
                 $caja->fill([
                     'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA,
@@ -140,6 +143,27 @@ class SincronizarCajasPedidoBmaService
         }
 
         return ['cajas' => $resultado, 'diffs' => $diffs];
+    }
+
+    /** @param  array<string, mixed>  $linea */
+    private function assertCajaRecolectadaIntacta(PedidoBmaCaja $caja, array $linea): void
+    {
+        foreach (['catalogo_tipo_caja_id', 'largo', 'ancho', 'alto', 'peso_real_kg', 'peso_volumetrico_kg'] as $campo) {
+            if (! array_key_exists($campo, $linea)) {
+                continue;
+            }
+            $actual = $caja->{$campo};
+            $nuevo = $linea[$campo];
+            $distinto = is_numeric($actual) && is_numeric($nuevo)
+                ? abs((float) $actual - (float) $nuevo) > 0.0001
+                : (string) $actual !== (string) $nuevo;
+            if ($distinto) {
+                throw new RuntimeException('Una caja recolectada no cambia de contenido.');
+            }
+        }
+        if (array_key_exists('numero_rastreo', $linea) && trim((string) $linea['numero_rastreo']) !== trim((string) $caja->numero_rastreo)) {
+            throw new RuntimeException('Una caja recolectada no cambia de guía.');
+        }
     }
 
     /**

@@ -140,6 +140,9 @@ class CrearPedidoBmaService
                 );
             }
 
+            $pedido = $pedido->fresh();
+            app(Nacional\GuardarMercanciaNacional::class)->ejecutar($pedido, $datos, $vendedorId);
+
             return $pedido->load(['cliente', 'estatus', 'envioTienda', 'documentos', 'almacen', 'banco', 'principal', 'sucursalDestino']);
         });
     }

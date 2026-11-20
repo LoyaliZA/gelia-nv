@@ -13,7 +13,7 @@ import { adaptadorConsultaTienda } from './adaptadoresConsulta';
 
 export { AjustePiezas };
 import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
-import { anexosPendientesRevision, revisionesDelCicloEnCurso } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, revisionesDelCicloEnCurso, revisionesNoEnviadasTienda } from './cambiosDisponibilidad';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
@@ -42,7 +42,7 @@ function mensajeDe(error, reserva) {
 function preparacionVisible(tarea) {
     const respuesta = tarea?.respuesta;
     const fotos = (respuesta?.documentos || []).some((documento) => documento?.url);
-    return Boolean(respuesta) && (respuesta.respondida || tarea?.estado === 'CON_INCIDENCIA' || fotos);
+    return Boolean(respuesta) && (respuesta.respondida || respuesta.revision?.estado || tarea?.estado === 'CON_INCIDENCIA' || (!respuesta.documental && fotos));
 }
 
 export function respuestaDeTiendaEmitida(pedido) {
@@ -202,7 +202,13 @@ export default function SeguimientoSolicitudTienda({
     const visto = lectura || pedido;
     const adaptador = adaptadorConsultaTienda({ pedidoId, pedido: visto });
     const cerrada = cerradaLocal ?? consultaCerrada;
-    const filas = lectura?.revisiones_producto || revisiones;
+    const ocultas = revisionesNoEnviadasTienda(solicitud);
+    const filas = (lectura?.revisiones_producto || revisiones).filter(p => !ocultas.has(Number(p.id)));
+    const tareaVisible = visto?.tarea_preparacion && { ...visto.tarea_preparacion,
+        respuesta: visto.tarea_preparacion.respuesta && { ...visto.tarea_preparacion.respuesta,
+            excepciones: (visto.tarea_preparacion.respuesta.excepciones || []).filter(p => !ocultas.has(Number(p.id))),
+        },
+    };
     const aplicar = datos => { setLectura(datos); setSolicitud(datos.solicitud_preparacion || {}); setCerradaLocal(Boolean(datos.consulta_cerrada || datos.consulta_cerrada_at)); onSolicitud?.(datos.solicitud_preparacion || {}); onPedidoActualizado?.(datos); };
     const reabrir = async () => {
         if (reabriendo) return; setReabriendo(true);
@@ -234,7 +240,8 @@ export default function SeguimientoSolicitudTienda({
     const estado = solicitud?.revision_disponibilidad?.estado;
     const ajustePendiente = anexosPendientesRevision(solicitud);
     const puedeConfirmar = !ajustePendiente && !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
-    const causaCierre = visto?.motivo_bloqueo_cierre
+    const causaCierre = (area === 'preparacion_tienda' && ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : null)
+        || visto?.motivo_bloqueo_cierre
         || (ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : '');
 
     if (!pedidoId) return null;
@@ -271,7 +278,7 @@ export default function SeguimientoSolicitudTienda({
             )}
             {cerrada && <ConfirmacionSolicitud pedido={visto} pedidoId={pedidoId} cerrada faltante={faltante} soloLectura={soloLectura} onReabrir={reabrir} />}
             <RespuestaPreparacionTienda
-                tarea={visto?.tarea_preparacion}
+                tarea={tareaVisible}
                 mostrarCaptura={false}
                 accionesDePieza={accionesDePieza}
                 onVerDocumentos={(documentos, indice) => setVista({ documentos, indice })}

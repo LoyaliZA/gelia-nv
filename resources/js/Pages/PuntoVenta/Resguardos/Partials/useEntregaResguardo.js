@@ -50,10 +50,14 @@ export default function useEntregaResguardo({
             return { duplicado: true };
         }
 
+        const foto = metodoValidacion === 'fotografia_t02';
         const erroresLocales = validarFormularioEntrega({
             relacion,
             nombreQuienRetira,
             tieneFirma: Boolean(firmaDataUrl),
+            requiereFoto: foto,
+            tieneFoto: (evidencias || []).length > 0,
+            omitirBultos: foto,
             bultoIds,
         });
         if (Object.keys(erroresLocales).length > 0) {
@@ -83,7 +87,7 @@ export default function useEntregaResguardo({
 
         setPreparando(false);
 
-        const firma = dataUrlAFichero(firmaDataUrl);
+        const firma = firmaDataUrl ? dataUrlAFichero(firmaDataUrl) : null;
         const form = armarFormDataEntrega({
             version: versionRef.current,
             idempotencyKey: idempotencyRef.current,

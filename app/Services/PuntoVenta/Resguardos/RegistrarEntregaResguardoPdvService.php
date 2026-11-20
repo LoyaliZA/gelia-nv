@@ -43,12 +43,16 @@ class RegistrarEntregaResguardoPdvService
         string $relacion,
         string $nombreQuienRetira,
         string $metodoValidacion,
-        UploadedFile $firma,
+        ?UploadedFile $firma,
         ?string $observaciones = null,
         array $evidencias = [],
         ?array $bultoIds = null,
         bool $operacionMultiple = false,
     ): ResguardoPdv {
+        if ($resguardo->esOrigenNacional()) {
+            return $this->entregarNacional($resguardo, $actor, $versionEsperada, $idempotencyKey, $evidencias, $firma);
+        }
+
         $pathsEscritos = [];
 
         try {
@@ -87,6 +91,51 @@ class RegistrarEntregaResguardoPdvService
             $this->eliminarArchivosHuerfanos($pathsEscritos);
             throw $e;
         }
+    }
+
+    /**
+     * @param  list<UploadedFile>  $evidencias
+     */
+    private function entregarNacional(
+        ResguardoPdv $resguardo,
+        User $actor,
+        int $versionEsperada,
+        string $idempotencyKey,
+        array $evidencias,
+        ?UploadedFile $firma,
+    ): ResguardoPdv {
+        $this->alcance->asegurarMutacionPiso(
+            $actor,
+            PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR,
+            (int) $resguardo->sucursal_id
+        );
+        if ($evidencias instanceof UploadedFile) {
+            $evidencias = [$evidencias];
+        }
+        $foto = $evidencias[0] ?? $firma;
+        if (! $foto instanceof UploadedFile) {
+            throw ValidationException::withMessages([
+                'evidencias' => 'Adjunte la fotografía de la entrega.',
+            ]);
+        }
+        $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
+        if ($reintento !== null) {
+            return $reintento;
+        }
+        if ((int) $resguardo->version !== $versionEsperada) {
+            throw ValidationException::withMessages([
+                'version' => 'Otro usuario modificó este resguardo. Actualice la página e intente de nuevo.',
+            ]);
+        }
+        $pedido = $resguardo->pedido;
+        if (! $pedido) {
+            throw ValidationException::withMessages(['estado' => 'La sucursal no tiene este pedido en su bandeja.']);
+        }
+        $entregado = app(\App\Services\ControlPedidos\Nacional\EventosCustodiaSucursalNacional::class)
+            ->entregar($pedido, $actor->id, ['evidencia' => $foto, 'idempotency_key' => $idempotencyKey]);
+        $entregado->increment('version');
+
+        return $entregado->fresh(['bultos', 'entregas']);
     }
 
     /**

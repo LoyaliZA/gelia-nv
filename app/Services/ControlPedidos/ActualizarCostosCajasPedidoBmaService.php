@@ -31,6 +31,10 @@ class ActualizarCostosCajasPedidoBmaService
             return $pedido;
         }
 
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido) && $pedido->tienePaqueteriaPendiente()) {
+            throw new RuntimeException('Elija la paquetería antes de cotizar el envío.');
+        }
+
         if ($pedido->pago_validado_at && ! $reabrirPago) {
             throw new RuntimeException(
                 'El pago ya está validado. Solicite reapertura autorizada para cambiar costos.'

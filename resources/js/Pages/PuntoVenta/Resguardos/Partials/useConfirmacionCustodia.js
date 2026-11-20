@@ -20,9 +20,13 @@ export default function useConfirmacionCustodia({
         }
     }, [versionInicial]);
 
-    const enviar = useCallback(async ({ almacenId, bultos, evidencias = [], piezas, omisiones = [] }) => {
-        if (!almacenId || !bultos?.length) {
-            setError('Selecciona almacén y al menos un bulto.');
+    const enviar = useCallback(async ({ almacenId, bultos, evidencias = [], piezas, omisiones = [], ubicacion = '', origenNacional = false }) => {
+        if (!almacenId || (!origenNacional && !bultos?.length)) {
+            setError(origenNacional ? 'Seleccione el almacén de custodia.' : 'Selecciona almacén y al menos un bulto.');
+            return;
+        }
+        if (origenNacional && !String(ubicacion).trim()) {
+            setError('Indique la ubicación de la custodia.');
             return;
         }
 
@@ -39,7 +43,10 @@ export default function useConfirmacionCustodia({
         form.append('version', String(version));
         form.append('idempotency_key', idempotencyRef.current);
         form.append('almacen_id', String(almacenId));
-        bultos.forEach((bulto, indice) => {
+        if (origenNacional) {
+            form.append('ubicacion', String(ubicacion).trim());
+        }
+        (origenNacional ? [] : bultos).forEach((bulto, indice) => {
             form.append(`bultos[${indice}][folio]`, String(bulto.folio).trim());
             form.append(`bultos[${indice}][tipo]`, bulto.tipo);
             form.append(`bultos[${indice}][condicion]`, bulto.condicion);

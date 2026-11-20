@@ -171,6 +171,36 @@ const previewsVigentes = (pedido, relacionTipo, relacionId) => (pedido?.document
         documento_id: d.id,
     }));
 
+export function precargarMercanciaNacional(pedido, revisiones) {
+    const solicitud = pedido.solicitud_preparacion;
+    if (solicitud?.modalidad_entrega !== 'nacional' || solicitud.captura_nacional !== 'compartida') return revisiones;
+    const solicitadas = solicitud.piezas_nacionales_vigentes || solicitud.piezas_nacionales || [];
+    const respuestas = solicitud.respuestas_piezas_nacionales || {};
+    const ids = new Set(Object.values(respuestas).map(String));
+    const activas = new Set(solicitadas.map((pieza) => pieza.id));
+    const previas = revisiones.filter((revision) =>
+        !revision.piezaSolicitada && !activas.has(revision.client_uuid) && !ids.has(String(revision.revision_id)),
+    );
+    return [
+        ...solicitadas.map((pieza) => {
+            const anterior = revisiones.find((revision) => revision.client_uuid === pieza.id
+                || (respuestas[pieza.id] && String(revision.revision_id) === String(respuestas[pieza.id])));
+            return {
+                ...revisionDesdeProducto(),
+                ...anterior,
+                client_uuid: pieza.id,
+                piezaSolicitada: true,
+                sku: pieza.sku || '',
+                descripcion_producto: pieza.descripcion,
+                cantidad_solicitada: pieza.cantidad,
+                cantidad_encontrada: anterior ? Math.min(Number(anterior.cantidad_encontrada), pieza.cantidad) : pieza.cantidad,
+                documentoIds: pieza.documento_ids || [],
+            };
+        }),
+        ...previas,
+    ];
+}
+
 const evidenciaProductoSigue = (rev) => (rev.previews || []).some((p) => {
     if (p.vigente) {
         return rev.estado_fisico === rev.estado_fisico_original
@@ -320,12 +350,14 @@ export default function ModalResponderPesaje({
                         prev.forEach((r) => revocarPreviews(r.previews));
                         const previas = (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((row) => !row.retirada_at);
                         const usadas = new Set();
-                        return (draft.revisiones || []).map((r) => {
+                        const recuperadas = (draft.revisiones || []).map((r) => {
                             const evidencias = Array.isArray(r.evidencias) ? r.evidencias.filter((f) => f instanceof Blob) : [];
                             const previa = previas.find((row) => !usadas.has(row.id) && (
                                 String(row.id) === String(r.revision_id)
-                                || (r.producto_id && String(row.producto_id) === String(r.producto_id))
-                                || (r.descripcion_producto && row.descripcion_producto === r.descripcion_producto)
+                                || (!r.piezaSolicitada && (
+                                    (r.producto_id && String(row.producto_id) === String(r.producto_id))
+                                    || (r.descripcion_producto && row.descripcion_producto === r.descripcion_producto)
+                                ))
                             ));
                             if (previa) usadas.add(previa.id);
                             return {
@@ -344,6 +376,7 @@ export default function ModalResponderPesaje({
                                 expandido: false,
                             };
                         });
+                        return precargarMercanciaNacional(pedido, recuperadas);
                     });
                     setEvidenciasPorEnvio((prev) => {
                         prev.forEach((s) => revocarPreviews(s.previews));
@@ -420,7 +453,7 @@ export default function ModalResponderPesaje({
                         }
                         setRevisiones((prev) => {
                             prev.forEach((r) => revocarPreviews(r.previews));
-                            return revsPrevias.filter((r) => !r.retirada_at).map((r) => ({
+                            return precargarMercanciaNacional(pedido, revsPrevias.filter((r) => !r.retirada_at).map((r) => ({
                                 ...revisionDesdeProducto({
                                     id: r.producto_id,
                                     sku: r.sku,
@@ -442,7 +475,7 @@ export default function ModalResponderPesaje({
                                 evidencias: [],
                                 previews: previewsVigentes(pedido, 'revision_producto', r.id),
                                 expandido: false,
-                            }));
+                            })));
                         });
                         const loteDocs = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion' && d.relacion_tipo === 'revision_general' && d.activo !== false && d.url);
                         if (loteDocs.length) {
@@ -476,10 +509,14 @@ export default function ModalResponderPesaje({
                         setBorradorMsg(pedido.consulta_actualizacion_pendiente ? 'Precarga: respuesta anterior' : null);
                     } else {
                         resetFormularioVacio();
+                        setRevisiones(precargarMercanciaNacional(pedido, []));
                     }
                 }
             } catch {
-                if (!cancelado) resetFormularioVacio();
+                if (!cancelado) {
+                    resetFormularioVacio();
+                    setRevisiones(precargarMercanciaNacional(pedido, []));
+                }
             } finally {
                 window.setTimeout(() => {
                     hydratingRef.current = false;
@@ -661,9 +698,9 @@ export default function ModalResponderPesaje({
 
     const pdfPedido = (pedido.documentos || []).find((d) => d.tipo === 'pdf_pedido')
         || (pedido.documentos || []).find((d) => d.tipo === 'cotizacion');
-    const anexosPiezas = (pedido.documentos || []).filter((d) => d.tipo === 'anexo_piezas');
+    const anexosPiezas = (pedido.documentos || []).filter((d) => d.tipo === 'anexo_piezas' && d.activo !== false);
     const severidadEstado = { bueno: 0, regular: 1, sin_existencia: 2, malo: 3, danado: 4 };
-    const cantidadSolicitadaRevisada = trasladoInterno
+    const cantidadSolicitadaRevisada = (trasladoInterno || revisiones.some((r) => r.piezaSolicitada))
         ? revisiones.reduce((total, r) => total + Number(r.cantidad_solicitada || 0), 0)
         : revisiones.length;
     const estadoGeneralDerivado = revisiones.reduce((acc, r) => {
@@ -746,7 +783,11 @@ export default function ModalResponderPesaje({
 
     const actualizarRevision = (idx, campo, valor) => {
         if (campo !== 'expandido') setErrorCampo(null);
-        setRevisiones((prev) => prev.map((r, i) => (i === idx ? { ...r, [campo]: valor } : r)));
+        setRevisiones((prev) => prev.map((r, i) => (i === idx ? {
+            ...r,
+            [campo]: valor,
+            ...(r.piezaSolicitada && campo === 'estado_fisico' && valor === 'sin_existencia' ? { cantidad_encontrada: 0 } : {}),
+        } : r)));
     };
 
     const setEvidenciasRevision = (idx, files, previews) => {
@@ -994,7 +1035,7 @@ export default function ModalResponderPesaje({
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Producto sin descripción.' });
                 return;
             }
-            if (trasladoInterno && (!Number.isInteger(Number(r.cantidad_solicitada)) || Number(r.cantidad_solicitada) < 1
+            if ((trasladoInterno || r.piezaSolicitada) && (!Number.isInteger(Number(r.cantidad_solicitada)) || Number(r.cantidad_solicitada) < 1
                 || r.cantidad_encontrada === '' || r.cantidad_encontrada == null || !Number.isInteger(Number(r.cantidad_encontrada))
                 || Number(r.cantidad_encontrada) < 0 || Number(r.cantidad_encontrada) > Number(r.cantidad_solicitada)
                 || (r.estado_fisico === 'sin_existencia' && Number(r.cantidad_encontrada) !== 0))) {
@@ -1002,7 +1043,7 @@ export default function ModalResponderPesaje({
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Revise las cantidades solicitadas y encontradas.' });
                 return;
             }
-            if (requiereComentario(r.estado_fisico) || (trasladoInterno && Number(r.cantidad_encontrada) < Number(r.cantidad_solicitada))) {
+            if (requiereComentario(r.estado_fisico) || ((trasladoInterno || r.piezaSolicitada) && Number(r.cantidad_encontrada) < Number(r.cantidad_solicitada))) {
                 if (!r.comentario.trim()) {
                     actualizarRevision(i, 'expandido', true);
                     avisarCampo(`pesaje-comentario-${r.client_uuid}`, r.estado_fisico === 'sin_existencia'
@@ -1074,7 +1115,7 @@ export default function ModalResponderPesaje({
             form.append(`revisiones[${i}][descripcion_producto]`, r.descripcion_producto);
             if (r.producto_id) form.append(`revisiones[${i}][producto_id]`, String(r.producto_id));
             if (r.sku) form.append(`revisiones[${i}][sku]`, String(r.sku));
-            if (trasladoInterno) {
+            if (trasladoInterno || r.piezaSolicitada) {
                 form.append(`revisiones[${i}][cantidad_solicitada]`, String(r.cantidad_solicitada));
                 form.append(`revisiones[${i}][cantidad_encontrada]`, String(r.cantidad_encontrada));
             }
@@ -1189,7 +1230,7 @@ export default function ModalResponderPesaje({
                         <p className="text-sm font-bold theme-text-main m-0 break-words line-clamp-2">{rev.descripcion_producto}</p>
                         <span className={badge.className} style={badge.style}>{badge.label}</span>
                     </div>
-                    <button
+                    {!rev.piezaSolicitada && <button
                         type="button"
                         onClick={(e) => {
                             e.preventDefault();
@@ -1201,14 +1242,20 @@ export default function ModalResponderPesaje({
                         title="Eliminar pieza (agregada por error)"
                     >
                         <Trash2 className="w-4 h-4" />
-                    </button>
+                    </button>}
                 </summary>
                 <div className="px-3 pb-3 space-y-3 border-t theme-border pt-3">
                     <p className="text-xs theme-text-muted font-normal m-0">Agregue detalle solo si el estado no es Bueno o necesita foto/comentario.</p>
-                    {trasladoInterno && (
+                    {rev.documentoIds?.length > 0 && (
+                        <button type="button" className={`${BTN_SECONDARY} min-h-[44px]`}
+                            onClick={() => abrirGaleria(anexosPiezas.filter((doc) => rev.documentoIds.includes(doc.id)))}>
+                            Ver evidencia de la solicitud
+                        </button>
+                    )}
+                    {(trasladoInterno || rev.piezaSolicitada) && (
                         <div className="grid grid-cols-2 gap-3">
                             <label className={SECCION}>Cantidad solicitada
-                                <input type="number" min="1" step="1" required value={rev.cantidad_solicitada ?? ''}
+                                <input type="number" min="1" step="1" required readOnly={rev.piezaSolicitada} value={rev.cantidad_solicitada ?? ''}
                                     onChange={(e) => actualizarRevision(idx, 'cantidad_solicitada', e.target.value)} className={`${THEME_INPUT} w-full`} />
                             </label>
                             <label className={SECCION}>Cantidad encontrada

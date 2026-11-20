@@ -33,6 +33,7 @@ class MarcarEmpacadoPedidoBmaService
 
     private function empacar(PedidoBma $pedido, int $usuarioId, array $bultosPorPedido): PedidoBma
     {
+        \App\Support\ControlPedidos\Nacional\BarreraRecepcionComplementoNacional::assert($pedido);
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen', 'complementos.estatus', 'complementos.paqueteria', 'complementos.origen']);
 
         $raiz = $pedido->raizEmpaque()->loadMissing([

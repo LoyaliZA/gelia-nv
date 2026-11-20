@@ -47,6 +47,7 @@ class RegistrarPagoPedidoBmaService
         if ($forma !== null && $forma !== '' && ! in_array($forma, PedidoBmaPago::FORMAS_PAGO, true)) {
             throw new InvalidArgumentException('Forma de pago no válida.');
         }
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertFormaPago($pedido, is_string($forma) ? $forma : null);
 
         $bancoId = isset($datos['catalogo_banco_id']) && $datos['catalogo_banco_id'] !== ''
             ? (int) $datos['catalogo_banco_id']

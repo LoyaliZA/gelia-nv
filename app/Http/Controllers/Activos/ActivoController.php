@@ -34,11 +34,13 @@ use App\Services\Activos\DevolverActivoService;
 use App\Services\Activos\EliminarFotoActivoService;
 use App\Services\Activos\ExportarActivosService;
 use App\Services\Activos\FirmarAsignacionActivoService;
+use App\Services\Activos\GuardarFotosRegistroActivoService;
 use App\Services\Activos\ListarActivosService;
 use App\Services\Activos\ResolverCodigoActivoService;
 use App\Services\Activos\PresentarConsultaPublicaActivoService;
 use App\Services\Activos\ProgramarMantenimientoActivoService;
 use App\Services\Activos\SubirFotosActivoService;
+use App\Services\Activos\TransferirActivoService;
 use App\Support\EtiquetaActivoAssets;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\QrCode;
@@ -46,6 +48,7 @@ use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 use Rap2hpoutre\FastExcel\FastExcel;
@@ -197,7 +200,7 @@ class ActivoController extends Controller
     public function store(
         StoreActivoRequest $request,
         CrearActivoService $crearService,
-        SubirFotosActivoService $fotosService,
+        GuardarFotosRegistroActivoService $fotosService,
         AsignarActivoService $asignarService,
     ) {
         $datos = $request->validated();
@@ -206,25 +209,41 @@ class ActivoController extends Controller
         $condicionesEntrega = $datos['condiciones_entrega'] ?? null;
         unset($datos['user_id'], $datos['notas'], $datos['condiciones_entrega']);
 
-        $activo = $crearService->ejecutar(Auth::user(), $datos);
+        $actor = $request->user();
+        $conexion = DB::connection();
+        $nivelInicial = $conexion->transactionLevel();
+        $confirmando = false;
+        $conexion->beginTransaction();
 
-        if ($request->hasFile('fotos')) {
-            $fotosService->ejecutar($activo, $request->file('fotos'));
-        }
+        try {
+            $activo = $crearService->ejecutar($actor, $datos);
+            $fotosService->ejecutar($activo, $request->file('fotos', []));
 
-        if ($userIdAsignacion) {
-            $activo = $asignarService->ejecutar($activo, Auth::user(), (int) $userIdAsignacion, $notasAsignacion, $condicionesEntrega);
-        } elseif ($activo->activo_padre_id) {
-            $padre = Activo::find($activo->activo_padre_id);
-            if ($padre?->responsable_user_id) {
+            $responsableId = $userIdAsignacion;
+            if (! $responsableId && $activo->activo_padre_id) {
+                $responsableId = Activo::find($activo->activo_padre_id)?->responsable_user_id;
+            }
+
+            if ($responsableId) {
                 $activo = $asignarService->ejecutar(
                     $activo,
-                    Auth::user(),
-                    (int) $padre->responsable_user_id,
+                    $actor,
+                    (int) $responsableId,
                     $notasAsignacion,
                     $condicionesEntrega,
                 );
             }
+
+            $confirmando = true;
+            $conexion->commit();
+        } catch (\Throwable $error) {
+            // Si se perdió la respuesta del commit, preservar archivos hasta conocer el resultado.
+            if ($conexion->transactionLevel() > $nivelInicial
+                && (! $confirmando || $conexion->getPdo()->inTransaction())) {
+                $conexion->rollBack($nivelInicial);
+            }
+
+            throw $error;
         }
 
         $mensaje = $userIdAsignacion

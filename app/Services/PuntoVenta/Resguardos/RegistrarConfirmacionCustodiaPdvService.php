@@ -53,6 +53,7 @@ class RegistrarConfirmacionCustodiaPdvService
         array $evidencias = [],
         ?array $piezas = null,
         array $omisiones = [],
+        string $ubicacion = '',
     ): ResguardoPdv {
         $this->alcance->asegurarMutacionPiso(
             $actor,
@@ -73,6 +74,7 @@ class RegistrarConfirmacionCustodiaPdvService
                 $evidencias,
                 $piezas,
                 $omisiones,
+                $ubicacion,
                 &$pathsEscritos,
             ) {
                 $resguardo = ResguardoPdv::query()
@@ -83,6 +85,23 @@ class RegistrarConfirmacionCustodiaPdvService
                 $reintento = $this->resolverReintentoIdempotente($resguardo, $idempotencyKey);
                 if ($reintento !== null) {
                     return $reintento;
+                }
+
+                if ($resguardo->esOrigenNacional()) {
+                    if ((int) $resguardo->version !== $versionEsperada) {
+                        throw ValidationException::withMessages([
+                            'version' => 'Otro usuario modificó este resguardo. Actualice la página e intente de nuevo.',
+                        ]);
+                    }
+                    $pedido = $resguardo->pedido;
+                    if (! $pedido) {
+                        throw ValidationException::withMessages(['estado' => 'La sucursal no tiene este pedido en su bandeja.']);
+                    }
+                    $custodiado = app(\App\Services\ControlPedidos\Nacional\EventosCustodiaSucursalNacional::class)
+                        ->custodiar($pedido, $actor->id, $almacenId, $ubicacion, ['idempotency_key' => $idempotencyKey]);
+                    $custodiado->increment('version');
+
+                    return $custodiado->fresh(['bultos', 'almacen']);
                 }
 
                 $this->assertVersionYEstado($resguardo, $versionEsperada);

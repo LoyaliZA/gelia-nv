@@ -25,6 +25,9 @@ class AsignarGuiaPedidoBmaService
             throw new \InvalidArgumentException('El número de guía es obligatorio.');
         }
 
+        \App\Support\ControlPedidos\Nacional\BarreraRecepcionComplementoNacional::assert($pedido);
+        \App\Support\ControlPedidos\Nacional\BarreraSeguroCajaNacional::assert($pedido);
+
         $pedido->loadMissing(['estatus', 'paqueteria', 'origen']);
         InstruccionEntrega::assertGuiaNoPosterior($pedido);
 
@@ -42,6 +45,11 @@ class AsignarGuiaPedidoBmaService
             );
         }
 
+        \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeGuiar($pedido);
+        \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+
+        $this->assertCajasConPeso($pedido);
+
         if (!$pedido->puedeAsignarGuia()) {
             throw new \RuntimeException('El pedido no está pendiente de guía.');
         }
@@ -51,6 +59,11 @@ class AsignarGuiaPedidoBmaService
             || $pedido->empacado_at !== null;
 
         return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
+            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+            }
+
             $estatusAnterior = $pedido->estatus;
 
             $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo'], $usuarioId);
@@ -129,5 +142,19 @@ class AsignarGuiaPedidoBmaService
         return $restantes === []
             ? $this->colaErroresService->attrsColaVacia()
             : $this->colaErroresService->attrsColaPendiente($restantes);
+    }
+
+    private function assertCajasConPeso(PedidoBma $pedido): void
+    {
+        if (! \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+            return;
+        }
+        $pedido->loadMissing('cajas');
+        $sinPeso = $pedido->cajas->contains(
+            fn (\App\Models\ControlPedidos\PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->peso_real_kg === null
+        );
+        if ($sinPeso) {
+            throw new \RuntimeException('Hay una caja sin peso. No se asigna guía.');
+        }
     }
 }

@@ -25,6 +25,55 @@ const detalle = async (texto = 'Caja rota', indice = 0) => act(() => {
  textarea.dispatchEvent(new Event('input',{bubbles:true}));
 });
 
+it('reconcilia la identidad tras guardar sin perder foto, texto ni duplicar la pieza al recuperarla', async () => {
+ const revision = { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'misma-consulta' };
+ const original = { id: 4, documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'catalogo', sku: 'A', descripcion: 'Pieza de prueba', cantidad: 1, pendiente_revision: true }] } };
+ await montar({ origen: 'Tienda', pedido: original, revision });
+ await click('Con detalle'); await foto('Fotos del producto'); await detalle('Tapa dañada');
+ const campo = container.querySelector('textarea');
+ const fotoLocal = container.querySelector('.gelia-cedis-producto img').getAttribute('src');
+ await act(async () => { await new Promise(r => setTimeout(r, 500)); });
+ expect(onEnviar.mock.lastCall[0].get('excepciones[0][origen_unidad_id]')).toBe('anexo:legacy:0:A');
+ const pedido = { ...original, excepciones: [{ id: 12, sku: 'A', descripcion: 'Pieza de prueba', cantidad: 1, estado_fisico: 'regular', detalle: 'Tapa dañada', documentos: [{ url: '/guardada.png' }] }],
+  solicitud_preparacion: { anexo_sin_remision: [{ ...original.solicitud_preparacion.anexo_sin_remision[0], linea_id: 'linea-definitiva',
+   unidades: [{ unidad_id: 'anexo:linea-definitiva:sku:A', resultado: 'incidencia', revision_ids: [12] }] }] } };
+ await montar({ origen: 'Tienda', pedido, revision });
+ expect(container.querySelectorAll('textarea')).toHaveLength(1);
+ expect(container.querySelector('textarea')).toBe(campo);
+ expect(campo.value).toBe('Tapa dañada');
+ expect(container.querySelector('.gelia-cedis-producto img').getAttribute('src')).toBe(fotoLocal);
+ await click('Enviar respuesta');
+ expect(envioFinal().get('excepciones[0][origen_unidad_id]')).toBe('anexo:linea-definitiva:sku:A');
+ expect(envioFinal().get('cambios_revisados[0][unidad_id]')).toBe('anexo:linea-definitiva:sku:A');
+ expect(envioFinal().get('excepciones[1][descripcion]')).toBeNull();
+});
+
+it('incorpora piezas repetidas de una captura, quita una selección y envía cada detalle con su unidad', async () => {
+ const unidad = 'anexo:linea-unica:doc:21';
+ await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: {
+  documentos: [{ id: 21, url: '/anexo.png', mime_type: 'image/png' }, { id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'documento', linea_id: 'linea-unica', documento_id: 21,
+   unidades: [{ unidad_id: unidad, documento_id: 21, resultado: null }] }] },
+ } });
+ await click('Registrar detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ for (let i = 0; i < 3; i++) await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (3)').click());
+ await act(() => container.querySelector('[aria-label="Quitar pieza 2"]').click());
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(2);
+ await detalle('Defecto primero', 0); await detalle('Defecto tercero', 1);
+ await foto('Fotos del producto', 1, 0); await foto('Fotos del producto', 1, 1);
+ await click('Enviar respuesta');
+ expect(envioFinal().get('excepciones[0][detalle]')).toBe('Defecto primero');
+ expect(envioFinal().get('excepciones[1][detalle]')).toBe('Defecto tercero');
+ for (let i = 0; i < 2; i++) {
+  expect(envioFinal().get(`excepciones[${i}][origen_unidad_id]`)).toBe(unidad);
+  expect(envioFinal().getAll(`excepciones[${i}][evidencias][]`)).toHaveLength(1);
+ }
+ expect(envioFinal().get('excepciones[2][descripcion]')).toBeNull();
+});
+
 it('responde dos ciclos del mismo pedido sin desmontar ni reutilizar la captura anterior', async () => {
     const pedido = { id: 4, documentos: [] };
     await montar({ pedido });
@@ -88,6 +137,41 @@ beforeEach(() => {
  container = document.createElement('div');document.body.append(container);root = createRoot(container);
 });
 afterEach(async () => { await act(() => root.unmount());container.remove(); });
+
+it('recupera atributos, detalle y fotos de una unidad de Tienda y envía sin recapturarlos', async () => {
+ const recuperar = vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['foto'], { type: 'image/png' }) });
+ vi.stubGlobal('fetch', recuperar);
+ try {
+  await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'ciclo' },
+   pedido: { excepciones: [{ id: 12, descripcion: 'Pieza recuperada', cantidad: 1, estado_fisico: 'regular', detalle: 'Tapa rota', unica_pieza: true,
+    documentos: [{ id: 99, url: '/foto-guardada.png', nombre_original: 'foto.png', mime_type: 'image/png' }] }],
+    documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+    solicitud_preparacion: { anexo_sin_remision: [{ solicitud_id: 's', entrada: 'catalogo', descripcion: 'Pieza recuperada', pendiente_revision: true,
+     unidades: [{ unidad_id: 'anexo:s:sku:', resultado: 'incidencia', revision_ids: [12] }] }] } } });
+  expect(container.querySelector('textarea').value).toBe('Tapa rota');
+  expect(container.querySelector('[aria-label="Única pieza"]').getAttribute('aria-checked')).toBe('true');
+  expect(container.querySelector('img[src="/foto-guardada.png"]')).not.toBeNull();
+  await click('Enviar respuesta');
+  expect(envioFinal().get('excepciones[0][detalle]')).toBe('Tapa rota');
+  expect(envioFinal().getAll('excepciones[0][evidencias][]')).toHaveLength(1);
+  expect(recuperar).toHaveBeenCalledOnce();
+ } finally { vi.unstubAllGlobals(); }
+});
+
+it('espera y reintenta el avance fallido antes de permitir el envío final de Tienda', async () => {
+ const props = { origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true }, pedido: {
+  documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'catalogo', descripcion: 'Pieza pendiente', sku: 'A', cantidad: 1, pendiente_revision: true }] },
+ } };
+ await montar(props); await click('Todo OK');
+ onEnviar.mockRejectedValue({ response: { data: { message: 'Error de prueba al guardar' } } });
+ await click('Enviar respuesta');
+ expect(envioFinal()).toBeUndefined();
+ expect(container.textContent).toContain('Error de prueba al guardar');
+ onEnviar.mockResolvedValue({}); await click('Enviar respuesta');
+ expect(envioFinal()).toBeDefined();
+ expect(envioFinal().get('cambios_revisados[0][resultado]')).toBe('correcto');
+});
 it('en municipal reutiliza origen y destino con almacén y terminal persistidos', async () => {
     await montar({ pedido: { almacen: { nombre: 'CEDIS Norte' }, solicitud_preparacion: { modalidad_entrega: 'municipal', consulta_municipal: { area: 'cedis' } }, paqueteria: { nombre: 'Terminal ficticia' } }, documentos: [{ tipo: 'pdf_pedido', url: '/wizerp.pdf' }] });
     expect(container.textContent).toContain('Terminal ficticia');

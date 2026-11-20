@@ -8,6 +8,78 @@ use Illuminate\Validation\ValidationException;
 /** Identidad y estado de cada unidad revisable. No usa el índice del array como id permanente. */
 final class UnidadesRevisionConsulta
 {
+    /** Solo para líneas nuevas de Tienda. No reidentifica registros existentes. */
+    public static function nuevaLineaTienda(array $linea): array
+    {
+        $linea['linea_id'] = (string) Str::uuid();
+        $linea['unidades'] = self::derivar('anexo', $linea);
+
+        return $linea;
+    }
+
+    /** Resuelve alias dentro del mismo pedido y ciclo ya bloqueados por el servicio. */
+    public static function normalizarReferenciasTienda(array $json, array $datos): array
+    {
+        $original = $json;
+        $json = self::materializar($json);
+        $referencias = [];
+        foreach ($datos['cambios_revisados'] ?? [] as $i => $cambio) {
+            $tipo = $cambio['tipo'] ?? 'anexo';
+            if ($tipo !== 'anexo') continue; // El informe de retiro conserva su resolución existente.
+            $clave = $tipo === 'retiro' ? 'retiro_piezas' : 'anexo_sin_remision';
+            $recibida = (string) ($cambio['unidad_id'] ?? '');
+            $candidatas = [];
+            foreach ($json[$clave] ?? [] as $indice => $linea) {
+                foreach ($linea['unidades'] ?? [] as $unidad) {
+                    $id = $unidad['unidad_id'];
+                    $documento = (int) ($unidad['documento_id'] ?? 0);
+                    $previa = $original[$clave][$indice];
+                    // Las claves históricas se aceptan solo si identifican una unidad única.
+                    $anclas = array_unique(['', (string) ($previa['solicitud_id'] ?? ''), (string) ($previa['linea_id'] ?? '')]);
+                    $aliases = [$id];
+                    foreach ($anclas as $ancla) {
+                        $prefijo = $ancla !== '' ? $tipo.':'.$ancla : $tipo;
+                        if ($documento > 0) {
+                            $aliases[] = $prefijo.':doc:'.$documento;
+                        } elseif (! empty($previa['sustituye_revision_id'])) {
+                            $aliases[] = $prefijo.':rev:'.$previa['sustituye_revision_id'];
+                        } else {
+                            $aliases[] = $ancla !== '' ? $prefijo.':sku:'.($previa['sku'] ?? '') : $tipo.':legacy:'.$indice.':'.($previa['sku'] ?? '');
+                        }
+                    }
+                    if ($recibida !== '' ? ! in_array($recibida, $aliases, true)
+                        : (! isset($cambio['indice']) || (int) $cambio['indice'] !== $indice || (int) ($cambio['documento_id'] ?? 0) !== $documento)) {
+                        continue;
+                    }
+                    $candidatas[] = ['indice' => $indice, 'unidad' => $unidad];
+                }
+            }
+            if (count($candidatas) !== 1) {
+                throw ValidationException::withMessages(['unidad_id' => 'La referencia no identifica una sola unidad de esta consulta. Actualice la captura.']);
+            }
+            $hallada = $candidatas[0];
+            if ((isset($cambio['indice']) && (int) $cambio['indice'] !== $hallada['indice'])
+                || (isset($cambio['documento_id']) && (int) $cambio['documento_id'] !== (int) ($hallada['unidad']['documento_id'] ?? 0))) {
+                throw ValidationException::withMessages(['unidad_id' => 'El anexo o documento no corresponde a la unidad indicada.']);
+            }
+            $canonica = $hallada['unidad']['unidad_id'];
+            if ($recibida !== '') $referencias[$recibida] = $canonica;
+            $referencias[$canonica] = $canonica;
+            $datos['cambios_revisados'][$i]['unidad_id'] = $canonica;
+            $datos['cambios_revisados'][$i]['indice'] = $hallada['indice'];
+        }
+        foreach ($datos['excepciones'] ?? [] as $i => $pieza) {
+            $origen = (string) ($pieza['origen_unidad_id'] ?? '');
+            if ($origen === '') continue; // Contrato legado sin relación individual.
+            if (! isset($referencias[$origen])) {
+                throw ValidationException::withMessages(['excepciones' => 'Las piezas deben corresponder a la unidad que se guarda.']);
+            }
+            $datos['excepciones'][$i]['origen_unidad_id'] = $referencias[$origen];
+        }
+
+        return [$json, $datos];
+    }
+
     /**
      * @param  array<string, mixed>  $json
      * @return array<string, mixed>
@@ -85,7 +157,7 @@ final class UnidadesRevisionConsulta
     {
         $solicitud = (string) ($linea['solicitud_id'] ?? '');
         $lineaId = (string) ($linea['linea_id'] ?? '');
-        $ancla = $solicitud !== '' ? $solicitud : $lineaId;
+        $ancla = $lineaId !== '' ? $lineaId : $solicitud;
         if ($documentoId) {
             return $ancla !== '' ? "{$tipo}:{$ancla}:doc:{$documentoId}" : "{$tipo}:doc:{$documentoId}";
         }

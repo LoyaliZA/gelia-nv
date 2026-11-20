@@ -245,12 +245,14 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
         const ruta = esEdicion ? route('activos.update', activo.id) : route('activos.store');
 
         transform((formData) => {
+            const { departamento_id, ...camposEditables } = formData;
             const atributosRaw = typeof formData.atributos === 'object'
                 ? formData.atributos
                 : (JSON.parse(formData.atributos || '{}') || {});
 
             return {
-                ...formData,
+                ...camposEditables,
+                ...(!esEdicion && { departamento_id }),
                 atributos: JSON.stringify(atributosRaw),
                 registro_continuo: !esEdicion && registroContinuo,
             };
@@ -351,14 +353,26 @@ export default function ModalFormActivo({ abierto, onCerrar, tipos = [], categor
                     </select>
                 </div>
             )}
-            <div>
-                <label className={LABEL_CLASS}>Departamento *</label>
-                <select value={data.departamento_id} onChange={(e) => setData('departamento_id', e.target.value)} className={SELECT_CLASS}>
-                    <option value="">Seleccionar...</option>
-                    {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-                </select>
-                {erroresCombinados.departamento_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.departamento_id}</p>}
-            </div>
+            {esEdicion ? (
+                <label className="block">
+                    <span className={LABEL_CLASS}>Departamento</span>
+                    <input
+                        type="text"
+                        value={activo.departamento?.nombre ?? ''}
+                        disabled
+                        className={`${INPUT_CLASS} opacity-80 cursor-default`}
+                    />
+                </label>
+            ) : (
+                <div>
+                    <label className={LABEL_CLASS}>Departamento *</label>
+                    <select value={data.departamento_id} onChange={(e) => setData('departamento_id', e.target.value)} className={SELECT_CLASS}>
+                        <option value="">Seleccionar...</option>
+                        {departamentos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                    </select>
+                    {erroresCombinados.departamento_id && <p className="text-red-500 text-xs mt-1">{erroresCombinados.departamento_id}</p>}
+                </div>
+            )}
             {esAccesorio && (
                 <div>
                     <label className={LABEL_CLASS}>Activo principal *</label>

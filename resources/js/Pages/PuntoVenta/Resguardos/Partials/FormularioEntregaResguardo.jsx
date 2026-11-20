@@ -75,7 +75,11 @@ export default function FormularioEntregaResguardo({
 
     const relaciones = catalogos.relaciones || {};
     const metodoValidacion = catalogos.metodo_validacion || 'firma';
-    const indiceActual = indicePaso(pasoActual);
+    const requiereFoto = metodoValidacion === 'fotografia_t02';
+    const pasos = requiereFoto
+        ? PASOS_ENTREGA.filter((paso) => paso.id !== 'revisar').map((paso) => (paso.id === 'evidencia' ? { ...paso, etiqueta: 'Foto' } : paso))
+        : PASOS_ENTREGA;
+    const indiceActual = pasos.findIndex((paso) => paso.id === pasoActual);
 
     const previews = useMemo(() => evidencias.map((archivo) => ({
         archivo,
@@ -113,20 +117,24 @@ export default function FormularioEntregaResguardo({
 
         if (pasoActual === 'evidencia') {
             persistirFirmaCapturada();
-            const errores = validarPasoEvidencia({ tieneFirma: tieneFirmaParaEnvio() });
+            const errores = validarPasoEvidencia({
+                tieneFirma: tieneFirmaParaEnvio(),
+                requiereFoto,
+                tieneFoto: evidencias.length > 0,
+            });
             if (Object.keys(errores).length > 0) {
                 setErroresPaso(errores);
                 return;
             }
         }
 
-        const siguiente = PASOS_ENTREGA[indiceActual + 1];
+        const siguiente = pasos[indiceActual + 1];
         if (siguiente) setPasoActual(siguiente.id);
     };
 
     const retroceder = () => {
         setErroresPaso({});
-        const anterior = PASOS_ENTREGA[indiceActual - 1];
+        const anterior = pasos[indiceActual - 1];
         if (anterior?.id === 'evidencia') {
             setFirmaDataUrlGuardada(null);
         }
@@ -136,9 +144,13 @@ export default function FormularioEntregaResguardo({
     const solicitarConfirmacion = () => {
         persistirFirmaCapturada();
         const errores = {
-            ...validarPasoBultos({ bultoIds }),
+            ...(requiereFoto ? {} : validarPasoBultos({ bultoIds })),
             ...validarPasoReceptor({ relacion, nombreQuienRetira }),
-            ...validarPasoEvidencia({ tieneFirma: tieneFirmaParaEnvio() }),
+            ...validarPasoEvidencia({
+                tieneFirma: tieneFirmaParaEnvio(),
+                requiereFoto,
+                tieneFoto: evidencias.length > 0,
+            }),
         };
         if (Object.keys(errores).length > 0) {
             setErroresPaso(errores);
@@ -168,7 +180,7 @@ export default function FormularioEntregaResguardo({
 
     return (
         <div className="space-y-6">
-            <IndicadorPasos pasoActual={pasoActual} />
+            <IndicadorPasos pasoActual={pasoActual} pasos={pasos} />
 
             {pasoActual === 'localizar' && (
                 <PasoLocalizar resguardo={resguardo} />
@@ -209,6 +221,7 @@ export default function FormularioEntregaResguardo({
                     onQuitar={quitarEvidencia}
                     errores={erroresPaso}
                     deshabilitado={enviando}
+                    soloFotografia={requiereFoto}
                 />
             )}
 
@@ -289,13 +302,13 @@ export default function FormularioEntregaResguardo({
     );
 }
 
-function IndicadorPasos({ pasoActual }) {
-    const indice = indicePaso(pasoActual);
+function IndicadorPasos({ pasoActual, pasos = PASOS_ENTREGA }) {
+    const indice = pasos.findIndex((paso) => paso.id === pasoActual);
 
     return (
         <div className={`${geliaCardClass()} p-4`}>
             <ol className="flex flex-wrap gap-2 m-0 p-0 list-none">
-                {PASOS_ENTREGA.map((paso, indicePasoItem) => {
+                {pasos.map((paso, indicePasoItem) => {
                     const activo = paso.id === pasoActual;
                     const completado = indicePasoItem < indice;
                     return (
@@ -519,6 +532,7 @@ export function PasoEvidencia({
     onQuitar,
     errores,
     deshabilitado,
+    soloFotografia = false,
 }) {
     const [overlayFirmaAbierto, setOverlayFirmaAbierto] = useState(false);
     const esCampo = esDispositivoCampo();
@@ -549,6 +563,7 @@ export function PasoEvidencia({
 
     return (
         <div className="space-y-4">
+            {!soloFotografia && (
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
                 <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Firma del receptor</h2>
                 <p className="text-sm theme-text-muted m-0">
@@ -605,6 +620,7 @@ export function PasoEvidencia({
                     <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.firma}</p>
                 )}
             </div>
+            )}
 
             <OverlayFirmaEntregaPantallaCompleta
                 abierto={overlayFirmaAbierto}
@@ -615,7 +631,10 @@ export function PasoEvidencia({
             />
 
             <div className={`${geliaCardClass()} p-5 space-y-4`}>
-                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">Evidencia fotográfica (opcional)</h2>
+                <h2 className="text-sm font-black uppercase tracking-widest theme-text-main m-0">{soloFotografia ? 'Fotografía de la entrega' : 'Evidencia fotográfica (opcional)'}</h2>
+                {errores.evidencias && (
+                    <p className="text-xs font-bold text-[var(--color-peligro)] m-0">{errores.evidencias}</p>
+                )}
                 <BotonesCapturaEvidencia
                     onAgregar={onAgregar}
                     deshabilitado={deshabilitado}

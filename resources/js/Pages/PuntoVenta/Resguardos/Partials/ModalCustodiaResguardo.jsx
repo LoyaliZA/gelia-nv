@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import { AlertTriangle, Loader2, PackageCheck, X } from 'lucide-react';
 import IconoConfirmacionAnimado from '@/Components/IconoConfirmacionAnimado';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_SELECT } from '../../../../utils/geliaTheme';
 import FormularioCustodiaBultos from './FormularioCustodiaBultos';
 import useConfirmacionCustodia from './useConfirmacionCustodia';
 import useFormularioCustodiaResguardo from './useFormularioCustodiaResguardo';
@@ -139,6 +139,13 @@ export default function ModalCustodiaResguardo({
                                     No hay almacenes activos en esta sucursal para registrar custodia.
                                 </p>
                             </div>
+                        ) : (resguardo.origen_nacional || resguardoResumen?.origen_nacional) ? (
+                            <FormularioCustodiaNacional
+                                almacenes={almacenes}
+                                enviando={enviando}
+                                error={error}
+                                onEnviar={enviar}
+                            />
                         ) : (
                             <FormularioCustodiaBultos
                                 resguardo={resguardo}
@@ -190,6 +197,36 @@ function EstadoNoDisponible({ motivo, onDetalle }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+function FormularioCustodiaNacional({ almacenes, enviando, error, onEnviar }) {
+    const [almacenId, setAlmacenId] = React.useState(String(almacenes[0]?.id || ''));
+    const [ubicacion, setUbicacion] = React.useState('');
+
+    return (
+        <form
+            className="space-y-3"
+            onSubmit={(evento) => {
+                evento.preventDefault();
+                onEnviar({ almacenId, ubicacion, origenNacional: true });
+            }}
+        >
+            <label className={THEME_LABEL} htmlFor="custodia-nacional-almacen">Almacén
+                <select id="custodia-nacional-almacen" className={`${THEME_SELECT} w-full min-h-[44px] mt-1`} value={almacenId} onChange={(evento) => setAlmacenId(evento.target.value)} disabled={enviando}>
+                    {almacenes.map((almacen) => (
+                        <option key={almacen.id} value={String(almacen.id)}>{almacen.nombre}</option>
+                    ))}
+                </select>
+            </label>
+            <label className={THEME_LABEL} htmlFor="custodia-nacional-ubicacion">Ubicación
+                <input id="custodia-nacional-ubicacion" className={`${THEME_INPUT} w-full min-h-[44px] mt-1`} value={ubicacion} onChange={(evento) => setUbicacion(evento.target.value)} disabled={enviando} />
+            </label>
+            {error && <p className="text-sm theme-text-aviso m-0" role="alert">{error}</p>}
+            <button type="submit" className={`${THEME_BTN_PRIMARY} min-h-[44px] w-full`} disabled={enviando}>
+                {enviando ? 'Confirmando…' : 'Confirmar custodia'}
+            </button>
+        </form>
     );
 }
 

@@ -1,6 +1,12 @@
 const CODIGOS_TIENDA = ['RECOGE_TIENDA', 'RECOGE_TIENDA_TRANSFERENCIA', 'RECOGE_TIENDA_CREDITO'];
 
 /** Las marcas de captura distinguen el flujo nuevo de los pedidos del piloto. */
+export function esCapturaNacional(pedido) {
+    const solicitud = pedido?.solicitud_preparacion;
+
+    return solicitud?.modalidad_entrega === 'nacional' && solicitud?.captura_nacional === 'compartida';
+}
+
 export function esCapturaTienda(pedido) {
     const solicitud = pedido?.solicitud_preparacion;
     if (!solicitud || typeof solicitud !== 'object') return false;
@@ -13,6 +19,7 @@ export function esCapturaTienda(pedido) {
 export function usaRegistroActual(pedido) {
     if (!pedido) return true;
     const solicitud = pedido.solicitud_preparacion;
+    if (esCapturaNacional(pedido)) return true;
     if (esCapturaTienda(pedido)) return true;
     // El alta nueva permite guardar antes de elegir la modalidad.
     if (solicitud && Object.hasOwn(solicitud, 'modalidad_entrega')) {

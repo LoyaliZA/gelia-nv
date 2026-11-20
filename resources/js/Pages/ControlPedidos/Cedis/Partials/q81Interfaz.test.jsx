@@ -138,3 +138,30 @@ it('Bitácora necesita permiso explícito, incluso para el rol Gerente, y respet
  await renderTarjeta({puede_ver_bitacora:false}, {onBitacora:abrir});
  expect([...container.querySelectorAll('button')].some(b=>b.textContent==='Bitácora')).toBe(false);
 });
+
+it('no despacha por paquetería cuando hay recolección en sucursal nacional', async () => {
+    await renderTarjeta({
+        origen: { nombre: 'Envío', requiere_logistica: true },
+        es_traslado_interno_pdv: false,
+        solicitud_preparacion: {
+            modalidad_entrega: 'nacional',
+            cambio_a_tienda: { estado: 'pendiente_recepcion', sucursal_destino_id: 4 },
+        },
+        sucursal_destino: { nombre: 'Sucursal centro' },
+        estatus: { fase_ciclo: 'EN_CEDIS' },
+    });
+    expect(container.textContent).toContain('No despachar por paquetería');
+    expect(container.textContent).toContain('Sucursal centro');
+    expect([...container.querySelectorAll('button')].some((boton) => boton.textContent.includes('Marcar empacado'))).toBe(false);
+});
+
+it('ofrece recepción y liberación del vínculo físico nacional', async () => {
+    await renderTarjeta({
+        origen: { nombre: 'Envío', requiere_logistica: true },
+        es_traslado_interno_pdv: false,
+        solicitud_preparacion: { modalidad_entrega: 'nacional', vinculo_resguardo: { estado: 'en_traslado', integrado: false } },
+        estatus: { fase_ciclo: 'EN_CEDIS' },
+    });
+    expect([...container.querySelectorAll('button')].some((boton) => boton.textContent.includes('Confirmar recepción'))).toBe(true);
+    expect([...container.querySelectorAll('button')].some((boton) => boton.textContent.includes('Marcar empacado'))).toBe(false);
+});

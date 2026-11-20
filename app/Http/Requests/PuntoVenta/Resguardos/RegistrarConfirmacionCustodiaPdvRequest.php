@@ -29,6 +29,15 @@ class RegistrarConfirmacionCustodiaPdvRequest extends PdvOperacionPisoRequest
      */
     public function rules(): array
     {
+        if ($this->resguardoNacional()) {
+            return [
+                'version' => ['required', 'integer', 'min:1'],
+                'idempotency_key' => ['required', 'string', 'max:64'],
+                'almacen_id' => ['required', 'integer', 'exists:almacenes,id'],
+                'ubicacion' => ['required', 'string', 'max:80'],
+            ];
+        }
+
         return [
             'version' => ['required', 'integer', 'min:1'],
             'idempotency_key' => ['required', 'string', 'max:64'],
@@ -67,5 +76,12 @@ class RegistrarConfirmacionCustodiaPdvRequest extends PdvOperacionPisoRequest
         }
 
         return $datos;
+    }
+
+    private function resguardoNacional(): bool
+    {
+        $resguardo = $this->route('resguardo');
+
+        return $resguardo instanceof ResguardoPdv && $resguardo->esOrigenNacional();
     }
 }

@@ -120,6 +120,11 @@ class ResguardoPdv extends Model
             );
     }
 
+    public function esOrigenNacional(): bool
+    {
+        return ($this->snapshot_json['origen'] ?? null) === 'nacional';
+    }
+
     public function evidencias(): HasMany
     {
         return $this->hasMany(ResguardoPdvEvidencia::class, 'resguardo_id');

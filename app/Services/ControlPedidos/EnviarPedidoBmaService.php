@@ -62,6 +62,7 @@ class EnviarPedidoBmaService
         }
         app(ResolverAlmacenesConsultaCedisService::class)->ejecutar($pedido);
         $this->validarCamposRequeridos($pedido);
+        $soloMercanciaNacional = $pedido->tienePaqueteriaNacionalPendiente();
         $creditoTienda = \App\Support\ControlPedidos\CustodiaDocumentalTienda::credito($pedido);
         if ($creditoTienda && $pedido->pagosExhibicion()->activosParaCobertura()->where('forma_pago', '!=', 'credito')->exists()) {
             throw new \InvalidArgumentException('El crédito no se combina con otros métodos de pago.');
@@ -76,7 +77,8 @@ class EnviarPedidoBmaService
         if (config('control_pedidos.direcciones_normalizadas')) {
             $pedido->loadMissing(['origen', 'direccionVigente', 'tipoOperacionEnvio']);
             if (
-                ! $pedido->esResguardoAbierto()
+                ! $soloMercanciaNacional
+                && ! $pedido->esResguardoAbierto()
                 && $pedido->origen?->requiere_logistica
                 && ! $pedido->esTrasladoInternoAPdv()
                 && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)
@@ -104,7 +106,8 @@ class EnviarPedidoBmaService
                 throw new \RuntimeException('No se encontró el estatus PENDIENTE_AUXILIAR.');
             }
 
-            if ((config('control_pedidos.direcciones_normalizadas') || $pedido->cliente_direccion_id) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
+            if ((! $pedido->tienePaqueteriaNacionalPendiente() || $pedido->cliente_direccion_id)
+                && (config('control_pedidos.direcciones_normalizadas') || $pedido->cliente_direccion_id) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
                 $this->crearSnapshot->ejecutar($pedido, $usuarioId);
                 $pedido->refresh();
             }

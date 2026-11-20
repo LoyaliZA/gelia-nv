@@ -44,6 +44,21 @@ class CalcularTotalesEnvioPedidoService
         $parcial = $conCosto->isNotEmpty() && ! $completo;
         $requiereDesglose = $this->requiereDesgloseCajas($pedido, $activas);
 
+        if ($pedido->tienePaqueteriaNacionalPendiente()) {
+            return [
+                'fuente' => self::FUENTE_LEGADO,
+                'incompleto' => false,
+                'requiere_desglose' => false,
+                'cajas_activas' => $activas->count(),
+                'cajas_con_costo' => $conCosto->count(),
+                'costo_envios' => '0.00',
+                'costo_seguro' => '0.00',
+                'costo_adicional' => '0.00',
+                'costo_para_cobertura' => '0.00',
+                'moneda' => $this->config->moneda(),
+            ];
+        }
+
         if ($completo) {
             $enviosCent = 0;
             $seguroCent = 0;
@@ -104,7 +119,7 @@ class CalcularTotalesEnvioPedidoService
      */
     public function requiereDesgloseCajas(PedidoBma $pedido, ?Collection $activas = null): bool
     {
-        if (! $this->config->detalleCajas()) {
+        if (! $this->config->detalleCajas() || $pedido->tienePaqueteriaNacionalPendiente()) {
             return false;
         }
 

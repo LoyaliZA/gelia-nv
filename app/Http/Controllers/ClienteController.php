@@ -63,6 +63,15 @@ class ClienteController extends Controller
         $numero = $validated['numero_cliente'];
         $nombre = $validated['nombre'];
         unset($validated['numero_cliente'], $validated['nombre']);
+        if (array_key_exists('monto_venta_actual', $validated)) {
+            app(\App\Services\Clientes\RegistrarHistorialMontoClienteService::class)->registrar(
+                $cliente,
+                (float) $validated['monto_venta_actual'],
+                \App\Services\Clientes\RegistrarHistorialMontoClienteService::ORIGEN_EDICION_ADMINISTRATIVA,
+                Auth::id(),
+                notas: 'Ajuste manual del monto oficial.',
+            );
+        }
 
         $viejoMonto = (float) $cliente->monto_credito_autorizado;
         $viejoDias = (int) $cliente->dias_credito;
@@ -112,7 +121,12 @@ class ClienteController extends Controller
 
         $validated['es_heredado'] = $request->boolean('es_heredado');
         $validated['lista_bloqueada'] = $request->boolean('lista_bloqueada');
-        unset($validated['es_inactivo']); // Estado comercial administrado exclusivamente por Wizerp.
+        $puedeEstado = Auth::user()?->can('clientes.editar') ?? false;
+        if (! $request->exists('es_inactivo') || ! $puedeEstado) {
+            unset($validated['es_inactivo']);
+        } else {
+            $validated['es_inactivo'] = $request->boolean('es_inactivo');
+        }
 
         if (array_key_exists('lista_actual_id', $validated) && $validated['lista_actual_id'] === null) {
             unset($validated['lista_actual_id']);
@@ -124,9 +138,13 @@ class ClienteController extends Controller
             unset($validated['fecha_inicio_credito']);
         }
 
-        // El monto oficial no se edita desde administración; la lista solo con la autoridad apagada.
-        unset($validated['monto_venta_actual']);
-        if (app(\App\Services\Escalonamiento\EscalonamientoAutoridad::class)->estaActiva()) {
+        $user = Auth::user();
+        $puedeEditarMonto = $user?->can('clientes.editar') ?? false;
+
+        if (! $puedeEditarMonto) {
+            unset($validated['monto_venta_actual']);
+        }
+        if (app(\App\Services\Escalonamiento\EscalonamientoAutoridad::class)->estaActiva() && ! $puedeEditarMonto) {
             unset($validated['lista_actual_id']);
         }
 

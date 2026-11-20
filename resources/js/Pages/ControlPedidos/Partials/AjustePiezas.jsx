@@ -45,11 +45,12 @@ function piezasRespuesta(tarea, revisiones = []) {
     return [...reportadas, ...conocidas];
 }
 
-export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange }) {
+export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange, avisoAnexo = '', avisoRetiro = '' }) {
     const operaciones = adaptador || adaptadorConsultaTienda({ pedidoId, pedido });
     const puedeAnexar = operaciones.capacidades?.anexar !== false;
     const puedeRetirar = operaciones.capacidades?.retirar !== false;
     const productos = useMemo(() => {
+        if (adaptador?.piezasRetiro) return adaptador.piezasRetiro;
         const retiradas = new Set((solicitud?.retiro_piezas || []).flatMap(retiro => retiro.faltantes_retirados || []).map(Number));
         // Lo ya solicitado (pendiente o aplicado) deja de ofrecerse; una cantidad parcial solo descuenta lo pedido.
         const clave = (x) => String(x?.sku || x?.descripcion || '').trim().toLowerCase();
@@ -65,7 +66,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             .filter(pieza => !retiradas.has(Number(pieza.revision_id)))
             .map(pieza => ({ ...pieza, cantidad: pieza.revision_id ? pieza.cantidad : pieza.cantidad - (pedidas.get(clave(pieza)) || 0) }))
             .filter(pieza => pieza.cantidad > 0);
-    }, [pedido, solicitud]);
+    }, [pedido, solicitud, adaptador]);
     const claveAnexo = useRef(uuidSolicitud());
     const claveRetiro = useRef(uuidSolicitud());
     const [modo, setModo] = useState('anexo');
@@ -172,7 +173,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 },
             });
             const lineas = respuesta.data?.expediente?.anexo?.sin_remision;
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta, respuesta.data);
             else if (Array.isArray(lineas)) onSolicitud({ ...solicitud, anexo_sin_remision: lineas });
             claveAnexo.current = uuidSolicitud();
             setSeleccionadas([]);
@@ -181,13 +182,13 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setNota('');
             setEvidenciasAnexo([]);
             setPreviewAnexo([]);
-            onAviso(
+            onAviso(avisoAnexo || (
                 respuesta.data?.folio && respuesta.data?.pedido_id && respuesta.data.pedido_id !== pedidoId
                     ? `Anexo registrado en ${respuesta.data.folio}. Falta su cobertura y la integración física.`
                     : entrada === 'documento'
                         ? 'Anexo documental enviado. Quien prepara identifica las piezas. No confirma disponibilidad.'
-                        : 'Anexo con productos enviado. Quien prepara lo revisa. No confirma disponibilidad.',
-            );
+                        : 'Anexo con productos enviado. Quien prepara lo revisa. No confirma disponibilidad.'
+            ));
         } catch (errorAnexo) {
             setError(mensajeDe(errorAnexo, 'No se registró el anexo.'));
         } finally {
@@ -279,7 +280,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                     return form;
                 },
             });
-            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta);
+            if (respuesta.data?.solicitud_preparacion) onSolicitud(respuesta.data.solicitud_preparacion, respuesta.data.version_consulta, respuesta.data);
             claveRetiro.current = uuidSolicitud();
             [...previewsRetiro, ...previewsDocumentos].forEach((preview) => {
                 if (preview.url?.startsWith('blob:')) URL.revokeObjectURL(preview.url);
@@ -294,7 +295,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
             setAgregadas([]);
             setPiezaBuscada(null);
             setCantidadBuscada('1');
-            onAviso(respuesta.data?.message || 'Retiro solicitado.');
+            onAviso(avisoRetiro || respuesta.data?.message || 'Retiro solicitado.');
         } catch (errorRetiro) {
             setError(mensajeDe(errorRetiro, 'No se solicitó el retiro.'));
         } finally {

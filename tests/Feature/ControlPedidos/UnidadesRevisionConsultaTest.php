@@ -7,6 +7,57 @@ use Tests\TestCase;
 
 class UnidadesRevisionConsultaTest extends TestCase
 {
+    public function test_lineas_nuevas_comparten_solicitud_documento_y_sku_sin_compartir_identidad(): void
+    {
+        $base = ['solicitud_id' => 'sol-compartida', 'documento_id' => 71, 'sku' => 'MISMO', 'pendiente_revision' => true];
+        $a = UnidadesRevisionConsulta::nuevaLineaTienda($base);
+        $b = UnidadesRevisionConsulta::nuevaLineaTienda($base);
+        $this->assertNotSame($a['linea_id'], $b['linea_id']);
+        $this->assertNotSame($a['unidades'][0]['unidad_id'], $b['unidades'][0]['unidad_id']);
+        $json = UnidadesRevisionConsulta::materializar(['anexo_sin_remision' => [$a, $b]]);
+        $this->assertSame($b['unidades'], $json['anexo_sin_remision'][1]['unidades']);
+        $this->assertSame(1, UnidadesRevisionConsulta::localizar($json, $b['unidades'][0]['unidad_id'])['indice']);
+    }
+
+    public function test_normaliza_origen_provisional_y_cambio_juntos_sin_reidentificar_lo_guardado(): void
+    {
+        $json = ['anexo_sin_remision' => [['documento_id' => 71, 'pendiente_revision' => true],
+            ['documento_id' => 72, 'unidades' => [['unidad_id' => 'historia-fija', 'documento_id' => 72, 'resultado' => 'correcto']]]]];
+        $datos = ['cambios_revisados' => [['tipo' => 'anexo', 'indice' => 0, 'documento_id' => 71, 'unidad_id' => 'anexo:doc:71', 'resultado' => 'incidencia']],
+            'excepciones' => [['origen_unidad_id' => 'anexo:doc:71']]];
+        [$normalizado, $resuelto] = UnidadesRevisionConsulta::normalizarReferenciasTienda($json, $datos);
+        $id = $normalizado['anexo_sin_remision'][0]['unidades'][0]['unidad_id'];
+        $this->assertSame($id, $resuelto['cambios_revisados'][0]['unidad_id']);
+        $this->assertSame($id, $resuelto['excepciones'][0]['origen_unidad_id']);
+        $this->assertSame('historia-fija', $normalizado['anexo_sin_remision'][1]['unidades'][0]['unidad_id']);
+        $this->assertArrayNotHasKey('linea_id', $json['anexo_sin_remision'][0]);
+        [, $reintento] = UnidadesRevisionConsulta::normalizarReferenciasTienda($normalizado, $datos);
+        $this->assertSame($id, $reintento['excepciones'][0]['origen_unidad_id']);
+    }
+
+    public function test_alias_compartido_no_se_desambigua_por_indice(): void
+    {
+        $base = ['solicitud_id' => 'sol', 'documento_id' => 71, 'pendiente_revision' => true];
+        $json = ['anexo_sin_remision' => [UnidadesRevisionConsulta::nuevaLineaTienda($base), UnidadesRevisionConsulta::nuevaLineaTienda($base)]];
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        UnidadesRevisionConsulta::normalizarReferenciasTienda($json, ['cambios_revisados' => [['tipo' => 'anexo', 'indice' => 1, 'documento_id' => 71, 'unidad_id' => 'anexo:sol:doc:71']]]);
+    }
+
+    public function test_rechaza_origen_ajeno_aunque_la_unidad_del_cambio_sea_valida(): void
+    {
+        $json = ['anexo_sin_remision' => [['documento_id' => 71], ['documento_id' => 72]]];
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        UnidadesRevisionConsulta::normalizarReferenciasTienda($json, ['cambios_revisados' => [['tipo' => 'anexo', 'documento_id' => 71, 'unidad_id' => 'anexo:doc:71']],
+            'excepciones' => [['origen_unidad_id' => 'anexo:doc:72']]]);
+    }
+
+    public function test_rechaza_documento_distinto_del_identificado_por_la_clave(): void
+    {
+        $json = ['anexo_sin_remision' => [['documento_id' => 71], ['documento_id' => 72]]];
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        UnidadesRevisionConsulta::normalizarReferenciasTienda($json, ['cambios_revisados' => [['tipo' => 'anexo', 'indice' => 1, 'documento_id' => 72, 'unidad_id' => 'anexo:doc:71']]]);
+    }
+
     public function test_sku_con_varias_capturas_emite_una_unidad_por_archivo(): void
     {
         $linea = [

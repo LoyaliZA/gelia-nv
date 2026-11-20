@@ -238,7 +238,7 @@ export function accionesPedidoLista({
     if (puedeEditar?.(pedido) && onEditar) {
         out.push({
             key: 'editar',
-            label: estadoConsultaPedido(pedido) === 'respondida' ? 'Continuar' : 'Editar',
+            label: pedido.puede_continuar_nacional || estadoConsultaPedido(pedido) === 'respondida' ? 'Continuar' : 'Editar',
             onClick: () => onEditar(pedido),
         });
     }

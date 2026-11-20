@@ -402,7 +402,23 @@ class BeneficiosAutorizadosRegresionTest extends TestCase
 
     // ---- H6: el oficial solo lo escribe la importación ------------------------------------------
 
-    public function test_h6_la_edicion_administrativa_ignora_el_monto_oficial(): void
+    public function test_h6_la_edicion_administrativa_ignora_el_monto_oficial_sin_permiso(): void
+    {
+        $cliente = $this->cliente('5000.00');
+
+        $this->actingAs($this->vendedor)->withHeaders(['X-Inertia' => 'true', 'X-Requested-With' => 'XMLHttpRequest'])
+            ->put(route('admin.clientes.update', $cliente), [
+                'numero_cliente' => $cliente->numero_cliente,
+                'nombre' => 'Nombre corregido',
+                'monto_venta_actual' => 999999,
+                'lista_actual_id' => $this->bronce->id,
+            ]);
+
+        $this->assertSame('5000.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame('Nombre corregido', $cliente->fresh()->nombre, 'La edición se aplicó; solo el oficial se ignora.');
+    }
+
+    public function test_h6_con_permiso_editar_aplica_el_monto_oficial(): void
     {
         $cliente = $this->cliente('5000.00');
         Permission::findOrCreate('clientes.editar', 'web');
@@ -416,8 +432,8 @@ class BeneficiosAutorizadosRegresionTest extends TestCase
                 'lista_actual_id' => $this->bronce->id,
             ]);
 
-        $this->assertSame('5000.00', $cliente->fresh()->monto_venta_actual);
-        $this->assertSame('Nombre corregido', $cliente->fresh()->nombre, 'La edición se aplicó; solo el oficial se ignora.');
+        $this->assertSame('999999.00', $cliente->fresh()->monto_venta_actual);
+        $this->assertSame('Nombre corregido', $cliente->fresh()->nombre);
     }
 
     // ---- Lista automática por acumulado operativo ----------------------------------------------

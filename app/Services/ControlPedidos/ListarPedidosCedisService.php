@@ -138,6 +138,7 @@ class ListarPedidosCedisService
             'historial.estatusNuevo',
             'resguardosAnexados.resguardo:id,folio,folio_remision,numero_remision',
             'complementos.documentos',
+            'complementos.revisionesProducto',
             'complementos.estatus',
             'complementos.cliente',
             'complementos.bultosEmpaque.documentos',

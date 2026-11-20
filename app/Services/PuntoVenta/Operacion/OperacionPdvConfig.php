@@ -37,4 +37,17 @@ final class OperacionPdvConfig
 
         return Carbon::parse($fecha, $zona)->startOfDay()->timezone((string) config('app.timezone'));
     }
+
+    /**
+     * Último instante del día operativo, calculado en la zona de la sucursal.
+     * Aplicar endOfDay() sobre inicioDiaOperativo() usa la zona de la aplicación
+     * y desplaza la ventana cuando la sucursal tiene otra zona horaria.
+     */
+    public function finDiaOperativo(int $sucursalId, ?CarbonInterface $momento = null): Carbon
+    {
+        $zona = $this->zonaHorariaOperativa($sucursalId);
+        $fecha = $this->fechaOperativa($sucursalId, $momento);
+
+        return Carbon::parse($fecha, $zona)->endOfDay()->timezone((string) config('app.timezone'));
+    }
 }

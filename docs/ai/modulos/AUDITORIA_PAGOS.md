@@ -12,6 +12,8 @@
 - [verificado] Validar pago crea cierre de reporte y resuelve su campo de la cola de errores: `app/Services/ControlPedidos/ValidarPagoPedidoBmaService.php:96`.
 - [verificado] M-10 / flete diferido: `assertPagoListoParaAvanzar` y `CoberturaPagoPedidoBmaService::bloqueos` exigen mercancía cubierta y conservan SAF, comprobantes, rechazos y FASE_APROBAR; el pendiente de transporte no se marca cubierto. Con resguardo activo, enviar a auditoría también es solo mercancía (M-09 se valida después): `RegistrarPagoPedidoBmaService.php`.
 
+- [verificado] Nacional 2.0 con PAQ. PENDIENTE permite verificar y remisionar solo mercancía. Al elegir servicio y cotizar, se conservan la remisión y las exhibiciones verificadas. Auxiliar revisa la cobertura de los cargos pendientes. Guía y despacho requieren decisión y cobertura: `CoberturaEnvioNacional` y `CambiarPaqueteriaNacional`.
+
 ## Reglas que no se rompen
 - [verificado] Reintento de pago recupera exhibición por clave antes de comprobar versión financiera: `app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php:111`.
 - [verificado] Mantener índice único por pedido/clave: `database/migrations/2026_10_15_210100_add_idempotency_key_to_pedido_bma_pagos.php:11`.
@@ -36,4 +38,4 @@
 - [verificado] Excedentes desde $10 tienen gestión SAF; menores no se automatizan: `gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md:82`.
 - [inferido] Modificar la fórmula solo en React produciría una proyección incompatible con el bloqueo servidor; confirmar con resumen persistido: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:78`.
 
-- Última verificación: 2026-11-19, working tree resguardo municipal M-04 a M-10.
+- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.

@@ -89,11 +89,64 @@ export function adaptadorConsultaMunicipal({ pedidoId, pedido = {} }) {
     };
 }
 
-/** Contrato Nacional. Sin comandos ni interfaz: la etapa 5 conecta pesaje, cajas y transporte. */
+export function adaptadorConsultaNacional({ pedidoId, pedido = {} }) {
+    const abierta = Boolean(pedidoId)
+        && Boolean(pedido.pesaje_respondido_at)
+        && !pedido.consulta_cerrada
+        && !pedido.consulta_cerrada_at
+        && !pedido.numero_remision
+        && !pedido.pago_validado_at
+        && !pedido.consulta_actualizacion_pendiente;
+    const conCaptura = (tipo) => {
+        const enviar = comando(`/control-pedidos/${pedidoId}/ajuste-nacional`);
+
+        return ({ archivos, armar }) => enviar({
+            archivos,
+            armar: (lote, indice) => {
+                const form = armar(lote, indice);
+                form.set('tipo', tipo);
+                form.set('revision_esperada', String(pedido.revision_registro ?? ''));
+                form.set('base_captura', String(pedido.base_captura ?? ''));
+
+                return form;
+            },
+        });
+    };
+
+    return {
+        modalidad: 'nacional',
+        almacenId: pedido.almacen_id || pedido.almacen?.id || null,
+        piezasRetiro: (pedido.revisiones_producto || []).filter((p) => !p.retirada_at).map((p) => ({
+            id: `revision-${p.id}`,
+            revision_id: p.id,
+            sku: p.sku || '',
+            descripcion: p.descripcion_producto,
+            cantidad: Math.max(1, Number(p.cantidad_solicitada) || Number(p.cantidad_encontrada) || 1),
+            estado: p.estado_fisico,
+        })),
+        capacidades: {
+            anexar: abierta,
+            retirar: abierta,
+            sustituir: false,
+            consultar: true,
+            adjuntar: abierta,
+            solicitarRevision: false,
+            historial: true,
+            cerrar: Boolean(pedido.puede_cerrar_consulta),
+            reabrir: false,
+        },
+        comandos: {
+            anexar: conCaptura('anexo'),
+            retirar: conCaptura('retiro'),
+        },
+    };
+}
+
+/** Alta nacional 2.0. El anexo queda en el mismo pedido y no usa la revisión sin pesaje. */
 export const contratoConsultaNacional = {
     modalidad: 'nacional',
-    capacidades: ['anexar', 'retirar', 'sustituir', 'consultar', 'adjuntar', 'solicitarRevision', 'historial'],
-    puntos: ['ModalFormPedidoLegado', 'ActualizarConsultaPedidoBmaService', 'solicitar-repesaje'],
+    capacidades: ['anexar', 'retirar', 'consultar', 'adjuntar', 'historial'],
+    puntos: ['FormularioRegistrarNacional', 'ActualizarConsultaPedidoBmaService', 'ajuste-nacional'],
     conserva: ['pesos', 'medidas', 'cajas', 'costos', 'documentosTransporte', 'bloqueosPesaje'],
-    prohibido: ['area_revision_control_pedidos_como_consulta_sin_peso', 'pedidoRelacionadoTienda', 'montarEditor'],
+    prohibido: ['area_revision_control_pedidos_como_consulta_sin_peso', 'pedidoRelacionadoTienda', 'montarEditor', 'anexo-tienda'],
 };

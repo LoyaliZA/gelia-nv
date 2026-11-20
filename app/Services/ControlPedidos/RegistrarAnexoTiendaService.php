@@ -78,6 +78,9 @@ final class RegistrarAnexoTiendaService
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
             $meta = $this->meta($docs, $ciclo, $solicitudId);
             $lineas = array_map(fn ($linea) => array_merge($linea, $meta), $lineas);
+            if (($json['modalidad_entrega'] ?? '') === 'tienda' && ($json['area_revision'] ?? '') === 'preparacion_tienda') {
+                $lineas = array_map(\App\Support\ControlPedidos\UnidadesRevisionConsulta::nuevaLineaTienda(...), $lineas);
+            }
             if (is_array($json['revision_disponibilidad'] ?? null)) {
                 $json['revision_disponibilidad']['aceptacion_vigente'] = false;
                 $json['revision_disponibilidad']['ciclo_id'] = $ciclo;

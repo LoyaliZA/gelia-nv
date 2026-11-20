@@ -43,6 +43,7 @@ return [
     'clientes.correccion_emergencia',
     'clientes.corregir_modalidad',
     'clientes.crear',
+    'clientes.editar',
     'clientes.direcciones.crear',
     'clientes.direcciones.desactivar',
     'clientes.direcciones.editar',

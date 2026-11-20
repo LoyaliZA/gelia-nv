@@ -34,7 +34,6 @@ class UpdateActivoRequest extends FormRequest
             'catalogo_tipo_activo_id' => 'sometimes|exists:catalogo_tipos_activo,id',
             'catalogo_categoria_activo_id' => 'nullable|exists:catalogo_categorias_activo,id',
             'activo_padre_id' => 'nullable|exists:activos,id',
-            'departamento_id' => 'sometimes|exists:departamentos,id',
             'area_id' => 'nullable|exists:areas,id',
             'nombre' => 'sometimes|string|max:255',
             'descripcion' => 'nullable|string|max:2000',

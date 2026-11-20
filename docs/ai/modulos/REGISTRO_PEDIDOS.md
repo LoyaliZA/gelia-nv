@@ -3,10 +3,10 @@
 - Propósito: conservar la captura comercial y dirigir cada modalidad al recorrido compatible.
 - Ubicación: `routes/web/modules/control-pedidos/core.php`; `app/Http/Controllers/ControlPedidos/PedidoBmaController.php`; `app/Services/ControlPedidos/{CrearPedidoBmaService,ActualizarPedidoBmaService}.php`.
 - Frontend: `resources/js/Pages/ControlPedidos/{Index.jsx,Partials/ModalFormPedido.jsx,Partials/FormularioRegistrarTienda.jsx,Partials/ModalFormPedidoLegado.jsx}`.
-- Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
+- Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest,NacionalAltaConsultaTest,NacionalOla3CierreTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
 
 ## Estado actual
-- [verificado] Tienda y Municipal marcado comparten captura; Nacional y Municipal histórico conservan el legado: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:8`.
+- [verificado] Tienda, Municipal marcado y Nacional 2.0 (`captura_nacional=compartida`) comparten captura. Nacional histórico y el borrador legado siguen en el formulario anterior; abrirlos no escribe la marca: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:13`.
 - [verificado] Abrir/seleccionar modalidad sin captura significativa no debe crear borradores: `gestion-pedidos-docs/M01_CORTE_ETAPAS_1_2.md:13`.
 - [verificado] La lectura del listado excluye borradores ajenos salvo alcance administrador: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:171`.
 
@@ -28,6 +28,9 @@
 ## Puntos blandos
 - [verificado] «Legado» sigue importado y ejecutado; no es un archivo huérfano: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:38`.
 - [verificado] El identificador histórico `folio_remision` no autoriza editar el número de pedido desde Auditoría: `app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php:86`.
-- [inferido] Unificar ambos formularios sin preservar su selección alteraría Nacional/históricos; por confirmar mediante regresión de esas variantes: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:15`.
+- [verificado] El borrador nacional guarda líneas opcionales por SKU o evidencia con UUID y cantidad. Conserva el PDF general por separado. `GuardarMercanciaNacional` guarda las líneas, sus adjuntos y la revisión de la captura en el mismo guardado del borrador.
+- [verificado] Después del cierre y con cobertura de mercancía, Ventas puede solicitar recolección en sucursal antes de la salida. `CambiarNacionalATienda` conserva modalidad y cargos previos. La confirmación externa de cancelación de una guía es un hecho separado.
+- [verificado] Tras el cierre, la captura nacional permite cambiar la paquetería y registrar cotización con dirección verificada y flete de cada caja. `CambiarPaqueteriaNacional` aplica los importes con los servicios de costos existentes.
+- [verificado] El alta nacional ofrece PAQ. PENDIENTE y comerciales activas con logística, incluso si `requiere_peso` es falso. Ambos recorridos consultan peso en CEDIS: `FormularioRegistrarNacional` y `SolicitarPesajePedidoBmaService`.
 
-- Última verificación: 2026-11-18, working tree M-02 UX conversión.
+- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.

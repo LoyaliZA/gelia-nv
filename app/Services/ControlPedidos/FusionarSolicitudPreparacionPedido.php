@@ -2,6 +2,8 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+
 /**
  * Merge de la intención de preparación.
  * Una clave ausente conserva el valor previo. null limpia solo esa clave.
@@ -110,6 +112,7 @@ class FusionarSolicitudPreparacionPedido
         }
 
         $this->conservarOperacionTienda($salida, $actual === null ? $entrada : $base);
+        $this->aplicarMarcaNacional($salida, $base, $entrada);
 
         if (array_key_exists('entrega_municipal', $entrada)) {
             if ($entrada['entrega_municipal'] === null) {
@@ -195,7 +198,7 @@ class FusionarSolicitudPreparacionPedido
      */
     private function vacia(array $salida): bool
     {
-        if (array_key_exists('modalidad_entrega', $salida)) {
+        if (array_key_exists('modalidad_entrega', $salida) || ($salida['captura_nacional'] ?? null) === 'compartida') {
             return false;
         }
         if (in_array($salida['area_revision'] ?? null, ['preparacion_tienda', 'control_pedidos'], true)) {
@@ -354,6 +357,48 @@ class FusionarSolicitudPreparacionPedido
             if (array_key_exists($clave, $origen)) {
                 $salida[$clave] = $origen[$clave];
             }
+        }
+    }
+
+    /**
+     * La marca 2.0 solo entra en un alta nacional. Un histórico ya nacional no la recibe al abrirse ni al guardarse.
+     *
+     * @param  array<string, mixed>  $salida
+     * @param  array<string, mixed>  $base
+     * @param  array<string, mixed>  $entrada
+     */
+    private function aplicarMarcaNacional(array &$salida, array $base, array $entrada): void
+    {
+        if (is_array($base['ajustes_nacionales'] ?? null)) {
+            $salida['ajustes_nacionales'] = array_values($base['ajustes_nacionales']);
+        }
+        if (is_array($base['invalidacion_guia'] ?? null)) {
+            $salida['invalidacion_guia'] = $base['invalidacion_guia'];
+        }
+        if (is_array($base['cambio_paqueteria'] ?? null)) {
+            $salida['cambio_paqueteria'] = $base['cambio_paqueteria'];
+        }
+        foreach (['piezas_nacionales', 'piezas_nacionales_vigentes', 'respuestas_piezas_nacionales', 'pago_solo_mercancia_nacional', 'cambio_paqueteria_cobertura', 'cotizacion_nacional', 'complementos_nacionales', 'complemento_nacional', 'respuesta_complemento_nacional', 'vinculo_resguardo', 'cambio_a_tienda', 'cancelacion_nacional'] as $clave) {
+            if (is_array($base[$clave] ?? null)) {
+                $salida[$clave] = $base[$clave];
+            }
+        }
+
+        if (($salida['modalidad_entrega'] ?? null) !== 'nacional') {
+            return;
+        }
+
+        $marcaPrevia = ($base['captura_nacional'] ?? null) === 'compartida';
+        $marcaPedida = ($entrada['captura_nacional'] ?? null) === 'compartida';
+        $historico = ($base['modalidad_entrega'] ?? null) === 'nacional' && ! $marcaPrevia;
+        if (! $marcaPrevia && ! ($marcaPedida && ! $historico)) {
+            return;
+        }
+
+        $salida['captura_nacional'] = 'compartida';
+        unset($salida['area_revision']);
+        if (($salida['codigo_modalidad'] ?? null) === null || $salida['codigo_modalidad'] === '') {
+            $salida['codigo_modalidad'] = CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_BODEGA_NORMAL;
         }
     }
 

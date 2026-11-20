@@ -15,6 +15,8 @@
 - [verificado] Bloquear empaque ante actualización, errores graves o traslado a CEDIS sin recepción: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:105` y `:125`.
 - [verificado] Regla ordinaria exige pago validado/remisión; solo-resguardos exige anexo de envío aprobado y no remisión de mercancía: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:113`.
 - [verificado] Enviado requiere empaque, etapa correcta y guía si ofrece rastreo: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:38` y `:68`.
+- [verificado] El hijo con `pedido_principal_id` no entra a la cola de pesaje. CEDIS responde las piezas del complemento en el detalle del padre, sin mezclar documentos: `app/Services/ControlPedidos/Nacional/ResponderPiezasComplementoNacional.php`.
+- [verificado] Con recolección en sucursal no despacha por paquetería. Empaque, guía y salida esperan recepción CEDIS e `integrado` del vínculo físico: `app/Support/ControlPedidos/Nacional/BarreraRecepcionComplementoNacional.php`.
 
 ## Dependencias con otros módulos
 - [Consultas](CONSULTAS_DISPONIBILIDAD.md), [Auditoría](AUDITORIA_PAGOS.md), [Guías](DELEGADO_GUIAS.md), Traspasos y PDV.
@@ -28,4 +30,4 @@
 - [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
 - [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, cierre Ola 3 sin commit.

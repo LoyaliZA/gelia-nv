@@ -181,7 +181,7 @@ class CierreHorarioOperacionPdvTest extends TestCase
         Event::assertNotDispatched(JornadaCierreHorario::class);
     }
 
-    public function test_sobrescritura_por_sucursal_y_zona_horaria(): void
+    public function test_sobrescritura_por_sucursal_conserva_hora_e_ignora_zona_horaria(): void
     {
         $otra = Sucursal::factory()->create();
         $this->configurarHorario([
@@ -197,17 +197,9 @@ class CierreHorarioOperacionPdvTest extends TestCase
 
         $servicio = app(CierreHorarioSucursalPdvService::class);
 
-        $antesTijuana = now('America/Tijuana')->setTime(19, 30);
-        $this->assertFalse($servicio->ejecutar($this->sucursal->id, $antesTijuana));
-
-        $despuesTijuana = now('America/Tijuana')->setTime(20, 5);
-        $this->assertTrue($servicio->ejecutar($this->sucursal->id, $despuesTijuana));
-
-        $this->configurarHorario([
-            'hora_cierre' => '19:00',
-            'zona_horaria' => 'America/Mexico_City',
-            'por_sucursal' => [],
-        ]);
+        // La zona siempre es la de la aplicación (México); la hora propia de la sucursal sí aplica.
+        $this->assertFalse($servicio->ejecutar($this->sucursal->id, now('America/Mexico_City')->setTime(19, 30)));
+        $this->assertTrue($servicio->ejecutar($this->sucursal->id, now('America/Mexico_City')->setTime(20, 5)));
 
         $this->assertFalse($servicio->ejecutar($otra->id, now('America/Mexico_City')->setTime(18, 30)));
         $this->assertTrue($servicio->ejecutar($otra->id, now('America/Mexico_City')->setTime(19, 5)));

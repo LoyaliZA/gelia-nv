@@ -61,6 +61,8 @@ describe('entregaResguardoUtils', () => {
     it('exige firma en paso de evidencia', () => {
         expect(validarPasoEvidencia({ tieneFirma: false }).firma).toBeTruthy();
         expect(validarPasoEvidencia({ tieneFirma: true })).toEqual({});
+        expect(validarPasoEvidencia({ requiereFoto: true, tieneFoto: false }).evidencias).toBeTruthy();
+        expect(validarPasoEvidencia({ requiereFoto: true, tieneFoto: true })).toEqual({});
     });
 
     it('define dimensiones normalizadas de firma para el panel de entrega', () => {
