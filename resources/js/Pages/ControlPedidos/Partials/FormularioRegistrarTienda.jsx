@@ -1314,7 +1314,7 @@ export default function FormularioRegistrarTienda({
                             )}
                         </div>
                     </section>
-                    <div className="registrar-tienda-atencion">
+                    <div className={`registrar-tienda-atencion ${nacional ? 'registrar-nacional-inicio' : ''}`}>
                         {(transito || modalidad) === 'tienda' && !conversion && (
                             <section
                                 className="registrar-tienda-panel"
@@ -1510,6 +1510,7 @@ export default function FormularioRegistrarTienda({
                                 />
                             </div>
                         </section>
+                        {nacional?.panelEnvio}
                     </div>
                     {nacional?.contenido}
                     {(!conversion || (modalidad === 'municipal' && !resultadoConversion)) && municipal?.contenido}

@@ -1643,6 +1643,16 @@
 }
 
 @container registrar-tienda (min-width: 48rem) {
+    .registrar-nacional-inicio .registrar-tienda-datos,
+    .registrar-nacional-inicio .registrar-nacional-envio-guardado {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .registrar-nacional-inicio .registrar-nacional-envio-importe {
+        padding-inline-start: 0;
+        border-inline-start: 0;
+    }
+
     .registrar-tienda-atencion {
         grid-template-columns: 1.15fr 1fr;
     }
