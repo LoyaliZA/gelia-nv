@@ -53,12 +53,12 @@ afterEach(async () => {
     host.remove();
 });
 
-async function render(extra = {}) {
+async function render(extra = {}, catalogosPrueba = catalogos) {
     const guardar = vi.fn(async (captura) => ({ ...pedido, ...extra, catalogo_paqueteria_id: captura.catalogo_paqueteria_id, revision_registro: 2, base_captura: 'b'.repeat(64) }));
     await act(async () => {
         root.render(
-            <FormularioRegistrarNacional pedido={{ ...pedido, ...extra }} catalogos={catalogos} guardar={guardar} onPedido={vi.fn()}>
-                {({ contenido, pie }) => <div>{contenido}{pie}</div>}
+            <FormularioRegistrarNacional pedido={{ ...pedido, ...extra }} catalogos={catalogosPrueba} guardar={guardar} onPedido={vi.fn()}>
+                {({ contenido, panelEnvio, pie, guardarBorrador }) => <div>{panelEnvio}{contenido}{pie}<button type="button" onClick={guardarBorrador}>Guardar borrador</button></div>}
             </FormularioRegistrarNacional>,
         );
     });
@@ -102,7 +102,8 @@ it('envía la consulta de pesaje con la paquetería comercial', async () => {
         expect.objectContaining({ revision_esperada: 2, base_captura: 'b'.repeat(64) }),
         expect.anything(),
     );
-    expect(document.body.textContent).toContain('Salida: CEDIS');
+    expect(document.querySelector('label[for="almacen-salida-nacional"]').textContent).toBe('Almacén de salida');
+    expect(document.getElementById('almacen-salida-nacional').disabled).toBe(true);
 });
 
 it('actualiza la paquetería después del cierre, incluida la pendiente', async () => {
@@ -118,7 +119,7 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
     await act(async () => {
         root.render(
             <FormularioRegistrarNacional pedido={cerrado} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
-                {({ contenido, pie }) => <div>{contenido}{pie}</div>}
+                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
             </FormularioRegistrarNacional>,
         );
     });
@@ -156,7 +157,7 @@ it('registra el importe del complemento en el pedido con remisión', async () =>
     await act(async () => {
         root.render(
             <FormularioRegistrarNacional pedido={conRemision} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
-                {({ contenido, pie }) => <div>{contenido}{pie}</div>}
+                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
             </FormularioRegistrarNacional>,
         );
     });
@@ -206,7 +207,7 @@ it('solicita recolección en sucursal sin convertir la modalidad', async () => {
     await act(async () => {
         root.render(
             <FormularioRegistrarNacional pedido={conRemision} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
-                {({ contenido, pie }) => <div>{contenido}{pie}</div>}
+                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
             </FormularioRegistrarNacional>,
         );
     });
@@ -226,37 +227,23 @@ it('solicita recolección en sucursal sin convertir la modalidad', async () => {
     );
 });
 
-it('envía una captura mixta con paquetería pendiente sin repetir el soporte general', async () => {
-    const guardar = await render({ documentos: [] });
-    const boton = (texto) => [...document.querySelectorAll('button')].find((item) => item.textContent === texto);
-    await act(async () => boton('Elegir perfume').click());
-    await act(async () => boton('Agregar').click());
-    await act(async () => boton('Por captura o documento').click());
-    await act(async () => {
-        const descripcion = document.getElementById('nacional-descripcion-captura');
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(descripcion, 'Aroma de la captura');
-        descripcion.dispatchEvent(new Event('input', { bubbles: true }));
-        boton('Adjuntar captura').click();
-    });
-    await act(async () => boton('Agregar pieza').click());
+it('transmite piezas precapturadas sin exigir recaptura ni una lista de SKU', async () => {
+    const solicitud = { modalidad_entrega: 'nacional', captura_nacional: 'compartida', piezas_nacionales: [
+        { id: 'sku-previo', sku: 'SKU-PREVIO', descripcion: 'Pieza precapturada', cantidad: 1 },
+        { id: 'captura-previa', sku: '', descripcion: 'Pieza sin SKU', cantidad: 1, documento_ids: [40] },
+    ] };
+    const guardar = await render({ documentos: [], solicitud_preparacion: solicitud });
+    expect(document.getElementById('mercancia-nacional-titulo')).toBeNull();
     await act(async () => {
         const select = document.getElementById('paqueteria-nacional');
-        select.value = '9';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
+        select.value = '9'; select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await act(async () => botonEnviar().click());
-
-    expect(guardar).toHaveBeenCalledWith(expect.objectContaining({
-        catalogo_paqueteria_id: 9,
-        guardar_mercancia_nacional: true,
-        piezas_nacionales: [
-            expect.objectContaining({ sku: 'SKU-NUEVA', cantidad: 1 }),
-            expect.objectContaining({ sku: '', evidencia: expect.any(File) }),
-        ],
-    }));
+    expect(guardar).toHaveBeenCalledWith({ catalogo_paqueteria_id: 9 });
     expect(axios.post.mock.calls[0][0]).toBe('/control-pedidos/9/solicitar-pesaje');
+    expect(solicitud.piezas_nacionales).toHaveLength(2);
     expect(document.body.textContent).toContain('CEDIS tiene pendiente confirmar disponibilidad y peso');
-    expect(document.body.textContent).not.toMatch(/Solicitar recolección|Registrar complemento|Falta confirmar la cancelación|No se creó una tarea/);
+    expect(document.getElementById('mercancia-nacional-titulo')).toBeNull();
 });
 
 it('muestra el aviso de una guía afectada y oculta cambios después de la salida', async () => {
@@ -283,4 +270,115 @@ it('anexa sobre el mismo pedido nacional', async () => {
     expect(axios.post).toHaveBeenCalledWith('/control-pedidos/7/ajuste-nacional', form, expect.anything());
     expect(form.get('tipo')).toBe('anexo');
     expect(String(axios.post.mock.calls[0][0])).not.toContain('anexo-tienda');
+});
+
+const cedisSalida = (id, nombre) => ({ id, nombre, tipo_almacen: { nombre: 'CEDIS' }, permite_salida_pedidos: true });
+const salida = () => document.getElementById('almacen-salida-nacional');
+const guardarBorrador = () => [...document.querySelectorAll('button')].find(b => b.textContent === 'Guardar borrador');
+const elegirSalida = id => act(async () => {
+    salida().value = String(id);
+    salida().dispatchEvent(new Event('change', { bubbles: true }));
+});
+
+it('preselecciona el único CEDIS elegible del catálogo sin fijar su id o nombre', async () => {
+    await render({}, { ...catalogos, almacenes: [
+        cedisSalida(47, 'Centro logístico del catálogo'),
+        { ...cedisSalida(48, 'Sin salida'), permite_salida_pedidos: false },
+        { ...cedisSalida(49, 'Inactivo'), activo: false },
+        { ...cedisSalida(50, 'Oculto'), visible_en_pedidos: false },
+        { ...cedisSalida(51, 'Sucursal PDV'), tipo_almacen: { nombre: 'PDV' } },
+    ] });
+    expect(salida().value).toBe('47');
+    expect([...salida().options].filter(o => o.value).map(o => o.textContent)).toEqual(['Centro logístico del catálogo']);
+    expect(salida().disabled).toBe(false);
+});
+
+it('no inventa una salida cuando el catálogo está vacío o es ambiguo', async () => {
+    await render();
+    expect(salida().value).toBe('');
+    expect([...salida().options].filter(o => o.value)).toHaveLength(0);
+    await render({}, { ...catalogos, almacenes: [cedisSalida(47, 'CEDIS Norte'), cedisSalida(73, 'CEDIS Sur')] });
+    expect(salida().value).toBe('');
+});
+
+it('guarda almacen_id, conserva la elección al confirmar y la recupera al reabrir', async () => {
+    const opciones = { ...catalogos, almacenes: [cedisSalida(47, 'CEDIS Norte'), cedisSalida(73, 'CEDIS Sur')] };
+    const guardar = await render({ almacen_id: 47, catalogo_paqueteria_id: 8 }, opciones);
+    await elegirSalida(73);
+    await act(async () => guardarBorrador().click());
+    expect(guardar).toHaveBeenCalledWith({ catalogo_paqueteria_id: 8, almacen_id: 73 });
+    // La respuesta simulada omite almacen_id, igual que el autoguardado actual.
+    expect(salida().value).toBe('73');
+    expect(axios.post).not.toHaveBeenCalled();
+    await act(() => root.unmount()); root = createRoot(host);
+    await render({ almacen_id: 73, catalogo_paqueteria_id: 8 }, opciones);
+    expect(salida().value).toBe('73');
+});
+
+it('guarda la salida antes de consultar y bloquea el selector después del envío', async () => {
+    const guardar = await render({ catalogo_paqueteria_id: 8 }, { ...catalogos, almacenes: [cedisSalida(47, 'CEDIS Norte')] });
+    await act(async () => botonEnviar().click());
+    expect(guardar).toHaveBeenCalledWith({ catalogo_paqueteria_id: 8, almacen_id: 47 });
+    expect(axios.post).toHaveBeenCalledWith('/control-pedidos/9/solicitar-pesaje', expect.anything(), expect.anything());
+    expect(salida().value).toBe('47'); expect(salida().disabled).toBe(true);
+});
+
+it('mantiene una salida previamente guardada si deja de estar disponible', async () => {
+    await render({ almacen_id: 73, almacen: { id: 73, nombre: 'CEDIS anterior' }, pesaje_solicitado_at: '2026-11-21T12:00:00Z' },
+        { ...catalogos, almacenes: [cedisSalida(47, 'CEDIS Norte')] });
+    expect(salida().value).toBe('73'); expect(salida().disabled).toBe(true);
+    expect(salida().selectedOptions[0].textContent).toContain('CEDIS anterior');
+    expect(salida().selectedOptions[0].disabled).toBe(true);
+});
+
+it('conserva la elección local cuando falla el guardado', async () => {
+    const guardar = await render({ almacen_id: 47 }, { ...catalogos, almacenes: [cedisSalida(47, 'CEDIS Norte'), cedisSalida(73, 'CEDIS Sur')] });
+    guardar.mockRejectedValueOnce(new Error('Fallo simulado'));
+    await elegirSalida(73);
+    await act(async () => guardarBorrador().click());
+    expect(salida().value).toBe('73'); expect(salida().disabled).toBe(false);
+    expect(axios.post).not.toHaveBeenCalled();
+});
+
+it.each([
+    ['registro', { id: undefined }],
+    ['borrador', {}],
+    ['consulta pendiente', { pesaje_solicitado_at: '2026-11-21T12:00:00Z' }],
+    ['actualización pendiente', { pesaje_solicitado_at: '2026-11-21T12:00:00Z', pesaje_respondido_at: '2026-11-21T13:00:00Z', consulta_actualizacion_pendiente: true }],
+])('oculta Mercancía en %s aunque conserve piezas precapturadas', async (_, estado) => {
+    await render({ ...estado, solicitud_preparacion: { modalidad_entrega: 'nacional', captura_nacional: 'compartida',
+        piezas_nacionales: [{ id: 'previa', sku: 'SKU-PREVIO', descripcion: 'Pieza precapturada', cantidad: 1 }] } });
+    expect(document.getElementById('mercancia-nacional-titulo')).toBeNull();
+    expect(document.querySelector('[aria-label="Ajuste de piezas"]')).toBeNull();
+    expect(document.getElementById('nacional-buscar-producto')).toBeNull();
+    expect(axios.post).not.toHaveBeenCalled();
+});
+
+it('muestra piezas y ajustes nacionales solo al recibir una respuesta vigente y los oculta al actualizar', async () => {
+    const consulta = { pesaje_solicitado_at: '2026-11-21T12:00:00Z', pesaje_respondido_at: '2026-11-21T13:00:00Z',
+        solicitud_preparacion: { modalidad_entrega: 'nacional', captura_nacional: 'compartida',
+            piezas_nacionales: [{ id: 'previa', sku: 'SKU-PREVIO', descripcion: 'Pieza precapturada', cantidad: 1 }] } };
+    await render(consulta);
+    const mercancia = document.querySelector('[aria-labelledby="mercancia-nacional-titulo"]');
+    expect(mercancia.textContent).toContain('Pieza precapturada');
+    expect(mercancia.textContent).toContain('Agregar piezas');
+    expect(mercancia.querySelector('[aria-label="Ajuste de piezas"]')).toBeTruthy();
+    expect(document.getElementById('nacional-buscar-producto')).toBeNull();
+    await render({ ...consulta, consulta_actualizacion_pendiente: true });
+    expect(document.getElementById('mercancia-nacional-titulo')).toBeNull();
+    await render({ ...consulta, consulta_actualizacion_pendiente: false });
+    expect(document.querySelector('[aria-labelledby="mercancia-nacional-titulo"]').textContent).toContain('Pieza precapturada');
+    expect(axios.post).not.toHaveBeenCalled();
+});
+
+it.each([
+    { consulta_cerrada_at: '2026-11-21T14:00:00Z' },
+    { pago_validado_at: '2026-11-21T14:00:00Z' },
+    { numero_remision: 'REM-PREVIA' },
+])('conserva las restricciones de ajustes después de la respuesta: %j', async bloqueo => {
+    await render({ ...bloqueo, pesaje_solicitado_at: '2026-11-21T12:00:00Z', pesaje_respondido_at: '2026-11-21T13:00:00Z' });
+    const mercancia = document.querySelector('[aria-labelledby="mercancia-nacional-titulo"]');
+    expect(mercancia).toBeTruthy();
+    expect(mercancia.querySelector('[aria-label="Ajuste de piezas"]')).toBeNull();
+    expect(axios.post).not.toHaveBeenCalled();
 });
