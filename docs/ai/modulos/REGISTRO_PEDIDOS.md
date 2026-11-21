@@ -6,6 +6,8 @@
 - Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest,NacionalAltaConsultaTest,NacionalOla3CierreTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
 
 ## Estado actual
+- [verificado] En Nacional, Mercancía aparece solo con respuesta CEDIS vigente; oculta registro, borrador y consulta/actualización pendiente. Reutiliza los ajustes nacionales y conserva sus bloqueos; piezas precapturadas y envío documental sin SKU se mantienen. `FormularioRegistrarNacional.jsx` y `SeguimientoSolicitudNacional.jsx`.
+- [verificado] Nacional selecciona la salida entre CEDIS habilitados del catálogo; preselecciona el único elegible, guarda `almacen_id` y bloquea cambios tras solicitar pesaje. Conserva el id guardado si deja de estar disponible: `FormularioRegistrarNacional.jsx`; pruebas de selección e integración junto al componente.
 - [verificado] Tienda, Municipal marcado y Nacional 2.0 (`captura_nacional=compartida`) comparten captura. Nacional histórico y el borrador legado siguen en el formulario anterior; abrirlos no escribe la marca: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:13`.
 - [verificado] Abrir/seleccionar modalidad sin captura significativa no debe crear borradores: `gestion-pedidos-docs/M01_CORTE_ETAPAS_1_2.md:13`.
 - [verificado] La lectura del listado excluye borradores ajenos salvo alcance administrador: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:171`.
@@ -33,4 +35,4 @@
 - [verificado] Tras el cierre, la captura nacional permite cambiar la paquetería y registrar cotización con dirección verificada y flete de cada caja. `CambiarPaqueteriaNacional` aplica los importes con los servicios de costos existentes.
 - [verificado] El alta nacional ofrece PAQ. PENDIENTE y comerciales activas con logística, incluso si `requiere_peso` es falso. Ambos recorridos consultan peso en CEDIS: `FormularioRegistrarNacional` y `SolicitarPesajePedidoBmaService`.
 
-- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.
+- Última verificación: 2026-11-21, árbol de trabajo sobre `c3e44924`; selector nacional comprobado con transporte simulado, sin commit.
