@@ -194,9 +194,7 @@ class NacionalAltaConsultaTest extends TestCase
             'tipo_almacen_id' => CatalogoTipoAlmacen::query()->firstOrCreate(['nombre' => 'CEDIS'])->id,
             'permite_salida_pedidos' => true,
         ]);
-        CatalogoOrigenPedido::query()->firstOrCreate(['nombre' => 'Envío Foráneo'], [
-            'requiere_logistica' => true, 'activo' => true,
-        ]);
+        $this->dejarUnicoOrigenLogistico('ENVÍO');
 
         $idSku = (string) Str::uuid();
         $idFoto = (string) Str::uuid();
@@ -487,6 +485,76 @@ class NacionalAltaConsultaTest extends TestCase
             'base_captura' => $pedido->base_captura,
             'evidencia' => UploadedFile::fake()->image('retiro.jpg'),
         ];
+    }
+
+    /** Deja activo un solo origen con logística, como el catálogo real; el nombre no influye. */
+    private function dejarUnicoOrigenLogistico(string $nombre): CatalogoOrigenPedido
+    {
+        CatalogoOrigenPedido::query()->where('requiere_logistica', true)->update(['activo' => false]);
+
+        return CatalogoOrigenPedido::query()->updateOrCreate(
+            ['nombre' => $nombre],
+            ['requiere_logistica' => true, 'activo' => true]
+        );
+    }
+
+    public function test_el_origen_nacional_se_resuelve_por_atributos_y_no_por_nombre(): void
+    {
+        $this->actingAs($this->usuario);
+        $pedido = $this->pedidoNacional();
+        $origen = $this->dejarUnicoOrigenLogistico('ENVÍO');
+        $pedido->update(['origen_id' => null, 'almacen_id' => null]);
+        $cedis = Almacen::query()->create([
+            'codigo' => 'CEDIS-ORI', 'nombre' => 'CEDIS', 'activo' => true,
+            'tipo_almacen_id' => CatalogoTipoAlmacen::query()->firstOrCreate(['nombre' => 'CEDIS'])->id,
+            'permite_salida_pedidos' => true,
+        ]);
+
+        $this->postJson('/control-pedidos/'.$pedido->id.'/solicitar-pesaje', [
+            'revision_esperada' => (int) $pedido->fresh()->revision_registro, 'base_captura' => $pedido->fresh()->base_captura,
+        ])->assertOk()->assertJsonPath('almacen_id', $cedis->id);
+
+        $this->assertSame($origen->id, $pedido->fresh()->origen_id);
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE, $pedido->fresh()->estatus_envio);
+    }
+
+    public function test_el_origen_nacional_rechaza_cero_o_varios_candidatos_sin_asignar_ninguno(): void
+    {
+        $this->actingAs($this->usuario);
+        $pedido = $this->pedidoNacional();
+        $pedido->update(['origen_id' => null]);
+        $this->dejarUnicoOrigenLogistico('ENVÍO');
+
+        CatalogoOrigenPedido::query()->where('requiere_logistica', true)->update(['activo' => false]);
+        $this->solicitarNacional($pedido)->assertStatus(422)
+            ->assertJsonPath('message', 'No hay un origen activo con logística. Active el origen de envío para enviar la consulta nacional.');
+        $this->assertNull($pedido->fresh()->origen_id);
+
+        CatalogoOrigenPedido::query()->where('requiere_logistica', true)->update(['activo' => true]);
+        $this->solicitarNacional($pedido)->assertStatus(422)
+            ->assertJsonPath('message', 'Hay más de un origen activo con logística. Deje uno solo activo para enviar la consulta nacional.');
+        $this->assertNull($pedido->fresh()->origen_id);
+        $this->assertSame(PedidoBma::ESTATUS_ENVIO_COMPLETO, $pedido->fresh()->estatus_envio);
+    }
+
+    public function test_un_pedido_con_origen_asignado_lo_conserva_aunque_haya_varios_candidatos(): void
+    {
+        $this->actingAs($this->usuario);
+        $pedido = $this->pedidoNacional();
+        $propio = $pedido->origen_id;
+        CatalogoOrigenPedido::query()->where('requiere_logistica', true)->update(['activo' => true]);
+
+        $this->solicitarNacional($pedido)->assertOk();
+        $this->assertSame($propio, $pedido->fresh()->origen_id);
+    }
+
+    private function solicitarNacional(PedidoBma $pedido): \Illuminate\Testing\TestResponse
+    {
+        $actual = $pedido->fresh();
+
+        return $this->postJson('/control-pedidos/'.$actual->id.'/solicitar-pesaje', [
+            'revision_esperada' => (int) $actual->revision_registro, 'base_captura' => $actual->base_captura,
+        ]);
     }
 
     private function pedidoNacional(bool $marcado = true): PedidoBma

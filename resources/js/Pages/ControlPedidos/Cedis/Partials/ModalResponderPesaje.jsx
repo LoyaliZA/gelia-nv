@@ -1,6 +1,7 @@
 import { resumenActualizacionConsulta } from './resumenActualizacionConsulta';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
+import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
@@ -210,10 +211,31 @@ const evidenciaProductoSigue = (rev) => (rev.previews || []).some((p) => {
     return Boolean(p.remoto);
 });
 
+function SeccionPesaje({ nacional, indice, titulo, abierta, onToggle, procesando, children }) {
+    if (!nacional) return children;
+    const id = `pesaje-nacional-seccion-${indice}`;
+    return (
+        <section className="gelia-pesaje-nacional-seccion">
+            <h3 className="m-0">
+                <button type="button" className="gelia-pesaje-nacional-desplegar"
+                    id={`${id}-titulo`} aria-expanded={abierta} aria-controls={id}
+                    disabled={procesando} onClick={onToggle}>
+                    <span>{titulo}</span>
+                    <ChevronDown size={18} aria-hidden="true" className={abierta ? 'rotate-180' : ''} />
+                </button>
+            </h3>
+            <div id={id} hidden={!abierta} className="gelia-pesaje-nacional-contenido space-y-4">
+                {children}
+            </div>
+        </section>
+    );
+}
+
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
     const soloRevisiones = cedisConsultaEsRevisionMercancia(pedido);
+    const nacional = !soloRevisiones && presentacionPedidoCedis(pedido || {}).modalidad === 'nacional';
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const exigeCajaSinPeso = soloRevisiones && !trasladoInterno && Boolean(pedido?.paqueteria?.requiere_caja);
     const empaqueConsulta = soloRevisiones
@@ -247,6 +269,7 @@ export default function ModalResponderPesaje({
     const [borradorMsg, setBorradorMsg] = useState(null);
     const [errorCampo, setErrorCampo] = useState(null);
     const [paso, setPaso] = useState(0);
+    const [seccionesAbiertas, setSeccionesAbiertas] = useState([true, false, false]);
     const cuerpoRef = useRef(null);
     const [listaProductosAbierta, setListaProductosAbierta] = useState(false);
     const skuAbortRef = useRef(null);
@@ -322,6 +345,10 @@ export default function ModalResponderPesaje({
 
         let cancelado = false;
         setPaso(0);
+        setSeccionesAbiertas([true,
+            Boolean((pedido.revisiones_producto || pedido.revisionesProducto || []).length),
+            Boolean((pedido.cajas || pedido.cajas_pesaje || []).length),
+        ]);
         skipAutosaveRef.current = true;
         hydratingRef.current = true;
         loteUuidRef.current = nuevoUuid();
@@ -335,6 +362,10 @@ export default function ModalResponderPesaje({
                 const draft = await leerBorradorPesaje(pedido.id);
                 if (cancelado) return;
                 setAlmacenElegidoId(draft?.almacenId || '');
+                if (nacional && draft) setSeccionesAbiertas([true,
+                    Boolean(draft.revisiones?.length),
+                    Boolean(draft.envios?.some(caja => caja.catalogo_tipo_caja_id || caja.peso_real_kg !== '')),
+                ]);
 
                 if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote) {
                     setEnvios(
@@ -671,10 +702,10 @@ export default function ModalResponderPesaje({
     }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja, soloRevisiones]);
 
     useEffect(() => {
-        if (!abierto || esCampo || paso !== 1) return undefined;
+        if (nacional || !abierto || esCampo || paso !== 1) return undefined;
         const t = window.setTimeout(() => skuPistolaRef.current?.focus(), 200);
         return () => window.clearTimeout(t);
-    }, [abierto, esCampo, paso]);
+    }, [abierto, esCampo, paso, nacional]);
 
     useEffect(() => () => {
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
@@ -928,7 +959,9 @@ export default function ModalResponderPesaje({
     };
 
     const avisarCampo = (id, mensaje) => {
-        setPaso(id === 'cedis-sku-pesaje' || id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-') ? 1 : 2);
+        const destino = id === 'cedis-sku-pesaje' || id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-') ? 1 : 2;
+        setPaso(destino);
+        if (nacional) setSeccionesAbiertas(actual => actual.map((abierta, indice) => indice === destino || abierta));
         if (id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-')) setListaProductosAbierta(true);
         setErrorCampo({ id, mensaje });
         window.requestAnimationFrame(() => {
@@ -1192,6 +1225,16 @@ export default function ModalResponderPesaje({
     const cambiarPaso = (siguiente) => {
         if (procesando) return;
         setPaso(siguiente);
+        if (nacional) {
+            setSeccionesAbiertas(actual => actual.map((abierta, indice) => indice === siguiente || abierta));
+            window.requestAnimationFrame(() => {
+                const encabezado = document.getElementById(`pesaje-nacional-seccion-${siguiente}-titulo`);
+                encabezado?.scrollIntoView({ block: 'start' });
+                if (siguiente === 1 && !esCampo) skuPistolaRef.current?.focus({ preventScroll: true });
+                else encabezado?.focus({ preventScroll: true });
+            });
+            return;
+        }
         window.requestAnimationFrame(() => {
             cuerpoRef.current?.scrollTo({ top: 0, behavior: 'instant' });
             const id = ['pesaje-referencia', 'pesaje-productos', 'pesaje-envios'][siguiente];
@@ -1334,13 +1377,119 @@ export default function ModalResponderPesaje({
         </>
     );
 
+    const encabezadoSeccion = (indice, titulo) => ({
+        nacional, indice, titulo, abierta: seccionesAbiertas[indice], procesando,
+        onToggle: () => {
+            if (seccionesAbiertas[indice]) {
+                setSeccionesAbiertas(actual => actual.map((abierta, i) => i === indice ? false : abierta));
+            } else cambiarPaso(indice);
+        },
+    });
+
+    const comparacionRespuesta = resumenAntesDespues && (
+        <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
+            <p className={`${SECCION} m-0`}>Antes → después</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="rounded-lg border theme-border p-3 space-y-1">
+                    <p className="text-xs font-medium theme-text-muted m-0">Antes (CEDIS)</p>
+                    <p className="m-0 font-bold theme-text-main">
+                        {resumenAntesDespues.antes.productos.length} producto(s)
+                        {!soloRevisiones && (
+                            <> · {resumenAntesDespues.antes.envios} envío(s) · {Math.round((resumenAntesDespues.antes.pesoCobrado || 0) * 10000) / 10000} kg</>
+                        )}
+                    </p>
+                    <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                        {resumenAntesDespues.antes.productos.slice(0, 12).map((p, i) => (
+                            <li key={`a-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                        ))}
+                        {resumenAntesDespues.antes.productos.length > 12 && (
+                            <li>+{resumenAntesDespues.antes.productos.length - 12} más</li>
+                        )}
+                    </ul>
+                </div>
+                <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
+                    <p className="text-xs font-medium theme-text-muted m-0">Después (a guardar)</p>
+                    <p className="m-0 font-bold theme-text-main">
+                        {resumenAntesDespues.despues.productos.length} producto(s)
+                        {!soloRevisiones && (
+                            <> · {resumenAntesDespues.despues.envios} envío(s) · {Math.round((resumenAntesDespues.despues.pesoCobrado || 0) * 10000) / 10000} kg</>
+                        )}
+                    </p>
+                    <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                        {resumenAntesDespues.despues.productos.slice(0, 12).map((p, i) => (
+                            <li key={`d-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                        ))}
+                        {resumenAntesDespues.despues.productos.length > 12 && (
+                            <li>+{resumenAntesDespues.despues.productos.length - 12} más</li>
+                        )}
+                    </ul>
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                {resumenAntesDespues.piezas.sinCambioPiezas && (
+                    <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
+                        Sin cambios de piezas. Se conserva el motivo de la actualización.
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.agregadas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
+                        {resumenAntesDespues.piezas.agregadas.length} agregada(s): {resumenAntesDespues.piezas.agregadas.map((p) => p.etiqueta).join(', ')}
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.retiradas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
+                        {resumenAntesDespues.piezas.retiradas.length} retirada(s): {resumenAntesDespues.piezas.retiradas.map((p) => p.etiqueta).join(', ')}
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.sustituidas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.sustituidas.length} sustituida(s)
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.cantidades.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.cantidades.length} con cantidad modificada
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.condiciones.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.condiciones.length} con condición modificada
+                    </span>
+                )}
+                {resumenAntesDespues.cambioEnvios && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
+                    </span>
+                )}
+                {resumenAntesDespues.cambioPeso && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        Peso cobrado cambió (se puede invalidar costo de envío)
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+
+    const pieRespuesta = (
+        <div className="flex flex-col gap-3 pt-2">
+            <p className="m-0 text-xs theme-text-muted" role="status">
+                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
+                {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
+                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
+            </p>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+                {accionesRespuesta}
+            </div>
+        </div>
+    );
+
     return createPortal(
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`}>
                 <div
                     {...dialog}
                     aria-labelledby="pesaje-titulo"
-                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-respuesta max-w-3xl w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-respuesta ${nacional ? 'gelia-pesaje-nacional' : 'max-w-3xl'} w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -1377,12 +1526,12 @@ export default function ModalResponderPesaje({
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
-                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                        {!nacional && <div className="flex flex-wrap gap-2 sm:justify-end">
                             {accionesRespuesta}
-                        </div>
+                        </div>}
                     </div>
 
-                    <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
+                    {!nacional && <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
                         {pasos.map((label, index) => (
                             <button key={label} type="button" disabled={procesando}
                                 aria-current={paso === index ? 'step' : undefined}
@@ -1390,102 +1539,21 @@ export default function ModalResponderPesaje({
                                 <span aria-hidden="true">{index + 1}</span>{label}
                             </button>
                         ))}
-                    </nav>
+                    </nav>}
                     <div ref={cuerpoRef} className="gelia-modal-body p-4 md:p-6 space-y-5">
-                        <p className="text-xs theme-text-muted m-0" role="status">Paso {paso + 1} de 3 · {instrucciones[paso]}</p>
-                        {paso === 0 && (pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
+                        {!nacional && <p className="text-xs theme-text-muted m-0" role="status">Paso {paso + 1} de 3 · {instrucciones[paso]}</p>}
+                        {(nacional || paso === 0) && (pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
                             <AvisoOperativoPedido label="Actualización de consulta" tono="warning" icon={Scale}>
                                 Motivo: {LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}
                                 . Revise el resumen antes → después, ajuste piezas/cajas y guarde.
                             </AvisoOperativoPedido>
                         )}
 
-                        {paso === 2 && resumenAntesDespues && (
-                            <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
-                                <p className={`${SECCION} m-0`}>Antes → después</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                    <div className="rounded-lg border theme-border p-3 space-y-1">
-                                        <p className="text-xs font-medium theme-text-muted m-0">Antes (CEDIS)</p>
-                                        <p className="m-0 font-bold theme-text-main">
-                                            {resumenAntesDespues.antes.productos.length} producto(s)
-                                            {!soloRevisiones && (
-                                                <> · {resumenAntesDespues.antes.envios} envío(s) · {Math.round((resumenAntesDespues.antes.pesoCobrado || 0) * 10000) / 10000} kg</>
-                                            )}
-                                        </p>
-                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
-                                            {resumenAntesDespues.antes.productos.slice(0, 12).map((p, i) => (
-                                                <li key={`a-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
-                                            ))}
-                                            {resumenAntesDespues.antes.productos.length > 12 && (
-                                                <li>+{resumenAntesDespues.antes.productos.length - 12} más</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                    <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
-                                        <p className="text-xs font-medium theme-text-muted m-0">Después (a guardar)</p>
-                                        <p className="m-0 font-bold theme-text-main">
-                                            {resumenAntesDespues.despues.productos.length} producto(s)
-                                            {!soloRevisiones && (
-                                                <> · {resumenAntesDespues.despues.envios} envío(s) · {Math.round((resumenAntesDespues.despues.pesoCobrado || 0) * 10000) / 10000} kg</>
-                                            )}
-                                        </p>
-                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
-                                            {resumenAntesDespues.despues.productos.slice(0, 12).map((p, i) => (
-                                                <li key={`d-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
-                                            ))}
-                                            {resumenAntesDespues.despues.productos.length > 12 && (
-                                                <li>+{resumenAntesDespues.despues.productos.length - 12} más</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                    {resumenAntesDespues.piezas.sinCambioPiezas && (
-                                        <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
-                                            Sin cambios de piezas. Se conserva el motivo de la actualización.
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.agregadas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
-                                            {resumenAntesDespues.piezas.agregadas.length} agregada(s): {resumenAntesDespues.piezas.agregadas.map((p) => p.etiqueta).join(', ')}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.retiradas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
-                                            {resumenAntesDespues.piezas.retiradas.length} retirada(s): {resumenAntesDespues.piezas.retiradas.map((p) => p.etiqueta).join(', ')}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.sustituidas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.sustituidas.length} sustituida(s)
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.cantidades.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.cantidades.length} con cantidad modificada
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.condiciones.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.condiciones.length} con condición modificada
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.cambioEnvios && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.cambioPeso && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            Peso cobrado cambió (se puede invalidar costo de envío)
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        {!nacional && paso === 2 && comparacionRespuesta}
 
                         <div className="space-y-4">
-                        <div hidden={paso !== 0} className="gelia-pedidos-paso space-y-4">
+                        <SeccionPesaje {...encabezadoSeccion(0, 'Pedido y almacén')}>
+                        <div hidden={!nacional && paso !== 0} className="gelia-pedidos-paso space-y-4">
                         <section id="pesaje-referencia" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1557,10 +1625,12 @@ export default function ModalResponderPesaje({
                             </select>
                             {revisiones.length > 0 && <span className="block text-xs theme-text-muted">Las piezas conservan el almacén utilizado al registrarlas.</span>}
                         </label>
+                        </SeccionPesaje>
                         <fieldset disabled={procesando} className="gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0">
-                        <section id="pesaje-productos" tabIndex={-1} hidden={paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
+                        <SeccionPesaje {...encabezadoSeccion(1, 'Revisión física de productos')}>
+                        <section id="pesaje-productos" tabIndex={-1} hidden={!nacional && paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>
+                                {!nacional && <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>}
                                 <span className="text-xs theme-text-muted tabular-nums">{cantidadSolicitadaRevisada} de {pedido.cantidad_piezas || '—'} piezas</span>
                                 {borradorMsg && (
                                     <p className="text-xs font-medium theme-text-muted m-0" role="status">{borradorMsg}</p>
@@ -1676,6 +1746,7 @@ export default function ModalResponderPesaje({
                             )}
                         </section>
 
+                        </SeccionPesaje>
                         {soloRevisiones && (
                         <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Evidencia final del pedido</h3>
@@ -1736,7 +1807,8 @@ export default function ModalResponderPesaje({
                         )}
 
                         {!soloRevisiones && (
-                        <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
+                        <SeccionPesaje {...encabezadoSeccion(2, 'Cajas y evidencias')}>
+                        <section id="pesaje-envios" tabIndex={-1} hidden={!nacional && paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Envíos</h3>
                             <p className="text-xs theme-text-muted font-normal m-0 mb-3">
                                 Por cada caja adjunte la foto del lote de productos que van en ese envío.
@@ -1840,20 +1912,14 @@ export default function ModalResponderPesaje({
                                 </div>
                             )}
                         </section>
+                        </SeccionPesaje>
                         )}
                         </fieldset>
-                        <div className="flex flex-col gap-3 pt-2">
-                            <p className="m-0 text-xs theme-text-muted" role="status">
-                                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
-                                {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
-                                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
-                            </p>
-                            <div className="flex flex-wrap gap-2 sm:justify-end">
-                                {accionesRespuesta}
-                            </div>
-                        </div>
+                        {nacional && seccionesAbiertas[2] && comparacionRespuesta}
+                        {!nacional && pieRespuesta}
                         </div>
                     </div>
+                    {nacional && <footer className="gelia-pesaje-nacional-footer">{pieRespuesta}</footer>}
                 </div>
             </div>
             <ModalAlertaPedido

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { Layers, Truck } from 'lucide-react';
 import ContinuacionEnvioNacional from './ContinuacionEnvioNacional';
 import SeguimientoSolicitudNacional from './SeguimientoSolicitudNacional';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
@@ -29,7 +30,7 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, children }) {
+export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, children }) {
     const [actual, setActual] = useState(pedido);
     const [paqueteriaId, setPaqueteriaId] = useState(String(pedido?.catalogo_paqueteria_id || ''));
     const [tocada, setTocada] = useState(false);
@@ -339,7 +340,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                 <button type="button" className={GELIA_BTN_OUTLINE} aria-pressed={entradaPieza === 'captura'} onClick={() => setEntradaPieza('captura')}>Por captura o documento</button>
             </div>
             {entradaPieza === 'catalogo' ? (
-                <div className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-end">
+                <div className="registrar-nacional-producto grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-end">
                     <div className="min-w-0 col-span-full">
                         <label className={THEME_LABEL} htmlFor="nacional-buscar-producto">Producto</label>
                         <SelectorProducto
@@ -385,7 +386,10 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
         <div className="grid min-w-0 gap-4">
             {(!enviada || mercancia.length > 0) && (
                 <section className="registrar-tienda-panel space-y-3" aria-labelledby="mercancia-nacional-titulo">
-                    <h3 id="mercancia-nacional-titulo" className="m-0 text-base">Mercancía</h3>
+                    <div className="registrar-tienda-seccion-titulo">
+                        <Layers size={18} aria-hidden="true" />
+                        <h3 id="mercancia-nacional-titulo">Mercancía</h3>
+                    </div>
                     {!enviada && <>
                         <p className="text-sm theme-text-muted m-0">Si el documento identifica las piezas, puede enviar la consulta con ese soporte.</p>
                         {editorPiezas}
@@ -395,37 +399,57 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                 </section>
             )}
             <section className="registrar-tienda-panel space-y-3" aria-labelledby="envio-nacional-titulo">
-                <h3 id="envio-nacional-titulo" className="m-0 text-base">Envío nacional</h3>
-                <p className="text-sm theme-text-main m-0">Salida: CEDIS</p>
                 {enviada ? (
-                    <p className="text-sm theme-text-main m-0">Paquetería: {elegida?.nombre || actual?.paqueteria?.nombre || 'Consultar selección'}</p>
-                ) : (
-                    <div className="min-w-0">
-                        <label className={THEME_LABEL} htmlFor="paqueteria-nacional">Paquetería</label>
-                        <select
-                            id="paqueteria-nacional"
-                            className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
-                            value={paqueteriaId}
-                            disabled={enviando || bloqueado}
-                            aria-invalid={tocada && !paqueteriaId ? 'true' : undefined}
-                            aria-describedby={error ? 'paqueteria-nacional-error' : undefined}
-                            onBlur={() => {
-                                setTocada(true);
-                                if (!paqueteriaId) setError(opciones.length ? 'Elija la paquetería o seleccione PAQ. PENDIENTE.' : 'No hay paqueterías nacionales disponibles.');
-                            }}
-                            onFocus={() => setError('')}
-                            onChange={(evento) => {
-                                setPaqueteriaId(evento.target.value);
-                                setPaqueteriaEditada(true);
-                                setError('');
-                            }}
-                        >
-                            <option value="">Elegir</option>
-                            {opciones.map((item) => (
-                                <option key={item.id} value={String(item.id)}>{item.nombre}</option>
-                            ))}
-                        </select>
+                    <div className="registrar-nacional-envio-guardado">
+                        <div className="min-w-0 space-y-3">
+                            <div className="registrar-tienda-seccion-titulo">
+                                <Truck size={18} aria-hidden="true" />
+                                <h3 id="envio-nacional-titulo">Envío nacional</h3>
+                            </div>
+                            <p className="text-sm theme-text-main m-0">Salida: CEDIS</p>
+                            <p className="text-sm theme-text-main m-0">Paquetería: {elegida?.nombre || actual?.paqueteria?.nombre || 'Consultar selección'}</p>
+                        </div>
+                        <div className="registrar-nacional-envio-importe min-w-0">
+                            {campoImporteMercancia}
+                        </div>
                     </div>
+                ) : (
+                    <>
+                        <div className="registrar-tienda-seccion-titulo">
+                            <Truck size={18} aria-hidden="true" />
+                            <h3 id="envio-nacional-titulo">Envío nacional</h3>
+                        </div>
+                        <p className="text-sm theme-text-main m-0">Salida: CEDIS</p>
+                        <div className="registrar-tienda-datos">
+                            <div className="min-w-0">
+                                <label className={THEME_LABEL} htmlFor="paqueteria-nacional">Paquetería</label>
+                                <select
+                                    id="paqueteria-nacional"
+                                    className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
+                                    value={paqueteriaId}
+                                    disabled={enviando || bloqueado}
+                                    aria-invalid={tocada && !paqueteriaId ? 'true' : undefined}
+                                    aria-describedby={error ? 'paqueteria-nacional-error' : undefined}
+                                    onBlur={() => {
+                                        setTocada(true);
+                                        if (!paqueteriaId) setError(opciones.length ? 'Elija la paquetería o seleccione PAQ. PENDIENTE.' : 'No hay paqueterías nacionales disponibles.');
+                                    }}
+                                    onFocus={() => setError('')}
+                                    onChange={(evento) => {
+                                        setPaqueteriaId(evento.target.value);
+                                        setPaqueteriaEditada(true);
+                                        setError('');
+                                    }}
+                                >
+                                    <option value="">Elegir</option>
+                                    {opciones.map((item) => (
+                                        <option key={item.id} value={String(item.id)}>{item.nombre}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            {campoImporteMercancia}
+                        </div>
+                    </>
                 )}
                 {elegida?.nombre === 'PAQ. PENDIENTE' && (
                     <p className="text-sm theme-text-muted m-0">El flete queda pendiente. Puede continuar con el pago de mercancía después de cerrar la consulta.</p>
