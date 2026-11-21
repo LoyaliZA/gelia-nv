@@ -14,6 +14,7 @@ use App\Support\ControlPedidos\Conversion\FlagsConversionModalidad;
 use App\Support\ControlPedidos\Conversion\PoliticaConversionModalidad;
 use App\Support\ControlPedidos\Conversion\ResultadoElegibilidadConversion;
 use App\Support\ControlPedidos\Conversion\SolicitudPendienteConversion;
+use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 
 class EvaluarElegibilidadConversion
@@ -88,6 +89,15 @@ class EvaluarElegibilidadConversion
 
     public function paraDestino(PedidoBma $pedido, User $usuario, string $destino): ResultadoElegibilidadConversion
     {
+        // M-07: tras la salida a terminal no hay cambio ordinario de modalidad.
+        if (RecorridoFisicoMunicipal::salioATerminal($pedido)) {
+            return new ResultadoElegibilidadConversion(
+                false,
+                ConsultaPedidoYaCerradaAlgunaVez::es($pedido),
+                RecorridoFisicoMunicipal::MENSAJE_SALIO_A_TERMINAL,
+                CodigosConversionModalidad::CODIGO_NO_ELEGIBLE,
+            );
+        }
         $cerrada = ConsultaPedidoYaCerradaAlgunaVez::es($pedido);
         if ($cerrada) {
             return new ResultadoElegibilidadConversion(
@@ -188,6 +198,9 @@ class EvaluarElegibilidadConversion
         }
         if ($pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_ENTREGADO) {
             return 'El pedido ya fue entregado.';
+        }
+        if (RecorridoFisicoMunicipal::salioATerminal($pedido)) {
+            return RecorridoFisicoMunicipal::MENSAJE_SALIO_A_TERMINAL;
         }
         if ($cerrada) {
             return 'La consulta ya se cerró. El cambio de modalidad no está disponible.';

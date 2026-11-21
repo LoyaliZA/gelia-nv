@@ -42,7 +42,7 @@ class FusionarSolicitudPreparacionPedido
         $base = is_array($actual) ? $actual : [];
         $salida = ['version' => 1];
         if (($base['modalidad_entrega'] ?? null) === 'municipal') {
-            foreach (['expediente', 'finanzas_municipales', 'consulta_municipal', 'municipio_destino', 'resguardo_envio'] as $clave) {
+            foreach (['expediente', 'finanzas_municipales', 'consulta_municipal', 'municipio_destino', 'resguardo_envio', 'recorrido_fisico_municipal', 'salida_terminal'] as $clave) {
                 if (array_key_exists($clave, $base)) $salida[$clave] = $base[$clave];
             }
         }

@@ -24,6 +24,7 @@ use App\Http\Controllers\PuntoVenta\Resguardos\AdjuntarEvidenciaRegistroManualPd
 use App\Http\Controllers\PuntoVenta\Resguardos\RegistrarResguardoManualPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ReponerVencidoResguardoPdvController;
 use App\Http\Controllers\PuntoVenta\Resguardos\ResolverIncidenciaResguardoPdvController;
+use App\Http\Controllers\PuntoVenta\Resguardos\SalidaTerminalResguardoPdvController;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Support\Facades\Route;
@@ -125,6 +126,13 @@ Route::middleware(['pdv.piso', 'pdv.permiso:'.PuntoVentaModulo::PERMISO_RESGUARD
         Route::get('/{resguardo}/entrega', [FormularioEntregaResguardoPdvController::class, 'show'])
             ->name('entrega.create');
         Route::put('/{resguardo}/entrega', EntregaResguardoPdvController::class)->name('entrega');
+    });
+
+Route::middleware(['pdv.piso', 'can:'.PuntoVentaModulo::PERMISO_RESGUARDOS_SALIDA_TERMINAL])
+    ->prefix('resguardos')
+    ->name('resguardos.')
+    ->group(function () {
+        Route::put('/{resguardo}/salida-terminal', SalidaTerminalResguardoPdvController::class)->name('salida_terminal');
     });
 
 Route::middleware(['pdv.piso'])

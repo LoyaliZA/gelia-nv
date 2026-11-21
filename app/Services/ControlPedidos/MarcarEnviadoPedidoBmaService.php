@@ -155,6 +155,7 @@ class MarcarEnviadoPedidoBmaService
             }
 
             $estatusAnterior = $pedido->estatus;
+            $municipal = \App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal::aplica($pedido) && $pedido->esTrasladoInternoAPdv();
 
             $pedido->update([
                 'catalogo_estatus_pedido_id' => $estatusEnviado->id,
@@ -165,8 +166,8 @@ class MarcarEnviadoPedidoBmaService
                 $usuarioId,
                 $estatusAnterior,
                 $estatusEnviado,
-                $pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada.' : 'Paquetería recogió el paquete.',
-                AccionesHistorialPedidoBma::ENVIO_FINAL
+                $municipal ? 'Salida de CEDIS hacia PDV confirmada.' : ($pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada.' : 'Paquetería recogió el paquete.'),
+                $municipal ? AccionesHistorialPedidoBma::SALIDA_CEDIS_PDV : AccionesHistorialPedidoBma::ENVIO_FINAL
             );
 
             $pedido = $pedido->fresh([
@@ -181,8 +182,8 @@ class MarcarEnviadoPedidoBmaService
 
             $this->notificarService->ejecutar(
                 $pedido,
-                'pedido_enviado',
-                $pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada' : 'Paquetería recogió el paquete',
+                $municipal ? 'pedido_salida_cedis_pdv' : 'pedido_enviado',
+                $municipal ? 'Salida de CEDIS hacia PDV' : ($pedido->esTrasladoInternoAPdv() ? 'Salida de traslado interno confirmada' : 'Paquetería recogió el paquete'),
                 [],
                 $usuarioId,
                 true,

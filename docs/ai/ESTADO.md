@@ -14,7 +14,7 @@
 - Requisitos conceptuales: [análisis V02.1](../../gestion-pedidos-docs/Analisis_de_Requerimientos_Gestion_de_pedidos_V02.1_Dudas_resueltas.md); no prueban implementación ni sustituyen decisiones posteriores.
 
 ## Pendientes
-- Etapa 4 perfecciona el circuito municipal; Nacional, carátula y logística física siguen fuera: [Consultas](modulos/CONSULTAS_DISPONIBILIDAD.md), [Transferencia](modulos/TRANSFERENCIA_CUSTODIA.md) y [Municipal](modulos/ENVIO_MUNICIPAL.md).
+- Municipal con recorrido físico CEDIS→PDV, carátula y salida a terminal implementado (sin recorrido real ni MySQL); pendientes en [Municipal](modulos/ENVIO_MUNICIPAL.md#recorrido-físico-compartido-2026-11-21). Nacional sigue fuera: [Consultas](modulos/CONSULTAS_DISPONIBILIDAD.md), [Transferencia](modulos/TRANSFERENCIA_CUSTODIA.md) y [Municipal](modulos/ENVIO_MUNICIPAL.md).
 - [verificado] Regularización de transporte diferido (P-01) queda fuera del alcance acreditado: `gestion-pedidos-docs/M01_AUDITORIA_CODEX_DETALLADA.md:146`.
 - Por confirmar en despliegue: flags, catálogos, permisos efectivos, scheduler, workers y disponibilidad de evidencias; no se consultaron datos operativos ni secretos.
 - La fecha de esta auditoría acredita lectura de fuentes, no ejecución de las pruebas descritas en informes anteriores.

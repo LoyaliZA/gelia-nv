@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ControlPedidos\PedidoBmaTiendaController;
+use App\Http\Controllers\ControlPedidos\CaratulaMunicipalController;
 
 Route::middleware(['can:control_pedidos.tienda.ver'])
     ->prefix('control-pedidos/tienda')
@@ -69,3 +70,12 @@ Route::prefix('control-pedidos/tareas-preparacion')
 
 Route::post('/control-pedidos/tareas-preparacion/{tarea}/reabrir-apartado', [PedidoBmaTiendaController::class, 'reabrirApartado'])
     ->middleware('can:control_pedidos.preparacion.solicitar')->name('control_pedidos.preparacion.reabrir_apartado');
+
+// Carátula del envío municipal generada desde el pedido; la sucursal destino se valida en servicio y controlador.
+Route::prefix('control-pedidos/tienda/pedidos/{pedidoBma}/caratula-municipal')
+    ->name('control_pedidos.tienda.municipal.caratula.')
+    ->group(function () {
+        Route::post('/generar', [CaratulaMunicipalController::class, 'generar'])->middleware('can:control_pedidos.tienda.generar_caratula')->name('generar');
+        Route::post('/regenerar', [CaratulaMunicipalController::class, 'regenerar'])->middleware('can:control_pedidos.tienda.regenerar_caratula')->name('regenerar');
+        Route::get('/{caratula}/pdf', [CaratulaMunicipalController::class, 'descargar'])->middleware('can:control_pedidos.tienda.imprimir_caratula')->name('pdf');
+    });

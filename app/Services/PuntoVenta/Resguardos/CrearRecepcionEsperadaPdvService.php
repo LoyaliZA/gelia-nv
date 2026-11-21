@@ -9,6 +9,7 @@ use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Services\ControlPedidos\ValidarSucursalDestinoPedidoBma;
+use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\PuntoVenta\Resguardos\CantidadBultosEsperadaResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,7 @@ class CrearRecepcionEsperadaPdvService
                 'folio_remision' => $pedido->folio_remision,
                 'sucursal_id' => $sucursalId,
                 'handoff' => self::HANDOFF,
+                ...(RecorridoFisicoMunicipal::aplica($pedido) ? ['origen' => 'municipal'] : []),
                 'traslado_interno' => $pedido->esTrasladoInternoAPdv(),
                 'inventario_sincronizado' => false,
                 'revision_fisica' => $pedido->revisionesProducto()

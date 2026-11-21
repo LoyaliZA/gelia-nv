@@ -253,6 +253,7 @@ return [
     'plantilla_pedidos.ver_programadas',
     'plantilla_pedidos.visualizar',
     'punto_venta.acceder',
+    'punto_venta.resguardos.salida_terminal',
     'reportes.pagos_pedidos.confirmar_admin',
     'reportes.pagos_pedidos.exportar_csv',
     'reportes.pagos_pedidos.exportar_pdf',

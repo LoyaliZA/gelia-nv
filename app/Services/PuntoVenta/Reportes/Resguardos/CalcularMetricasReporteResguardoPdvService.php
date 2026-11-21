@@ -282,6 +282,8 @@ class CalcularMetricasReporteResguardoPdvService
 
         $entregados = (clone $queryBase)
             ->where('estado', ResguardoPdv::ESTADO_ENTREGADO)
+            // La salida a terminal de un municipal deja la custodia, pero no es entrega al cliente.
+            ->whereNull('snapshot_json->salida_terminal')
             ->whereNotNull('entrega_completada_at')
             ->where('entrega_completada_at', '>=', $desde)
             ->where('entrega_completada_at', '<', $hasta)

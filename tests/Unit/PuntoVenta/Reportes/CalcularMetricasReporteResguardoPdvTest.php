@@ -186,6 +186,36 @@ class CalcularMetricasReporteResguardoPdvTest extends TestCase
         $this->assertSame(1, $payload['metricas'][MetricaResguardoPdvIds::R_03_INCIDENCIAS_ABIERTAS]['valor']);
     }
 
+    public function test_tasa_entrega_no_cuenta_salidas_a_terminal(): void
+    {
+        $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_ENTREGADO,
+            'recepcion_fisica_at' => now()->subDays(3),
+            'entrega_completada_at' => now()->subDay(),
+        ]);
+        $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_ENTREGADO,
+            'recepcion_fisica_at' => now()->subDays(3),
+            'entrega_completada_at' => now()->subHours(5),
+            'snapshot_json' => ['origen' => 'municipal', 'salida_terminal' => ['at' => now()->subHours(5)->toIso8601String(), 'receptor' => 'Chofer ficticio', 'actor_id' => 1]],
+        ]);
+        $this->crearResguardo($this->sucursalA, [
+            'estado' => ResguardoPdv::ESTADO_DEVUELTO,
+            'recepcion_fisica_at' => now()->subDays(4),
+            'devolucion_confirmada_at' => now()->subHours(12),
+        ]);
+
+        $tasa = $this->metricas([
+            'desde' => now()->subWeek()->toIso8601String(),
+            'hasta' => now()->addDay()->toIso8601String(),
+            'sucursal_id' => $this->sucursalA->id,
+        ])['metricas'][MetricaResguardoPdvIds::R_09_TASA_ENTREGA];
+
+        $this->assertSame(1, $tasa['entregados']);
+        $this->assertSame(1, $tasa['devueltos']);
+        $this->assertSame(50.0, $tasa['valor']);
+    }
+
     public function test_clasificaciones_cargan_confirmacion_de_custodia_y_excluyen_casos_no_elegibles(): void
     {
         $casos = $this->crearCasosClasificacionCustodia();

@@ -60,9 +60,12 @@ final class ExclusividadRemisionEnvio
         $entregada = ResguardoPdv::query()
             ->where('pedido_bma_id', $origen->id)
             ->where('estado', ResguardoPdv::ESTADO_ENTREGADO)
-            ->exists();
+            ->first();
         if ($entregada) {
-            throw new InvalidArgumentException('Esa remisión ya fue entregada.');
+            // Un municipal salido a terminal dejó la custodia sin entregarse al cliente.
+            throw new InvalidArgumentException($entregada->salidaTerminal() !== null
+                ? 'Esa remisión ya salió de custodia.'
+                : 'Esa remisión ya fue entregada.');
         }
     }
 

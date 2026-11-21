@@ -3,6 +3,7 @@
 namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
 use App\Models\ControlPedidos\CatalogoPaqueteriaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Support\ControlPedidos\BusquedaDelegadoPedidoBma;
@@ -90,6 +91,7 @@ class ListarPedidosDelegadoService
             ->whereNotNull('pago_validado_at')
             ->where('cliente_proporciona_guia', false)
             ->whereHas('remision')
+            ->whereNotIn('pedidos_bma.id', $this->idsRecorridoFisicoMunicipal())
             ->where(function (Builder $q) {
                 $q->whereHas('paqueteria', function (Builder $p) {
                     $p->where('categoria', CatalogoPaqueteriaPedido::CATEGORIA_COMERCIAL);
@@ -104,6 +106,18 @@ class ListarPedidosDelegadoService
                     ->orWhere(fn (Builder $q2) => $this->scopePendientesEnvio($q2))
                     ->orWhere(fn (Builder $q2) => $this->scopeEnviados($q2));
             });
+    }
+
+    /** Municipal con recorrido físico propio: sin guía ni rastreo, no pertenece a la cola de Delegado. Misma regla que RecorridoFisicoMunicipal::aplica. */
+    private function idsRecorridoFisicoMunicipal(): Builder
+    {
+        return PedidoBma::query()->select('pedidos_bma.id')
+            ->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
+            ->where('solicitud_preparacion_json->recorrido_fisico_municipal', true)
+            ->whereDoesntHave('tareaPreparacionVigente', fn (Builder $t) => $t->whereHas(
+                'modalidad',
+                fn (Builder $m) => $m->where('codigo', CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO)
+            ));
     }
 
     /** Sin número de guía: EN_CEDIS o ya empacado esperando rastreo. */

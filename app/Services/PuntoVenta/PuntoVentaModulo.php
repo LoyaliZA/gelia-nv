@@ -44,6 +44,9 @@ final class PuntoVentaModulo
 
     public const PERMISO_RESGUARDOS_VER_HISTORIAL_ENTREGAS = 'pdv.resguardos.ver_historial_entregas';
 
+    /** Salida a terminal de un municipal en custodia. Fuera de permisosIniciales(): se asigna manualmente. */
+    public const PERMISO_RESGUARDOS_SALIDA_TERMINAL = 'punto_venta.resguardos.salida_terminal';
+
     public const PERMISO_REPORTES_EXPORTAR = 'pdv.reportes.exportar';
 
     public const PERMISO_VISITAS_PROGRAMADAS_VER = 'pdv.visitas_programadas.ver';

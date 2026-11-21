@@ -117,8 +117,14 @@ class ConsultaHistorialEntregadosResguardoPdvService
     {
         $ultimaEntrega = $resguardo->entregas->first();
         $relaciones = EtiquetasResguardoPdv::relacionesEntrega();
+        $salida = $resguardo->salidaTerminal();
+        // Salida a terminal (municipal): sale de custodia sin entrega al cliente; las demás filas no cambian.
+        $terminal = $salida ? [
+            'estado_etiqueta' => EtiquetasResguardoPdv::SALIDA_TERMINAL,
+            'salida_terminal' => ['at' => $salida['at'] ?? null, 'receptor' => $salida['receptor'] ?? null],
+        ] : [];
 
-        return [
+        return $terminal + [
             'id' => $resguardo->id,
             'snapshot_folio' => $resguardo->snapshot_folio,
             'snapshot_cliente_nombre' => $resguardo->snapshot_cliente_nombre,

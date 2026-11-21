@@ -125,6 +125,24 @@ class ResguardoPdv extends Model
         return ($this->snapshot_json['origen'] ?? null) === 'nacional';
     }
 
+    public function esOrigenMunicipal(): bool
+    {
+        return ($this->snapshot_json['origen'] ?? null) === 'municipal';
+    }
+
+    /**
+     * Salida a terminal registrada (municipal). El resguardo queda en ESTADO_ENTREGADO como salida de custodia,
+     * pero no es una entrega al cliente: no tiene fila de entrega.
+     *
+     * @return array{at: string, receptor: string, actor_id: int}|null
+     */
+    public function salidaTerminal(): ?array
+    {
+        $salida = $this->snapshot_json['salida_terminal'] ?? null;
+
+        return is_array($salida) ? $salida : null;
+    }
+
     public function evidencias(): HasMany
     {
         return $this->hasMany(ResguardoPdvEvidencia::class, 'resguardo_id');

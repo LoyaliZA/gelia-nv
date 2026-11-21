@@ -1,0 +1,134 @@
+[
+  {
+    "tamaño": "escritorio",
+    "tema": "light",
+    "caso": "sin-caratula-error",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "light",
+    "caso": "con-caratula-regenerar",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "light",
+    "caso": "salida-registrada",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "caso": "sin-caratula-error",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "caso": "con-caratula-regenerar",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "escritorio",
+    "tema": "dark",
+    "caso": "salida-registrada",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "caso": "sin-caratula-error",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "caso": "con-caratula-regenerar",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "light",
+    "caso": "salida-registrada",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "dark",
+    "caso": "sin-caratula-error",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "dark",
+    "caso": "con-caratula-regenerar",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  },
+  {
+    "tamaño": "movil",
+    "tema": "dark",
+    "caso": "salida-registrada",
+    "errores": [],
+    "medidas": {
+      "pagina": false,
+      "controlesPequenos": []
+    },
+    "fallos": []
+  }
+]

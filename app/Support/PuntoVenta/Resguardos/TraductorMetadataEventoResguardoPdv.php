@@ -160,7 +160,11 @@ final class TraductorMetadataEventoResguardoPdv
         return match ($clave) {
             'receptor' => is_array($valor)
                 ? self::traducirReceptor($valor, $verDatosOperativos)
-                : null,
+                : (is_string($valor) && $valor !== '' ? [
+                    'clave' => 'receptor',
+                    'etiqueta' => 'Recibe en terminal',
+                    'valor' => $verDatosOperativos ? $valor : 'Registrado',
+                ] : null),
             'bultos' => is_array($valor)
                 ? [
                     'clave' => $clave,
@@ -349,6 +353,10 @@ final class TraductorMetadataEventoResguardoPdv
                 $integracion['ultimo_error'] = '[restringido]';
             }
             $enmascarado['integracion_cp'] = $integracion;
+        }
+
+        if (isset($enmascarado['receptor']) && is_string($enmascarado['receptor'])) {
+            $enmascarado['receptor'] = '[restringido]';
         }
 
         if (isset($enmascarado['receptor']) && is_array($enmascarado['receptor'])) {
