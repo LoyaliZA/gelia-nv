@@ -657,6 +657,64 @@
 }
 
 /* CEDIS: una tarea visible, con avance accesible para uso táctil. */
+.gelia-pesaje-nacional {
+    max-width: 64rem;
+    overflow: hidden;
+}
+
+.gelia-pesaje-nacional > .gelia-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scroll-padding-block: 1rem;
+}
+
+.gelia-pesaje-nacional-seccion {
+    min-width: 0;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--pedidos-surface-radius);
+    background: var(--theme-surface-solid);
+}
+
+.gelia-pesaje-nacional-desplegar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    min-height: 44px;
+    padding: 1rem;
+    color: var(--theme-text-main);
+    text-align: left;
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+.gelia-pesaje-nacional-contenido {
+    padding: 0 1rem 1rem;
+}
+
+.gelia-pesaje-nacional-contenido[hidden] {
+    display: none !important;
+}
+
+.gelia-pesaje-nacional-contenido .gelia-pedidos-seccion {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.gelia-pesaje-nacional-footer {
+    flex-shrink: 0;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--theme-border);
+    background: var(--theme-surface-solid);
+}
+
+.gelia-pesaje-nacional-footer > div {
+    padding-top: 0;
+}
+
 .gelia-pedidos-paso[hidden] {
     display: none !important;
 }
