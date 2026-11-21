@@ -154,12 +154,17 @@ class SolicitarPesajePedidoBmaService
             throw new \InvalidArgumentException('El envío nacional debe salir de CEDIS.');
         }
         if (! $pedido->origen_id) {
-            $origen = \App\Models\ControlPedidos\CatalogoOrigenPedido::query()
-                ->where('activo', true)->where('requiere_logistica', true)->where('nombre', 'Envío Foráneo')->first();
-            if (! $origen) {
-                throw new \InvalidArgumentException('Configure el origen Envío Foráneo para enviar la consulta nacional.');
+            $candidatos = \App\Models\ControlPedidos\CatalogoOrigenPedido::query()
+                ->where('activo', true)->where('requiere_logistica', true)->get(['id', 'requiere_logistica', 'activo']);
+            $idOrigen = \App\Support\ControlPedidos\Nacional\OrigenEnvioNacional::idUnico($candidatos);
+            if (! $idOrigen) {
+                throw new \InvalidArgumentException(
+                    $candidatos->count() > 1
+                        ? 'Hay más de un origen activo con logística. Deje uno solo activo para enviar la consulta nacional.'
+                        : 'No hay un origen activo con logística. Active el origen de envío para enviar la consulta nacional.'
+                );
             }
-            $pedido->origen()->associate($origen);
+            $pedido->origen()->associate($idOrigen);
         }
         if (! $pedido->almacen_id) {
             $almacenes = Almacen::query()->where('activo', true)->where('permite_salida_pedidos', true)
