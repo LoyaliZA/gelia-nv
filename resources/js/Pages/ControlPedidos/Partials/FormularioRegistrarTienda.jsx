@@ -1269,15 +1269,6 @@ export default function FormularioRegistrarTienda({
                                     />
                                 </div>
                             </div>
-                            {nacional && (
-                                <div className="min-w-0">
-                                    <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>
-                                    <input id="importe-mercancia-nacional" type="number" min="0.01" step="0.01" inputMode="decimal"
-                                        className={campo} value={totalMercancia} disabled={avanzado || operandoNacional}
-                                        onChange={(evento) => setTotalMercancia(evento.target.value)}
-                                    />
-                                </div>
-                            )}
                             <div className="min-w-0">
                                 <label className={THEME_LABEL} htmlFor="modalidad-tienda">
                                     Modalidad
@@ -1410,7 +1401,7 @@ export default function FormularioRegistrarTienda({
                                         Cargando
                                     </p>
                                 )}
-                                {!nacional && !documento?.url && estadoArchivo !== 'cargando' && (
+                                {!documento?.url && estadoArchivo !== 'cargando' && (
                                     <div className="registrar-tienda-archivo-vacio">
                                         <div
                                             className={`${GELIA_ICON_BOX} registrar-tienda-emblema`}
@@ -1745,6 +1736,15 @@ export default function FormularioRegistrarTienda({
                 onBusyChange={setOperandoNacional}
                 bloqueado={estadoArchivo === 'cargando' || guardando}
                 importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
+                campoImporteMercancia={(
+                    <div className="min-w-0">
+                        <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>
+                        <input id="importe-mercancia-nacional" type="number" min="0.01" step="0.01" inputMode="decimal"
+                            className={`${campo} mt-1`} value={totalMercancia} disabled={avanzado || operandoNacional}
+                            onChange={(evento) => setTotalMercancia(evento.target.value)}
+                        />
+                    </div>
+                )}
             >
                 {(nacional) => renderFormulario(null, nacional)}
             </FormularioRegistrarNacional>
