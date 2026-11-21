@@ -64,26 +64,33 @@ it('permite abrir Cajas sin completar Pedido ni Productos y mantiene un solo pie
     await mount();
     expect(document.querySelector('[aria-label="Pasos para responder"]')).toBeNull();
     expect(document.querySelectorAll('.gelia-pesaje-nacional-footer')).toHaveLength(1);
-    expect(panel(0).hidden).toBe(false); expect(panel(1).hidden).toBe(true);
-    await click(document.getElementById('pesaje-nacional-seccion-2-titulo'));
+    expect(panel(0).hidden).toBe(false); expect(panel(1).hidden).toBe(false);
+    await click(button('Siguiente'));
     expect(panel(2).hidden).toBe(false);
-    expect(button('Registrar pesaje')).toBeTruthy();
+    expect(button('Enviar respuesta')).toBeTruthy();
     expect(router.post).not.toHaveBeenCalled();
 });
 
-it('mantiene la acción de Productos cuando se pliega la referencia del pedido', async () => {
+it('muestra documento y productos juntos y permite regresar sin validar', async () => {
     await mount();
-    await click(button('Revisar productos'));
-    await click(document.getElementById('pesaje-nacional-seccion-0-titulo'));
-    expect(panel(0).hidden).toBe(true);
+    expect(panel(0).hidden).toBe(false);
     expect(panel(1).hidden).toBe(false);
-    expect(document.querySelector('footer').textContent).toContain('Cajas y evidencias');
-    expect(document.querySelector('footer').textContent).toContain('Atrás');
+    expect(panel(2).hidden).toBe(true);
+    expect(document.querySelector('.gelia-pesaje-nacional-desplegar')).toBeNull();
+    await click(button('Siguiente'));
+    expect(panel(0).hidden).toBe(true);
+    expect(panel(1).hidden).toBe(true);
+    expect(panel(2).hidden).toBe(false);
+    await click(button('Atrás'));
+    expect(panel(0).hidden).toBe(false);
+    expect(panel(1).hidden).toBe(false);
+    expect(document.activeElement.id).toBe('cedis-sku-pesaje');
+    expect(router.post).not.toHaveBeenCalled();
 });
 
-it('conserva los controles, el peso y el archivo al plegar, avanzar y retroceder', async () => {
+it('conserva los controles, el peso y el archivo al avanzar y retroceder', async () => {
     await mount();
-    await click(document.getElementById('pesaje-nacional-seccion-2-titulo'));
+    await click(button('Siguiente'));
     const peso = document.querySelector('input[id^="pesaje-peso-"]');
     await change(peso, '2.75');
     const file = new File(['foto'], 'contenido.jpg', { type: 'image/jpeg' });
@@ -92,11 +99,10 @@ it('conserva los controles, el peso y el archivo al plegar, avanzar y retroceder
         Object.defineProperty(input, 'files', { configurable: true, value: [file] });
         input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await click(document.getElementById('pesaje-nacional-seccion-2-titulo'));
-    expect(panel(2).hidden).toBe(true);
     await click(button('Atrás'));
+    expect(panel(2).hidden).toBe(true);
     expect(document.activeElement.id).toBe('cedis-sku-pesaje');
-    await click(button('Cajas y evidencias'));
+    await click(button('Siguiente'));
     expect(document.querySelector('input[id^="pesaje-peso-"]')).toBe(peso);
     expect(peso.value).toBe('2.75');
     expect(panel(2).textContent).toContain('contenido.jpg');
@@ -104,7 +110,7 @@ it('conserva los controles, el peso y el archivo al plegar, avanzar y retroceder
     expect(saved.envios[0].peso_real_kg).toBe('2.75');
     expect(saved.evidenciasPorEnvio[0].archivos[0]).toBe(file);
     await change(panel(2).querySelector('select[id^="pesaje-caja-"]'), '1');
-    await click(button('Registrar pesaje'));
+    await click(button('Enviar respuesta'));
     expect(router.post).not.toHaveBeenCalled();
     await click(document.querySelector('[aria-label="Confirmar acción"] button'));
     await act(() => vi.advanceTimersByTimeAsync(100));
@@ -116,11 +122,10 @@ it('conserva los controles, el peso y el archivo al plegar, avanzar y retroceder
     expect(payload.get('evidencias_envios[0][0]')).toBe(file);
 });
 
-it('abre Cajas plegada y enfoca el campo con error sin enfocar el escáner', async () => {
+it('muestra Cajas y enfoca el campo con error sin enfocar el escáner', async () => {
     await mount();
-    await click(document.getElementById('pesaje-nacional-seccion-2-titulo'));
-    await click(document.getElementById('pesaje-nacional-seccion-2-titulo'));
-    await click(button('Registrar pesaje'));
+    await click(button('Siguiente'));
+    await click(button('Enviar respuesta'));
     expect(panel(2).hidden).toBe(false);
     expect(document.activeElement.id).toMatch(/^pesaje-caja-/);
     expect(document.activeElement.getAttribute('aria-invalid')).toBe('true');
@@ -129,12 +134,13 @@ it('abre Cajas plegada y enfoca el campo con error sin enfocar el escáner', asy
     expect(router.post).not.toHaveBeenCalled();
 });
 
-it('recupera el borrador y despliega las secciones con captura sin cambiar sus UUID', async () => {
+it('recupera el borrador sin cambiar la vista inicial sin cambiar sus UUID', async () => {
     draft = { envios: [{ client_uuid: 'ab463593-230f-4a18-8d69-38177cd871e5',
         catalogo_tipo_caja_id: 1, largo: 10, ancho: 10, alto: 10, peso_real_kg: '3', peso_volumetrico_kg: 0.2 }],
         revisiones: [], evidenciasPorEnvio: [] };
     await mount();
-    expect(panel(2).hidden).toBe(false);
+    expect(panel(2).hidden).toBe(true);
+    await click(button('Siguiente'));
     expect(document.getElementById('pesaje-peso-ab463593-230f-4a18-8d69-38177cd871e5').value).toBe('3');
     expect(document.body.textContent).toContain('Borrador recuperado');
 });
@@ -146,11 +152,9 @@ it('abre Productos y su detalle al faltar comentario y mantiene allí el foco', 
             estado_fisico: 'sin_existencia', comentario: '', evidencias: [], previews: [] }],
         evidenciasPorEnvio: [{ archivos: [new File(['foto'], 'caja.jpg', { type: 'image/jpeg' })] }] };
     await mount();
-    await click(button('Revisar productos'));
-    await click(button('Cajas y evidencias'));
-    await click(document.getElementById('pesaje-nacional-seccion-1-titulo'));
+    await click(button('Siguiente'));
     expect(panel(1).hidden).toBe(true);
-    await click(button('Registrar pesaje'));
+    await click(button('Enviar respuesta'));
     expect(panel(1).hidden).toBe(false);
     expect(document.activeElement.id).toBe('pesaje-comentario-2422bb99-9437-4f1c-aa84-76c32facfb63');
     await act(() => vi.advanceTimersByTimeAsync(250));

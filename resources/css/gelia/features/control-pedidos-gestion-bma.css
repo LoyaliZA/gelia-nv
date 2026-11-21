@@ -658,7 +658,7 @@
 
 /* CEDIS: una tarea visible, con avance accesible para uso táctil. */
 .gelia-pesaje-nacional {
-    max-width: 64rem;
+    max-width: 80rem;
     overflow: hidden;
 }
 
@@ -671,27 +671,14 @@
 
 .gelia-pesaje-nacional-seccion {
     min-width: 0;
+    padding: 1rem;
     border: 1px solid var(--theme-border);
     border-radius: var(--pedidos-surface-radius);
     background: var(--theme-surface-solid);
 }
 
-.gelia-pesaje-nacional-desplegar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    width: 100%;
-    min-height: 44px;
-    padding: 1rem;
-    color: var(--theme-text-main);
-    text-align: left;
-    font-size: 0.875rem;
-    font-weight: 650;
-}
-
 .gelia-pesaje-nacional-contenido {
-    padding: 0 1rem 1rem;
+    padding: 1rem 0 0;
 }
 
 .gelia-pesaje-nacional-contenido[hidden] {
@@ -1754,3 +1741,139 @@
 }
 
 .gelia-pedidos-cedis .gelia-pedidos-estados:empty { display: none; }
+
+/* Las dos vistas nacionales conservan montada toda la captura. */
+.gelia-pesaje-nacional-vistas {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+.gelia-pesaje-nacional-campos { display: contents; }
+.gelia-pesaje-nacional-seccion[hidden] { display: none !important; }
+#pesaje-nacional-seccion-2,
+.gelia-pesaje-nacional-comparacion { grid-column: 1 / -1; }
+@media (min-width: 1024px) {
+    .gelia-pesaje-nacional-vistas { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+}
+
+/* Solo Cajas y evidencias del pesaje nacional ordinario. */
+.gelia-pesaje-nacional .gelia-pesaje-caja {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+    overflow: hidden;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--pedidos-surface-radius);
+    background: var(--theme-surface-solid);
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-cabecera {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .5rem 1rem;
+    border-bottom: 1px solid var(--theme-border);
+    background: color-mix(in srgb, var(--color-primario) 6%, var(--theme-surface-solid));
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-cabecera p {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 1rem;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-cabecera svg { flex-shrink: 0; }
+.gelia-pesaje-nacional .gelia-pesaje-caja-datos {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 1rem;
+    min-width: 0;
+    padding-inline: 1rem;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-datos > * { min-width: 0; }
+.gelia-pesaje-nacional .gelia-pesaje-caja-catalogo {
+    grid-column: 1 / -1;
+    background: color-mix(in srgb, var(--color-primario) 4%, var(--theme-surface-solid));
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-catalogo summary { margin-bottom: .5rem; }
+.gelia-pesaje-nacional .gelia-pesaje-caja > .gelia-pedidos-adjuntos {
+    min-width: 0;
+    margin: 0;
+    padding: 0 1rem 1rem;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos > div:first-child { flex-wrap: wrap; }
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos-control { padding: 1rem; }
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-evidencias {
+    grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+    gap: .5rem;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-evidencia-vista { height: 8rem; }
+@media (min-width: 1024px) {
+    .gelia-pesaje-nacional .gelia-pesaje-caja { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .gelia-pesaje-nacional .gelia-pesaje-caja-datos {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        padding: 0 0 1rem 1rem;
+    }
+    .gelia-pesaje-nacional .gelia-pesaje-caja > .gelia-pedidos-adjuntos {
+        border-left: 1px solid var(--theme-border);
+        padding-left: 1rem;
+    }
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja-cabecera p svg { color: var(--color-primario); }
+
+/* La galería conserva carga, pegado, cámara y acciones; solo cambia su acomodo. */
+.gelia-pesaje-nacional .gelia-pesaje-caja > .gelia-pedidos-adjuntos {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos > * { margin-top: 0; min-width: 0; }
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos-control {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-block: auto;
+    text-align: center;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos:has(.gelia-pedidos-evidencias) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos:has(.gelia-pedidos-evidencias) .gelia-pedidos-adjuntos-control {
+    justify-self: end;
+    align-items: flex-end;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-adjuntos:has(.gelia-pedidos-evidencias) .gelia-pedidos-adjuntos-control > p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-evidencias {
+    display: flex;
+    gap: .75rem;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    padding: .25rem .25rem .75rem;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-primario) var(--theme-element-bg);
+}
+.gelia-pesaje-nacional .gelia-pesaje-caja .gelia-pedidos-evidencia {
+    flex: 0 0 8rem;
+    scroll-snap-align: start;
+}
