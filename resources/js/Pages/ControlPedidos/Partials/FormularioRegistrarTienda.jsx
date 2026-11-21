@@ -1425,14 +1425,23 @@ export default function FormularioRegistrarTienda({
                                     </div>
                                 )}
                                 {nacional && documento?.url && estadoArchivo !== 'cargando' && (
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        {esImagen(documento)
-                                            ? <img src={documento.url} alt="" className="w-14 h-14 shrink-0 object-contain rounded" />
-                                            : <span className={GELIA_ICON_BOX}><FileText size={18} aria-hidden="true" /></span>}
-                                        <div className="min-w-0">
-                                            <p className="m-0 break-words text-sm theme-text-main" role="status">{documento.nombre_original || 'Archivo del pedido'}</p>
-                                            <p className="m-0 text-xs theme-text-muted">{esImagen(documento) ? 'Imagen' : 'PDF'}</p>
+                                    <div className="registrar-tienda-archivo-listo w-full text-left">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            {esImagen(documento)
+                                                ? <img src={documento.url} alt="" className="w-14 h-14 shrink-0 object-contain rounded" />
+                                                : <span className={GELIA_ICON_BOX}><FileText size={18} aria-hidden="true" /></span>}
+                                            <div className="min-w-0">
+                                                <p className="m-0 break-words text-sm theme-text-main" role="status">{documento.nombre_original || 'Archivo del pedido'}</p>
+                                                <p className="m-0 text-xs theme-text-muted">{esImagen(documento) ? 'Imagen' : 'PDF'}</p>
+                                            </div>
                                         </div>
+                                        {!esImagen(documento) && (
+                                            <VisorPdfPaginas
+                                                url={documento.url}
+                                                titulo={documento.nombre_original || 'Pedido'}
+                                                maxHeight="14rem"
+                                            />
+                                        )}
                                     </div>
                                 )}
                                 {!nacional && documento?.url && estadoArchivo !== 'cargando' && (
