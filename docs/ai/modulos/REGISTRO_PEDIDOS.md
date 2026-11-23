@@ -40,3 +40,4 @@
 - Última verificación: 2026-11-23, árbol de trabajo sobre `1c0f841f`; entrada Nuevo pedido y tres modalidades comprobadas con transporte simulado, sin commit.
 - Última verificación: 2026-11-23, árbol de trabajo sobre `94668a09`; anexo extraordinario comprobado en navegador (creación, etiqueta, mini consulta de CEDIS, dirección heredada), sin commit.
 - Última verificación: 2026-11-21, árbol de trabajo sobre `c3e44924`; selector nacional comprobado con transporte simulado, sin commit.
+- Última verificación: 2026-11-23, merge de anexo extraordinario (`94668a09`, navegador) y selector de modalidad (`1c0f841f`, transporte simulado).
