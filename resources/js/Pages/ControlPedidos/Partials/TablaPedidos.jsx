@@ -274,7 +274,7 @@ function useAccionesProps(props) {
     const {
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, onAnexoExtraordinario,
     } = props;
 
     return useMemo(() => accionesPedidoLista({
@@ -302,11 +302,12 @@ function useAccionesProps(props) {
         onAnexarEnvio,
         onCompletarEnvio,
         onCargarGuia,
+        onAnexoExtraordinario,
         onEsperaPago: (p) => router.post(route('control_pedidos.espera_pago', p.id), {}, { preserveScroll: true }),
     }), [
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia, onAnexoExtraordinario,
     ]);
 }
 
@@ -547,6 +548,7 @@ export default function TablaPedidos({
     onAnexarEnvio,
     onCompletarEnvio,
     onCargarGuia,
+    onAnexoExtraordinario,
 }) {
     const [docPreview, setDocPreview] = useState(null);
     const items = pedidos?.data || [];
@@ -605,6 +607,7 @@ export default function TablaPedidos({
         onAnexarEnvio,
         onCompletarEnvio,
         onCargarGuia,
+        onAnexoExtraordinario,
     };
 
     const vacio = (

@@ -23,6 +23,7 @@ import ModalAuditoriaEliminacionPedido from './Partials/ModalAuditoriaEliminacio
 import ModalEliminarRegistroPedido from './Partials/ModalEliminarRegistroPedido';
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
+import ModalAnexoExtraordinario from './Nacional/ModalAnexoExtraordinario';
 import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import useListadoDiscreto from './Partials/useListadoDiscreto';
@@ -70,6 +71,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [pedidoAuditoria, setPedidoAuditoria] = useState(null);
     const [modalLinkDireccion, setModalLinkDireccion] = useState(false);
     const [modalAnexo, setModalAnexo] = useState({ abierto: false, pedido: null });
+    const [modalAnexoExtraordinario, setModalAnexoExtraordinario] = useState({ abierto: false, pedido: null });
     const [modalCompletarEnvio, setModalCompletarEnvio] = useState({ abierto: false, pedido: null });
     const [modalCargarGuia, setModalCargarGuia] = useState({ abierto: false, pedido: null });
     const [alerta, setAlerta] = useState({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
@@ -178,6 +180,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     // El detalle es de solo lectura: no se pausa para que la respuesta de Control de pedidos se refleje sin cerrar y reabrir.
     const pausarPollingListado = modalBitacora.abierto
         || modalAnexo.abierto
+        || modalAnexoExtraordinario.abierto
         || modalCompletarEnvio.abierto
         || modalCargarGuia.abierto
         || modalLinkDireccion
@@ -364,6 +367,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     onVerAuditoria={setPedidoAuditoria}
                     onCancelar={setPedidoACancelar}
                     onAnexarEnvio={(pedido) => setModalAnexo({ abierto: true, pedido })}
+                    onAnexoExtraordinario={(pedido) => setModalAnexoExtraordinario({ abierto: true, pedido })}
                     onCompletarEnvio={(pedido) => setModalCompletarEnvio({ abierto: true, pedido })}
                     onCargarGuia={(pedido) => setModalCargarGuia({ abierto: true, pedido })}
                 />
@@ -404,6 +408,12 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 pedido={modalAnexo.pedido}
                 bancos={catalogos.bancos || []}
                 onClose={() => setModalAnexo({ abierto: false, pedido: null })}
+            />
+            <ModalAnexoExtraordinario
+                abierto={modalAnexoExtraordinario.abierto}
+                pedido={modalAnexoExtraordinario.pedido}
+                onClose={() => setModalAnexoExtraordinario({ abierto: false, pedido: null })}
+                onCreado={() => router.reload({ preserveScroll: true })}
             />
             <ModalLiberarResguardoAbierto
                 abierto={modalCompletarEnvio.abierto}

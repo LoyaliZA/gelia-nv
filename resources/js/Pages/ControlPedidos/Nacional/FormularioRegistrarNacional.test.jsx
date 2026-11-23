@@ -145,13 +145,12 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
     );
 });
 
-it('registra el importe del complemento en el pedido con remisión', async () => {
+it('ofrece el anexo extraordinario en un pedido con remisión y abre su modal corto', async () => {
     const conRemision = {
         ...pedido,
         numero_remision: 'REM-9',
         consulta_cerrada_at: '2026-11-20T14:00:00Z',
         pago_validado_at: '2026-11-20T18:00:00Z',
-        revisiones: [{ sku: 'SKU-VIEJO', cantidad: 2 }],
         pesaje_solicitado_at: '2026-11-20T12:00:00Z',
     };
     await act(async () => {
@@ -161,36 +160,19 @@ it('registra el importe del complemento en el pedido con remisión', async () =>
             </FormularioRegistrarNacional>,
         );
     });
-    const importe = document.getElementById('importe-complemento');
-    const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Registrar complemento'));
-    expect(importe).not.toBeNull();
-    expect(boton.disabled).toBe(false);
-    await act(async () => {
-        importe.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
-    });
-    expect(document.body.textContent).toContain('Indique el importe del complemento.');
-    const soporte = document.getElementById('soporte-complemento');
-    await act(async () => {
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(importe, '40.50');
-        importe.dispatchEvent(new Event('input', { bubbles: true }));
-        Object.defineProperty(soporte, 'files', { configurable: true, value: [new File(['soporte'], 'soporte.jpg', { type: 'image/jpeg' })] });
-        soporte.dispatchEvent(new Event('change', { bubbles: true }));
-        [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Elegir perfume')).click();
-    });
-    await act(async () => {
-        [...document.querySelectorAll('button')].find((item) => item.textContent === 'Agregar').click();
-    });
-    await act(async () => boton.click());
-    const cuerpo = axios.post.mock.calls.at(-1)[1];
-    expect(axios.post).toHaveBeenCalledWith('/control-pedidos/9/ajuste-nacional', expect.any(FormData), expect.anything());
-    expect(cuerpo.get('tipo')).toBe('anexo');
-    expect(cuerpo.get('solicitud_id')).toBe('11111111-1111-4111-8111-111111111111');
-    expect(cuerpo.get('total_mercancia_nueva')).toBe('40.5');
-    expect(cuerpo.get('piezas[0][sku]')).toBe('SKU-NUEVA');
-    expect(cuerpo.get('piezas[0][descripcion]')).toBe('Crema nueva');
-    expect(cuerpo.get('piezas[0][descripcion]')).not.toBe('Complemento');
-    expect(cuerpo.get('evidencia')).toBeTruthy();
-    expect(String([...cuerpo.entries()])).not.toContain('SKU-VIEJO');
+    expect(document.getElementById('importe-complemento')).toBeNull();
+    expect(document.body.textContent).not.toContain('Registrar complemento');
+    const abrir = [...document.querySelectorAll('button')].find((item) => item.textContent.trim() === 'Anexo extraordinario');
+    expect(abrir).toBeDefined();
+    await act(async () => abrir.click());
+    const dialogo = document.body.querySelector('[role="dialog"]');
+    expect(dialogo.textContent).toContain('Hereda cliente, almacén de salida, paquetería y dirección');
+    expect(document.getElementById('anexo-folio-wizerp')).not.toBeNull();
+});
+
+it('no ofrece el anexo extraordinario mientras el pedido no tiene pago ni remisión', async () => {
+    await render({ pesaje_solicitado_at: '2026-11-20T12:00:00Z', consulta_cerrada_at: '2026-11-20T13:00:00Z' });
+    expect([...document.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Anexo extraordinario')).toBe(false);
 });
 
 it('solicita recolección en sucursal sin convertir la modalidad', async () => {

@@ -44,10 +44,7 @@ class RegistrarAjusteConsultaNacional
                 if (! CapturaNacional::es($pedido)) {
                     throw new \InvalidArgumentException('Este ajuste solo aplica a un envío nacional de la captura actual.');
                 }
-                $ya = $this->complementoPrevio($pedido, $solicitudId);
-                app(RegistrarComplementoNacional::class)->ejecutar($pedido, $usuario, $datos, $archivos);
-
-                return ['pedido' => $pedido->fresh(), 'idempotente' => $ya];
+                throw new \InvalidArgumentException('Con remisión o pago, use «Anexo extraordinario»: el anexo es un minipedido relacionado con su propia consulta y pago.');
             }
 
             RevisionCapturaPedido::comprobar($pedido, $datos);
