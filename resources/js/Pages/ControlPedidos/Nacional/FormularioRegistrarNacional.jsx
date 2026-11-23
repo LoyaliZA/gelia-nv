@@ -42,7 +42,7 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, children }) {
+export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, puedeAgregarDireccion = false, children }) {
     const [actual, setActual] = useState(pedido);
     const [paqueteriaId, setPaqueteriaId] = useState(String(pedido?.catalogo_paqueteria_id || ''));
     const almacenesSalida = useMemo(() => almacenesSalidaNacional(catalogos.almacenes), [catalogos.almacenes]);
@@ -523,6 +523,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     key={`${actual.id}-${elegida.id}`}
                     pedido={actual} catalogos={catalogos}
                     pendiente={elegida.nombre === 'PAQ. PENDIENTE'} importePendiente={importePendiente} onPedido={adoptar}
+                    puedeAgregarDireccion={puedeAgregarDireccion}
                 />
             )}
             {conComplemento && !cambio && !yaSalio && (

@@ -38,6 +38,8 @@ export default defineConfig(({ mode }) => {
         test: {
             environment: 'node',
             include: ['resources/js/**/*.test.{js,jsx}'],
+            // Node 25+ expone un localStorage experimental que tapa el de happy-dom y rompe las pruebas de captura.
+            execArgv: ['--no-experimental-webstorage'],
         },
         server: {
             host: '0.0.0.0',

@@ -13,7 +13,7 @@ describe('Respuesta actual en las vistas de consulta', () => {
         await act(() => root.render(<ConsultaSolicitudTienda pedido={pedido} />));
         expect(container.querySelector('[aria-label="Resultado de la revisión en tienda"]')).not.toBeNull();
         expect(container.textContent).toContain('Respuesta de disponibilidad');
-        expect(container.textContent).toContain('Sin incidencias');
+        expect(container.textContent).toContain('Todo OK');
         expect(container.querySelectorAll('button,input,select,textarea')).toHaveLength(0);
     });
     it('muestra cierre y respuesta física sin habilitar acciones', async () => {
