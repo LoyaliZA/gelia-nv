@@ -6,7 +6,7 @@ import axios from 'axios';
 import SeguimientoSolicitudNacional from './SeguimientoSolicitudNacional';
 
 vi.mock('axios', () => ({ default: { post: vi.fn(), get: vi.fn() } }));
-vi.mock('../Partials/AjustePiezas', () => ({ AjustePiezas: () => null }));
+vi.mock('../Partials/AjustePiezas', () => ({ AjustePiezas: () => <p>Editor de ajuste</p> }));
 
 const pedido = {
     id: 9,
@@ -86,4 +86,72 @@ it('muestra el conflicto y no da la consulta por cerrada', async () => {
     expect(document.body.textContent).not.toContain('Ventas registró el cierre');
     expect(onPedidoActualizado).not.toHaveBeenCalled();
     expect(axios.get).not.toHaveBeenCalled();
+});
+
+const respondido = {
+    pesaje_respondido_at: '2026-11-20T12:00:00Z',
+    pesaje_respondido_por: { name: 'Auxiliar CEDIS' },
+    numero_cajas: 1,
+    peso_real_kg: 1.2,
+    peso_cobrado_guia_kg: 2,
+    revisiones_producto: [
+        { id: 1, sku: 'SKU-ANX-1', descripcion_producto: 'Perfume anexo de prueba', cantidad_solicitada: 1, cantidad_encontrada: 1, estado_fisico: 'bueno' },
+    ],
+};
+
+it('muestra la respuesta de CEDIS como una card con estado, pieza y resumen de pesaje', async () => {
+    await render(vi.fn(), respondido);
+    const respuesta = document.querySelector('[aria-label="Resultado de la consulta en CEDIS"]');
+    expect(respuesta).not.toBeNull();
+    expect(respuesta.textContent).toContain('Respuesta de CEDIS');
+    expect(respuesta.textContent).toContain('Auxiliar CEDIS');
+    expect(respuesta.textContent).toContain('SKU-ANX-1');
+    expect(respuesta.textContent).toContain('Perfume anexo de prueba');
+    expect(respuesta.textContent).toContain('Todo OK');
+    expect(respuesta.textContent).toContain('Unidades encontradas');
+    expect(respuesta.textContent).not.toContain('Piezas afectadas');
+    const pesaje = document.querySelector('[aria-label="Resumen del pesaje"]');
+    expect(pesaje.textContent).toMatch(/Cajas\s*1/);
+    expect(pesaje.textContent).toMatch(/Peso real\s*1\.2 kg/);
+    expect(pesaje.textContent).toMatch(/Peso a cobrar\s*2 kg/);
+    expect(document.body.textContent).toContain('Consulta respondida');
+});
+
+it('marca con detalles o faltantes cuando CEDIS reporta una pieza con detalle', async () => {
+    await render(vi.fn(), { ...respondido, revisiones_producto: [{ ...respondido.revisiones_producto[0], estado_fisico: 'regular', comentario: 'Caja maltratada' }] });
+    const respuesta = document.querySelector('[aria-label="Resultado de la consulta en CEDIS"]');
+    expect(respuesta.textContent).toContain('Con detalles o faltantes');
+    expect(respuesta.textContent).toContain('Caja maltratada');
+});
+
+it('avisa que se espera la respuesta de CEDIS mientras la consulta no se contesta', async () => {
+    await render(vi.fn(), { pesaje_respondido_at: null, puede_cerrar_consulta: false, revisiones_producto: [] });
+    expect(document.body.textContent).toContain('Consulta pendiente: CEDIS');
+    expect(document.body.textContent).toContain('Esperando respuesta de CEDIS');
+    expect(document.querySelector('[aria-label="Resultado de la consulta en CEDIS"]')).toBeNull();
+});
+
+it('al cerrar la consulta muestra el aviso de cierre y la sección Mercancía explica por qué ya no se modifica', async () => {
+    await render(vi.fn(), { ...respondido, consulta_cerrada_at: '2026-11-20T13:00:00Z', puede_cerrar_consulta: false });
+    expect(document.body.textContent).toContain('Consulta cerrada');
+    expect(document.body.textContent).toContain('Ventas registró el cierre');
+    const mercancia = document.querySelector('[aria-labelledby="mercancia-nacional-titulo"]');
+    expect(mercancia.textContent).toContain('ya no se modifica desde aquí');
+    expect(mercancia.querySelector('.tienda-ajustes-desplegar')).toBeNull();
+});
+
+it('con pago o remisión explica que los anexos van por «Anexo extraordinario»', async () => {
+    await render(vi.fn(), { ...respondido, consulta_cerrada_at: '2026-11-20T13:00:00Z', puede_cerrar_consulta: false, numero_remision: 'REM-1' });
+    expect(document.body.textContent).toContain('Anexo extraordinario');
+});
+
+it('los ajustes de piezas viven en un desplegable «Modificar pedido» y no ocupan la vista de entrada', async () => {
+    await render(vi.fn(), respondido);
+    const abrir = [...document.querySelectorAll('button')].find((boton) => boton.textContent.includes('Modificar pedido'));
+    expect(abrir).toBeDefined();
+    expect(abrir.getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('[hidden]').textContent).toContain('Editor de ajuste');
+    await act(async () => abrir.click());
+    expect(abrir.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[hidden]')).toBeNull();
 });

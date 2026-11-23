@@ -70,7 +70,7 @@ class NacionalOla3Test extends TestCase
         }
     }
 
-    public function test_anexo_con_remision_crea_complemento_pagado_aparte_y_el_reintento_no_duplica(): void
+    public function test_anexo_con_remision_crea_un_minipedido_sin_pago_y_el_reintento_no_duplica(): void
     {
         Storage::fake('public');
         $pedido = $this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS, [
@@ -84,9 +84,10 @@ class NacionalOla3Test extends TestCase
         $segundo = app(RegistrarComplementoNacional::class)->ejecutar($pedido->fresh(), $this->usuario, $datos, [$datos['evidencia']]);
 
         $pedido->refresh();
-        $hijo = PedidoBma::query()->where('pedido_principal_id', $pedido->id)->first();
+        $hijo = $this->hijoDe($pedido);
         $this->assertSame($primero->id, $segundo->id);
-        $this->assertSame(1, PedidoBma::query()->where('pedido_principal_id', $pedido->id)->count());
+        $this->assertSame(1, $this->anexosDe($pedido));
+        $this->assertNull($hijo->pedido_principal_id, 'el anexo sale en caja y guía aparte');
         $this->assertSame('REM-1', $pedido->numero_remision);
         $this->assertSame('100.00', number_format((float) $pedido->total_mercancia, 2, '.', ''));
         $this->assertNotNull($hijo);
@@ -96,14 +97,14 @@ class NacionalOla3Test extends TestCase
         $this->assertSame('compartida', $hijo->solicitud_preparacion_json['captura_nacional']);
         $this->assertSame('SKU-NUEVA', $hijo->solicitud_preparacion_json['complemento_nacional']['piezas'][0]['sku']);
         $this->assertSame('0.00', number_format((float) $hijo->solicitud_preparacion_json['complemento_nacional']['mercancia_nueva_por_cobrar'], 2, '.', ''));
-        $this->assertNotNull($hijo->pago_validado_at);
+        $this->assertNull($hijo->pago_validado_at, 'Ventas no valida su propio pago');
         $this->assertNull($hijo->sucursal_destino_id);
         $this->assertSame(0, PedidoBmaTareaPreparacion::query()->where('pedido_bma_id', $hijo->id)->count());
         $this->assertSame(0, $pedido->documentos()->count());
         $this->assertSame(1, $hijo->documentos()->count());
     }
 
-    public function test_el_anexo_http_con_remision_responde_en_el_pedido_original(): void
+    public function test_el_anexo_http_con_remision_crea_su_minipedido_y_no_toca_el_original(): void
     {
         Storage::fake('public');
         $pedido = $this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS, [
@@ -112,30 +113,24 @@ class NacionalOla3Test extends TestCase
             'pago_validado_at' => now(),
         ]);
         $datos = $this->datosComplemento($pedido, 40, 'SKU-HTTP');
+        $cuerpo = [
+            'solicitud_id' => $datos['solicitud_id'],
+            'folio_wizerp' => $datos['folio_wizerp'],
+            'piezas' => $datos['piezas'],
+            'total_mercancia_nueva' => 40,
+            'revision_esperada' => $datos['revision_esperada'],
+            'base_captura' => $datos['base_captura'],
+            'documento' => $datos['evidencia'],
+        ];
         $ajeno = User::factory()->create();
 
-        $this->actingAs($ajeno)->post('/control-pedidos/'.$pedido->id.'/ajuste-nacional', [
-            'tipo' => 'anexo',
-            'solicitud_id' => $datos['solicitud_id'],
-            'piezas' => $datos['piezas'],
-            'total_mercancia_nueva' => 40,
-            'revision_esperada' => $datos['revision_esperada'],
-            'base_captura' => $datos['base_captura'],
-            'evidencia' => $datos['evidencia'],
-        ], ['Accept' => 'application/json'])->assertForbidden();
-
-        $this->actingAs($this->usuario)->post('/control-pedidos/'.$pedido->id.'/ajuste-nacional', [
-            'tipo' => 'anexo',
-            'solicitud_id' => $datos['solicitud_id'],
-            'piezas' => $datos['piezas'],
-            'total_mercancia_nueva' => 40,
-            'revision_esperada' => $datos['revision_esperada'],
-            'base_captura' => $datos['base_captura'],
-            'evidencia' => $datos['evidencia'],
-        ], ['Accept' => 'application/json'])->assertOk();
+        $this->actingAs($ajeno)->post(route('control_pedidos.anexo_extraordinario', $pedido), $cuerpo, ['Accept' => 'application/json'])
+            ->assertForbidden();
+        $this->actingAs($this->usuario)->post(route('control_pedidos.anexo_extraordinario', $pedido), $cuerpo, ['Accept' => 'application/json'])
+            ->assertOk();
 
         $this->assertSame('REM-HTTP', $pedido->fresh()->numero_remision);
-        $this->assertSame(1, PedidoBma::query()->where('pedido_principal_id', $pedido->id)->count());
+        $this->assertSame(1, $this->anexosDe($pedido));
         $this->assertSame(0, PedidoBmaTareaPreparacion::query()->count());
     }
 
@@ -804,6 +799,16 @@ class NacionalOla3Test extends TestCase
         ], $extra));
     }
 
+    private function hijoDe(PedidoBma $principal): ?PedidoBma
+    {
+        return PedidoBma::query()->where('solicitud_preparacion_json->complemento_nacional->pedido_origen_id', $principal->id)->first();
+    }
+
+    private function anexosDe(PedidoBma $principal): int
+    {
+        return PedidoBma::query()->where('solicitud_preparacion_json->complemento_nacional->pedido_origen_id', $principal->id)->count();
+    }
+
     /** @return array<string, mixed> */
     private function datosComplemento(PedidoBma $pedido, float $monto, string $sku): array
     {
@@ -811,6 +816,7 @@ class NacionalOla3Test extends TestCase
 
         return [
             'solicitud_id' => (string) Str::uuid(),
+            'folio_wizerp' => 'WIZ-ANX-'.uniqid(),
             'piezas' => [['sku' => $sku, 'descripcion' => 'Pieza nueva', 'cantidad' => 1]],
             'total_mercancia_nueva' => $monto,
             'revision_esperada' => (int) $fresco->revision_registro,
