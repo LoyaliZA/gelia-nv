@@ -89,6 +89,7 @@ class ConsultaFormularioConfirmacionCustodiaPdvService
         return [
             'id' => $resguardo->id,
             'origen_nacional' => $resguardo->esOrigenNacional(),
+            'origen_municipal' => $resguardo->esOrigenMunicipal(),
             'estado' => $resguardo->estado,
             'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
             'version' => (int) $resguardo->version,

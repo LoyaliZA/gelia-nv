@@ -8,6 +8,7 @@ import {
     RotateCcw,
     Undo2,
     Ban,
+    Scale,
     X,
     Save,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ import { geliaCardClass } from '../../utils/geliaTheme';
 import SafMenuAcciones from './Partials/SafMenuAcciones';
 import SafModal from './Partials/SafModal';
 import SafEvidenciasPanel from './Partials/SafEvidenciasPanel';
+import ModalConciliarOrigenSaf from './Partials/ModalConciliarOrigenSaf';
 import {
     BTN_BACK,
     BTN_PRIMARY,
@@ -27,6 +29,7 @@ import {
     LABEL_CATEGORIA_MOTIVO,
     LABEL_ESTADO_FIN,
     LABEL_ESTADO_REV,
+    LABEL_USO_SALDO,
     TD,
     TH,
     THEME_INPUT,
@@ -60,6 +63,7 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
     const can = (p) => permisos.includes(p) || auth?.user?.roles?.includes('Super Admin');
     const [creditoAccion, setCreditoAccion] = useState(null);
     const [modo, setModo] = useState(null);
+    const [creditoConciliar, setCreditoConciliar] = useState(null);
 
     const formRevision = useForm({ estado_revision: 'revisado', observaciones: '' });
     const formAjuste = useForm({ monto_delta: '', saf_motivo_id: '', observaciones: '' });
@@ -130,6 +134,14 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
             tone: 'sky',
             show: can('saldos_favor.ajustar') && Number(c.monto_aplicado) > 0,
             onClick: () => abrir(c, 'revertir'),
+        },
+        {
+            key: 'conciliar-origen',
+            label: 'Conciliar origen',
+            icon: Scale,
+            tone: 'primary',
+            show: can('saldos_favor.autorizar_envio') && c.uso_efectivo === 'pendiente_conciliacion',
+            onClick: () => setCreditoConciliar(c),
         },
         {
             key: 'cancelar',
@@ -239,6 +251,9 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                                         <div className="text-[10px] font-bold uppercase tracking-wide theme-text-muted">
                                             {LABEL_ESTADO_REV[c.estado_revision] || c.estado_revision}
                                         </div>
+                                        {c.uso_efectivo && c.uso_efectivo !== 'general' && (
+                                            <div className="text-[10px] font-bold theme-text-main mt-1">{LABEL_USO_SALDO[c.uso_efectivo] || c.uso_efectivo}</div>
+                                        )}
                                     </td>
                                     <td className={TD}>{fmtFecha(c.fecha_generacion)}</td>
                                     <td className={TD}>{fmtFecha(c.fecha_vencimiento)}</td>
@@ -440,6 +455,7 @@ export default function Cuenta({ auth, cliente, cuenta, creditos = [], movimient
                             )}
                     </div>
                 </SafModal>
+                <ModalConciliarOrigenSaf credito={creditoConciliar} onClose={() => setCreditoConciliar(null)} />
             </GeliaPageShell>
         </AppLayout>
     );

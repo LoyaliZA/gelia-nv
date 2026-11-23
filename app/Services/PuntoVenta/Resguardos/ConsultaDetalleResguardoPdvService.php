@@ -8,6 +8,8 @@ use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\User;
+use App\Support\ControlPedidos\Municipal\PresentadorCambioATienda;
+use App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales;
 use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\PoliticaResguardoEnvio;
 use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
@@ -115,6 +117,9 @@ class ConsultaDetalleResguardoPdvService
             ] : null;
             $serializado['es_municipal'] = true;
             $serializado['caratula'] = $this->resumenCaratulaMunicipal($user, $resguardo);
+            $serializado['complementos_municipales'] = $this->complementosMunicipales($user, $resguardo);
+            $pedidoCambio = $resguardo->pedido_bma_id ? PedidoBma::query()->find($resguardo->pedido_bma_id) : null;
+            $serializado['cambio_a_tienda'] = $pedidoCambio ? PresentadorCambioATienda::para($pedidoCambio, $user) : null;
         }
 
         return [
@@ -129,6 +134,21 @@ class ConsultaDetalleResguardoPdvService
      *
      * @return array<string, mixed>|null
      */
+    /**
+     * M-03b: piezas adicionales del envío para la sucursal que tiene el paquete. La misma fuente que ve CEDIS y Ventas;
+     * «puede_integrar» exige pago y remisión propios, paquete en custodia y personal de la sucursal.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function complementosMunicipales(User $user, ResguardoPdv $resguardo): array
+    {
+        $principal = $resguardo->pedido_bma_id ? PedidoBma::query()->find($resguardo->pedido_bma_id) : null;
+
+        return $principal instanceof PedidoBma
+            ? (PresentadorPiezasAdicionales::para($principal, $user)['items'] ?? [])
+            : [];
+    }
+
     private function resumenCaratulaMunicipal(User $user, ResguardoPdv $resguardo): ?array
     {
         // La relación del resguardo carga pocas columnas; la carátula necesita destino, cancelación y estatus.

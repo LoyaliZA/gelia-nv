@@ -1316,6 +1316,10 @@ class PedidoBma extends Model
     /** Tras Fase 2: Envío y Tienda exigen cierre (salvo complemento de resguardo). */
     public function requiereConsultaCerradaParaProceder(): bool
     {
+        // Las piezas adicionales de un envío municipal no tienen consulta propia: se documentan, se pagan y las integra el área.
+        if (\App\Support\ControlPedidos\Municipal\ComplementosMunicipales::es($this)) {
+            return false;
+        }
         if ($this->esResguardoComplementario()) {
             return false;
         }

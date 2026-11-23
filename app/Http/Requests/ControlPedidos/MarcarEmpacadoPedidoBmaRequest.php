@@ -80,7 +80,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
                 } elseif (! CustodiaDocumentalTienda::aplica($miembro)) {
                     foreach ($bultos as $indice => $fila) {
                         if (empty($fila['foto_ticket'])) {
-                            $validator->errors()->add("bultos_por_pedido.{$key}.{$indice}.foto_ticket", 'Cada bulto debe incluir foto del ticket.');
+                            $validator->errors()->add("bultos_por_pedido.{$key}.{$indice}.foto_ticket", $miembro->esTrasladoInternoAPdv() ? 'Cada bulto debe incluir foto de su remisión (la que va engrapada al bulto).' : 'Cada bulto debe incluir foto del ticket.');
                         }
                     }
                 }

@@ -13,6 +13,8 @@ use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
+use App\Support\ControlPedidos\Municipal\CambioMunicipalATienda;
+use App\Support\ControlPedidos\Municipal\ComplementosMunicipales;
 use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\PuntoVenta\Resguardos\EstadoResguardoPdv;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -125,6 +127,14 @@ class RegistrarSalidaTerminalResguardoPdvService
         }
         if ($pedido->cancelado_at) {
             return 'El pedido está cancelado.';
+        }
+        // M-07: el cliente recogerá este paquete en sucursal; no sale a terminal.
+        if (CambioMunicipalATienda::activo($pedido)) {
+            return CambioMunicipalATienda::MENSAJE_SALIDA;
+        }
+        // M-03b: las piezas adicionales deben integrarse (o resolverse) antes de que el paquete salga.
+        if (ComplementosMunicipales::hayAbiertos($pedido)) {
+            return ComplementosMunicipales::MENSAJE_ABIERTO;
         }
         if ($resguardo->estado !== ResguardoPdv::ESTADO_EN_CUSTODIA || ! EstadoResguardoPdv::custodiaCompleta($resguardo)) {
             return 'El paquete debe estar completo en custodia para registrar la salida a terminal.';

@@ -86,14 +86,14 @@ export default function ModalEvidenciasBultosEmpaque({ abierto, onClose, bultos 
                                             onClick={() => abrirFoto(bulto.foto_ticket.url)}
                                             className="rounded-xl overflow-hidden border theme-border aspect-[4/3] relative group outline-none"
                                         >
-                                            <img src={bulto.foto_ticket.url} alt={`Ticket bulto ${bulto.numero}`} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110 group-active:scale-110" />
+                                            <img src={bulto.foto_ticket.url} alt={`Remisión del bulto ${bulto.numero}`} className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-110 group-active:scale-110" />
                                             <span className="absolute bottom-0 inset-x-0 bg-[color-mix(in_srgb,var(--theme-text-main)_75%,transparent)] text-[var(--theme-element-bg)] text-[9px] font-black uppercase tracking-widest py-1.5 flex items-center justify-center gap-1">
-                                                <Ticket className="w-3 h-3" /> Ticket
+                                                <Ticket className="w-3 h-3" /> Remisión / ticket
                                             </span>
                                         </button>
                                     ) : (
                                         <div className="rounded-xl border theme-border aspect-[4/3] flex items-center justify-center text-[10px] font-bold theme-text-muted">
-                                            Sin ticket
+                                            Sin remisión / ticket
                                         </div>
                                     )}
                                 </div>

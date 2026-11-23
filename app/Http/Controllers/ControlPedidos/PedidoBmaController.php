@@ -1046,6 +1046,9 @@ class PedidoBmaController extends Controller
             $resguardo = $datos['accion'] === 'vincular'
                 ? PedidoBma::query()->findOrFail((int) ($datos['resguardo_id'] ?? 0))
                 : $pedidoBma;
+            if ($datos['accion'] === 'vincular') {
+                $listarService->asegurarAcceso($resguardo, Auth::user());
+            }
             $pedido = match ($datos['accion']) {
                 'vincular' => $servicio->vincular($pedidoBma, $resguardo, (int) Auth::id()),
                 'salida' => $servicio->registrarSalidaOrigen($pedidoBma, (int) Auth::id()),

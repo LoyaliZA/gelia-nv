@@ -14,6 +14,11 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::post('/municipal/clientes/{cliente}/consignatarios/{consignatario}/documento', [ExpedienteClienteController::class, 'documento'])->name('municipal.expediente.documento');
     Route::get('/municipal/clientes/{cliente}/documentos/{documento}', [ExpedienteClienteController::class, 'descargar'])->withTrashed()->name('municipal.expediente.descargar');
     Route::get('/municipal/consultas-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'tienda'])->name('municipal.consultas_tienda');
+    Route::post('/municipal/{pedidoBma}/cambio-a-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\CambioATiendaMunicipalController::class, 'solicitar'])->name('municipal.cambio_a_tienda.solicitar');
+    Route::post('/municipal/{pedidoBma}/cambio-a-tienda/aplicar', [\App\Http\Controllers\ControlPedidos\Municipal\CambioATiendaMunicipalController::class, 'aplicar'])->name('municipal.cambio_a_tienda.aplicar');
+    Route::post('/municipal/{pedidoBma}/complementos', [\App\Http\Controllers\ControlPedidos\Municipal\ComplementoMunicipalController::class, 'store'])->name('municipal.complementos.store');
+    Route::post('/municipal/{pedidoBma}/complementos/{complemento}/enviar', [\App\Http\Controllers\ControlPedidos\Municipal\ComplementoMunicipalController::class, 'enviar'])->name('municipal.complementos.enviar');
+    Route::post('/municipal/{pedidoBma}/complementos/{complemento}/integrar', [\App\Http\Controllers\ControlPedidos\Municipal\ComplementoMunicipalController::class, 'integrar'])->name('municipal.complementos.integrar');
     Route::post('/municipal/{pedidoBma}/solicitud', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'guardar'])->name('municipal.solicitud');
     Route::post('/municipal/{pedidoBma}/consulta', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'enviarConsulta'])->name('municipal.consulta');
     Route::post('/municipal/{pedidoBma}/resguardo', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'resguardo'])->name('municipal.resguardo');

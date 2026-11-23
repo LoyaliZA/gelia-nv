@@ -114,3 +114,10 @@ export function groupMotivosByCategoria(motivos = []) {
     });
     return [...map.entries()];
 }
+
+/** Uso permitido de un saldo (S-06). `pendiente_conciliacion` no se aplica hasta que Administración confirme su origen. */
+export const LABEL_USO_SALDO = {
+    general: 'Uso general',
+    solo_transporte: 'Solo gastos de envío',
+    pendiente_conciliacion: 'Pendiente de conciliar origen',
+};

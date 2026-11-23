@@ -10,6 +10,7 @@ use App\Models\SaldosAFavor\SafMovimiento;
 use App\Models\User;
 use App\Notifications\SaldoFavorPendienteRevisionNotification;
 use App\Support\SaldosAFavor\AlcanceSaf;
+use App\Support\SaldosAFavor\PoliticaUsoCreditoSaf;
 use App\Support\SaldosAFavor\ReglasSaf;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +72,7 @@ class GenerarCreditoSafService
             throw new InvalidArgumentException('El motivo seleccionado requiere detalle.');
         }
 
+        $clasificacion = $this->clasificacion($datos, $motivo);
         $datos = $this->sellarAlcance($datos);
 
         $origenManual = (bool) ($datos['origen_manual'] ?? false);
@@ -82,7 +84,7 @@ class GenerarCreditoSafService
             throw new InvalidArgumentException('La generación manual requiere al menos una evidencia.');
         }
 
-        return DB::transaction(function () use ($datos, $monto, $clienteId, $archivos, $motivoId) {
+        return DB::transaction(function () use ($datos, $monto, $clienteId, $archivos, $motivoId, $clasificacion) {
             $this->assertNoDuplicado($clienteId, $monto, $datos);
 
             $cuenta = $this->cuentas->handle($clienteId, $datos['moneda'] ?? 'MXN');
@@ -114,6 +116,7 @@ class GenerarCreditoSafService
                 'generado_por_id' => $datos['generado_por_id'] ?? null,
                 'estado_financiero' => SafCredito::ESTADO_DISPONIBLE,
                 'estado_revision' => SafCredito::REVISION_PENDIENTE,
+                ...$clasificacion,
             ]);
 
             $mov = $this->movimientos->handle(
@@ -192,6 +195,42 @@ class GenerarCreditoSafService
      * @param  array<string, mixed>  $datos
      * @return array<string, mixed>
      */
+    /**
+     * Uso y origen económico con los que nace el crédito. El motivo no prueba el origen: un crédito de motivo de envío sin
+     * clasificación declarada nace pendiente de conciliación. Una clasificación explícita exige fuente.
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array<string, mixed>
+     */
+    private function clasificacion(array $datos, SafMotivo $motivo): array
+    {
+        $declarada = $datos['clasificacion'] ?? null;
+        if (! is_array($declarada)) {
+            $uso = PoliticaUsoCreditoSaf::usoInicial($motivo->categoria);
+
+            return [
+                'uso_permitido' => $uso,
+                'origen_economico' => $uso === SafCredito::USO_PENDIENTE_CONCILIACION ? SafCredito::ORIGEN_NO_DETERMINADO : null,
+                'clasificacion_fuente' => $uso === SafCredito::USO_PENDIENTE_CONCILIACION ? 'regla_de_generacion' : null,
+            ];
+        }
+        $uso = (string) ($declarada['uso'] ?? '');
+        $origen = (string) ($declarada['origen'] ?? '');
+        $fuente = trim((string) ($declarada['fuente'] ?? ''));
+        if (! in_array($uso, SafCredito::USOS, true) || ! in_array($origen, SafCredito::ORIGENES, true) || $fuente === '') {
+            throw new InvalidArgumentException('La clasificación del saldo a favor necesita uso, origen económico y fuente válidos.');
+        }
+
+        return [
+            'uso_permitido' => $uso,
+            'origen_economico' => $origen,
+            'clasificacion_fuente' => $fuente,
+            'clasificacion_motivo' => $declarada['motivo'] ?? null,
+            'clasificado_por_id' => $datos['generado_por_id'] ?? null,
+            'clasificado_at' => $uso === SafCredito::USO_PENDIENTE_CONCILIACION ? null : now(),
+        ];
+    }
+
     private function sellarAlcance(array $datos): array
     {
         $pedidoId = isset($datos['pedido_bma_id']) ? (int) $datos['pedido_bma_id'] : 0;

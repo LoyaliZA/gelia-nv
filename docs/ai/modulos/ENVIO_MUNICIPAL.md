@@ -48,6 +48,13 @@
 - [pendiente] Rama «preparar en Tienda» (municipal con almacén PDV y marca): sin camino físico definido; requiere decisión de negocio.
 - [pendiente] Selector de sucursal destino en el registro municipal. Recorrido con cuentas reales y MySQL no probados; migraciones 170000 y 180000 pendientes en este servidor.
 
+## Piezas adicionales (M-03b), cambio a recolección (M-07) y saldo de envío (S-06) (2026-11-23)
+- [verificado] «Ya salió» para anexo y cambio: `RecorridoFisicoMunicipal::envioYaSalioParaAjustes` (recorrido nuevo = marca `salida_terminal`; históricos y ENVIO_MUNICIPIO = `envioYaSalio()`, que no se modifica). El anexo municipal rechaza con remisión, pago o salida a terminal: `RegistrarAnexoTiendaService`.
+- [verificado] Piezas adicionales = pedido propio con `pedido_principal_id`, `es_resguardo=false` y marca `complemento_municipal` (no usa `CrearPedidoBmaService` complementario); pago, remisión y envío a auditoría propios; la integración la confirma CEDIS o la sucursal según dónde esté el paquete, nunca en tránsito ni tras la salida a terminal; el principal no sale a terminal con piezas sin integrar: `app/Services/ControlPedidos/Municipal/{Registrar,Enviar,Integrar}Complemento*`, `ComplementosMunicipales`, `PresentadorPiezasAdicionales`. CEDIS no los empaca en grupo (`MarcarEmpacadoPedidoBmaService`).
+- [verificado] Cambio a recolección en sucursal (`cambio_a_tienda` en el JSON): Ventas solicita (motivo, evidencia o error de captura); el área que tiene el paquete verifica, invalida carátulas y conserva compra, remisión, pagos y custodia sin crear traslados. Solicitado/aplicado bloquea salida a terminal y carátula; solicitado bloquea la entrega. Otra sucursal con traslado hecho exige gerencia y NO está conectada; en tránsito se verifica al recibir; histórico se rechaza: `{Solicitar,Aplicar}CambioMunicipalATiendaService`, `PresentadorCambioATienda`.
+- [verificado] Saldo de envío: se genera en la pantalla de Saldos a favor (`es_saldo_envio`, `GenerarSaldoEnvioS06Service`), solo Administración (`saldos_favor.autorizar_envio`), con cambio verificado, una vez por cambio; nace `solo_transporte`; sin mínimo de $10. `PoliticaUsoCreditoSaf`: `pendiente_conciliacion` no se aplica a pedidos nuevos; `solo_transporte` solo hasta el costo de envío del pedido. Créditos nuevos de motivo de envío nacen pendientes; conciliar (`ConciliarOrigenCreditoSafService`) y `saf:conciliacion-envio` (solo lee salvo `--confirmo`).
+- [pendiente] Complementos simultáneos, integración en paquete cerrado, gastos de transporte consumidos, seguro como envío, mínimo S-06, traslado a otra sucursal con traslado hecho, recorrido visual con cuentas reales.
+
 ## Cómo probar
 - [PRUEBAS](../PRUEBAS.md): `MunicipalOrdinarioM01Test`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `ResguardoMunicipalOla1Test`, `ResguardoMunicipalOla2Test`; terminales, expediente, diferido, conversión P0, resguardo M-04/M-09/M-10.
 
@@ -58,4 +65,4 @@
 
 - [verificado] M-02 abre el modal original de registro en modo conversión; no hay wizard de pasos. La reserva vive en `ModalFormPedido` y confirma por `/conversion-modalidad`.
 
-- Última verificación: 2026-11-21, sin commit, árbol de trabajo (recorrido físico municipal; pruebas dirigidas ejecutadas en SQLite).
+- Última verificación: 2026-11-23, sin commit, árbol de trabajo (M-03b, M-07 y S-06; pruebas dirigidas en SQLite).

@@ -58,7 +58,8 @@ export default function InputMoneda({
 
     const handleFocus = () => {
         setFocused(true);
-        setTexto(value === '' || value == null ? '' : String(value));
+        // Un importe en cero no es un dato: al enfocar se vacía para que escribir 900 no produzca «0.00900».
+        setTexto(value === '' || value == null || Number(value) === 0 ? '' : String(value));
     };
 
     const handleBlur = () => {

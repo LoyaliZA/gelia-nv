@@ -44,6 +44,9 @@ class GenerarCaratulaMunicipalService
             if (! RecorridoFisicoMunicipal::aplica($pedido)) {
                 throw ValidationException::withMessages(['pedido' => 'Este pedido no usa el recorrido físico municipal.']);
             }
+            if (\App\Support\ControlPedidos\Municipal\CambioMunicipalATienda::activo($pedido)) {
+                throw ValidationException::withMessages(['pedido' => \App\Support\ControlPedidos\Municipal\CambioMunicipalATienda::MENSAJE_SALIDA]);
+            }
             if ($pedido->cancelado_at || $pedido->estatus?->fase_ciclo === 'CANCELADO') {
                 throw ValidationException::withMessages(['pedido' => 'El pedido está cancelado.']);
             }

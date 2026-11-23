@@ -564,6 +564,552 @@ class SalidaTerminalMunicipalTest extends TestCase
         $this->assertArrayNotHasKey('salida_terminal', $json);
     }
 
+    // ── M-03b: piezas adicionales (complemento municipal) ─────────────────────────────────────────────
+
+    private function complemento(PedidoBma $principal, ?string $solicitudId = null): PedidoBma
+    {
+        Storage::fake('public');
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+        $principal->update(['numero_remision' => $principal->numero_remision ?: 'REM-PRIN-'.$principal->id]);
+
+        return app(\App\Services\ControlPedidos\Municipal\RegistrarComplementoMunicipalService::class)->ejecutar($principal->fresh(), $this->usuario, [
+            'solicitud_id' => $solicitudId ?? (string) \Illuminate\Support\Str::uuid(),
+            'folio_remision' => 'WIZ-COMP-'.uniqid(),
+            'total_mercancia' => 250,
+            'piezas' => [['descripcion' => 'Pieza adicional', 'cantidad' => 2]],
+            'evidencias' => [UploadedFile::fake()->create('piezas.pdf', 10, 'application/pdf')],
+        ]);
+    }
+
+    private function pagarYRemisionar(PedidoBma $complemento): void
+    {
+        $complemento->update(['pago_validado_at' => now(), 'pago_validado_por_id' => $this->usuario->id, 'numero_remision' => 'REM-COMP-'.$complemento->id]);
+    }
+
+    public function test_complemento_hereda_destino_con_identidad_propia_y_sin_semantica_de_resguardo(): void
+    {
+        $principal = $this->pedido();
+        $total = $principal->total_mercancia;
+        $complemento = $this->complemento($principal);
+        $principal->refresh();
+
+        $this->assertSame((int) $principal->id, (int) $complemento->pedido_principal_id);
+        $this->assertFalse((bool) $complemento->es_resguardo);
+        $this->assertSame($principal->cliente_id, $complemento->cliente_id);
+        $this->assertSame($principal->sucursal_destino_id, $complemento->sucursal_destino_id);
+        $this->assertSame($principal->catalogo_paqueteria_id, $complemento->catalogo_paqueteria_id);
+        $this->assertEquals(250, $complemento->total_mercancia);
+        $this->assertEquals(250, $complemento->total_a_cobrar);
+        $this->assertNull($complemento->pago_validado_at);
+        $this->assertNull($complemento->numero_remision);
+        $this->assertNotSame($principal->folio, $complemento->folio);
+        $this->assertNotNull(\App\Support\ControlPedidos\Municipal\ComplementosMunicipales::marca($complemento));
+        $this->assertSame('municipal', ($principal->solicitud_preparacion_json['modalidad_entrega'] ?? null));
+        $this->assertNotSame('municipal', $complemento->solicitud_preparacion_json['modalidad_entrega'] ?? null);
+        $this->assertEquals($total, $principal->total_mercancia, 'El principal conserva su importe');
+        $this->assertSame($complemento->id, $principal->solicitud_preparacion_json['complementos_municipales'][0]['pedido_id']);
+        $this->assertSame(1, $complemento->documentos()->count());
+        $this->assertTrue(\App\Support\ControlPedidos\Municipal\ComplementosMunicipales::hayAbiertos($principal));
+    }
+
+    public function test_misma_solicitud_no_duplica_el_complemento(): void
+    {
+        $principal = $this->pedido();
+        $clave = (string) \Illuminate\Support\Str::uuid();
+        $uno = $this->complemento($principal, $clave);
+        $dos = $this->complemento($principal->fresh(), $clave);
+
+        $this->assertSame($uno->id, $dos->id);
+        $this->assertSame(1, PedidoBma::query()->where('pedido_principal_id', $principal->id)->count());
+    }
+
+    public function test_complemento_rechaza_sin_remision_o_tras_salida_a_terminal(): void
+    {
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+        $servicio = app(\App\Services\ControlPedidos\Municipal\RegistrarComplementoMunicipalService::class);
+        $datos = fn () => [
+            'solicitud_id' => (string) \Illuminate\Support\Str::uuid(), 'folio_remision' => 'WIZ-X', 'total_mercancia' => 50,
+            'piezas' => [['descripcion' => 'Pieza', 'cantidad' => 1]],
+            'evidencias' => [UploadedFile::fake()->create('p.pdf', 5, 'application/pdf')],
+        ];
+        Storage::fake('public');
+
+        $sinRemision = $this->pedido(['folio_remision' => null]);
+        try {
+            $servicio->ejecutar($sinRemision, $this->usuario, $datos());
+            $this->fail('Sin remisión se modifica el pedido original.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('anexo', $e->errors());
+        }
+
+        $salio = $this->pedido(['numero_remision' => 'REM-SALIO']);
+        $salio->update(['solicitud_preparacion_json' => array_merge($salio->solicitud_preparacion_json, ['salida_terminal' => ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia']])]);
+        try {
+            $servicio->ejecutar($salio->fresh(), $this->usuario, $datos());
+            $this->fail('Tras la salida a terminal las piezas van en otro envío.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertSame(\App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal::MENSAJE_ANEXO_SALIO, $e->errors()['anexo'][0]);
+        }
+        $this->assertSame(0, PedidoBma::query()->whereNotNull('pedido_principal_id')->count());
+    }
+
+    public function test_complemento_abierto_impide_la_salida_a_terminal_hasta_integrarlo(): void
+    {
+        $resguardo = $this->resguardoEnCustodia();
+        $principal = $resguardo->pedido()->first();
+        $complemento = $this->complemento($principal);
+        $enviar = fn () => $this->actingAs($this->gerencia)->put(route('punto_venta.resguardos.salida_terminal', $resguardo), [
+            'version' => (int) $resguardo->fresh()->version,
+            'idempotency_key' => 'term:comp:'.uniqid(),
+            'receptor' => 'Juan Pérez',
+        ]);
+
+        $enviar()->assertUnprocessable()->assertJsonValidationErrors('estado');
+        $this->assertNull($principal->fresh()->solicitud_preparacion_json['salida_terminal'] ?? null);
+
+        $this->pagarYRemisionar($complemento);
+        app(\App\Services\ControlPedidos\Municipal\IntegrarComplementoMunicipalService::class)->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+
+        $enviar()->assertOk();
+    }
+
+    public function test_integracion_en_pdv_la_confirma_la_sucursal_y_respeta_pago_remision_y_rol(): void
+    {
+        $resguardo = $this->resguardoEnCustodia();
+        $principal = $resguardo->pedido()->first();
+        $complemento = $this->complemento($principal);
+        $servicio = app(\App\Services\ControlPedidos\Municipal\IntegrarComplementoMunicipalService::class);
+        $this->assertSame('pdv', $servicio::ubicacion($principal));
+
+        // Sin pago ni remisión propios no se integra.
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+            $this->fail('El complemento necesita pago verificado.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('pago', $e->errors());
+        }
+        $this->pagarYRemisionar($complemento);
+
+        // Ventas (sin facultad de sucursal) no confirma hechos físicos.
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->usuario);
+            $this->fail('Ventas no confirma la integración física.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('permiso', $e->errors());
+        }
+
+        // Personal de otra sucursal tampoco.
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->usuarioPdv($this->otraSucursal));
+            $this->fail('Otra sucursal no integra.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('permiso', $e->errors());
+        }
+
+        $integrado = $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+        $this->assertSame('integrado', \App\Support\ControlPedidos\Municipal\ComplementosMunicipales::estado($integrado));
+        $this->assertSame('pdv', $integrado->solicitud_preparacion_json['complemento_municipal']['integracion']['ubicacion']);
+        $this->assertSame($this->gerencia->id, $integrado->solicitud_preparacion_json['complemento_municipal']['integracion']['integrado_por_id']);
+        $this->assertFalse(\App\Support\ControlPedidos\Municipal\ComplementosMunicipales::hayAbiertos($principal->fresh()));
+
+        // Idempotente.
+        $otra = $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+        $this->assertSame($integrado->id, $otra->id);
+        // La custodia del principal sigue en su sitio: no se creó traslado ni recepción.
+        $this->assertSame(ResguardoPdv::ESTADO_EN_CUSTODIA, $resguardo->fresh()->estado);
+    }
+
+    public function test_integracion_no_ocurre_en_transito_ni_despues_de_la_salida_a_terminal(): void
+    {
+        $resguardo = $this->resguardoMunicipalPendiente();
+        $principal = $resguardo->pedido()->first();
+        $complemento = $this->complemento($principal);
+        $this->pagarYRemisionar($complemento);
+        $servicio = app(\App\Services\ControlPedidos\Municipal\IntegrarComplementoMunicipalService::class);
+
+        $this->assertSame('transito', $servicio::ubicacion($principal));
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+            $this->fail('En tránsito no se integra.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('ubicacion', $e->errors());
+        }
+
+        $principal->update(['solicitud_preparacion_json' => array_merge($principal->fresh()->solicitud_preparacion_json, ['salida_terminal' => ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia']])]);
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+            $this->fail('Después de la salida a terminal no se integra.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertSame(\App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal::MENSAJE_ANEXO_SALIO, $e->errors()['complemento'][0]);
+        }
+    }
+
+    public function test_integracion_en_cedis_la_confirma_cedis_y_no_la_sucursal(): void
+    {
+        $principal = $this->pedido(['numero_remision' => 'REM-CEDIS']);
+        $complemento = $this->complemento($principal);
+        $this->pagarYRemisionar($complemento);
+        $servicio = app(\App\Services\ControlPedidos\Municipal\IntegrarComplementoMunicipalService::class);
+        $this->assertSame('cedis', $servicio::ubicacion($principal));
+
+        try {
+            $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+            $this->fail('La sucursal no confirma lo que está en CEDIS.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('permiso', $e->errors());
+        }
+
+        $cedis = User::factory()->create();
+        $cedis->givePermissionTo([Permission::findOrCreate('control_pedidos.cedis', 'web'), Permission::findOrCreate('control_pedidos.cedis.ver_todos', 'web')]);
+        $integrado = $servicio->ejecutar($principal->fresh(), $complemento->fresh(), $cedis);
+        $this->assertSame('cedis', $integrado->solicitud_preparacion_json['complemento_municipal']['integracion']['ubicacion']);
+    }
+
+    public function test_complemento_recorre_pago_auditoria_y_remision_propios_antes_de_integrarse(): void
+    {
+        foreach (['PENDIENTE_AUXILIAR' => 'AZUL_1'] as $fase => $codigo) {
+            CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => $fase], ['codigo_interno' => $codigo, 'nombre_visual' => $fase, 'color_hex' => '#3B82F6', 'orden' => 2, 'activo' => true]);
+        }
+        $resguardo = $this->resguardoEnCustodia();
+        $principal = $resguardo->pedido()->first();
+        $complemento = $this->complemento($principal);
+        $remisionPrincipal = $principal->fresh()->numero_remision;
+        $enviar = app(\App\Services\ControlPedidos\Municipal\EnviarComplementoMunicipalAAuditoriaService::class);
+
+        // Sin pago propio no se envía.
+        try {
+            $enviar->ejecutar($complemento->fresh(), $this->usuario);
+            $this->fail('Sin pago no se envía a auditoría.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('pago', $e->errors());
+        }
+
+        app(\App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService::class)->handle($complemento->fresh(), [
+            'monto' => 250, 'forma_pago' => 'efectivo', 'idempotency_key' => (string) \Illuminate\Support\Str::uuid(),
+        ], UploadedFile::fake()->image('pago.jpg'), $this->usuario->id);
+        $enviado = $enviar->ejecutar($complemento->fresh(), $this->usuario);
+        $this->assertSame('PENDIENTE_AUXILIAR', $enviado->estatus->fase_ciclo);
+        $this->assertTrue(app(\App\Services\ControlPedidos\ListarPedidosAuditoriaService::class)->ejecutar([], false)->contains('id', $complemento->id), 'El auxiliar ve el complemento en su bandeja');
+        $this->actingAs($this->gerencia)->getJson(route('punto_venta.resguardos.show', $resguardo))->assertOk()
+            ->assertJsonPath('resguardo.complementos_municipales.0.puede_integrar', false);
+
+        $auxiliar = User::factory()->create();
+        $validado = app(\App\Services\ControlPedidos\ValidarPagoPedidoBmaService::class)->ejecutar($enviado->fresh(), $auxiliar->id);
+        $this->assertNotNull($validado['pedido']->pago_validado_at);
+        app(\App\Services\ControlPedidos\GestionarRemisionPedidoBmaService::class)->actualizarNumeroRemision($complemento->fresh(), 'REM-COMP-1', $auxiliar->id);
+        $this->assertSame('REM-COMP-1', $complemento->fresh()->numero_remision);
+
+        // Pago y remisión del principal intactos.
+        $this->assertSame($remisionPrincipal, $principal->fresh()->numero_remision);
+        $this->assertEquals(1000, $principal->fresh()->total_mercancia);
+
+        // Visibilidad: la sucursal lo ve en el detalle; el auxiliar lo vio en su lista al enviarse.
+        $detalle = $this->actingAs($this->gerencia)->getJson(route('punto_venta.resguardos.show', $resguardo))->assertOk();
+        $detalle->assertJsonPath('resguardo.complementos_municipales.0.id', $complemento->id)
+            ->assertJsonPath('resguardo.complementos_municipales.0.pagado', true)
+            ->assertJsonPath('resguardo.complementos_municipales.0.remisionado', true)
+            ->assertJsonPath('resguardo.complementos_municipales.0.puede_integrar', true);
+
+        $integrado = app(\App\Services\ControlPedidos\Municipal\IntegrarComplementoMunicipalService::class)->ejecutar($principal->fresh(), $complemento->fresh(), $this->gerencia);
+        $this->assertSame('integrado', \App\Support\ControlPedidos\Municipal\ComplementosMunicipales::estado($integrado));
+    }
+
+    public function test_rutas_de_complemento_municipal_crean_envian_e_integran(): void
+    {
+        CatalogoEstatusPedido::query()->firstOrCreate(['fase_ciclo' => 'PENDIENTE_AUXILIAR'], ['codigo_interno' => 'AZUL_1', 'nombre_visual' => 'PA', 'color_hex' => '#3B82F6', 'orden' => 2, 'activo' => true]);
+        Storage::fake('public');
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+        $resguardo = $this->resguardoEnCustodia();
+        $principal = $resguardo->pedido()->first();
+        $principal->update(['numero_remision' => 'REM-HTTP']);
+        $clave = (string) \Illuminate\Support\Str::uuid();
+        $payload = fn () => [
+            'solicitud_id' => $clave, 'folio_remision' => 'WIZ-HTTP', 'total_mercancia' => 120,
+            'piezas' => [['descripcion' => 'Pieza', 'cantidad' => 1]],
+            'evidencias' => [UploadedFile::fake()->create('piezas.pdf', 10, 'application/pdf')],
+        ];
+
+        // Quien no es la vendedora del pedido no agrega piezas.
+        $this->actingAs($this->gerencia)->post(route('control_pedidos.municipal.complementos.store', $principal), $payload(), ['Accept' => 'application/json'])->assertStatus(403);
+
+        $id = $this->actingAs($this->usuario)->post(route('control_pedidos.municipal.complementos.store', $principal), $payload(), ['Accept' => 'application/json'])
+            ->assertOk()->json('complemento.id');
+        $this->actingAs($this->usuario)->post(route('control_pedidos.municipal.complementos.store', $principal), $payload(), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('complemento.id', $id);
+        $this->assertSame(1, PedidoBma::query()->where('pedido_principal_id', $principal->id)->count());
+
+        $complemento = PedidoBma::findOrFail($id);
+        $this->actingAs($this->usuario)->postJson(route('control_pedidos.municipal.complementos.enviar', [$principal, $complemento]))
+            ->assertUnprocessable()->assertJsonValidationErrors('pago');
+        $this->actingAs($this->usuario)->postJson(route('control_pedidos.municipal.complementos.integrar', [$principal, $complemento]))
+            ->assertUnprocessable();
+
+        $this->pagarYRemisionar($complemento);
+        $this->actingAs($this->gerencia)->postJson(route('control_pedidos.municipal.complementos.integrar', [$principal, $complemento]))->assertOk();
+        $this->assertSame('integrado', \App\Support\ControlPedidos\Municipal\ComplementosMunicipales::estado($complemento->fresh()));
+    }
+
+    // ── Cambio de un envío municipal a recolección en sucursal ────────────────────────────────────────
+
+    private function habilitarSucursales(array ...$pares): void
+    {
+        $almacenes = [];
+        foreach ($pares as [$sucursal, $codigo]) {
+            $tipo = CatalogoTipoAlmacen::query()->firstOrCreate(['nombre' => 'PDV'], ['activo' => true]);
+            $almacen = Almacen::query()->firstOrCreate(['codigo' => $codigo], [
+                'nombre' => $codigo, 'tipo_almacen_id' => $tipo->id, 'sucursal_id' => $sucursal->id, 'activo' => true, 'visible_en_pedidos' => true,
+            ]);
+            $almacenes[] = $almacen->id;
+        }
+        ConfiguracionSistema::query()->updateOrCreate(
+            ['clave' => \App\Services\ControlPedidos\PreparacionTiendaConfig::CLAVE_FLAG],
+            ['valor' => json_encode(['activo' => true, 'almacenes_habilitados' => $almacenes])]
+        );
+        app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->olvidarCache();
+    }
+
+    private function solicitarCambio(PedidoBma $pedido, array $extra = [], ?User $usuario = null): PedidoBma
+    {
+        Storage::fake('public');
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+
+        return app(\App\Services\ControlPedidos\Municipal\SolicitarCambioMunicipalATiendaService::class)->ejecutar($pedido->fresh(), $usuario ?? $this->usuario, array_merge([
+            'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+            'motivo' => 'El cliente pasará a recoger',
+            'evidencias' => [UploadedFile::fake()->create('peticion.pdf', 10, 'application/pdf')],
+        ], $extra));
+    }
+
+    private function aplicarCambio(PedidoBma $pedido, User $usuario): PedidoBma
+    {
+        return app(\App\Services\ControlPedidos\Municipal\AplicarCambioMunicipalATiendaService::class)->ejecutar($pedido->fresh(), $usuario);
+    }
+
+    private function caratula(PedidoBma $pedido, string $estado = 'GENERADA'): \App\Models\ControlPedidos\PedidoBmaCaratula
+    {
+        return \App\Models\ControlPedidos\PedidoBmaCaratula::query()->create([
+            'pedido_bma_id' => $pedido->id, 'version' => 1, 'destinatario_nombre' => 'Persona ficticia', 'destinatario_telefono' => '3311111111', 'municipio_destino' => 'Terminal ficticia',
+            'catalogo_paqueteria_id' => $pedido->catalogo_paqueteria_id, 'modalidad_cobro' => 'PAGADO', 'ruta_pdf' => 'qa/caratula.pdf', 'hash_sha256' => str_repeat('a', 64), 'estado' => $estado,
+            'generada_por_id' => $this->usuario->id, 'generada_at' => now(),
+        ]);
+    }
+
+    public function test_solicitud_exige_motivo_y_evidencia_o_error_de_captura_y_es_idempotente(): void
+    {
+        $pedido = $this->pedido();
+        foreach ([['motivo' => ''], ['evidencias' => []]] as $malo) {
+            try {
+                $this->solicitarCambio($pedido, $malo);
+                $this->fail('Debe rechazar la solicitud incompleta.');
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $this->assertNotEmpty($e->errors());
+            }
+        }
+
+        // Un error de captura sustituye la evidencia y queda registrado.
+        $clave = (string) \Illuminate\Support\Str::uuid();
+        $uno = $this->solicitarCambio($pedido, ['solicitud_id' => $clave, 'evidencias' => [], 'error_captura' => true]);
+        $dos = $this->solicitarCambio($pedido, ['solicitud_id' => $clave, 'evidencias' => [], 'error_captura' => true]);
+        $datos = $uno->solicitud_preparacion_json['cambio_a_tienda'];
+        $this->assertSame('solicitado', $datos['estado']);
+        $this->assertTrue($datos['error_captura']);
+        $this->assertSame($uno->id, $dos->id);
+        $this->assertSame(1, PedidoBmaHistorialEstado::query()->where('pedido_bma_id', $pedido->id)->where('accion', 'cambio_a_tienda_solicitado')->count());
+    }
+
+    public function test_solicitud_se_rechaza_sin_compra_tras_salida_a_terminal_y_con_piezas_sin_integrar(): void
+    {
+        $sinCompra = $this->pedido(['pago_validado_at' => null, 'pago_validado_por_id' => null, 'folio_remision' => null]);
+        try {
+            $this->solicitarCambio($sinCompra);
+            $this->fail('Sin pago ni remisión se modifica el pedido.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('pedido', $e->errors());
+        }
+
+        $salio = $this->pedido();
+        $salio->update(['solicitud_preparacion_json' => array_merge($salio->solicitud_preparacion_json, ['salida_terminal' => ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia']])]);
+        try {
+            $this->solicitarCambio($salio);
+            $this->fail('Tras la salida a terminal no hay cambio ordinario.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertSame(\App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal::MENSAJE_SALIO_A_TERMINAL, $e->errors()['pedido'][0]);
+        }
+
+        $conPiezas = $this->pedido(['numero_remision' => 'REM-PZ']);
+        $this->complemento($conPiezas);
+        try {
+            $this->solicitarCambio($conPiezas);
+            $this->fail('Primero se resuelven las piezas adicionales.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('pedido', $e->errors());
+        }
+
+        $historico = $this->pedido(['solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal']]);
+        try {
+            $this->solicitarCambio($historico);
+            $this->fail('El recorrido anterior lo gestiona Control de pedidos.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('pedido', $e->errors());
+        }
+    }
+
+    public function test_cambio_solicitado_detiene_la_salida_y_la_entrega_hasta_verificarse(): void
+    {
+        $resguardo = $this->resguardoEnCustodia();
+        $pedido = $resguardo->pedido()->first();
+        $this->solicitarCambio($pedido);
+        $this->gerencia->givePermissionTo(PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR);
+
+        $this->actingAs($this->gerencia)->put(route('punto_venta.resguardos.salida_terminal', $resguardo), [
+            'version' => (int) $resguardo->fresh()->version, 'idempotency_key' => 'term:cambio', 'receptor' => 'Juan',
+        ])->assertUnprocessable()->assertJsonValidationErrors('estado');
+
+        $entrega = fn () => $this->actingAs($this->gerencia)->put(route('punto_venta.resguardos.entrega', $resguardo), [
+            'version' => (int) $resguardo->fresh()->version, 'idempotency_key' => 'ent:cambio', 'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
+            'nombre_quien_retira' => 'Cliente', 'metodo_validacion' => 'firma', 'firma' => UploadedFile::fake()->image('firma.png'),
+        ]);
+        $entrega()->assertUnprocessable();
+        $this->assertSame(0, ResguardoPdvEntrega::query()->where('resguardo_id', $resguardo->id)->count());
+    }
+
+    public function test_cambio_en_sucursal_aprovecha_la_custodia_sin_traslados_ficticios_y_permite_la_entrega(): void
+    {
+        $resguardo = $this->resguardoEnCustodia();
+        $pedido = $resguardo->pedido()->first();
+        $caratula = $this->caratula($pedido);
+        $this->solicitarCambio($pedido);
+        $resguardos = ResguardoPdv::query()->count();
+        $eventos = ResguardoPdvEvento::query()->count();
+
+        // La vendedora no confirma hechos físicos; otra sucursal tampoco.
+        foreach ([$this->usuario, $this->usuarioPdv($this->otraSucursal)] as $ajeno) {
+            try {
+                $this->aplicarCambio($pedido, $ajeno);
+                $this->fail('Solo la sucursal que tiene el paquete lo verifica.');
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                $this->assertArrayHasKey('permiso', $e->errors());
+            }
+        }
+
+        $aplicado = $this->aplicarCambio($pedido, $this->gerencia);
+        $this->assertSame('aplicado', $aplicado->solicitud_preparacion_json['cambio_a_tienda']['estado']);
+        $this->assertSame('invalidada', strtolower($caratula->fresh()->estado));
+        $this->assertSame(ResguardoPdv::ESTADO_EN_CUSTODIA, $resguardo->fresh()->estado);
+        $this->assertSame($resguardos, ResguardoPdv::query()->count(), 'No se crea otro resguardo ni recepción');
+        $this->assertSame($eventos, ResguardoPdvEvento::query()->count(), 'No se registran salidas ni recepciones nuevas');
+        $this->assertSame($pedido->fresh()->numero_remision, $aplicado->numero_remision);
+        $this->assertNotNull($aplicado->pago_validado_at);
+        $this->assertSame($this->gerencia->id, $aplicado->solicitud_preparacion_json['cambio_a_tienda']['aplicado_por_id']);
+
+        // Idempotente, nunca a terminal, y ahora sí se entrega al cliente.
+        $this->assertSame($aplicado->id, $this->aplicarCambio($pedido, $this->gerencia)->id);
+        $this->gerencia->givePermissionTo(PuntoVentaModulo::PERMISO_RESGUARDOS_ENTREGAR);
+        $this->actingAs($this->gerencia)->put(route('punto_venta.resguardos.salida_terminal', $resguardo), [
+            'version' => (int) $resguardo->fresh()->version, 'idempotency_key' => 'term:aplicado', 'receptor' => 'Juan',
+        ])->assertUnprocessable();
+        $this->actingAs($this->gerencia)->put(route('punto_venta.resguardos.entrega', $resguardo), [
+            'version' => (int) $resguardo->fresh()->version, 'idempotency_key' => 'ent:aplicado', 'relacion' => ResguardoPdvEntrega::RELACION_TITULAR,
+            'nombre_quien_retira' => 'Cliente', 'metodo_validacion' => 'firma', 'firma' => UploadedFile::fake()->image('firma.png'),
+        ])->assertOk();
+    }
+
+    public function test_cambio_con_el_paquete_en_cedis_lo_verifica_cedis_y_actualiza_el_destino_antes_del_primer_traslado(): void
+    {
+        $this->habilitarSucursales([$this->sucursal, 'PDV-A'], [$this->otraSucursal, 'PDV-B']);
+        $pedido = $this->pedido();
+        $solicitado = $this->solicitarCambio($pedido, ['sucursal_destino_id' => $this->otraSucursal->id]);
+        $datos = $solicitado->solicitud_preparacion_json['cambio_a_tienda'];
+        $this->assertFalse($datos['requiere_autorizacion_gerencia'], 'Antes del primer traslado solo se actualiza la instrucción');
+        $this->assertSame($this->sucursal->id, $pedido->fresh()->sucursal_destino_id, 'Solicitar no cambia el destino');
+
+        try {
+            $this->aplicarCambio($pedido, $this->gerencia);
+            $this->fail('La sucursal no verifica lo que está en CEDIS.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('permiso', $e->errors());
+        }
+        $cedis = User::factory()->create();
+        $cedis->givePermissionTo([Permission::findOrCreate('control_pedidos.cedis', 'web'), Permission::findOrCreate('control_pedidos.cedis.ver_todos', 'web')]);
+        $this->aplicarCambio($pedido, $cedis);
+
+        $this->assertSame($this->otraSucursal->id, $pedido->fresh()->sucursal_destino_id);
+        $this->assertSame(0, ResguardoPdv::query()->where('pedido_bma_id', $pedido->id)->count(), 'CEDIS aún no traslada');
+    }
+
+    public function test_otra_sucursal_con_el_traslado_hecho_exige_gerencia_y_no_se_aplica_aqui(): void
+    {
+        $this->habilitarSucursales([$this->sucursal, 'PDV-A'], [$this->otraSucursal, 'PDV-B']);
+        $resguardo = $this->resguardoEnCustodia();
+        $pedido = $resguardo->pedido()->first();
+        $solicitado = $this->solicitarCambio($pedido, ['sucursal_destino_id' => $this->otraSucursal->id]);
+
+        $this->assertTrue($solicitado->solicitud_preparacion_json['cambio_a_tienda']['requiere_autorizacion_gerencia']);
+        try {
+            $this->aplicarCambio($pedido, $this->gerencia);
+            $this->fail('Otra sucursal con el traslado hecho necesita autorización y un nuevo traslado.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('cambio', $e->errors());
+        }
+        $this->assertSame($this->sucursal->id, $pedido->fresh()->sucursal_destino_id);
+        $this->assertSame(ResguardoPdv::ESTADO_EN_CUSTODIA, $resguardo->fresh()->estado);
+    }
+
+    public function test_cambio_en_transito_no_se_aplica_hasta_recibirse(): void
+    {
+        $resguardo = $this->resguardoMunicipalPendiente();
+        $pedido = $resguardo->pedido()->first();
+        $this->solicitarCambio($pedido);
+
+        try {
+            $this->aplicarCambio($pedido, $this->gerencia);
+            $this->fail('En tránsito se verifica al recibir.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertArrayHasKey('ubicacion', $e->errors());
+        }
+    }
+
+    public function test_presentador_del_cambio_indica_quien_puede_solicitar_y_quien_verificar(): void
+    {
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+        $resguardo = $this->resguardoEnCustodia();
+        $pedido = $resguardo->pedido()->first();
+        $presentar = fn (User $u) => \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido->fresh(), $u);
+
+        $this->assertTrue($presentar($this->usuario)['puede_solicitar']);
+        $this->assertFalse($presentar($this->usuario)['puede_aplicar']);
+        $this->assertNull($presentar($this->gerencia), 'Sin solicitud, el área no ve nada que verificar');
+
+        $this->solicitarCambio($pedido);
+        $ventas = $presentar($this->usuario);
+        $this->assertFalse($ventas['puede_solicitar']);
+        $this->assertFalse($ventas['puede_aplicar'], 'La vendedora no verifica hechos físicos');
+        $this->assertSame('Solicitado, pendiente de verificar', $ventas['etiqueta']);
+        $this->assertTrue($presentar($this->gerencia)['puede_aplicar']);
+        $this->assertFalse($presentar($this->usuarioPdv($this->otraSucursal))['puede_aplicar']);
+
+        $detalle = $this->actingAs($this->gerencia)->getJson(route('punto_venta.resguardos.show', $resguardo))->assertOk();
+        $detalle->assertJsonPath('resguardo.cambio_a_tienda.puede_aplicar', true)->assertJsonPath('resguardo.cambio_a_tienda.estado', 'solicitado');
+
+        $this->aplicarCambio($pedido, $this->gerencia);
+        $this->assertSame('Verificado, recoge en sucursal', $presentar($this->gerencia)['etiqueta']);
+        $this->assertFalse($presentar($this->gerencia)['puede_aplicar']);
+    }
+
+    public function test_rutas_del_cambio_a_recoleccion_en_sucursal(): void
+    {
+        Storage::fake('public');
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.crear', 'web'));
+        $resguardo = $this->resguardoEnCustodia();
+        $pedido = $resguardo->pedido()->first();
+        $datos = fn () => ['solicitud_id' => (string) \Illuminate\Support\Str::uuid(), 'motivo' => 'El cliente recoge', 'error_captura' => 1];
+
+        $this->actingAs($this->gerencia)->postJson(route('control_pedidos.municipal.cambio_a_tienda.solicitar', $pedido), $datos())->assertForbidden();
+        $this->actingAs($this->usuario)->postJson(route('control_pedidos.municipal.cambio_a_tienda.solicitar', $pedido), $datos())->assertOk()->assertJsonPath('estado', 'solicitado');
+        $this->actingAs($this->usuario)->postJson(route('control_pedidos.municipal.cambio_a_tienda.aplicar', $pedido))->assertUnprocessable();
+        $this->actingAs($this->gerencia)->postJson(route('control_pedidos.municipal.cambio_a_tienda.aplicar', $pedido))->assertOk()->assertJsonPath('estado', 'aplicado');
+    }
+
     private function usuarioPdv(Sucursal $sucursal, bool $salidaTerminal = true): User
     {
         $user = User::factory()->create();

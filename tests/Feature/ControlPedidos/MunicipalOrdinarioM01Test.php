@@ -577,7 +577,7 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->actingAs($this->ventas)->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
     }
 
-    public function test_resolver_faltante_y_responder_actualizacion_permite_cierre_sin_pisar_flete(): void
+    public function test_resolver_faltante_retirando_permite_cierre_sin_pisar_flete(): void
     {
         $this->guardarSolicitud();
         $this->postJson(route('control_pedidos.municipal.consulta', $this->pedido))->assertOk();
@@ -592,12 +592,9 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->postJson('/control-pedidos/'.$this->pedido->id.'/disponibilidad-tienda', [
             'revision_id' => $revision->id, 'accion' => 'retirar', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
         ])->assertOk();
-        $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertUnprocessable();
-        $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
-            'confirmacion_explicita' => 1,
-            'actualizacion_id' => data_get($this->pedido->fresh()->solicitud_preparacion_json, 'revision_disponibilidad.actualizacion_id'),
-            'evidencias' => [UploadedFile::fake()->image('actualizada.jpg')],
-        ])->assertOk();
+        // Un retiro solo se informa («El retiro solicitado no exige reconfirmación», ActualizacionConsulta::requiereRespuesta):
+        // no deja actualización pendiente y el cierre procede. Un anexo sin responder sí lo bloquea (ver prueba de anexo y retiro).
+        $this->assertFalse((bool) $this->pedido->fresh()->consulta_actualizacion_pendiente);
         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
         $this->assertNull($this->pedido->fresh()->costo_envio);
         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
@@ -860,6 +857,32 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
         $this->assertNull($this->pedido->fresh()->costo_envio);
         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
+    }
+
+    public function test_anexo_municipal_con_remision_o_tras_salida_terminal_se_rechaza(): void
+    {
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['consulta_municipal'] = ['area' => 'cedis', 'estado' => 'respondida', 'enviada_at' => now()->toIso8601String()];
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones', 'aceptacion_vigente' => true, 'ciclo_id' => 'ciclo-municipal'];
+        $this->pedido->update(['solicitud_preparacion_json' => $json, 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION]);
+        $url = '/control-pedidos/'.$this->pedido->id.'/anexo-tienda';
+        $enviar = fn () => $this->actingAs($this->ventas)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+            'evidencia' => UploadedFile::fake()->createWithContent('anexo.pdf', 'anexo-'.uniqid()),
+        ], ['Accept' => 'application/json']);
+
+        // Con remisión: el pedido original no se modifica; el complemento llega con M-03b.
+        $this->pedido->update(['numero_remision' => 'REM-ANEXO']);
+        $enviar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertEmpty($this->pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'] ?? []);
+
+        // Sin remisión pero tras la salida a terminal: tampoco.
+        $json = $this->pedido->fresh()->solicitud_preparacion_json;
+        $json['recorrido_fisico_municipal'] = true;
+        $json['salida_terminal'] = ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia'];
+        $this->pedido->update(['numero_remision' => null, 'solicitud_preparacion_json' => $json]);
+        $enviar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertEmpty($this->pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'] ?? []);
     }
 
     public function test_anexo_y_retiro_municipal_no_crean_tienda_ni_pisan_wizerp_ni_cierran(): void

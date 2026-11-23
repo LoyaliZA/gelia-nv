@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { usePage } from '@inertiajs/react';
 import { MapPin, UserRound, Coins, FileText, Save, Send, RefreshCw, PauseCircle } from 'lucide-react';
 import SeccionPagosExhibicion from '../Partials/SeccionPagosExhibicion';
+import InputMoneda from '../Partials/InputMoneda';
 import { GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
 import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
 import { terminalesMunicipales } from './terminalMunicipal';
@@ -35,6 +36,8 @@ export default function FormularioRegistrarMunicipal({
     const [costo, setCosto] = useState(borrador.costo ?? pedido?.costo_envio ?? '');
     const [almacenId, setAlmacenId] = useState(String(borrador.almacenId ?? solicitud.consulta_municipal?.almacen_id ?? solicitud.almacen_revision_id ?? ''));
     const [aviso, setAviso] = useState('');
+    const [totalMercancia, setTotalMercancia] = useState(Number(pedido?.total_mercancia) > 0 ? String(pedido.total_mercancia) : '');
+    const [importeGuardando, setImporteGuardando] = useState(false);
     const resguardoInicial = solicitud.resguardo_envio || {};
     const [resguardoActivo, setResguardoActivo] = useState(Boolean(resguardoInicial.activo));
     const [resguardoMotivo, setResguardoMotivo] = useState(resguardoInicial.motivo || '');
@@ -237,6 +240,33 @@ export default function FormularioRegistrarMunicipal({
 
     const guardarInstruccionResguardo = () => { persistirResguardo().catch(() => {}); };
 
+    // El envío a revisión exige total de mercancía, origen y almacén de salida; el municipal no los capturaba.
+    const guardarImporteMercancia = async () => {
+        const total = Number(totalMercancia);
+        if (!Number.isFinite(total) || total <= 0) { setAviso('Indique el total de mercancía del pedido de Wizerp, mayor que cero.'); return false; }
+        const origenes = catalogos.origenes || [];
+        const almacenes = catalogos.almacenes || [];
+        const origen = origenes.find(o => /^env[ií]o$/i.test(String(o.nombre).trim())) || origenes.find(o => o.requiere_logistica);
+        const salida = almacenId || String(almacenes.find(a => /^cedis$/i.test(String(a.nombre).trim()))?.id || '');
+        if (!origen || !salida) { setAviso('No hay origen «Envío» o almacén CEDIS configurados; avise a Administración.'); return false; }
+        setImporteGuardando(true); setAviso('');
+        try {
+            const { data } = await window.axios.put(route('control_pedidos.update', actual.id), {
+                total_mercancia: total,
+                origen_id: Number(origen.id),
+                almacen_id: Number(salida),
+                revision_esperada: actual.revision_registro,
+                base_captura: actual.base_captura,
+            }, { headers: { Accept: 'application/json' } });
+            actualizar({ ...actual, ...data, total_mercancia: total, origen_id: data?.origen_id ?? Number(origen.id), almacen_id: data?.almacen_id ?? Number(salida) });
+            setAviso('Importe guardado. Registre el pago de la mercancía y el envío por el total exigible.');
+            return true;
+        } catch (error) {
+            setAviso(Object.values(error.response?.data?.errors || {})[0]?.[0] || error.response?.data?.message || error.message || 'No se pudo guardar el importe.');
+            return false;
+        } finally { setImporteGuardando(false); }
+    };
+
     const enviarRevision = async () => {
         if (operacionRef.current || ocupado) return;
         operacionRef.current = true;
@@ -246,6 +276,9 @@ export default function FormularioRegistrarMunicipal({
                 const { vigente } = await persistirResguardo();
                 // Nunca se envía a revisión una instrucción desactualizada.
                 if (!vigente) throw new Error('Hay cambios sin guardar en la instrucción de resguardo. Guárdelos y envíe de nuevo.');
+            }
+            if (!(Number(actual.total_mercancia) > 0) || !actual.origen_id || !actual.almacen_id) {
+                if (!(await guardarImporteMercancia())) return;
             }
             const { data } = await window.axios.put(route('control_pedidos.enviar', actual.id), {}, { headers: { Accept: 'application/json' } });
             actualizar({ ...actual, ...data });
@@ -337,6 +370,10 @@ export default function FormularioRegistrarMunicipal({
                                     const terminal = paqueterias.find(item => String(item.id) === evento.target.value);
                                     if (!terminal?.permite_costo_diferido) setCostoModo('conocido');
                                     if (!terminal?.permite_por_cobrar) setLeyenda('PAGADO');
+                                    // La tarifa del catálogo evita capturar a mano el costo: fija se precarga; por peso se conoce al pesar en terminal.
+                                    const tarifa = Number(terminal?.tarifa_monto);
+                                    if (terminal?.modalidad_tarifa === 'fija' && tarifa > 0) { setCostoModo('conocido'); setCosto(tarifa.toFixed(2)); }
+                                    else if (terminal?.modalidad_tarifa === 'por_peso' && terminal?.permite_costo_diferido) { setCostoModo('diferido'); setCosto(''); }
                                 }}>
                                     <option value="">Elegir terminal</option>
                                     {!paqueteria && actual.paqueteria && <option value={actual.catalogo_paqueteria_id} disabled>{actual.paqueteria.nombre} · No disponible</option>}
@@ -373,6 +410,9 @@ export default function FormularioRegistrarMunicipal({
                                     {(puedePorCobrar || bloqueado && leyenda === 'POR_COBRAR') && <option value="POR_COBRAR">POR COBRAR</option>}
                                 </select>
                             </label>
+                            {paqueteria?.modalidad_tarifa && Number(paqueteria.tarifa_monto) > 0 && <p className="text-xs theme-text-muted m-0" data-tarifa-catalogo>
+                                Tarifa del catálogo: ${Number(paqueteria.tarifa_monto).toFixed(2)} {paqueteria.modalidad_tarifa === 'por_peso' ? `por ${paqueteria.tarifa_unidad_peso || 'kg'}; el total se conoce al pesar en terminal.` : 'por envío.'}
+                            </p>}
                             {costoModo !== 'diferido' && <label className={THEME_LABEL}>Importe de transporte
                                 <input className={`${THEME_INPUT} w-full mt-1`} type="number" min="0.01" step="0.01" value={costo} onChange={cambiar(setCosto)} />
                             </label>}
@@ -444,7 +484,15 @@ export default function FormularioRegistrarMunicipal({
                     {consultaCerrada && !conversion && (
                         <section className="registrar-tienda-panel">
                             <div className="registrar-tienda-seccion-titulo"><Coins size={18} /><h3>Pagos de la mercancía</h3></div>
+                            <div className="grid min-w-0 gap-1 mb-3 min-[32rem]:grid-cols-[minmax(0,1fr)_auto_auto] min-[32rem]:items-end min-[32rem]:gap-3">
+                                <div className="min-w-0">
+                                    <label className={THEME_LABEL} htmlFor="total-mercancia-municipal">Total de mercancía (pedido Wizerp)</label>
+                                    <InputMoneda id="total-mercancia-municipal" value={totalMercancia} onChange={setTotalMercancia} disabled={enRevision || ocupado || importeGuardando || Number(actual.total_pagado || 0) > 0} className="w-full min-h-[44px]" />
+                                </div>
+                                <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={enRevision || ocupado || importeGuardando || guardando} onClick={guardarImporteMercancia}>{importeGuardando ? 'Guardando…' : 'Guardar importe'}</button>
+                            </div>
                             <SeccionPagosExhibicion
+                                key={`pagos-${actual.id}-${actual.total_mercancia}`}
                                 pedidoId={actual.id}
                                 bancos={catalogos.bancos || []}
                                 formasPago={catalogos.formas_pago || []}
@@ -463,7 +511,7 @@ export default function FormularioRegistrarMunicipal({
                 </>;
     const pie = <>
 
-                    <p id="municipal-motivo-envio" className="registrar-tienda-pie-estado" aria-live="polite">{motivoResguardo || motivoEnvio || etapa || aviso || (puedeEnviarRevision ? 'Registre el pago de la mercancía y envíe a revisión.' : 'Al enviar se guardarán los datos automáticamente.')}</p>
+                    <p id="municipal-motivo-envio" className="registrar-tienda-pie-estado" aria-live="polite">{aviso || motivoResguardo || motivoEnvio || etapa || (puedeEnviarRevision ? 'Registre el pago de la mercancía y envíe a revisión.' : 'Al enviar se guardarán los datos automáticamente.')}</p>
                     <div className="registrar-tienda-pie-acciones">
                         {!bloqueado && <button type="button" className={GELIA_BTN_OUTLINE} disabled={guardando || ocupado} onClick={guardar}><Save size={16} />Guardar solicitud</button>}
                         {!enviada && <button type="button" className={THEME_BTN_PRIMARY} disabled={guardando || ocupado || Boolean(motivoEnvio)} aria-describedby="municipal-motivo-envio" onClick={enviar}><Send size={16} />{guardando ? (etapa === 'Guardando documento.' ? 'Guardando documento' : etapa === 'Enviando consulta.' ? 'Enviando consulta' : 'Preparando solicitud') : 'Enviar consulta'}</button>}

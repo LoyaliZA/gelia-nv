@@ -366,6 +366,11 @@ class RegistrarEntregaResguardoPdvService
 
     private function assertEntregable(ResguardoPdv $resguardo): void
     {
+        // M-07: mientras el cambio a recolección en sucursal espera su verificación, el paquete no se entrega.
+        $pedidoCambio = $resguardo->pedido_bma_id ? \App\Models\ControlPedidos\PedidoBma::query()->find($resguardo->pedido_bma_id) : null;
+        if ($pedidoCambio && \App\Support\ControlPedidos\Municipal\CambioMunicipalATienda::pendienteDeVerificacion($pedidoCambio)) {
+            throw ValidationException::withMessages(['estado' => \App\Support\ControlPedidos\Municipal\CambioMunicipalATienda::MENSAJE_VERIFICACION]);
+        }
         if ($resguardo->entrega_bloqueada) {
             throw ValidationException::withMessages([
                 'estado' => 'La entrega está bloqueada por una incidencia o cancelación pendiente.',

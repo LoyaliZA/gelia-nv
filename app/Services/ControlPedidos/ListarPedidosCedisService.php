@@ -54,6 +54,9 @@ class ListarPedidosCedisService
                 $pedido->setAttribute('resguardo_envio', \App\Support\ControlPedidos\PoliticaResguardoEnvio::evaluar($pedido));
             }
 
+            $pedido->setAttribute('piezas_adicionales', \App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales::para($pedido, $usuario));
+            $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
+
             return BitacoraCedis::presentar($pedido, $usuario);
         };
 

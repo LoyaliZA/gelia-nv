@@ -538,7 +538,12 @@ export const operacionEmpaqueDe = (pedido) => (
     || null
 );
 
-export const complementosDe = (pedido) => pedido?.complementos || [];
+/** Complementos que se empacan con el grupo. Las piezas adicionales municipales se integran por su propia confirmación. */
+export const complementosDe = (pedido) => {
+    const adicionales = new Set((pedido?.piezas_adicionales?.items || []).map((c) => c.id));
+
+    return (pedido?.complementos || []).filter((c) => !adicionales.has(c.id));
+};
 
 export const miembrosGrupoEmpaque = (pedido) => {
     if (!pedido) return [];

@@ -34,6 +34,19 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
             ];
         }
 
+        // Municipal desde CEDIS: la evidencia ya viene del empaque; la sucursal confirma llegada sin recapturar folios ni condición.
+        if ($this->resguardoMunicipal()) {
+            return [
+                'condicion' => ['sometimes', 'in:bueno,regular,malo,danado'],
+                'observacion' => ['nullable', 'string', 'max:2000'],
+                'folios' => ['sometimes', 'array', 'min:1', 'max:200'],
+                'folios.*' => ['required', 'string', 'max:100', 'distinct'],
+                'version' => ['required', 'integer', 'min:1'],
+                'idempotency_key' => ['required', 'string', 'max:64'],
+                'foto_paquete' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            ];
+        }
+
         return [
             'condicion' => ['required', 'in:bueno,regular,malo,danado'],
             'observacion' => ['nullable', 'string', 'max:2000'],
@@ -62,11 +75,29 @@ class RegistrarRecepcionFisicaPdvRequest extends PdvOperacionPisoRequest
     public function payloadOperacion(): array
     {
         $datos = $this->validated();
+        if ($this->resguardoMunicipal()) {
+            $resguardo = $this->route('resguardo');
+            $datos['condicion'] = $datos['condicion'] ?? 'bueno';
+            if (empty($datos['folios'])) {
+                $recibidos = $resguardo->bultos()->pluck('folio')->all();
+                $datos['folios'] = array_values(array_diff(
+                    array_column(\App\Support\PuntoVenta\Resguardos\BultosEsperadosResguardoPdv::desdeResguardo($resguardo), 'folio'),
+                    $recibidos
+                ));
+            }
+        }
         if ($this->exists('piezas')) {
             $datos['piezas'] = NormalizadorPiezasRegistroManualPdv::normalizar($datos['piezas'] ?? []);
         }
 
         return $datos;
+    }
+
+    private function resguardoMunicipal(): bool
+    {
+        $resguardo = $this->route('resguardo');
+
+        return $resguardo instanceof ResguardoPdv && $resguardo->esOrigenMunicipal();
     }
 
     private function resguardoNacional(): bool

@@ -16,6 +16,7 @@ use App\Models\Sucursal;
 use App\Services\ControlPedidos\Municipal\ResolverSucursalDestinoMunicipal;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
+use App\Support\ControlPedidos\PoliticaResguardoEnvio;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -196,6 +197,65 @@ class RecorridoFisicoMunicipalTest extends TestCase
         $tienda = $this->pedido('tienda');
         $tienda->update(['solicitud_preparacion_json' => ['modalidad_entrega' => 'tienda', 'recorrido_fisico_municipal' => true, 'salida_terminal' => $salida]]);
         $this->assertArrayNotHasKey('salida_terminal', $tienda->fresh()->solicitud_preparacion ?? []);
+    }
+
+    private function enFase(PedidoBma $pedido, string $fase): PedidoBma
+    {
+        $estatus = CatalogoEstatusPedido::query()->firstOrCreate(
+            ['fase_ciclo' => $fase],
+            ['codigo_interno' => 'RFM_F_'.$fase, 'nombre_visual' => $fase, 'color_hex' => '#64748B', 'orden' => 9, 'activo' => true]
+        );
+        $pedido->update(['catalogo_estatus_pedido_id' => $estatus->id]);
+
+        return $pedido->fresh();
+    }
+
+    public function test_recorrido_nuevo_trasladado_a_pdv_sin_salida_terminal_no_ha_salido_para_ajustes(): void
+    {
+        $sucursal = Sucursal::factory()->create();
+        $cedis = $this->almacen('CEDIS', 'CEDIS-1');
+        $pedido = $this->enFase($this->pedido('municipal', ['almacen_id' => $cedis->id, 'sucursal_destino_id' => $sucursal->id]), CatalogoEstatusPedido::FASE_ENVIADO);
+
+        $this->assertTrue(RecorridoFisicoMunicipal::aplica($pedido));
+        $this->assertTrue(PoliticaResguardoEnvio::envioYaSalio($pedido), 'envioYaSalio() conserva su regla para M-04, M-09 y M-10');
+        $this->assertFalse(RecorridoFisicoMunicipal::envioYaSalioParaAjustes($pedido));
+    }
+
+    public function test_recorrido_nuevo_con_salida_terminal_ya_salio_para_ajustes(): void
+    {
+        $sucursal = Sucursal::factory()->create();
+        $cedis = $this->almacen('CEDIS', 'CEDIS-1');
+        $pedido = $this->enFase($this->pedido('municipal', ['almacen_id' => $cedis->id, 'sucursal_destino_id' => $sucursal->id]), CatalogoEstatusPedido::FASE_ENVIADO);
+        $pedido->update(['solicitud_preparacion_json' => array_merge($pedido->solicitud_preparacion_json, ['salida_terminal' => ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia']])]);
+
+        $this->assertTrue(RecorridoFisicoMunicipal::envioYaSalioParaAjustes($pedido->fresh()));
+    }
+
+    public function test_municipal_historico_conserva_la_regla_anterior(): void
+    {
+        $historico = $this->pedido('municipal', ['solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal']]);
+        $this->assertFalse(RecorridoFisicoMunicipal::aplica($historico));
+        $this->assertFalse(RecorridoFisicoMunicipal::envioYaSalioParaAjustes($historico));
+
+        $historico = $this->enFase($historico, CatalogoEstatusPedido::FASE_ENVIADO);
+        $this->assertTrue(RecorridoFisicoMunicipal::envioYaSalioParaAjustes($historico), 'Sin marca de recorrido nuevo, ENVIADO sigue significando que salió');
+    }
+
+    public function test_municipal_con_tarea_envio_municipio_enviado_conserva_la_regla_anterior(): void
+    {
+        $sucursal = Sucursal::factory()->create();
+        $cedis = $this->almacen('CEDIS', 'CEDIS-1');
+        $pedido = $this->pedido('municipal', ['almacen_id' => $cedis->id, 'sucursal_destino_id' => $sucursal->id]);
+        $modalidad = CatalogoModalidadPreparacionPedido::query()->where('codigo', CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO)->firstOrFail();
+        PedidoBmaTareaPreparacion::query()->create([
+            'pedido_bma_id' => $pedido->id, 'catalogo_modalidad_preparacion_id' => $modalidad->id,
+            'almacen_id' => $cedis->id, 'estado' => PedidoBmaTareaPreparacion::ESTADO_PENDIENTE,
+            'area_responsable_codigo' => 'TIENDA', 'version' => 1,
+        ]);
+        $pedido = $this->enFase($pedido->fresh(), CatalogoEstatusPedido::FASE_ENVIADO);
+
+        $this->assertFalse(RecorridoFisicoMunicipal::aplica($pedido));
+        $this->assertTrue(RecorridoFisicoMunicipal::envioYaSalioParaAjustes($pedido));
     }
 
     public function test_evaluar_aplica_varias_veces_no_repite_consultas(): void

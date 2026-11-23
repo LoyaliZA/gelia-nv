@@ -863,7 +863,8 @@ final class PoliticaResguardoEnvio
             $e[] = 'pago_rechazado';
         } elseif ($auditado) {
             $e[] = 'pago_auditado';
-        } elseif ($mercancia) {
+        } elseif ($mercancia && ($exhibiciones || (float) $pedido->total_mercancia <= 0 && self::vinculos($pedido) !== [])) {
+            // «Cubierta» sin exhibiciones solo es cierto cuando la mercancía ya viene pagada en remisiones vinculadas; sin importe ni pago no hay nada registrado.
             $e[] = $pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR ? 'pendiente_auditoria' : 'pago_registrado_ventas';
         } elseif ($exhibiciones) {
             $e[] = 'pago_pendiente_registro';

@@ -79,6 +79,10 @@ class ListarPedidosAuditoriaService
             'totales_envio',
             app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido)
         );
+        // Auditoría necesita la política del resguardo municipal (panel, liberación sin datos nacionales).
+        if (\App\Support\ControlPedidos\ConsultaMunicipal::es($pedido)) {
+            $pedido->setAttribute('resguardo_envio', \App\Support\ControlPedidos\PoliticaResguardoEnvio::evaluar($pedido));
+        }
         $pedido->setAttribute('es_recoge_tienda_apartado', $pedido->esRecogeTiendaApartado());
         $pedido->setAttribute('es_recoleccion_tienda', $pedido->esRecoleccionTienda());
 

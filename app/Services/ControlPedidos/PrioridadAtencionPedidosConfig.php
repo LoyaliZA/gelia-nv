@@ -44,12 +44,14 @@ final class PrioridadAtencionPedidosConfig
         $modalidad = "COALESCE($modalidad, (select m.codigo from pedido_bma_tareas_preparacion t join catalogo_modalidades_preparacion_pedido m on m.id = t.catalogo_modalidad_preparacion_id where t.pedido_bma_id = pedidos_bma.id and t.estado not in ('CANCELADA', 'LIBERADA') order by t.version desc, t.id desc limit 1))";
         $municipalLegado = "($entrega IS NULL AND (select sin_logistica from catalogo_paqueterias_pedido where id = pedidos_bma.catalogo_paqueteria_id) = 1)";
         $operacion = '(select codigo from catalogo_tipos_operacion_envio where id = pedidos_bma.tipo_operacion_envio_id)';
+        // Un municipal en resguardo sigue siendo municipal: la modalidad se evalúa antes que la bandera de resguardo.
         $sql = "CASE WHEN pedidos_bma.prioridad_md = ? THEN ?
-            WHEN pedidos_bma.es_resguardo = ? OR $operacion IN (?, ?) THEN ?
             WHEN $entrega = ? OR $modalidad = ? OR $operacion = ? OR $municipalLegado THEN ?
+            WHEN pedidos_bma.es_resguardo = ? OR $operacion IN (?, ?) THEN ?
             WHEN $entrega = ? OR $modalidad IN (?, ?, ?) THEN ? ELSE ? END";
-        $bindings = [true, $rangos['mismo_dia'], true, Operacion::CODIGO_RESGUARDO_ABIERTO, Operacion::CODIGO_RESGUARDO_COMPLEMENTARIO, $rangos['resguardo'],
+        $bindings = [true, $rangos['mismo_dia'],
             'municipal', Modalidad::CODIGO_ENVIO_MUNICIPIO, Operacion::CODIGO_MUNICIPIO_DIFERIDO, $rangos['municipal'],
+            true, Operacion::CODIGO_RESGUARDO_ABIERTO, Operacion::CODIGO_RESGUARDO_COMPLEMENTARIO, $rangos['resguardo'],
             'tienda', ...Modalidad::CODIGOS_FASE4, $rangos['tienda'], $rangos['nacional']];
         return [$sql, $bindings];
     }

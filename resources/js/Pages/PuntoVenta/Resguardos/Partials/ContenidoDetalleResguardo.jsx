@@ -20,6 +20,8 @@ import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
 import IntegracionFisicaConjunto from '../../../ControlPedidos/Municipal/IntegracionFisicaConjunto';
+import PiezasAdicionalesArea from '../../../ControlPedidos/Partials/PiezasAdicionalesArea';
+import CambioATiendaArea from '../../../ControlPedidos/Partials/CambioATiendaArea';
 import { SeccionCaratulaMunicipalResguardo, SeccionSalidaTerminalResguardo } from './AccionesMunicipalResguardo';
 import MiniaturaEvidenciaResguardo, { GaleriaEvidenciasResguardo } from './MiniaturaEvidenciaResguardo';
 
@@ -141,6 +143,22 @@ export default function ContenidoDetalleResguardo({
                 <IntegracionFisicaConjunto
                     pedido={{ id: resguardo.integracion_municipal.pedido_id, resguardo_envio: resguardo.integracion_municipal.resguardo_envio }}
                     mecanismos={!modoAuditoria && resguardo.integracion_municipal.puede_confirmar ? ['custodia_local'] : []}
+                    onActualizado={() => onAccionExito?.()}
+                />
+            )}
+
+            {resguardo.es_municipal && resguardo.pedido_bma_id && resguardo.cambio_a_tienda && (
+                <CambioATiendaArea
+                    pedidoId={resguardo.pedido_bma_id}
+                    cambio={modoAuditoria ? { ...resguardo.cambio_a_tienda, puede_aplicar: false } : resguardo.cambio_a_tienda}
+                    onActualizado={() => onAccionExito?.()}
+                />
+            )}
+
+            {resguardo.es_municipal && resguardo.pedido_bma_id && (
+                <PiezasAdicionalesArea
+                    pedidoId={resguardo.pedido_bma_id}
+                    items={modoAuditoria ? (resguardo.complementos_municipales || []).map((c) => ({ ...c, puede_integrar: false })) : resguardo.complementos_municipales}
                     onActualizado={() => onAccionExito?.()}
                 />
             )}

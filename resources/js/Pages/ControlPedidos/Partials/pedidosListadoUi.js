@@ -106,6 +106,9 @@ const GRUPO_POR_CLAVE = {
     'seguimiento-traslado': 'operaciones',
     'modalidad-tienda': 'operaciones',
     'conversion-modalidad': 'operaciones',
+    'piezas-adicionales': 'operaciones',
+    'cambio-a-tienda': 'operaciones',
+    'saldo-envio': 'operaciones',
     editar: 'operaciones',
     espera: 'operaciones',
     cancelar: 'administracion',
@@ -167,6 +170,9 @@ export function accionesPedidoLista({
     onBitacora,
     onMovimientoTienda,
     onCambiarModalidad,
+    onAgregarPiezas,
+    onCambioATienda,
+    onSaldoEnvio,
     onVerGuia,
     onAnexarEnvio,
     onCompletarEnvio,
@@ -197,7 +203,8 @@ export function accionesPedidoLista({
     if (puedeMutar && puedeCargarGuiaCliente(pedido) && (can('control_pedidos.crear') || can('control_pedidos.editar')) && onCargarGuia) {
         out.push({ key: 'cargar', label: 'Cargar guía', tone: 'fuchsia', onClick: () => onCargarGuia(pedido) });
     }
-    if (puedeMutar && puedeCompletarEnvioResguardo(pedido) && (can('control_pedidos.crear') || can('control_pedidos.editar')) && onCompletarEnvio) {
+    // «Completar envío» pide dirección, guía y peso: es del resguardo nacional. El municipal solicita su continuación en su propio formulario.
+    if (puedeMutar && pedido.solicitud_preparacion?.modalidad_entrega !== 'municipal' && puedeCompletarEnvioResguardo(pedido) && (can('control_pedidos.crear') || can('control_pedidos.editar')) && onCompletarEnvio) {
         out.push({ key: 'completar', label: 'Completar envío', tone: 'teal', onClick: () => onCompletarEnvio(pedido) });
     }
     const consultaMunicipalAbierta = pedido.solicitud_preparacion?.modalidad_entrega === 'municipal'
@@ -232,6 +239,28 @@ export function accionesPedidoLista({
             out.push({ key: 'seguimiento-traslado', label: 'Seguimiento de traslado y modalidad', onClick: () => onMovimientoTienda(pedido, 'traslado') });
         }
     }
+    // Envío municipal con remisión: piezas adicionales con pago y remisión propios, mientras no salga a terminal.
+    const piezasAdicionales = pedido.piezas_adicionales;
+    if (onAgregarPiezas && piezasAdicionales && (piezasAdicionales.puede_agregar || piezasAdicionales.items?.length > 0)) {
+        out.push({
+            key: 'piezas-adicionales',
+            label: piezasAdicionales.items?.length > 0 ? 'Piezas adicionales' : 'Agregar piezas',
+            onClick: () => onAgregarPiezas(pedido),
+        });
+    }
+    // Envío municipal con compra registrada: Ventas pide que el cliente recoja en sucursal, o consulta el estado de la solicitud.
+    const cambioATienda = pedido.cambio_a_tienda;
+    if (onCambioATienda && cambioATienda && (cambioATienda.puede_solicitar || cambioATienda.estado)) {
+        out.push({
+            key: 'cambio-a-tienda',
+            label: cambioATienda.estado ? 'Recolección en sucursal' : 'Cambiar a recolección en sucursal',
+            onClick: () => onCambioATienda(pedido),
+        });
+    }
+    // Administración reconoce el transporte no utilizado de un envío que pasó a recolección en sucursal.
+    if (onSaldoEnvio && cambioATienda?.puede_autorizar_saldo) {
+        out.push({ key: 'saldo-envio', label: 'Autorizar saldo de envío', tone: 'teal', onClick: () => onSaldoEnvio(pedido) });
+    }
     if (onBitacora) {
         out.push({ key: 'bitacora', label: 'Bitácora', tone: 'purple', onClick: () => onBitacora(pedido) });
     }
@@ -241,6 +270,10 @@ export function accionesPedidoLista({
             label: pedido.puede_continuar_nacional || estadoConsultaPedido(pedido) === 'respondida' ? 'Continuar' : 'Editar',
             onClick: () => onEditar(pedido),
         });
+    }
+    // Municipal en resguardo: Ventas comunica la liberación tras la decisión del cliente (AC-11) desde su formulario.
+    if (!puedeEditar?.(pedido) && onEditar && pedido.resguardo_envio?.capacidades?.puede_solicitar_continuacion) {
+        out.push({ key: 'continuacion', label: 'Solicitar continuación', tone: 'teal', onClick: () => onEditar(pedido) });
     }
     if (pedido.puede_espera_pago && can('control_pedidos.espera_pago') && onEsperaPago) {
         out.push({ key: 'espera', label: 'Esperando pago', tone: 'teal', onClick: () => onEsperaPago(pedido) });

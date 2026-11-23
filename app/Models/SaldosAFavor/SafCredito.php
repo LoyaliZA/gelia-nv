@@ -11,6 +11,25 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SafCredito extends Model
 {
+    /** Uso permitido (S-06): general, solo transporte, o pendiente de que Administración confirme su origen. */
+    public const USO_GENERAL = 'general';
+
+    public const USO_SOLO_TRANSPORTE = 'solo_transporte';
+
+    public const USO_PENDIENTE_CONCILIACION = 'pendiente_conciliacion';
+
+    public const USOS = [self::USO_GENERAL, self::USO_SOLO_TRANSPORTE, self::USO_PENDIENTE_CONCILIACION];
+
+    public const ORIGEN_TRANSPORTE_CONFIRMADO = 'transporte_confirmado';
+
+    public const ORIGEN_MERCANCIA = 'mercancia';
+
+    public const ORIGEN_MIXTO = 'mixto';
+
+    public const ORIGEN_NO_DETERMINADO = 'no_determinado';
+
+    public const ORIGENES = [self::ORIGEN_TRANSPORTE_CONFIRMADO, self::ORIGEN_MERCANCIA, self::ORIGEN_MIXTO, self::ORIGEN_NO_DETERMINADO];
+
     public const ESTADO_DISPONIBLE = 'disponible';
 
     /** @deprecated Prefer ESTADO_DISPONIBLE; se remapea en recalcularEstadoFinanciero */
@@ -67,6 +86,12 @@ class SafCredito extends Model
         'generado_por_id',
         'estado_financiero',
         'estado_revision',
+        'uso_permitido',
+        'origen_economico',
+        'clasificacion_fuente',
+        'clasificacion_motivo',
+        'clasificado_por_id',
+        'clasificado_at',
         'observaciones_revision',
         'revisado_por_id',
         'revisado_at',
@@ -125,6 +150,19 @@ class SafCredito extends Model
     public function aplicacionesPedido(): HasMany
     {
         return $this->hasMany(SafPedidoAplicacion::class, 'saf_credito_id');
+    }
+
+    protected static function booted(): void
+    {
+        // Ninguna escritura guarda una clasificación inventada.
+        static::saving(function (SafCredito $credito) {
+            if ($credito->uso_permitido !== null && ! in_array($credito->uso_permitido, self::USOS, true)) {
+                throw new \InvalidArgumentException('El uso permitido del saldo a favor no es válido.');
+            }
+            if ($credito->origen_economico !== null && ! in_array($credito->origen_economico, self::ORIGENES, true)) {
+                throw new \InvalidArgumentException('El origen económico del saldo a favor no es válido.');
+            }
+        });
     }
 
     public function puedeUsarse(): bool

@@ -111,7 +111,7 @@ class RegistrarRecepcionFisicaPdvService
                 if (! in_array($condicion, ['bueno', 'regular', 'malo', 'danado'], true)) {
                     throw ValidationException::withMessages(['condicion' => 'Indique la condición física observada.']);
                 }
-                if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo) && ! $fotoPaquete instanceof UploadedFile) {
+                if (! EvidenciaMinimaRegistroManualPdv::esManual($resguardo) && ! $resguardo->esOrigenMunicipal() && ! $fotoPaquete instanceof UploadedFile) {
                     throw ValidationException::withMessages(['foto_paquete' => 'Adjunte evidencia física de esta llegada.']);
                 }
                 if ($condicion !== 'bueno' && mb_strlen(trim((string) $observacion)) < 8) {

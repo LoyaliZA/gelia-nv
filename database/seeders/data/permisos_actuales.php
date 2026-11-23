@@ -306,6 +306,7 @@ return [
     'rh.ver',
     'saldos_favor.ajustar',
     'saldos_favor.aplicar',
+    'saldos_favor.autorizar_envio',
     'saldos_favor.caja',
     'saldos_favor.cancelar',
     'saldos_favor.configurar',
