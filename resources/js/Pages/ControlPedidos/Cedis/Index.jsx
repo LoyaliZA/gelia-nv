@@ -164,19 +164,19 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos CEDIS | GELIANV" />
-            <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-4 md:space-y-6">
-                <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
-                <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-4 md:p-6`}>
+            <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-3 md:space-y-6">
+                <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-3 md:p-6`}>
                     <div className="flex items-center gap-3">
-                        <span className="gelia-pedidos-icono" aria-hidden="true"><Warehouse className="w-6 h-6" /></span>
+                        <span className="gelia-pedidos-icono !w-10 !h-10 md:!w-12 md:!h-12" aria-hidden="true"><Warehouse className="w-5 h-5 md:w-6 md:h-6" /></span>
                         <div className="min-w-0">
-                            <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0">Control pedidos CEDIS</h1>
-                            <p className="text-sm theme-text-muted mt-1 m-0">Consulta, pesaje y empaque de pedidos</p>
+                            <h1 className="text-lg md:text-2xl font-bold theme-text-main m-0">Control pedidos CEDIS</h1>
+                            <p className="hidden sm:block text-sm theme-text-muted mt-1 m-0">Consulta, pesaje y empaque de pedidos</p>
+                            <a className="inline-flex items-center min-h-[44px] sm:min-h-0 text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                         </div>
                     </div>
                 </header>
 
-                <div className={`${geliaCardClass()} p-3 sm:p-5 space-y-4`}>
+                <div className={`${geliaCardClass()} p-3 sm:p-5 space-y-3 sm:space-y-4`}>
                     <IndicadoresOperacion label="Tipo de pedido" activo={valores.tipo || ''}
                         opciones={KPI_CONFIG.map(opcion => ({ ...opcion, valor: opcion.id ? metricasVista.tipos?.[opcion.id] : metricasVista.todos }))}
                         onCambiar={tipo => cambiar({ tipo, tab: 'TODOS' })} />

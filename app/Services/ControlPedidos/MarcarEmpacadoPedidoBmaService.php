@@ -97,7 +97,15 @@ class MarcarEmpacadoPedidoBmaService
 
     private function assertPuedeEmpacar(PedidoBma $pedido): void
     {
-        \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
+        try {
+            \App\Support\ControlPedidos\PoliticaResguardoEnvio::assertPuedeDespachar($pedido);
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === \App\Support\ControlPedidos\PoliticaResguardoEnvio::MENSAJE_CONJUNTO
+                && ($detalle = \App\Support\ControlPedidos\PoliticaResguardoEnvio::detalleConjuntoPendiente($pedido))) {
+                throw new \RuntimeException($e->getMessage().' '.$detalle);
+            }
+            throw $e;
+        }
         \App\Support\ControlPedidos\AtencionMismoDiaTienda::assertSalida($pedido);
         if (!$pedido->esGestionablePorCedis()) {
             throw new \RuntimeException("El pedido {$pedido->folio} no está en la bandeja de CEDIS.");

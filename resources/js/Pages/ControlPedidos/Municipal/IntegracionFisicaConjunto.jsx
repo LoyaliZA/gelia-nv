@@ -22,7 +22,9 @@ export default function IntegracionFisicaConjunto({ pedido, mecanismos = ['resgu
     useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
     const resguardo = pedido?.resguardo_envio;
     const vinculos = resguardo?.vinculos || [];
-    if (!resguardo?.activo || !vinculos.length) return null;
+    // Con o sin resguardo activo: mientras haya remisiones anexadas por integrar, el área que las tiene debe poder confirmarlas.
+    if (!vinculos.length) return null;
+    const pendientes = vinculos.filter((item) => !item.integrado).length;
 
     const confirmar = async (item) => {
         const definicion = RUTAS[item.mecanismo];
@@ -48,7 +50,12 @@ export default function IntegracionFisicaConjunto({ pedido, mecanismos = ['resgu
     return (
         <section className="registrar-tienda-panel grid gap-3" aria-label="Integración del conjunto de remisiones">
             <div className="registrar-tienda-seccion-titulo"><PackageCheck size={18} aria-hidden="true" /><h3>Integración del conjunto</h3></div>
-            <p className="text-xs theme-text-muted m-0">Este envío espera la mercancía de varias remisiones. Confirme solo lo que ya tiene identificado y junto. Liberar el resguardo es decisión de la persona auxiliar.</p>
+            <p className="text-xs theme-text-muted m-0">
+                {pendientes > 0
+                    ? `Este envío incluye remisiones anexadas. ${pendientes === 1 ? 'Falta 1 por confirmar' : `Faltan ${pendientes} por confirmar`}: el pedido no se empaca hasta que cada una esté identificada y junta.`
+                    : 'Todas las remisiones anexadas están integradas.'}
+                {resguardo.activo ? ' Liberar el resguardo es decisión de la persona auxiliar.' : ''}
+            </p>
             <EstadosResguardoMunicipal estados={resguardo.estados} />
             <ConjuntoRemisionesMunicipal
                 vinculos={vinculos}

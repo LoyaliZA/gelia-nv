@@ -13,6 +13,7 @@ import {
     LifeBuoy,
     Bot,
     ChartNoAxesColumn,
+    FlaskConical,
 } from 'lucide-react';
 
 /** Módulos del panel de administración (sidebar + /admin). */
@@ -151,6 +152,15 @@ export const ADMIN_MODULES = [
         routeName: 'admin.gelia_ai.uso.index',
         icon: ChartNoAxesColumn,
         permission: 'gelia_ai.gestionar_acceso',
+    },
+    {
+        id: 'pruebas_componentes',
+        title: 'Pruebas de componentes',
+        description: 'Previsualizar pantallas y avisos del sistema sin afectar a nadie.',
+        path: '/admin/pruebas-componentes',
+        routeName: 'admin.pruebas_componentes.index',
+        icon: FlaskConical,
+        permission: 'sistema.pruebas_componentes.ver',
     },
     {
         id: 'soporte_gestion',

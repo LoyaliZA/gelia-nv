@@ -221,7 +221,7 @@ export default function ListadoTienda({
     const usarTabla = vista === 'tabla';
 
     return (
-        <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-3 sm:p-5 space-y-4`}>
+        <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-2 sm:p-5 space-y-3 sm:space-y-4`}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="min-w-0">
                     <p className="text-sm font-bold theme-text-main m-0 tabular-nums">
@@ -263,7 +263,7 @@ export default function ListadoTienda({
             ) : null}
 
             <div className={usarTabla ? 'md:hidden' : ''}>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4">
                     {items.map((t) => (
                         <TarjetaTarea key={t.id} tarea={t} puedeTomar={puedeTomar} onAbrir={onAbrir} compacto />
                     ))}

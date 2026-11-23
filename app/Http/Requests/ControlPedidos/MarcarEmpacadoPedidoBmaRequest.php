@@ -22,6 +22,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
             'bultos_por_pedido.*' => ['required', 'array', 'min:1', 'max:50'],
             'bultos_por_pedido.*.*.foto_bulto' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'bultos_por_pedido.*.*.foto_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'bultos_por_pedido.*.*.usar_remision_pdf' => ['nullable', 'boolean'],
         ];
     }
 
@@ -79,8 +80,12 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
                     );
                 } elseif (! CustodiaDocumentalTienda::aplica($miembro)) {
                     foreach ($bultos as $indice => $fila) {
+                        $usaPdf = filter_var($this->input("bultos_por_pedido.{$key}.{$indice}.usar_remision_pdf"), FILTER_VALIDATE_BOOLEAN);
+                        if ($usaPdf && $miembro->tieneRemision()) {
+                            continue;
+                        }
                         if (empty($fila['foto_ticket'])) {
-                            $validator->errors()->add("bultos_por_pedido.{$key}.{$indice}.foto_ticket", $miembro->esTrasladoInternoAPdv() ? 'Cada bulto debe incluir foto de su remisión (la que va engrapada al bulto).' : 'Cada bulto debe incluir foto del ticket.');
+                            $validator->errors()->add("bultos_por_pedido.{$key}.{$indice}.foto_ticket", $miembro->esTrasladoInternoAPdv() ? 'Cada pedido debe incluir foto de su remisión (la que va engrapada al empaque) o la remisión en PDF.' : 'Cada pedido debe incluir foto de su remisión o la remisión en PDF.');
                         }
                     }
                 }
@@ -92,8 +97,8 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
     {
         return [
             'bultos_por_pedido.*.min' => 'Cada pedido debe tener al menos un bulto registrado.',
-            'bultos_por_pedido.*.*.foto_bulto.required' => 'Cada bulto debe incluir foto del bulto.',
-            'bultos_por_pedido.*.*.foto_ticket.required' => 'Cada bulto debe incluir foto del ticket.',
+            'bultos_por_pedido.*.*.foto_bulto.required' => 'Cada empaque debe incluir foto del pedido.',
+            'bultos_por_pedido.*.*.foto_ticket.required' => 'Cada empaque debe incluir foto de la remisión.',
             'bultos_por_pedido.*.*.foto_bulto.mimes' => 'Las fotos del bulto deben ser JPG, PNG o WEBP.',
             'bultos_por_pedido.*.*.foto_ticket.mimes' => 'Las fotos del ticket deben ser JPG, PNG o WEBP.',
             'bultos_por_pedido.*.*.foto_bulto.max' => 'Cada foto del bulto no debe superar 5 MB.',
@@ -124,6 +129,10 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
                 $filas[] = [
                     'foto_bulto' => $fila['foto_bulto'] ?? null,
                     'foto_ticket' => $fila['foto_ticket'] ?? null,
+                    'usar_remision_pdf' => filter_var(
+                        $this->input('bultos_por_pedido.'.$pedidoId.'.'.count($filas).'.usar_remision_pdf'),
+                        FILTER_VALIDATE_BOOLEAN
+                    ),
                 ];
             }
             if ($filas !== []) {

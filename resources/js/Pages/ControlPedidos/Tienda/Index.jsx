@@ -67,14 +67,14 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Preparación Tienda | GELIANV" />
-            <GeliaPageShell className="gelia-tienda-op space-y-4 md:space-y-6">
-                <a className="text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
-                <header className={`${geliaCardClass()} p-4 sm:p-5`}>
+            <GeliaPageShell className="gelia-tienda-op space-y-3 md:space-y-6">
+                <header className={`${geliaCardClass()} p-3 sm:p-5`}>
                     <div className="flex items-center gap-3">
-                        <span className={`${GELIA_ICON_BOX} p-3 rounded-xl`} aria-hidden="true"><Store className="w-6 h-6" /></span>
+                        <span className={`${GELIA_ICON_BOX} p-2 sm:p-3 rounded-xl`} aria-hidden="true"><Store className="w-5 h-5 sm:w-6 sm:h-6" /></span>
                         <div className="min-w-0">
-                            <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0">Preparación Tienda</h1>
-                            <p className="text-sm theme-text-muted mt-1 m-0">Pedidos de tu sucursal</p>
+                            <h1 className="text-lg md:text-2xl font-bold theme-text-main m-0">Preparación Tienda</h1>
+                            <p className="hidden sm:block text-sm theme-text-muted mt-1 m-0">Pedidos de tu sucursal</p>
+                            <a className="inline-flex items-center min-h-[44px] sm:min-h-0 text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                         </div>
                     </div>
                 </header>
@@ -96,7 +96,7 @@ export default function Index({
                     </div>
                 )}
 
-                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-3 sm:p-5 space-y-4`}>
+                <div className={`${geliaCardClass()} gelia-tienda-op-workspace p-3 sm:p-5 space-y-3 sm:space-y-4`}>
                     <MetricasBandejaTienda
                         metricas={metricasVista}
                         tabActiva={tabActiva}

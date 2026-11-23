@@ -80,7 +80,7 @@ class ListarPedidosBmaService
             'historial.estatusAnterior',
             'historial.estatusNuevo',
             'complementos',
-            'resguardosAnexados.resguardo:id,folio,folio_remision,numero_remision',
+            'resguardosAnexados.resguardo',
             'safAplicaciones.credito',
             'pagosExhibicion.banco',
             'tareaPreparacionVigente.modalidad',

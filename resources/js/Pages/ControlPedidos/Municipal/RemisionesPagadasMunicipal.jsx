@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Package } from 'lucide-react';
-import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
+import SeccionPlegableMunicipal from './SeccionPlegableMunicipal';
+import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL } from '../../../utils/geliaTheme';
 import ConjuntoRemisionesMunicipal from './ConjuntoRemisionesMunicipal';
-import { MECANISMOS_REMISION } from './estadosResguardoMunicipal';
 
 const ESPERA_BUSQUEDA_MS = 300;
 
@@ -12,9 +12,9 @@ const ESPERA_BUSQUEDA_MS = 300;
  */
 export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, onPedidoActualizado, onAviso }) {
     const [q, setQ] = useState('');
+    const [lista, setLista] = useState(false);
     const [candidatos, setCandidatos] = useState([]);
     const [origenId, setOrigenId] = useState('');
-    const [mecanismo, setMecanismo] = useState('');
     const [cargandoLista, setCargandoLista] = useState(false);
     const [errorLista, setErrorLista] = useState('');
     const [cargando, setCargando] = useState(false);
@@ -30,8 +30,11 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
         : resguardoActual.conjunto_cerrado
             ? 'El cliente ya definió el conjunto al cerrar la acumulación. No se agregan ni se quitan remisiones por este medio; las confirmaciones físicas pendientes continúan.'
             : '';
-    const candidato = candidatos.find((item) => String(item.id) === String(origenId));
-    const mecanismosPosibles = candidato?.mecanismos || [];
+    // Lo ya vinculado deja de ofrecerse: solo quedan las remisiones por incorporar.
+    const idsVinculados = new Set(vinculos.map((item) => String(item.origen_id)));
+    const disponibles = candidatos.filter((item) => !idsVinculados.has(String(item.id)));
+    const etiquetaRemision = (item) => `${item.folio} · ${item.numero_remision || item.folio_remision}`;
+    const candidato = disponibles.find((item) => String(item.id) === String(origenId));
     const sinMercanciaNueva = Number(pedido?.total_mercancia || 0) === 0 && vinculos.length > 0;
 
     const cargar = async (texto) => {
@@ -66,24 +69,16 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
 
     useEffect(() => () => { abortar.current?.abort(); peticion.current += 1; }, []);
 
-    useEffect(() => {
-        // Si la remisión elegida deja de ser posible, se conserva la selección solo cuando sigue en la lista.
-        if (origenId && !candidato) return;
-        if (candidato && !mecanismosPosibles.includes(mecanismo)) setMecanismo(mecanismosPosibles[0] || '');
-    }, [origenId, candidato]);
-
     const vincular = async () => {
-        if (!origenId || !mecanismo || ocupado || cargando) return;
+        if (!origenId || ocupado || cargando) return;
         setCargando(true);
         try {
             const { data } = await window.axios.post(route('control_pedidos.municipal.remisiones.vincular', pedido.id), {
                 origen_id: Number(origenId),
-                mecanismo,
             }, { headers: { Accept: 'application/json' } });
             onPedidoActualizado?.({ ...pedido, ...data });
             setOrigenId('');
-            setMecanismo('');
-            onAviso?.('Remisión vinculada. Falta su confirmación física; no se cobra de nuevo.');
+            onAviso?.('Pedido anexado. Se avisó al área que lo tiene para confirmarlo o trasladarlo; no se cobra de nuevo.');
         } catch (error) {
             // La selección se conserva para reintentar.
             onAviso?.(error.response?.data?.message || error.response?.data?.errors?.remision?.[0] || 'No se pudo vincular la remisión.');
@@ -109,8 +104,7 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
     };
 
     return (
-        <section className="registrar-tienda-panel" aria-label="Remisiones pagadas">
-            <div className="registrar-tienda-seccion-titulo"><Package size={18} aria-hidden="true" /><h3>Remisiones pagadas</h3></div>
+        <SeccionPlegableMunicipal titulo="Anexar pedidos pagados" icono={Package} abiertaInicial={vinculos.length > 0} resumen={vinculos.length > 0 ? `${vinculos.length} anexados` : null}>
             <p className="text-xs theme-text-muted mt-0 mb-3">Incorpore compras anteriores del mismo cliente. Vincular no activa el resguardo ni vuelve a cobrar lo ya pagado; la integración física la confirma el área que tiene la mercancía.</p>
             {sinMercanciaNueva && (
                 <p className="text-sm theme-text-main mt-0 mb-3" role="status">Este envío no tiene mercancía nueva: solo incorpora remisiones ya pagadas, y no hay nada nuevo por cobrar.</p>
@@ -126,36 +120,47 @@ export default function RemisionesPagadasMunicipal({ pedido, ocupado = false, on
             </div>
             {puedeVincular && (
                 <fieldset disabled={ocupado || cargando} className="grid sm:grid-cols-2 gap-4 min-w-0">
-                    <label className={THEME_LABEL}>Buscar remisión
-                        <input className={`${THEME_INPUT} w-full mt-1`} value={q} onChange={(evento) => setQ(evento.target.value)} aria-describedby="remisiones-estado-lista" />
-                    </label>
-                    <label className={THEME_LABEL}>Remisión
-                        <select className={`${THEME_SELECT} w-full mt-1`} value={origenId} onChange={(evento) => setOrigenId(evento.target.value)}>
-                            <option value="">Elegir remisión</option>
-                            {candidatos.map((item) => (
-                                <option key={item.id} value={item.id}>{item.folio} · {item.numero_remision || item.folio_remision}</option>
-                            ))}
-                        </select>
-                    </label>
-                    <label className={THEME_LABEL}>Cómo se integra
-                        <select className={`${THEME_SELECT} w-full mt-1`} value={mecanismo} disabled={!candidato} onChange={(evento) => setMecanismo(evento.target.value)}>
-                            <option value="">{candidato ? 'Elegir cómo se integra' : 'Elija primero la remisión'}</option>
-                            {mecanismosPosibles.map((id) => <option key={id} value={id}>{MECANISMOS_REMISION[id] || id}</option>)}
-                        </select>
-                    </label>
+                    <div className={`${THEME_LABEL} relative`} onBlur={(evento) => { if (!evento.currentTarget.contains(evento.relatedTarget)) setLista(false); }}>
+                        <label htmlFor="remision-anexar">Pedido pagado a anexar</label>
+                        <input
+                            id="remision-anexar"
+                            role="combobox"
+                            aria-expanded={lista}
+                            aria-controls="remision-anexar-lista"
+                            aria-autocomplete="list"
+                            aria-describedby="remisiones-estado-lista"
+                            autoComplete="off"
+                            placeholder="Buscar o elegir remisión"
+                            className={`${THEME_INPUT} w-full mt-1`}
+                            value={lista || !candidato ? q : etiquetaRemision(candidato)}
+                            onFocus={() => setLista(true)}
+                            onChange={(evento) => { setQ(evento.target.value); setOrigenId(''); setLista(true); }}
+                            onKeyDown={(evento) => { if (evento.key === 'Escape') setLista(false); }}
+                        />
+                        {lista && (
+                            <ul id="remision-anexar-lista" role="listbox" className="absolute z-20 left-0 right-0 mt-1 max-h-60 overflow-auto m-0 p-1 list-none rounded-xl border theme-border theme-element shadow-lg">
+                                {disponibles.length === 0 && <li className="px-3 py-2 text-sm theme-text-muted">{cargandoLista ? 'Buscando…' : 'Sin remisiones por anexar.'}</li>}
+                                {disponibles.map((item) => (
+                                    <li key={item.id} role="option" aria-selected={String(item.id) === String(origenId)}>
+                                        <button type="button" className="w-full text-left px-3 py-2 min-h-[44px] rounded-lg bg-transparent border-0 theme-text-main cursor-pointer hover:bg-[var(--theme-element-hover-bg,rgba(255,255,255,0.06))]" onClick={() => { setOrigenId(String(item.id)); setLista(false); }}>{etiquetaRemision(item)}</button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
                     <div className="self-end">
-                        <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={!origenId || !mecanismo || ocupado || cargando} onClick={vincular}>Vincular remisión</button>
+                        <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={!origenId || ocupado || cargando} onClick={vincular}>Anexar pedido</button>
                     </div>
                     <p id="remisiones-estado-lista" className="text-xs theme-text-muted m-0 sm:col-span-2" role="status" aria-live="polite">
                         {cargandoLista ? 'Buscando remisiones…'
                             : errorLista ? errorLista
-                                : candidatos.length === 0 ? (q ? 'Ninguna remisión coincide. Solo se listan compras pagadas y auditadas de este cliente, sin envío propio.' : 'Este cliente no tiene remisiones pagadas disponibles para incorporar.')
-                                    : candidato && candidato.mecanismos?.length === 1 && candidato.mecanismos[0] === 'resguardo_envio' ? 'Esa mercancía ya está en CEDIS: CEDIS confirma su integración. No hay traslado.'
-                                        : candidato ? 'Esa mercancía está en custodia de una sucursal: se integra allí o se traslada a CEDIS.'
-                                            : `${candidatos.length} remisiones disponibles.`}
+                                : disponibles.length === 0 ? (q ? 'Ninguna remisión coincide. Solo se listan compras pagadas y auditadas de este cliente, sin envío propio.' : 'Este cliente no tiene remisiones pagadas disponibles para incorporar.')
+                                    : candidato && candidato.mecanismos?.includes('resguardo_envio') ? 'Esa mercancía ya está en CEDIS: CEDIS confirmará el anexo antes de empacar.'
+                                        : candidato ? 'Esa mercancía está en custodia de una sucursal: se avisa a quien la resguarda para trasladarla a CEDIS.'
+                                            : `${disponibles.length} ${disponibles.length === 1 ? 'remisión disponible' : 'remisiones disponibles'}.`}
                     </p>
                 </fieldset>
             )}
-        </section>
+        </SeccionPlegableMunicipal>
     );
 }

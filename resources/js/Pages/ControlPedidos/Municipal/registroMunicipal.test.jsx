@@ -115,8 +115,8 @@ it('no envía la consulta si el documento no queda persistido', async () => {
 });
 it('muestra el resguardo de envío cuando la solicitud ya está guardada', async () => {
     await render({ pedido: { ...pedido, catalogo_paqueteria_id: 2 } });
-    expect(document.body.textContent).toContain('Dejar en resguardo');
-    expect(document.body.textContent).toContain('Remisiones pagadas');
+    expect(document.body.textContent).toContain('Activar resguardo');
+    expect(document.body.textContent).toContain('Anexar pedidos pagados');
 });
 it('bloquea el doble clic mientras termina el guardado previo al envío', async () => {
     let confirmar;

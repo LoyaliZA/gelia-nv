@@ -139,7 +139,7 @@ class ListarPedidosCedisService
             'historial.usuario',
             'historial.estatusAnterior',
             'historial.estatusNuevo',
-            'resguardosAnexados.resguardo:id,folio,folio_remision,numero_remision',
+            'resguardosAnexados.resguardo',
             'complementos.documentos',
             'complementos.revisionesProducto',
             'complementos.estatus',

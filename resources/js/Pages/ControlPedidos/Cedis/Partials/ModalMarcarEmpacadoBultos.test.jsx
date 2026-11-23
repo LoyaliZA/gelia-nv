@@ -59,7 +59,7 @@ it('rechaza un archivo distinto de imagen y conserva los requisitos del empaque 
     expect(document.querySelector('[role="alert"]').textContent).toContain('Usa una foto');
     expect(document.querySelector('.gelia-empaque-camara img')).toBeNull();
     await act(() => root.render(<Modal abierto pedido={{ ...pedido, id: 83, solicitud_preparacion: null }} onClose={vi.fn()} />));
-    expect(document.body.textContent).toContain('Foto del ticket');
+    expect(document.body.textContent).toContain('Foto de la remisión del pedido');
     await foto();
     await act(() => button('Marcar empacado').click());
     expect(router.post).not.toHaveBeenCalled();
