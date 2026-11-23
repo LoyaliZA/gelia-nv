@@ -109,6 +109,7 @@ const GRUPO_POR_CLAVE = {
     'modalidad-tienda': 'operaciones',
     'conversion-modalidad': 'operaciones',
     'piezas-adicionales': 'operaciones',
+    'anexo-extraordinario': 'operaciones',
     'cambio-a-tienda': 'operaciones',
     'saldo-envio': 'operaciones',
     editar: 'operaciones',
@@ -180,6 +181,7 @@ export function accionesPedidoLista({
     onCompletarEnvio,
     onCargarGuia,
     onEsperaPago,
+    onAnexoExtraordinario,
 }) {
     const out = [];
 
@@ -249,6 +251,18 @@ export function accionesPedidoLista({
             label: piezasAdicionales.items?.length > 0 ? 'Piezas adicionales' : 'Agregar piezas',
             onClick: () => onAgregarPiezas(pedido),
         });
+    }
+    // Nacional pagado o remisionado: el cliente agrega piezas y el anexo viaja como minipedido aparte (antes o después de salir).
+    const solicitudNacional = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
+    if (onAnexoExtraordinario
+        && solicitudNacional.modalidad_entrega === 'nacional'
+        && solicitudNacional.captura_nacional === 'compartida'
+        && !solicitudNacional.complemento_nacional
+        && (pedido.numero_remision || pedido.pago_validado_at)
+        && !pedido.cancelado_at
+        && pedido.estatus?.fase_ciclo !== 'CANCELADO'
+        && can('control_pedidos.crear')) {
+        out.push({ key: 'anexo-extraordinario', label: 'Anexo extraordinario', onClick: () => onAnexoExtraordinario(pedido) });
     }
     // Envío municipal con compra registrada: Ventas pide que el cliente recoja en sucursal, o consulta el estado de la solicitud.
     const cambioATienda = pedido.cambio_a_tienda;

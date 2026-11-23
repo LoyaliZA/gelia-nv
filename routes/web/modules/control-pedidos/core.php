@@ -83,6 +83,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::get('/{pedidoBma}/consulta-nacional', [PedidoBmaController::class, 'consultaNacional'])->name('consulta_nacional.show');
         Route::post('/{pedidoBma}/ajuste-nacional', [PedidoBmaController::class, 'ajusteNacional'])->name('ajuste_nacional');
+        Route::post('/{pedidoBma}/anexo-extraordinario', [PedidoBmaController::class, 'anexoExtraordinario'])->name('anexo_extraordinario');
         Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
         Route::post('/{pedidoBma}/custodia-nacional', [PedidoBmaController::class, 'custodiaNacional'])->name('custodia_nacional');
         Route::post('/{pedidoBma}/remision-caja', [PedidoBmaController::class, 'remisionCajaNacional'])->name('remision_caja_nacional');

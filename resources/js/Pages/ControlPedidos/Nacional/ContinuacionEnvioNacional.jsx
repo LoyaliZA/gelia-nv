@@ -3,12 +3,14 @@ import axios from 'axios';
 import SeccionPagosExhibicion from '../Partials/SeccionPagosExhibicion';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
+import ModalAgregarDireccionNacional from './ModalAgregarDireccionNacional';
 
 const opcionesJson = { headers: { Accept: 'application/json' } };
 const fasesCaptura = ['PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'];
 
-export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente, importePendiente, onPedido }) {
+export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente, importePendiente, onPedido, puedeAgregarDireccion = false }) {
     const [direcciones, setDirecciones] = useState([]);
+    const [agregandoDireccion, setAgregandoDireccion] = useState(false);
     const [errorDireccion, setErrorDireccion] = useState('');
     const [cargandoDireccion, setCargandoDireccion] = useState(false);
     const [seleccion, setSeleccion] = useState({});
@@ -42,6 +44,11 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
     }, [pedido.cliente_id, puedeCotizar]);
 
     const valorSeleccion = (campo) => seleccion[campo] ?? String(pedido[campo] || '');
+    const direccionAgregada = (nueva) => {
+        setDirecciones((previas) => [nueva, ...previas.filter((item) => String(item.id) !== String(nueva.id))]);
+        setSeleccion((previa) => ({ ...previa, cliente_direccion_id: String(nueva.id) }));
+        setError('');
+    };
     const ejecutar = async (accion) => {
         if (ocupado) return;
         setOcupado(true);
@@ -110,7 +117,14 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                     ))}
                     {cargandoDireccion && <p className="m-0 text-sm theme-text-muted" role="status">Cargando direcciones…</p>}
                     {!cargandoDireccion && !errorDireccion && direcciones.length === 0 && (
-                        <p className="m-0 text-sm theme-text-muted">Agregue una dirección verificada en el catálogo del cliente y vuelva a abrir el pedido.</p>
+                        <p className="m-0 text-sm theme-text-muted">
+                            {puedeAgregarDireccion
+                                ? 'Este cliente no tiene direcciones verificadas. Agregue una para cotizar.'
+                                : 'Este cliente no tiene direcciones verificadas. Pida a un auxiliar con permiso de direcciones que la agregue y vuelva a abrir el pedido.'}
+                        </p>
+                    )}
+                    {puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
+                        <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
                     )}
                     {errorDireccion && <p className="m-0 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
                     {cajas.map((caja, indice) => (
@@ -157,6 +171,10 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
             )}
             {fase === 'PENDIENTE_AUXILIAR' && <p className="m-0 text-sm" role="status">El auxiliar verifica el pago y la remisión.</p>}
             {error && <p className="m-0 text-sm theme-text-aviso" role="alert">{error}</p>}
+            <ModalAgregarDireccionNacional
+                abierto={agregandoDireccion} onClose={() => setAgregandoDireccion(false)}
+                pedido={pedido} esPrimera={direcciones.length === 0} onGuardada={direccionAgregada}
+            />
         </section>
     );
 }

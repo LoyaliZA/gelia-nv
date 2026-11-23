@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Truck } from 'lucide-react';
 import ContinuacionEnvioNacional from './ContinuacionEnvioNacional';
 import SeguimientoSolicitudNacional from './SeguimientoSolicitudNacional';
+import ModalAnexoExtraordinario from './ModalAnexoExtraordinario';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from '../Partials/GaleriaEvidenciasPedido';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
@@ -42,7 +43,7 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, children }) {
+export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, puedeAgregarDireccion = false, children }) {
     const [actual, setActual] = useState(pedido);
     const [paqueteriaId, setPaqueteriaId] = useState(String(pedido?.catalogo_paqueteria_id || ''));
     const almacenesSalida = useMemo(() => almacenesSalidaNacional(catalogos.almacenes), [catalogos.almacenes]);
@@ -54,9 +55,8 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     useEffect(() => { onBusyChange?.(enviando); }, [enviando, onBusyChange]);
     useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
     const [paqueteriaPosterior, setPaqueteriaPosterior] = useState('');
-    const [importeComplemento, setImporteComplemento] = useState('');
-    const [soporteComplemento, setSoporteComplemento] = useState(null);
-    const [errorComplemento, setErrorComplemento] = useState('');
+    const [anexoAbierto, setAnexoAbierto] = useState(false);
+    const [anexoCreado, setAnexoCreado] = useState(null);
     const [entradaPieza, setEntradaPieza] = useState('catalogo');
     const [producto, setProducto] = useState(null);
     const [cantidadCatalogo, setCantidadCatalogo] = useState('1');
@@ -69,7 +69,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const [mercanciaEditada, setMercanciaEditada] = useState(false);
     const [paqueteriaEditada, setPaqueteriaEditada] = useState(false);
     const clavePaqueteria = useRef(uuidSolicitud());
-    const claveComplemento = useRef(uuidSolicitud());
     const claveSucursal = useRef(uuidSolicitud());
     useEffect(() => { setActual(pedido); }, [pedido]);
     const opciones = useMemo(() => paqueteriasNacionales(catalogos.paqueterias), [catalogos.paqueterias]);
@@ -250,55 +249,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
             evidencia: archivo,
         }]);
         if (agregada) limpiarPieza();
-    };
-
-    const registrarComplemento = async () => {
-        if (enviando) return;
-        const importe = Number(String(importeComplemento).replace(',', '.'));
-        if (!Number.isFinite(importe) || importe <= 0) {
-            setErrorComplemento('Indique el importe del complemento.');
-
-            return;
-        }
-        if (!soporteComplemento) {
-            setErrorComplemento('Adjunte el soporte del complemento.');
-
-            return;
-        }
-        if (!piezas.length) {
-            setErrorComplemento('Indique las piezas nuevas del complemento.');
-
-            return;
-        }
-        setEnviando(true);
-        setErrorComplemento('');
-        try {
-            const cuerpo = new FormData();
-            cuerpo.append('tipo', 'anexo');
-            cuerpo.append('solicitud_id', claveComplemento.current);
-            cuerpo.append('total_mercancia_nueva', String(importe));
-            cuerpo.append('revision_esperada', String(actual?.revision_registro ?? ''));
-            cuerpo.append('base_captura', actual?.base_captura || '');
-            cuerpo.append('evidencia', soporteComplemento);
-            piezas.forEach((pieza, indice) => {
-                cuerpo.append(`piezas[${indice}][sku]`, pieza.sku || '');
-                cuerpo.append(`piezas[${indice}][descripcion]`, pieza.descripcion);
-                cuerpo.append(`piezas[${indice}][cantidad]`, String(pieza.cantidad));
-                if (pieza.evidencia) cuerpo.append(`piezas[${indice}][evidencia]`, pieza.evidencia);
-            });
-            const { data } = await axios.post(`/control-pedidos/${actual.id}/ajuste-nacional`, cuerpo, {
-                headers: { Accept: 'application/json' },
-            });
-            claveComplemento.current = uuidSolicitud();
-            setPiezas([]);
-            setImporteComplemento('');
-            setSoporteComplemento(null);
-            adoptar(data);
-        } catch (fallo) {
-            setErrorComplemento(mensajeDe(fallo, 'No se registró el complemento. Intente de nuevo.'));
-        } finally {
-            setEnviando(false);
-        }
     };
 
     const solicitarSucursal = async () => {
@@ -523,48 +473,24 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     key={`${actual.id}-${elegida.id}`}
                     pedido={actual} catalogos={catalogos}
                     pendiente={elegida.nombre === 'PAQ. PENDIENTE'} importePendiente={importePendiente} onPedido={adoptar}
+                    puedeAgregarDireccion={puedeAgregarDireccion}
                 />
             )}
-            {conComplemento && !cambio && !yaSalio && (
-                <details className="registrar-tienda-panel space-y-3">
-                    <summary className="cursor-pointer font-semibold">Agregar mercancía al pedido pagado</summary>
-                    {editorPiezas}
-                    {listaPiezas(piezas, true)}
-                    <label className={THEME_LABEL} htmlFor="importe-complemento">Importe del complemento</label>
-                    <p className="text-sm theme-text-main m-0">Importe de la mercancía nueva. Lo ya pagado no se vuelve a cobrar.</p>
-                    <input
-                        id="importe-complemento"
-                        className={`${THEME_INPUT} w-full min-h-[44px] text-base mt-1`}
-                        inputMode="decimal"
-                        value={importeComplemento}
-                        aria-invalid={errorComplemento ? 'true' : undefined}
-                        onBlur={() => {
-                            const importe = Number(String(importeComplemento).replace(',', '.'));
-                            if (!Number.isFinite(importe) || importe <= 0) setErrorComplemento('Indique el importe del complemento.');
-                        }}
-                        onFocus={() => setErrorComplemento('')}
-                        onChange={(evento) => {
-                            setImporteComplemento(evento.target.value);
-                            setErrorComplemento('');
-                        }}
-                    />
-                    <label className={`${THEME_LABEL} mt-2 block`} htmlFor="soporte-complemento">Soporte del complemento</label>
-                    <input
-                        id="soporte-complemento"
-                        className={`${THEME_INPUT} w-full min-h-[44px] text-base mt-1`}
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png,image/webp"
-                        onFocus={() => setErrorComplemento('')}
-                        onChange={(evento) => {
-                            setSoporteComplemento(evento.target.files?.[0] || null);
-                            setErrorComplemento('');
-                        }}
-                    />
-                    <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] mt-2`} disabled={enviando} onClick={registrarComplemento}>
-                        {enviando ? 'Registrando…' : 'Registrar complemento'}
-                    </button>
-                    {errorComplemento && <p className="text-sm theme-text-aviso m-0 mt-1" role="alert">{errorComplemento}</p>}
-                </details>
+            {conComplemento && !cambio && (
+                <section className="registrar-tienda-panel space-y-2" aria-label="Anexo extraordinario">
+                    <p className="text-sm theme-text-main m-0">
+                        {yaSalio
+                            ? 'Este pedido ya salió. Un anexo se envía como un envío nuevo, con su propia consulta, pago y guía.'
+                            : 'Si el cliente agrega piezas, el anexo se envía como un minipedido aparte, con su propia consulta, pago y guía.'}
+                    </p>
+                    <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => setAnexoAbierto(true)}>Anexo extraordinario</button>
+                    {anexoCreado && (
+                        <p className="text-sm m-0" role="status">
+                            Anexo {anexoCreado.folio} enviado a consulta de CEDIS. Ábralo desde el listado para seguirlo.
+                        </p>
+                    )}
+                    <ModalAnexoExtraordinario abierto={anexoAbierto} onClose={() => setAnexoAbierto(false)} pedido={actual} onCreado={setAnexoCreado} />
+                </section>
             )}
             {(cambio || puedePedirSucursal) && (
                 <section className="registrar-tienda-panel space-y-2" aria-label="Recolección en sucursal">

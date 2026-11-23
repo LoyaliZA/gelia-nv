@@ -68,7 +68,7 @@ class NacionalOla3CierreTest extends TestCase
         }
     }
 
-    public function test_el_complemento_identifica_sku_y_captura_sin_copiar_el_principal(): void
+    public function test_el_anexo_identifica_sku_y_captura_sin_copiar_el_principal(): void
     {
         Storage::fake('public');
         $pedido = $this->pedidoNacional([
@@ -104,17 +104,17 @@ class NacionalOla3CierreTest extends TestCase
         $piezas = $hijo->solicitud_preparacion_json['complemento_nacional']['piezas'];
         $this->assertSame('SKU-NUEVA', $piezas[0]['sku']);
         $this->assertSame('Crema nueva', $piezas[0]['descripcion']);
-        $this->assertSame('', $piezas[1]['sku']);
+        $this->assertNull($piezas[1]['sku']);
         $this->assertSame('Aroma de captura', $piezas[1]['descripcion']);
         $this->assertNotEquals('Complemento', $piezas[1]['descripcion']);
         $this->assertNotEmpty($piezas[1]['documento_ids'] ?? []);
-        $this->assertSame(2, $hijo->revisionesProducto()->count());
-        $this->assertSame('SKU-NUEVA', $hijo->revisionesProducto()->orderBy('id')->value('sku'));
-        $capturada = $hijo->revisionesProducto()->where('sku', '')->first();
-        $this->assertSame('Aroma de captura', $capturada->descripcion_producto);
-        $this->assertNull($capturada->cantidad_encontrada);
-        $this->assertGreaterThan(1, $hijo->documentos()->count());
-        $this->assertTrue($hijo->documentos()->where('relacion_id', $capturada->id)->exists());
+        $vigentes = $hijo->solicitud_preparacion_json['piezas_nacionales'];
+        $this->assertCount(2, $vigentes, 'CEDIS responde estas piezas en la consulta del anexo');
+        $this->assertSame('SKU-NUEVA', $vigentes[0]['sku']);
+        $this->assertNull($vigentes[1]['sku']);
+        $this->assertSame(0, $hijo->revisionesProducto()->count(), 'CEDIS crea las revisiones al responder');
+        $this->assertSame(1, $hijo->documentos()->where('relacion_tipo', \App\Support\ControlPedidos\Nacional\CapturaNacional::RELACION_PIEZA_SOLICITADA)->count());
+        $this->assertSame([$vigentes[1]['documento_ids'][0]], $hijo->documentos()->where('relacion_tipo', \App\Support\ControlPedidos\Nacional\CapturaNacional::RELACION_PIEZA_SOLICITADA)->pluck('id')->all());
 
         $misma = $datos['solicitud_id'];
         $otro = app(RegistrarComplementoNacional::class)->ejecutar($pedido->fresh(), $this->ventas, [
@@ -124,7 +124,7 @@ class NacionalOla3CierreTest extends TestCase
             'piezas' => [['sku' => 'SKU-NUEVA', 'descripcion' => 'Crema nueva', 'cantidad' => 1]],
         ], [UploadedFile::fake()->image('soporte.jpg')]);
         $this->assertSame($hijo->id, $otro->id);
-        $this->assertSame(1, PedidoBma::query()->where('pedido_principal_id', $pedido->id)->count());
+        $this->assertSame(1, PedidoBma::query()->where('solicitud_preparacion_json->complemento_nacional->pedido_origen_id', $pedido->id)->count());
     }
 
     public function test_rechaza_pieza_sin_sku_descripcion_ni_archivo(): void
@@ -140,21 +140,27 @@ class NacionalOla3CierreTest extends TestCase
         ], [UploadedFile::fake()->image('soporte.jpg')]);
     }
 
-    public function test_cedis_responde_las_piezas_del_hijo_sin_mezclar_al_padre(): void
+    public function test_cedis_responde_las_piezas_de_un_complemento_heredado_sin_mezclar_al_padre(): void
     {
         Storage::fake('public');
         $pedido = $this->pedidoNacional([
             'numero_remision' => 'REM-CEDIS',
             'pago_validado_at' => now(),
         ]);
-        $hijo = app(RegistrarComplementoNacional::class)->ejecutar($pedido, $this->ventas, [
-            ...$this->contexto($pedido),
-            'total_mercancia_nueva' => 25,
-            'piezas' => [
-                ['sku' => 'SKU-A', 'descripcion' => 'Pieza A', 'cantidad' => 1],
-                ['sku' => '', 'descripcion' => 'Pieza B', 'cantidad' => 1, 'evidencia' => UploadedFile::fake()->image('b.jpg')],
-            ],
-        ], [UploadedFile::fake()->image('soporte.jpg')]);
+        // Complemento heredado: creado antes del anexo extraordinario, con sus piezas como revisiones del hijo.
+        $hijo = $this->pedidoNacional(['pedido_principal_id' => $pedido->id, 'total_mercancia' => 25]);
+        foreach ([['SKU-A', 'Pieza A'], ['', 'Pieza B']] as $orden => [$sku, $descripcion]) {
+            $hijo->revisionesProducto()->create([
+                'descripcion_producto' => $descripcion,
+                'sku' => $sku,
+                'cantidad_solicitada' => 1,
+                'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_BUENO,
+                'orden' => $orden + 1,
+            ]);
+        }
+        $json = $pedido->solicitud_preparacion_json;
+        $json['complementos_nacionales'] = [['solicitud_id' => (string) Str::uuid(), 'pedido_id' => $hijo->id, 'antes_de_salida' => true]];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
         $revision = $hijo->revisionesProducto()->where('sku', 'SKU-A')->first();
         $ajeno = User::factory()->create();
         $payload = [
@@ -419,6 +425,7 @@ class NacionalOla3CierreTest extends TestCase
 
         return [
             'solicitud_id' => (string) Str::uuid(),
+            'folio_wizerp' => 'WIZ-ANX-'.uniqid(),
             'revision_esperada' => (int) $fresco->revision_registro,
             'base_captura' => RevisionCapturaPedido::base($fresco),
         ];

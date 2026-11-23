@@ -49,8 +49,12 @@ class SnapshotDireccionPedidoTest extends TestCase
             'cliente_direccion_id' => $direccion->id,
             'origen_id' => $this->origenForaneo()->id,
             'pesaje_respondido_at' => now(),
+            // Desde ago-2026 enviar exige la consulta cerrada (ValidacionCamposPedidoBma).
+            'consulta_cerrada_at' => now(),
         ]);
         $this->agregarComprobante($pedido);
+        // Enviar exige el documento del pedido (PDF o foto) además del comprobante.
+        $pedido->documentos()->create(['tipo' => 'pdf_pedido', 'ruta_archivo' => 'snap/pedido.pdf', 'nombre_original' => 'pedido.pdf', 'activo' => true]);
         if (! DB::table('pedido_bma_cajas')->where('pedido_bma_id', $pedido->id)->exists()) {
             DB::table('pedido_bma_cajas')->insert([
                 'pedido_bma_id' => $pedido->id,

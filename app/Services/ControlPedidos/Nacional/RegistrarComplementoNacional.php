@@ -6,13 +6,13 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
-use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
 use App\Models\User;
 use App\Services\ControlPedidos\GenerarFolioPedidoBmaService;
 use App\Support\ControlPedidos\Nacional\CapturaNacional;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /** Complemento nacional aparte. No copia la mercancía ya pagada ni abre un pedido de Tienda. */
@@ -37,13 +37,21 @@ class RegistrarComplementoNacional
             }
 
             RevisionCapturaPedido::comprobar($pedido, $datos);
+            $pedido->loadMissing('estatus');
             if (! CapturaNacional::es($pedido)) {
                 throw new InvalidArgumentException('Este complemento solo aplica a un envío nacional de la captura actual.');
+            }
+            if ($pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_CANCELADO) {
+                throw new InvalidArgumentException('Un pedido cancelado no admite anexos.');
             }
             if (! $pedido->numero_remision && ! $pedido->pago_validado_at) {
                 throw new InvalidArgumentException('Sin remisión ni pago, el ajuste sigue en el mismo pedido.');
             }
 
+            $folioWizerp = trim((string) ($datos['folio_wizerp'] ?? ''));
+            if ($folioWizerp === '') {
+                throw new InvalidArgumentException('Capture el folio Wizerp del anexo.');
+            }
             $piezas = $this->piezas($datos);
             $monto = round((float) ($datos['total_mercancia_nueva'] ?? 0), 2);
             if ($piezas === [] || $monto <= 0) {
@@ -62,8 +70,8 @@ class RegistrarComplementoNacional
             }
 
             $hijo = PedidoBma::query()->create([
-                'folio' => $antes ? $this->folios->ejecutarComplemento($pedido) : $this->folios->ejecutar(),
-                'folio_remision' => 'WIZ-'.uniqid(),
+                'folio' => $this->folios->ejecutarComplemento($pedido),
+                'folio_remision' => $folioWizerp,
                 'fecha' => now()->toDateString(),
                 'vendedor_id' => $usuario->id,
                 'cliente_id' => $pedido->cliente_id,
@@ -71,7 +79,8 @@ class RegistrarComplementoNacional
                 'almacen_id' => $pedido->almacen_id,
                 'catalogo_estatus_pedido_id' => $borrador->id,
                 'catalogo_paqueteria_id' => $pedido->catalogo_paqueteria_id,
-                'pedido_principal_id' => $antes ? $pedido->id : null,
+                'cliente_direccion_id' => $pedido->cliente_direccion_id,
+                // Independiente: CEDIS lo empaca y guía aparte; el vínculo vive en el JSON.
                 'solicitud_preparacion_json' => [
                     'modalidad_entrega' => 'nacional',
                     'captura_nacional' => 'compartida',
@@ -79,6 +88,8 @@ class RegistrarComplementoNacional
                     'complemento_nacional' => [
                         'solicitud_id' => $solicitudId,
                         'pedido_origen_id' => $pedido->id,
+                        'pedido_origen_folio' => $pedido->folio,
+                        'nota' => trim((string) ($datos['nota'] ?? '')) ?: null,
                         'piezas' => [],
                         'antes_de_salida' => $antes,
                         'mercancia_nueva_por_cobrar' => 0,
@@ -91,13 +102,13 @@ class RegistrarComplementoNacional
                 'total_a_cobrar' => $monto,
                 'aplica_seguro' => false,
                 'es_resguardo' => false,
-                'pago_validado_at' => now(),
-                'pago_validado_por_id' => $usuario->id,
             ]);
             $this->guardar($hijo, $guardados);
             $piezasGuardadas = $this->registrarPiezas($hijo, $piezas);
             $jsonHijo = is_array($hijo->solicitud_preparacion_json) ? $hijo->solicitud_preparacion_json : [];
             $jsonHijo['complemento_nacional']['piezas'] = $piezasGuardadas;
+            // CEDIS responde las piezas que Ventas identificó en `piezas_nacionales`, igual que en el alta.
+            $jsonHijo['piezas_nacionales'] = $piezasGuardadas;
             $hijo->update(['solicitud_preparacion_json' => $jsonHijo]);
 
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
@@ -178,33 +189,26 @@ class RegistrarComplementoNacional
     }
 
     /**
+     * Mismo contrato que el alta ordinaria: las piezas viven en el JSON con un UUID y CEDIS crea sus revisiones al responder.
+     *
      * @param  list<array{sku: string, descripcion: string, cantidad: int, evidencia: ?UploadedFile}>  $piezas
-     * @return list<array{sku: string, descripcion: string, cantidad: int, documento_ids: list<int>, revision_id: int}>
+     * @return list<array{id: string, sku: ?string, descripcion: string, cantidad: int, documento_ids: list<int>}>
      */
     private function registrarPiezas(PedidoBma $hijo, array $piezas): array
     {
         $salida = [];
-        $orden = (int) $hijo->revisionesProducto()->max('orden');
         foreach ($piezas as $pieza) {
-            $orden++;
-            $revision = $hijo->revisionesProducto()->create([
-                'sku' => $pieza['sku'],
-                'descripcion_producto' => $pieza['descripcion'],
-                'cantidad_solicitada' => $pieza['cantidad'],
-                'estado_fisico' => PedidoBmaRevisionProducto::ESTADO_BUENO,
-                'orden' => $orden,
-            ]);
             $documentoIds = [];
             if ($pieza['evidencia'] instanceof UploadedFile) {
-                $documento = $this->guardarUno($hijo, $pieza['evidencia'], $revision);
-                $documentoIds[] = $documento->id;
+                $orden = (int) $hijo->documentos()->max('orden') + 1;
+                $documentoIds[] = $this->persistir($hijo, $pieza['evidencia'], $orden, true)->id;
             }
             $salida[] = [
-                'sku' => $pieza['sku'],
+                'id' => (string) Str::uuid(),
+                'sku' => $pieza['sku'] !== '' ? $pieza['sku'] : null,
                 'descripcion' => $pieza['descripcion'],
                 'cantidad' => $pieza['cantidad'],
                 'documento_ids' => $documentoIds,
-                'revision_id' => $revision->id,
             ];
         }
 
@@ -228,18 +232,11 @@ class RegistrarComplementoNacional
     {
         $orden = (int) $pedido->documentos()->max('orden');
         foreach ($archivos as $archivo) {
-            $this->persistir($pedido, $archivo, ++$orden, null);
+            $this->persistir($pedido, $archivo, ++$orden, false);
         }
     }
 
-    private function guardarUno(PedidoBma $pedido, UploadedFile $archivo, PedidoBmaRevisionProducto $revision): PedidoBmaDocumento
-    {
-        $orden = (int) $pedido->documentos()->max('orden') + 1;
-
-        return $this->persistir($pedido, $archivo, $orden, $revision);
-    }
-
-    private function persistir(PedidoBma $pedido, UploadedFile $archivo, int $orden, ?PedidoBmaRevisionProducto $revision): PedidoBmaDocumento
+    private function persistir(PedidoBma $pedido, UploadedFile $archivo, int $orden, bool $deLaPieza): PedidoBmaDocumento
     {
         $ruta = $archivo->store("pedidos_bma/complemento_nacional/{$pedido->id}", 'public');
         if (! is_string($ruta) || $ruta === '') {
@@ -247,16 +244,14 @@ class RegistrarComplementoNacional
         }
 
         return $pedido->documentos()->create([
-            'tipo' => $revision
-                ? PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION
-                : PedidoBmaDocumento::TIPO_ANEXO_PIEZAS,
+            'tipo' => $deLaPieza ? PedidoBmaDocumento::TIPO_ANEXO_PIEZAS : PedidoBmaDocumento::TIPO_PDF_PEDIDO,
             'ruta_archivo' => $ruta,
             'nombre_original' => $archivo->getClientOriginalName(),
             'mime_type' => $archivo->getMimeType(),
             'tamano_bytes' => $archivo->getSize(),
             'orden' => $orden,
-            'relacion_tipo' => $revision ? PedidoBmaDocumento::RELACION_REVISION_PRODUCTO : null,
-            'relacion_id' => $revision?->id,
+            'relacion_tipo' => $deLaPieza ? CapturaNacional::RELACION_PIEZA_SOLICITADA : null,
+            'activo' => true,
         ]);
     }
 }

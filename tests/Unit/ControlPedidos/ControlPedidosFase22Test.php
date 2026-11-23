@@ -18,6 +18,7 @@ use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Tests\TestCase;
@@ -95,9 +96,16 @@ class ControlPedidosFase22Test extends TestCase
             'catalogo_paqueteria_id' => null,
         ]);
 
+        // Desde el 15-oct un pedido de mostrador exige bultos con evidencia al empacar (EmpaqueBultosCedisTest).
+        $bultos = [$pedido->id => [[
+            'foto_bulto' => UploadedFile::fake()->image('bulto.jpg'),
+            'foto_ticket' => UploadedFile::fake()->image('ticket.jpg'),
+        ]]];
+
         $actualizado = app(MarcarEmpacadoPedidoBmaService::class)->ejecutar(
             $pedido->fresh(['paqueteria', 'origen']),
-            $this->usuario->id
+            $this->usuario->id,
+            $bultos
         );
 
         $this->assertSame(
