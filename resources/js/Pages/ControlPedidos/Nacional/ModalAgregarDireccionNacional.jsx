@@ -18,6 +18,18 @@ export default function ModalAgregarDireccionNacional({ abierto, onClose, pedido
     const [error, setError] = useState('');
     const cierre = useRef(null);
 
+    // Devuelve el foco a quien abrió el modal y permite cerrarlo con Escape.
+    useEffect(() => {
+        if (!abierto) return undefined;
+        const abridor = document.activeElement;
+        const alTeclear = (evento) => { if (evento.key === 'Escape') onClose?.(); };
+        document.addEventListener('keydown', alTeclear);
+        return () => {
+            document.removeEventListener('keydown', alTeclear);
+            if (abridor && typeof abridor.focus === 'function') abridor.focus();
+        };
+    }, [abierto, onClose]);
+
     useEffect(() => {
         if (abierto) {
             setCampos({ ...CAMPOS_DIRECCION_VACIOS });

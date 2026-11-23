@@ -1,4 +1,5 @@
 import React from 'react';
+import EtiquetaAnexo from './EtiquetaAnexo';
 
 export default function EncabezadoFolioPedido({ pedido, size = 'md', className = '', mostrarInterno = true, etiquetaPrincipal = null, internoCompacto = false }) {
     const folioRemision = pedido?.folio_remision || '—';
@@ -18,6 +19,7 @@ export default function EncabezadoFolioPedido({ pedido, size = 'md', className =
                     {internoCompacto ? folioInterno : `Folio interno GELIA (generado por el sistema): ${folioInterno}`}
                 </p>
             )}
+            <EtiquetaAnexo pedido={pedido} className="mt-1" />
         </div>
     );
 }

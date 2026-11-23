@@ -992,6 +992,67 @@ class PedidoBmaController extends Controller
         ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($resultado['pedido'])));
     }
 
+    /** Anexo extraordinario: minipedido nacional relacionado con su propia mini consulta a CEDIS. */
+    public function anexoExtraordinario(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\RegistrarComplementoNacional $registrar,
+        SolicitarPesajePedidoBmaService $solicitar,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'solicitud_id' => ['required', 'uuid'],
+            'revision_esperada' => ['required', 'integer', 'min:0'],
+            'base_captura' => ['required', 'string', 'size:64'],
+            'folio_wizerp' => ['required', 'string', 'max:60'],
+            'total_mercancia_nueva' => ['required', 'numeric', 'gt:0'],
+            'nota' => ['nullable', 'string', 'max:500'],
+            'documento' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png,webp'],
+            'piezas' => ['required', 'array', 'min:1', 'max:20'],
+            'piezas.*.sku' => ['nullable', 'string', 'max:80'],
+            'piezas.*.descripcion' => ['required', 'string', 'max:180'],
+            'piezas.*.cantidad' => ['required', 'integer', 'min:1'],
+            'piezas.*.evidencia' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp'],
+        ]);
+        foreach (array_keys($datos['piezas']) as $indice) {
+            $archivoPieza = $request->file('piezas.'.$indice.'.evidencia');
+            if ($archivoPieza) {
+                $datos['piezas'][$indice]['evidencia'] = $archivoPieza;
+            }
+        }
+
+        try {
+            $anexo = $registrar->ejecutar($pedidoBma, Auth::user(), $datos, [$request->file('documento')]);
+        } catch (\App\Exceptions\ControlPedidos\ConflictoCapturaPedido $e) {
+            throw $e;
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        try {
+            if (! $anexo->pesaje_solicitado_at) {
+                $anexo = $solicitar->ejecutar($anexo->load(['estatus', 'origen']), Auth::id());
+            }
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'El anexo quedó guardado en borrador, pero no se pudo enviar su consulta: '.$e->getMessage(),
+                'anexo' => ['id' => $anexo->id, 'folio' => $anexo->folio],
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'anexo' => [
+                'id' => $anexo->id,
+                'folio' => $anexo->folio,
+                'folio_principal' => $pedidoBma->folio,
+                'estatus_fase' => $anexo->fresh('estatus')->estatus?->fase_ciclo,
+            ],
+        ]);
+    }
+
     public function paqueteriaNacional(
         Request $request,
         PedidoBma $pedidoBma,

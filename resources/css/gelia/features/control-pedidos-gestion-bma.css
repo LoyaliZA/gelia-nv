@@ -1962,3 +1962,34 @@
     /* El aviso informativo no repite lo que ya dice el título cuando hay botón de envío; los errores siguen visibles. */
     .gelia-preparacion-modal .gelia-preparacion-footer .gelia-cedis-alerta[data-error='false']:has(+ button) { display: none; }
 }
+
+/* Resumen del pesaje de CEDIS en la consulta nacional: una celda por dato. */
+.nacional-pesaje-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+}
+.nacional-pesaje-dato {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--color-info) 6%, var(--theme-surface-solid));
+}
+.nacional-pesaje-dato dt {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--theme-text-muted);
+}
+.nacional-pesaje-dato dd {
+    margin: 0.125rem 0 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--theme-text-main);
+    font-variant-numeric: tabular-nums;
+}
