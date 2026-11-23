@@ -109,12 +109,21 @@ class SolicitudMunicipalController extends Controller
         VisibilidadPedidoBma::assertPuedeConsultar($request->user(), $pedidoBma);
         $datos = $request->validate([
             'origen_id' => ['required', 'integer'],
-            'mecanismo' => ['required', 'in:custodia_cedis,custodia_local,resguardo_envio'],
+            'mecanismo' => ['nullable', 'in:custodia_cedis,custodia_local,resguardo_envio'],
         ]);
         $origen = PedidoBma::query()->findOrFail((int) $datos['origen_id']);
         abort_unless((int) $origen->cliente_id === (int) $pedidoBma->cliente_id, 404);
+        // Sin elección explícita se decide por dónde está la mercancía: en CEDIS se confirma allí; en custodia de sucursal se traslada a CEDIS.
+        $mecanismo = $datos['mecanismo'] ?? null;
+        if ($mecanismo === null) {
+            $posibles = $this->mecanismosDisponibles($origen);
+            if ($posibles === []) {
+                return response()->json(['message' => 'Esa remisión está en traslado. Podrá anexarla cuando CEDIS la reciba.'], 422);
+            }
+            $mecanismo = in_array(PoliticaResguardoEnvio::MECANISMO_CEDIS, $posibles, true) ? PoliticaResguardoEnvio::MECANISMO_CEDIS : $posibles[0];
+        }
         try {
-            $pedido = $servicio->ejecutar($pedidoBma, $origen, $request->user(), $datos['mecanismo']);
+            $pedido = $servicio->ejecutar($pedidoBma, $origen, $request->user(), $mecanismo);
         } catch (\RuntimeException|\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }

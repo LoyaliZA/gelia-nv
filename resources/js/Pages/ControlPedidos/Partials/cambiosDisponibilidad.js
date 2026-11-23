@@ -52,8 +52,8 @@ function anexoPendienteRevision(anexo) {
     return !['disponible', 'con_detalle', 'rechazado'].includes(anexo.estado);
 }
 
-export function anexosPendientesRevision(solicitud = {}) {
-    return (solicitud.anexo_sin_remision || []).some(anexoPendienteRevision);
+export function anexosPendientesRevision(solicitud) {
+    return (solicitud?.anexo_sin_remision || []).some(anexoPendienteRevision);
 }
 
 /** Revisiones guardadas por unidad en un anexo aún sin responder: avance del ciclo en curso, no de la respuesta enviada. */

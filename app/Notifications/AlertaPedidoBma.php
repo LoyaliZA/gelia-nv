@@ -79,6 +79,8 @@ class AlertaPedidoBma extends Notification implements ShouldBroadcast, ShouldQue
         'pedido_preparacion_tienda_lista_traslado' => 'Lista para traslado a CEDIS',
         'pedido_preparacion_tienda_en_traslado' => 'Mercancía en traslado a CEDIS',
         'pedido_preparacion_tienda_recibida_cedis' => 'CEDIS recibió traslado de Tienda',
+        'pedido_remision_anexada_cedis' => 'Remisión anexada por confirmar en CEDIS',
+        'pedido_remision_anexada_traslado' => 'Remisión en custodia por trasladar a CEDIS',
         'pedido_preparacion_tienda_rechazada_cedis' => 'CEDIS rechazó traslado de Tienda',
     ];
 

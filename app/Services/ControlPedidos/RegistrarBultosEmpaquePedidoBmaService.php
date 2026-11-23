@@ -33,13 +33,17 @@ class RegistrarBultosEmpaquePedidoBmaService
         foreach (array_values($bultos) as $idx => $fila) {
             $fotoBulto = $fila['foto_bulto'] ?? null;
             $fotoTicket = $fila['foto_ticket'] ?? null;
-
-            if (! $fotoBulto instanceof UploadedFile || ! $fotoBulto->isValid()) {
-                throw new \InvalidArgumentException('Cada bulto debe incluir foto del bulto.');
+            $usarRemisionPdf = ! empty($fila['usar_remision_pdf']);
+            if ($usarRemisionPdf && ! $fotoTicket instanceof UploadedFile && ! $pedido->tieneRemision()) {
+                throw new \InvalidArgumentException('El pedido no tiene remisión en PDF adjunta. Tome la foto de la remisión.');
             }
 
-            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
-                throw new \InvalidArgumentException('Cada bulto debe incluir foto del ticket.');
+            if (! $fotoBulto instanceof UploadedFile || ! $fotoBulto->isValid()) {
+                throw new \InvalidArgumentException('Cada empaque debe incluir foto del pedido.');
+            }
+
+            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! $usarRemisionPdf && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
+                throw new \InvalidArgumentException('Cada empaque debe incluir foto de la remisión.');
             }
 
             $bulto = PedidoBmaBultoEmpaque::query()->create([
@@ -52,12 +56,36 @@ class RegistrarBultosEmpaquePedidoBmaService
             $this->guardarDocumento($pedido, $bulto, PedidoBmaDocumento::TIPO_EVIDENCIA_BULTO_EMPAQUE, $fotoBulto, $ordenDoc++);
             if ($fotoTicket instanceof UploadedFile) {
                 $this->guardarDocumento($pedido, $bulto, PedidoBmaDocumento::TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE, $fotoTicket, $ordenDoc++);
+            } elseif ($usarRemisionPdf) {
+                $this->copiarRemisionPrincipal($pedido, $bulto, $ordenDoc++);
             }
         }
 
         $pedido->update(['numero_cajas' => count($bultos)]);
 
         return $pedido->fresh(['bultosEmpaque.documentos', 'documentos', 'origen', 'sucursalDestino']);
+    }
+
+    /** La remisión principal ya adjunta al pedido (PDF) sirve de evidencia; se copia el archivo para no compartir su ruta. */
+    private function copiarRemisionPrincipal(PedidoBma $pedido, PedidoBmaBultoEmpaque $bulto, int $orden): void
+    {
+        $remision = $pedido->remision()->first();
+        if (! $remision || ! Storage::disk('public')->exists($remision->ruta_archivo)) {
+            throw new \InvalidArgumentException('No se encontró el archivo de la remisión principal. Tome la foto de la remisión.');
+        }
+        $extension = pathinfo($remision->ruta_archivo, PATHINFO_EXTENSION) ?: 'pdf';
+        $ruta = "pedidos_bma/bultos_empaque/{$pedido->id}/remision-principal-{$bulto->id}.{$extension}";
+        Storage::disk('public')->copy($remision->ruta_archivo, $ruta);
+        $pedido->documentos()->create([
+            'tipo' => PedidoBmaDocumento::TIPO_EVIDENCIA_TICKET_BULTO_EMPAQUE,
+            'ruta_archivo' => $ruta,
+            'nombre_original' => $remision->nombre_original ?: 'remision-principal.pdf',
+            'mime_type' => $remision->mime_type,
+            'tamano_bytes' => $remision->tamano_bytes,
+            'orden' => $orden,
+            'relacion_tipo' => PedidoBmaDocumento::RELACION_BULTO_EMPAQUE,
+            'relacion_id' => $bulto->id,
+        ]);
     }
 
     private function guardarDocumento(

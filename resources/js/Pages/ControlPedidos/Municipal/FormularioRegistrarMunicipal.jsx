@@ -4,13 +4,14 @@ import { MapPin, UserRound, Coins, FileText, Save, Send, RefreshCw, PauseCircle 
 import SeccionPagosExhibicion from '../Partials/SeccionPagosExhibicion';
 import InputMoneda from '../Partials/InputMoneda';
 import { GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
-import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
+import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../Partials/ModalVistaPreviaDocumento';
 import { terminalesMunicipales } from './terminalMunicipal';
 import { THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
 import ExpedienteConsignatario from './ExpedienteConsignatario';
 import SeguimientoSolicitudMunicipal from './SeguimientoSolicitudMunicipal';
 import EstadosResguardoMunicipal from './EstadosResguardoMunicipal';
 import RemisionesPagadasMunicipal from './RemisionesPagadasMunicipal';
+import SeccionPlegableMunicipal from './SeccionPlegableMunicipal';
 
 function contextoCierreConsulta(pedido) {
     return {
@@ -55,9 +56,10 @@ export default function FormularioRegistrarMunicipal({
     const [ajustePendiente, setAjustePendiente] = useState(false);
     const operacionRef = useRef(false);
     const [actual, setActual] = useState(pedido);
-    const [docPreview, setDocPreview] = useState(null);
+    const [visorEvidencia, setVisorEvidencia] = useState(null);
     const [cambios, setCambios] = useState(Boolean(Object.keys(borrador).length));
     const conversion = modo === 'conversion';
+    const evidenciasRespuesta = (actual.documentos || []).filter(doc => doc.tipo === 'evidencia_condicion');
     const enviada = !conversion && Boolean(actual.solicitud_preparacion?.consulta_municipal?.enviada_at);
     const bloqueado = conversion
         ? Boolean(actual.cancelado_at)
@@ -420,22 +422,21 @@ export default function FormularioRegistrarMunicipal({
                         <p className="text-xs theme-text-muted mt-3 mb-0">La leyenda corresponde al transporte; no acredita el pago del cliente.{costoModo === 'diferido' ? ' El costo queda pendiente de determinar.' : ''}</p>
                     </section>
                     </div>
-                    {(actual.documentos || []).filter(doc => doc.tipo === 'evidencia_condicion').length > 0 && <section className="registrar-tienda-panel">
+                    {evidenciasRespuesta.length > 0 && <section className="registrar-tienda-panel">
                         <div className="registrar-tienda-seccion-titulo"><FileText size={18} /><h3>Evidencias de la respuesta</h3></div>
-                        <div className="flex flex-wrap gap-2">{actual.documentos.filter(doc => doc.tipo === 'evidencia_condicion').map(doc => <button key={doc.id} type="button" className={GELIA_BTN_OUTLINE} onClick={() => setDocPreview(doc)}>{doc.nombre_original || 'Ver evidencia'}</button>)}</div>
+                        <div className="flex flex-wrap gap-3">{evidenciasRespuesta.map((doc, i) => <div key={doc.id} className="grid gap-1 justify-items-start"><MiniaturaDocumento documento={doc} onVer={() => setVisorEvidencia(i)} /><span className="text-xs theme-text-muted max-w-[5rem] truncate" title={doc.nombre_original}>{doc.nombre_original}</span></div>)}</div>
                     </section>}
                     {enviada && <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando || ocupado} onClick={() => refrescar().catch(() => setAviso('No se pudo actualizar la consulta.'))}><RefreshCw size={16} />Actualizar respuesta</button>}
                     {!conversion && <SeguimientoSolicitudMunicipal pedido={actual} onCerrar={cerrarConsulta} onReabrir={reabrir} cerrando={guardando || ocupado} onPedidoActualizado={actualizar} onOcupado={setAjustePendiente} />}
                     {solicitudGuardada && !conversion && (
-                        <section className="registrar-tienda-panel">
-                            <div className="registrar-tienda-seccion-titulo"><PauseCircle size={18} /><h3>Resguardo de envío</h3></div>
+                        <SeccionPlegableMunicipal titulo="Activar resguardo del pedido" icono={PauseCircle} abiertaInicial={resguardoActivo} resumen={resguardoActivo ? 'Activo' : null}>
                             <fieldset disabled={guardando || ocupado || enRevision || resguardoEstado === 'guardando'} aria-busy={resguardoEstado === 'guardando'} className="grid gap-4 min-w-0">
                                 <label className="flex items-start gap-3 text-sm theme-text-main">
                                     <input type="checkbox" className="mt-1 w-5 h-5" checked={resguardoActivo} onChange={(evento) => {
                                         setResguardoActivo(evento.target.checked);
                                         marcarResguardoSinGuardar();
                                     }} />
-                                    <span>Dejar en resguardo. La mercancía espera; no se despacha hasta que quien audita lo libere. No cierra la consulta.</span>
+                                    <span>Activar resguardo. La mercancía espera; no se despacha hasta que quien audita lo libere. No cierra la consulta.</span>
                                 </label>
                                 {resguardoActivo && (
                                     <>
@@ -465,6 +466,7 @@ export default function FormularioRegistrarMunicipal({
                                     </>
                                 )}
                             </fieldset>
+                            {(resguardoActivo || resguardoEstado !== 'guardado') && <>
                             <div className="flex flex-wrap items-center gap-3 mt-3">
                                 <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={guardando || ocupado || enRevision || resguardoEstado === 'guardando' || resguardoEstado === 'guardado' || (resguardoActivo && (!resguardoMotivo || (resguardoMotivo === 'fecha_posterior' && !resguardoFecha)))} onClick={guardarInstruccionResguardo}>
                                     {resguardoEstado === 'error' ? 'Reintentar guardado' : 'Guardar instrucción'}
@@ -476,7 +478,8 @@ export default function FormularioRegistrarMunicipal({
                             </div>
                             <div className="mt-3"><EstadosResguardoMunicipal estados={actual.resguardo_envio?.estados} /></div>
                             <p className="text-xs theme-text-muted mt-3 mb-0">El transporte pendiente o diferido no cuenta como pagado. Un crédito de Wizerp no habilita este resguardo.</p>
-                        </section>
+                            </>}
+                        </SeccionPlegableMunicipal>
                     )}
                     {solicitudGuardada && !conversion && (
                         <RemisionesPagadasMunicipal pedido={actual} ocupado={guardando || ocupado} onPedidoActualizado={actualizar} onAviso={setAviso} />
@@ -507,7 +510,7 @@ export default function FormularioRegistrarMunicipal({
                             />
                         </section>
                     )}
-                    <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
+                    <ModalVistaPreviaDocumento abierto={visorEvidencia !== null} documentos={evidenciasRespuesta} indice={visorEvidencia ?? 0} onChangeIndice={setVisorEvidencia} onClose={() => setVisorEvidencia(null)} />
                 </>;
     const pie = <>
 

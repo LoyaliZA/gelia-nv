@@ -24,6 +24,29 @@
         })();
     </script>
 
+    <script>
+        // Tras una actualización, la vista entra desde blanco y se aclara hacia GELIA sin parpadeo.
+        (function () {
+            try {
+                if (sessionStorage.getItem('gelia-actualizado') !== '1') return;
+                sessionStorage.removeItem('gelia-actualizado');
+                var s = document.createElement('style');
+                s.textContent = '#gelia-retorno{position:fixed;inset:0;z-index:2147483647;background:#fff;pointer-events:none;opacity:1;transition:opacity .7s ease-out}#gelia-retorno.fuera{opacity:0}@media (prefers-reduced-motion:reduce){#gelia-retorno{transition-duration:.2s}}';
+                document.head.appendChild(s);
+                var d = document.createElement('div');
+                d.id = 'gelia-retorno';
+                d.setAttribute('aria-hidden', 'true');
+                document.documentElement.appendChild(d);
+                window.addEventListener('load', function () {
+                    setTimeout(function () {
+                        d.className = 'fuera';
+                        setTimeout(function () { d.remove(); s.remove(); }, 900);
+                    }, 150);
+                });
+            } catch (e) {}
+        })();
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" id="dynamic-favicon">
     <link rel="apple-touch-icon" href="/favicon-192.png">
     <link rel="manifest" href="/manifest.json">

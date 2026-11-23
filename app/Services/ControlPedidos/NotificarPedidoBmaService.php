@@ -24,8 +24,9 @@ class NotificarPedidoBmaService
         bool $incluirVendedora = true,
         array $extras = [],
         bool $incluirGerentes = false,
+        ?int $sucursalId = null,
     ): void {
-        $enviar = function () use ($pedido, $tipoAlerta, $mensaje, $permisos, $excluirUsuarioId, $incluirVendedora, $extras, $incluirGerentes) {
+        $enviar = function () use ($pedido, $tipoAlerta, $mensaje, $permisos, $excluirUsuarioId, $incluirVendedora, $extras, $incluirGerentes, $sucursalId) {
             try {
                 $destinatarios = $this->resolverDestinatarios(
                     $pedido,
@@ -34,6 +35,10 @@ class NotificarPedidoBmaService
                     $incluirVendedora,
                     $incluirGerentes
                 );
+                // Aviso dirigido a una sucursal: solo quien opera ahí y no el resto del área con el permiso.
+                if ($sucursalId) {
+                    $destinatarios = $destinatarios->filter(fn (User $u) => $u->idsSucursalesOperables()->contains($sucursalId))->values();
+                }
                 if ($destinatarios->isEmpty()) {
                     return;
                 }

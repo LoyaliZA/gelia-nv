@@ -316,6 +316,7 @@ return [
     'saldos_favor.ver',
     'sistema.auditorias.accesos.ver',
     'sistema.auditorias.ver',
+    'sistema.pruebas_componentes.ver',
     'solicitudes.cancelar',
     'solicitudes.confirmar_cambio_lista',
     'solicitudes.confirmar_pago',

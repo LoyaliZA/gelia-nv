@@ -4,12 +4,15 @@ import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_SELECT, THEME_LABEL, GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
 
 export function IndicadoresOperacion({ opciones, activo, onCambiar, label }) {
-    return <div className={`grid grid-cols-2 ${opciones.length === 5 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-2`} role="group" aria-label={label}>
+    // Teléfono: fichas en línea (etiqueta + conteo) que ocupan dos filas como máximo.
+    // sm en adelante: recuadros con icono y conteo destacado.
+    const cinco = opciones.length === 5;
+    return <div className={`grid gap-1.5 sm:gap-2 ${cinco ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`} role="group" aria-label={label}>
         {opciones.map(({ id, label: texto, valor, icon: Icon }, indice) => <button key={id} type="button" aria-pressed={activo === id} onClick={() => onCambiar(id)}
-            className={`min-w-0 min-h-[72px] rounded-xl border p-3 aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)] text-left theme-surface-solid theme-no-blur ${opciones.length === 5 && indice === 0 ? 'col-span-2 sm:col-span-1' : ''}`}
+            className={`${cinco && indice === 4 ? 'col-span-2' : ''} sm:col-span-1 min-w-0 inline-flex items-center justify-between gap-2 min-h-[44px] rounded-xl border px-2.5 text-left aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)] theme-surface-solid theme-no-blur sm:flex sm:flex-col sm:items-stretch sm:justify-start sm:gap-0 sm:min-h-[72px] sm:p-3`}
             style={{ borderColor: activo === id ? 'var(--color-primario)' : 'var(--theme-border)', background: activo === id ? 'color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid))' : undefined }}>
-            <span className="flex items-center justify-between gap-2"><Icon className="w-4 h-4 shrink-0 theme-text-primario" aria-hidden="true" /><span className="text-xl font-bold tabular-nums theme-text-main">{valor ?? 0}</span></span>
-            <span className={`block mt-1 text-xs leading-snug ${activo === id ? 'theme-text-main font-bold' : 'theme-text-muted font-semibold'}`}>{texto}</span>
+            <span className="order-2 flex items-center justify-between gap-2 sm:order-none"><Icon className="hidden sm:block w-4 h-4 shrink-0 theme-text-primario" aria-hidden="true" /><span className="text-sm sm:text-xl font-bold tabular-nums theme-text-main">{valor ?? 0}</span></span>
+            <span className={`order-1 sm:order-none block sm:mt-1 text-xs leading-snug ${activo === id ? 'theme-text-main font-bold' : 'theme-text-muted font-semibold'}`}>{texto}</span>
         </button>)}
     </div>;
 }
@@ -17,20 +20,20 @@ export function IndicadoresOperacion({ opciones, activo, onCambiar, label }) {
 export default function FiltrosBandejaOperativa({ id, valores, onCambiar, onLimpiar, onActualizar, buscando = false, fechaHoy }) {
     const hoy = fechaHoy || new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
     const esHoy = valores.desde === hoy && valores.hasta === hoy;
-    return <div className="space-y-3">
+    return <div className="space-y-2 sm:space-y-3">
         <div className="flex gap-2 items-end">
             <div className="min-w-0 flex-1"><label className={THEME_LABEL} htmlFor={`${id}-buscar`}>Buscar pedido</label>
                 <CampoBusqueda id={`${id}-buscar`} wrapperClassName="relative mt-1" type="search" value={valores.q} onChange={e => onCambiar({ q: e.target.value }, true)} placeholder="Folio o cliente…" className={`${THEME_INPUT} w-full min-h-[44px] text-sm`} />
             </div>
             <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] shrink-0`} aria-label="Actualizar pedidos" disabled={buscando} onClick={onActualizar}><RefreshCw className={`w-4 h-4 ${buscando ? 'animate-spin' : ''}`} aria-hidden /></button>
         </div>
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Accesos de fecha">
-            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={esHoy} onClick={() => onCambiar({ desde: hoy, hasta: hoy })}><CalendarDays className="w-4 h-4" aria-hidden />Hoy</button>
-            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={!valores.desde && !valores.hasta} onClick={() => onCambiar({ desde: '', hasta: '' })}>Todas las fechas</button>
-            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={!valores.desde && !valores.hasta && valores.orden === 'antiguos'} onClick={() => onCambiar({ desde: '', hasta: '', orden: 'antiguos' })}><ArrowDownUp className="w-4 h-4" aria-hidden />Más antiguos</button>
+        <div className="grid grid-cols-[auto_1fr_1fr] sm:flex sm:flex-wrap items-center gap-2" role="group" aria-label="Accesos de fecha">
+            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] px-2.5 sm:px-4 text-xs sm:text-sm aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={esHoy} onClick={() => onCambiar({ desde: hoy, hasta: hoy })}><CalendarDays className="hidden sm:block w-4 h-4" aria-hidden />Hoy</button>
+            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] px-2.5 sm:px-4 text-xs sm:text-sm aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={!valores.desde && !valores.hasta} onClick={() => onCambiar({ desde: '', hasta: '' })}>Todas las fechas</button>
+            <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] px-2.5 sm:px-4 text-xs sm:text-sm aria-pressed:ring-1 aria-pressed:ring-[var(--color-primario)]`} aria-pressed={!valores.desde && !valores.hasta && valores.orden === 'antiguos'} onClick={() => onCambiar({ desde: '', hasta: '', orden: 'antiguos' })}><ArrowDownUp className="hidden sm:block w-4 h-4" aria-hidden />Más antiguos</button>
         </div>
         <details className="border-t theme-border pt-2">
-            <summary className="min-h-[44px] cursor-pointer text-sm font-semibold theme-text-main py-3">Fechas, vendedora y orden{(valores.desde || valores.hasta || valores.vendedora || valores.orden === 'recientes') ? ' · Filtros activos' : ''}</summary>
+            <summary className="min-h-[44px] cursor-pointer text-sm font-semibold theme-text-main py-2.5 sm:py-3">Fechas, vendedora y orden{(valores.desde || valores.hasta || valores.vendedora || valores.orden === 'recientes') ? ' · Filtros activos' : ''}</summary>
             <div className="space-y-3 pt-2">
             <div className="min-w-0"><label className={THEME_LABEL} htmlFor={`${id}-vendedora`}><span className="flex items-center gap-1.5"><UserRound className="w-3.5 h-3.5" aria-hidden />Vendedora</span></label>
                 <input id={`${id}-vendedora`} type="search" value={valores.vendedora} onChange={e => onCambiar({ vendedora: e.target.value }, true)} placeholder="Nombre de la vendedora…" className={`${THEME_INPUT} mt-1 w-full min-h-[44px] text-sm`} />
@@ -42,6 +45,6 @@ export default function FiltrosBandejaOperativa({ id, valores, onCambiar, onLimp
                 <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={onLimpiar}>Limpiar filtros</button>
             </div>
         </details>
-        <p className="text-xs theme-text-muted m-0">Jerarquía de atención vigente; fecha de solicitud dentro de cada prioridad.</p>
+        <p className="hidden sm:block text-xs theme-text-muted m-0">Jerarquía de atención vigente; fecha de solicitud dentro de cada prioridad.</p>
     </div>;
 }

@@ -1,5 +1,6 @@
 /* Aviso de versión y capa de actualización.
-   El pulso ilumina el borde; el texto no pierde opacidad. */
+   El pulso ilumina el borde; el texto no pierde opacidad.
+   La capa solo anima transform y opacity; termina en un destello blanco que oculta la recarga. */
 
 @keyframes gelia-aviso-version-pulso {
     0%, 100% {
@@ -19,31 +20,14 @@
     animation: gelia-aviso-version-pulso 1.6s cubic-bezier(0.77, 0, 0.175, 1) infinite;
 }
 
-.gelia-actualizacion-halo {
-    position: absolute;
-    top: 42%;
-    left: 50%;
-    width: 18rem;
-    height: 18rem;
-    transform: translate(-50%, -50%);
-    border-radius: 9999px;
-    background: radial-gradient(
-        circle,
-        color-mix(in srgb, var(--color-primario) 32%, transparent) 0%,
-        transparent 70%
-    );
-    pointer-events: none;
+@keyframes gelia-aviso-mini-entra {
+    from { opacity: 0; transform: translateX(1.25rem) scale(0.7); }
+    to { opacity: 1; transform: none; }
 }
 
-@keyframes gelia-engranaje-giro {
-    to { transform: rotate(360deg); }
-}
-
-.gelia-engranaje {
-    display: inline-flex;
-    color: var(--theme-text-main);
-    transform-origin: center;
-    transform-box: fill-box;
+.gelia-aviso-version--mini {
+    animation: gelia-aviso-mini-entra 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    box-shadow: 0 0 14px 1px color-mix(in srgb, var(--color-primario) 45%, transparent);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -52,22 +36,318 @@
     }
 }
 
-.gelia-engranaje--horario {
-    animation: gelia-engranaje-giro 2.4s linear infinite;
+/* Pantalla de actualización */
+.gelia-actualizacion {
+    animation: gelia-act-entra 0.5s ease-out both;
 }
 
-.gelia-engranaje--antihorario {
-    animation: gelia-engranaje-giro 3.6s linear infinite reverse;
+@keyframes gelia-act-entra {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.gelia-actualizacion-halo {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    width: 26rem;
+    height: 26rem;
+    max-width: 120vw;
+    margin: -13rem 0 0 -13rem;
+    border-radius: 9999px;
+    background: radial-gradient(
+        circle,
+        color-mix(in srgb, var(--color-primario) 34%, transparent) 0%,
+        transparent 68%
+    );
+    pointer-events: none;
+    animation: gelia-act-halo 3s ease-in-out infinite;
+}
+
+@keyframes gelia-act-halo {
+    0%, 100% { opacity: 0.55; transform: scale(0.85); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+.gelia-actualizacion-orbita {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 12rem;
+    height: 12rem;
+}
+
+.gelia-actualizacion-anillo {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 40%, transparent);
+    animation: gelia-act-giro 6s linear infinite;
+}
+
+.gelia-actualizacion-anillo--1 { inset: 0; }
+.gelia-actualizacion-anillo--2 { inset: 1.5rem; animation-duration: 4.2s; animation-direction: reverse; border-style: dashed; }
+.gelia-actualizacion-anillo--3 { inset: 3rem; animation-duration: 3s; }
+
+.gelia-actualizacion-punto {
+    position: absolute;
+    top: -0.25rem;
+    left: 50%;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: -0.25rem;
+    border-radius: 9999px;
+    background: var(--color-primario);
+    box-shadow: 0 0 10px 2px color-mix(in srgb, var(--color-primario) 70%, transparent);
+}
+
+.gelia-actualizacion-particulas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* Logo: se deshace, gira en torbellino y se reúne (13–88 % del tiempo); luego el zoom al centro (88–100 %). */
+.gelia-actualizacion-logo {
+    overflow: visible;
+}
+
+.gelia-actualizacion-logo {
+    animation: gelia-act-logo var(--gelia-act-total) linear both;
+}
+
+/* Entre 13 % y 88 % los triángulos viajan en el lienzo 3D; el SVG solo muestra el logo reunido. */
+@keyframes gelia-act-logo {
+    0%, 12.9% { opacity: 1; }
+    13%, 87.9% { opacity: 0; }
+    88%, 100% { opacity: 1; }
+}
+
+.gelia-actualizacion-brillo {
+    position: absolute;
+    inset: 2rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle, color-mix(in srgb, var(--color-primario) 70%, transparent) 0%, transparent 70%);
+    opacity: 0;
+    animation: gelia-act-brillo var(--gelia-act-total) ease-out both;
+}
+
+@keyframes gelia-act-brillo {
+    0%, 70% { opacity: 0; transform: scale(0.6); }
+    88% { opacity: 1; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1.3); }
+}
+
+.gelia-actualizacion-orbita {
+    animation: gelia-act-zoom var(--gelia-act-total) linear both;
+}
+
+@keyframes gelia-act-zoom {
+    0%, 88% { transform: scale(1); animation-timing-function: cubic-bezier(0.7, 0, 1, 0.6); }
+    100% { transform: scale(45); }
+}
+
+@keyframes gelia-act-giro {
+    to { transform: rotate(360deg); }
+}
+
+.gelia-actualizacion-barra {
+    width: 100%;
+    height: 0.25rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--color-primario) 18%, transparent);
+}
+
+.gelia-actualizacion-barra-relleno {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--color-primario);
+    transform-origin: left center;
+    transform: scaleX(0);
+    will-change: transform;
+}
+
+.gelia-actualizacion-texto {
+    isolation: isolate;
+}
+
+/* Difuminado detrás del texto: desenfoque real con borde en degradé (máscara), sin límite visible.
+   Decisión del usuario; el perfil UX prohíbe backdrop-filter en paneles, pero aquí no hay caja ni borde. */
+.gelia-actualizacion-texto::before {
+    content: '';
+    position: absolute;
+    inset: -5rem -7rem;
+    z-index: -1;
+    background: color-mix(in srgb, var(--bg-app) 38%, transparent);
+    -webkit-backdrop-filter: blur(9px);
+    backdrop-filter: blur(9px);
+    -webkit-mask-image: radial-gradient(ellipse closest-side at center, #000 45%, transparent 100%);
+    mask-image: radial-gradient(ellipse closest-side at center, #000 45%, transparent 100%);
+    pointer-events: none;
+}
+
+.gelia-actualizacion-texto h2,
+.gelia-progreso-cifra,
+.gelia-progreso-etapa,
+.gelia-progreso-nota {
+    text-shadow: 0 1px 12px color-mix(in srgb, var(--bg-app) 85%, transparent);
+}
+
+.gelia-progreso {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.gelia-progreso-cifra {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 0.15rem;
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+    color: var(--theme-text-main);
+}
+
+.gelia-progreso-simbolo {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-primario);
+}
+
+.gelia-progreso-etapas {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-self: stretch;
+    max-width: 16rem;
+    margin-inline: auto;
+    width: 100%;
+}
+
+.gelia-progreso-etapa {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    text-align: left;
+    color: var(--theme-text-muted);
+    opacity: 0.55;
+    transition: opacity 0.35s ease-out, transform 0.35s ease-out;
+}
+
+.gelia-progreso-marca {
+    display: inline-flex;
+    width: 1.375rem;
+    height: 1.375rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1.5px solid color-mix(in srgb, var(--color-primario) 45%, transparent);
+    color: transparent;
+    transition: background-color 0.3s ease-out, color 0.3s ease-out, border-color 0.3s ease-out;
+}
+
+/* Etapa activa: texto pleno y punto que respira. Etapas hechas: marca rellena. */
+.gelia-progreso-etapas[data-etapa="0"] .gelia-progreso-etapa:nth-child(1),
+.gelia-progreso-etapas[data-etapa="1"] .gelia-progreso-etapa:nth-child(2),
+.gelia-progreso-etapas[data-etapa="2"] .gelia-progreso-etapa:nth-child(3) {
+    opacity: 1;
+    color: var(--theme-text-main);
+    font-weight: 600;
+}
+
+.gelia-progreso-etapas[data-etapa="0"] .gelia-progreso-etapa:nth-child(1) .gelia-progreso-marca,
+.gelia-progreso-etapas[data-etapa="1"] .gelia-progreso-etapa:nth-child(2) .gelia-progreso-marca,
+.gelia-progreso-etapas[data-etapa="2"] .gelia-progreso-etapa:nth-child(3) .gelia-progreso-marca {
+    border-color: var(--color-primario);
+    animation: gelia-act-marca 1.2s ease-in-out infinite;
+}
+
+.gelia-progreso-etapas[data-etapa="1"] .gelia-progreso-etapa:nth-child(1),
+.gelia-progreso-etapas[data-etapa="2"] .gelia-progreso-etapa:nth-child(-n+2) {
+    opacity: 0.8;
+}
+
+.gelia-progreso-etapas[data-etapa="1"] .gelia-progreso-etapa:nth-child(1) .gelia-progreso-marca,
+.gelia-progreso-etapas[data-etapa="2"] .gelia-progreso-etapa:nth-child(-n+2) .gelia-progreso-marca {
+    background: var(--color-primario);
+    border-color: var(--color-primario);
+    color: #fff;
+}
+
+@keyframes gelia-act-marca {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+.gelia-progreso-nota {
+    margin: 0.25rem 0 0;
+    max-width: 22rem;
+    text-wrap: pretty;
+    font-size: 0.8125rem;
+    font-style: italic;
+    color: var(--theme-text-muted);
+    animation: gelia-act-nota 0.6s ease-out both;
+}
+
+@keyframes gelia-act-nota {
+    from { opacity: 0; transform: translateY(0.375rem); }
+    to { opacity: 1; transform: none; }
+}
+
+/* Destello blanco: cubre la pantalla justo antes de recargar. */
+.gelia-actualizacion-destello {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: #fff;
+    opacity: 0;
+    pointer-events: none;
+    animation: gelia-act-destello var(--gelia-act-destello) cubic-bezier(0.55, 0, 0.9, 0.4) forwards;
+    animation-delay: calc(var(--gelia-act-total) - var(--gelia-act-destello));
+}
+
+@keyframes gelia-act-destello {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .gelia-aviso-version,
-    .gelia-engranaje--horario,
-    .gelia-engranaje--antihorario {
+    .gelia-aviso-version--mini,
+    .gelia-actualizacion-halo,
+    .gelia-actualizacion-anillo,
+    .gelia-actualizacion-logo,
+    .gelia-actualizacion-brillo,
+    .gelia-actualizacion-orbita {
         animation: none;
     }
 
     .gelia-aviso-version {
         box-shadow: 0 0 16px 2px color-mix(in srgb, var(--color-primario) 65%, transparent);
+    }
+
+    .gelia-progreso-marca,
+    .gelia-progreso-nota {
+        animation: none;
+    }
+
+    .gelia-actualizacion-destello {
+        animation-duration: 0.3s;
     }
 }

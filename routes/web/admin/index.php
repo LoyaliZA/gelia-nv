@@ -12,3 +12,4 @@ require __DIR__.'/personalizacion.php';
 require __DIR__.'/auditorias.php';
 require __DIR__.'/mapa-logistico.php';
 require __DIR__.'/api-externa.php';
+require __DIR__.'/pruebas-componentes.php';

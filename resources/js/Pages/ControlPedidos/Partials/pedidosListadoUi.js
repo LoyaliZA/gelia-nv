@@ -51,7 +51,9 @@ export function badgesListaPedido(pedido) {
         faseCiclo: fase,
         respondeTienda: Boolean(pedido.usa_preparacion_tienda),
     });
-    if (badgeEnvio) items.push({ key: 'envio', ...badgeEnvio });
+    // En un envío municipal el transporte diferido se regulariza en terminal: no es un pendiente de la vendedora.
+    const regularizacionMunicipal = municipal && pedido.estatus_envio === 'pendiente_regularizacion';
+    if (badgeEnvio && !regularizacionMunicipal) items.push({ key: 'envio', ...badgeEnvio });
 
     const badgeRevision = badgeAuditoriaRevision(pedido);
     if (badgeRevision) items.push({ key: 'revision', ...badgeRevision });

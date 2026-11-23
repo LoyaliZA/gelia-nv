@@ -254,6 +254,28 @@ final class PoliticaResguardoEnvio
         return null;
     }
 
+    /** Detalle legible de lo que impide salir al conjunto: qué remisión falta y quién la confirma. */
+    public static function detalleConjuntoPendiente(PedidoBma $pedido): ?string
+    {
+        if (! ConsultaMunicipal::es($pedido)) {
+            return null;
+        }
+        $faltan = [];
+        foreach (self::vinculos($pedido) as $vinculo) {
+            if ($vinculo['integrado']) {
+                continue;
+            }
+            $quien = match (true) {
+                in_array($vinculo['estado'], ['pendiente_traslado', 'en_traslado'], true) => 'está por trasladarse o en camino a CEDIS',
+                $vinculo['mecanismo'] === self::MECANISMO_LOCAL => 'la integra la sucursal donde está',
+                default => 'CEDIS debe confirmar su integración',
+            };
+            $faltan[] = 'remisión '.($vinculo['remision'] ?: $vinculo['folio'])." ({$quien})";
+        }
+
+        return $faltan === [] ? null : 'Faltan por integrar: '.implode('; ', $faltan).'.';
+    }
+
     public static function estadoConjunto(PedidoBma $pedido): string
     {
         if (self::motivoConjuntoIncompleto($pedido)) {

@@ -102,13 +102,13 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
     return (
         <article
             data-novedad={novedad?.tipo}
-            className={`${geliaCardClass()} gelia-tienda-op-tarjeta p-4 space-y-3 ${
+            className={`${geliaCardClass()} gelia-tienda-op-tarjeta p-4 space-y-2 sm:space-y-3 ${
                 ringAlerta ? 'ring-1 ring-[color-mix(in_srgb,var(--color-peligro)_35%,transparent)]' : ''
             }`}
         >
             {t.modalidad?.nombre && (
                 <p
-                    className="text-xs font-semibold text-center py-2 px-3 rounded-xl bg-[color-mix(in_srgb,var(--color-primario)_12%,transparent)] m-0 theme-text-primario"
+                    className="gelia-tienda-op-tarjeta-modalidad text-xs font-semibold text-center py-2 px-3 rounded-xl bg-[color-mix(in_srgb,var(--color-primario)_12%,transparent)] m-0 theme-text-primario"
                 >
                     {t.modalidad.nombre}
                 </p>
@@ -120,7 +120,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
                         {folio}
                     </p>
                     {compacto && t.modalidad?.nombre && (
-                        <p className="text-xs theme-text-muted font-medium m-0 mt-0.5 truncate">{t.modalidad.nombre}</p>
+                        <p className="hidden sm:block text-xs theme-text-muted font-medium m-0 mt-0.5 truncate">{t.modalidad.nombre}</p>
                     )}
                     {t.solicitada_at && (
                         <p className="text-xs theme-text-muted font-medium mt-1 m-0">
@@ -170,7 +170,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
             )}
 
             <div className="grid grid-cols-2 gap-2 text-xs font-medium theme-text-muted">
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                     <p className="text-[11px] font-semibold m-0 theme-text-muted">Cliente</p>
                     <p className="text-sm theme-text-main m-0 mt-0.5 normal-case truncate" title={t.pedido?.cliente_nombre}>
                         {t.pedido?.cliente_nombre || '—'}
@@ -188,7 +188,7 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
                         {t.piezas_solicitadas ?? t.pedido?.cantidad_piezas ?? 0}
                     </p>
                 </div>
-                <div>
+                <div className="hidden sm:block">
                     <p className="text-[11px] font-semibold m-0 theme-text-muted">Antigüedad</p>
                     <p className="text-sm theme-text-main m-0 mt-0.5 inline-flex items-center gap-1">
                         <Clock className="w-3 h-3" /> {fmtRelativo(t.solicitada_at)}

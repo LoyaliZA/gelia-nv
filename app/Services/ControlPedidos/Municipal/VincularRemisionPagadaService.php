@@ -7,6 +7,7 @@ use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaEnvioResguardo;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\User;
+use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Services\ControlPedidos\RetirarCustodiaParaEnvioService;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
@@ -33,6 +34,7 @@ class VincularRemisionPagadaService
         private RetirarCustodiaParaEnvioService $cedis,
         private RetirarCustodiaParaIntegracionLocalService $local,
         private RegistrarHistorialPedidoService $historial,
+        private NotificarPedidoBmaService $notificar,
     ) {}
 
     public function listar(PedidoBma $envio, string $q = ''): Collection
@@ -135,9 +137,46 @@ class VincularRemisionPagadaService
                 }
             }
             $this->invalidarContinuacionSiAplica($envio);
+            $this->avisarArea($envio, $origen, $mecanismo, $usuario);
 
             return $envio->fresh(['resguardosAnexados.resguardo', 'complementos']);
         });
+    }
+
+    /**
+     * Avisa al área que debe actuar: CEDIS confirma el anexo antes de empacar; si la mercancía está en custodia
+     * de una sucursal, quien prepara allí la traslada a CEDIS. La vendedora ya ve el estado en su pedido.
+     */
+    private function avisarArea(PedidoBma $envio, PedidoBma $origen, string $mecanismo, User $usuario): void
+    {
+        $remision = $origen->numero_remision ?: ($origen->folio_remision ?: $origen->folio);
+        if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_CEDIS) {
+            $sucursalId = PoliticaResguardoEnvio::sucursalCustodia($origen);
+            $this->notificar->ejecutar(
+                $origen,
+                'pedido_remision_anexada_traslado',
+                "La remisión {$remision} quedó anexada al envío {$envio->folio}. Trasládela de la sucursal a CEDIS para completar el pedido.",
+                ['control_pedidos.tienda.trasladar', 'pdv.resguardos.confirmar_custodia'],
+                $usuario->id,
+                false,
+                ['url' => '/control-pedidos/tienda'],
+                false,
+                $sucursalId ?: null,
+            );
+
+            return;
+        }
+        if ($mecanismo === PoliticaResguardoEnvio::MECANISMO_RESGUARDO) {
+            $this->notificar->ejecutar(
+                $envio,
+                'pedido_remision_anexada_cedis',
+                "Se anexó la remisión {$remision} al envío {$envio->folio}. Confirme su integración en CEDIS antes de empacar.",
+                ['control_pedidos.cedis'],
+                $usuario->id,
+                false,
+                ['url' => '/control-pedidos/cedis?q='.urlencode((string) ($envio->folio_remision ?: $envio->folio))]
+            );
+        }
     }
 
     public function desvincular(PedidoBma $envio, PedidoBma $origen, User $usuario): PedidoBma

@@ -72,6 +72,15 @@
     }
 
     .gelia-empaque-cabecera {
-        padding-top: max(1rem, env(safe-area-inset-top));
+        padding-block: max(0.5rem, env(safe-area-inset-top)) 0.5rem;
     }
+
+    .gelia-empaque-cabecera h2 { font-size: 1rem; }
+    .gelia-empaque-cuerpo { padding: 0.75rem; }
+    .gelia-empaque-pie { padding-block: 0.5rem; padding-bottom: max(0.5rem, env(safe-area-inset-bottom)); }
+
+    /* Zona de foto baja: el icono grande repite el del botón. */
+    .gelia-empaque-camara { min-height: 4.5rem; padding: 0.5rem; gap: 0.25rem; }
+    .gelia-empaque-camara > svg { display: none; }
+    .gelia-empaque-camara > img { height: 8rem; }
 }
