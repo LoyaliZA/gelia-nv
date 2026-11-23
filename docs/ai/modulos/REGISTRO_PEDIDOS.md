@@ -10,6 +10,7 @@
 - [verificado] Nacional selecciona la salida entre CEDIS habilitados del catálogo; preselecciona el único elegible, guarda `almacen_id` y bloquea cambios tras solicitar pesaje. Conserva el id guardado si deja de estar disponible: `FormularioRegistrarNacional.jsx`; pruebas de selección e integración junto al componente.
 - [verificado] Tienda, Municipal marcado y Nacional 2.0 (`captura_nacional=compartida`) comparten captura. Nacional histórico y el borrador legado siguen en el formulario anterior; abrirlos no escribe la marca: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:13`.
 - [verificado] Abrir/seleccionar modalidad sin captura significativa no debe crear borradores: `gestion-pedidos-docs/M01_CORTE_ETAPAS_1_2.md:13`.
+- [verificado] Nuevo pedido abre «Seleccionar modalidad» sin aviso de borrador; Tienda, municipal o nacional abre el formulario directamente con Modalidad preseleccionada. El borrador previo se conserva: `Index.jsx`, `Partials/ModalSeleccionarModalidad.jsx` y `Partials/FormularioRegistrarTienda.jsx`.
 - [verificado] La lectura del listado excluye borradores ajenos salvo alcance administrador: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:171`.
 
 ## Reglas que no se rompen
@@ -35,4 +36,4 @@
 - [verificado] Tras el cierre, la captura nacional permite cambiar la paquetería y registrar cotización con dirección verificada y flete de cada caja. `CambiarPaqueteriaNacional` aplica los importes con los servicios de costos existentes.
 - [verificado] El alta nacional ofrece PAQ. PENDIENTE y comerciales activas con logística, incluso si `requiere_peso` es falso. Ambos recorridos consultan peso en CEDIS: `FormularioRegistrarNacional` y `SolicitarPesajePedidoBmaService`.
 
-- Última verificación: 2026-11-21, árbol de trabajo sobre `c3e44924`; selector nacional comprobado con transporte simulado, sin commit.
+- Última verificación: 2026-11-23, árbol de trabajo sobre `1c0f841f`; entrada Nuevo pedido y tres modalidades comprobadas con transporte simulado, sin commit.

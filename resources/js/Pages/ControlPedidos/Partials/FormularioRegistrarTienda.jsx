@@ -274,6 +274,7 @@ export default function FormularioRegistrarTienda({
     onActualizar = null,
     intencion = 'alta',
     reservaConversion = null,
+    modalidadInicial = '',
 }) {
     const conversion = intencion === 'conversion';
     const conversionId = useId();
@@ -330,7 +331,9 @@ export default function FormularioRegistrarTienda({
     const [coincidencias, setCoincidencias] = useState([]);
     const [departamentoId, setDepartamentoId] = useState(departamentoInicial);
     const [folio, setFolio] = useState(pedido?.folio_remision || '');
-    const [modalidad, setModalidad] = useState(modalidadDe(solicitud));
+    const modalidadDeAlta = !pedidoInicial && !conversion
+        && OPCIONES_MODALIDAD.some(([valor]) => valor === modalidadInicial) ? modalidadInicial : '';
+    const [modalidad, setModalidad] = useState(() => modalidadDe(solicitud) || modalidadDeAlta);
     const [area, setArea] = useState(areaInicial);
     const [caso, setCaso] = useState(casoInicial);
     const [almacenId, setAlmacenId] = useState(almacenInicial);
@@ -380,7 +383,7 @@ export default function FormularioRegistrarTienda({
     const pedidoIdRef = useRef(pedido?.id || null);
     const baseRef = useRef(base);
     const datosRef = useRef({});
-    const deseadaRef = useRef(modalidadDe(solicitud));
+    const deseadaRef = useRef(modalidadDe(solicitud) || modalidadDeAlta);
     const colaRef = useRef(Promise.resolve());
     const suspenderRef = useRef(false);
     const cicloRef = useRef(0);
