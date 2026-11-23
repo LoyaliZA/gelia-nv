@@ -132,7 +132,7 @@ class AprobarPedidoBmaService
 
             $comentario = $pedido->es_resguardo
                 ? 'Pedido validado en resguardo. Visible en CEDIS; empaque bloqueado hasta liberar resguardo.'
-                : 'Pedido aprobado y enviado a Registro General.';
+                : 'Pedido aprobado y enviado a CEDIS.';
 
             $this->historialService->registrarTransicion(
                 $pedido->id,

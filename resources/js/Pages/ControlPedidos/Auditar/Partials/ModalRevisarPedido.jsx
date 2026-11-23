@@ -523,7 +523,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         },
         aprobar: {
             titulo: 'Aprobar pedido',
-            mensaje: '¿Aprobar y enviar este pedido a Registro General?',
+            mensaje: '¿Aprobar este pedido? Pasa a CEDIS y logística para continuar.',
             etiquetaConfirmar: 'Aprobar',
             variante: 'primary',
         },

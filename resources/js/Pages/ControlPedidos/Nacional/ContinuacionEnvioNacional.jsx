@@ -19,6 +19,10 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
     const clave = useRef(uuidSolicitud());
+    const avisoError = useRef(null);
+    useEffect(() => {
+        if (error) avisoError.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }, [error]);
     const fase = pedido.estatus?.fase_ciclo;
     const puedeEnviar = fasesCaptura.includes(fase);
     const mercanciaPagada = Boolean(pedido.mercancia_pagada || pedido.solicitud_preparacion?.pago_solo_mercancia_nacional);
@@ -42,6 +46,16 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
             .finally(() => { if (vigente) setCargandoDireccion(false); });
         return () => { vigente = false; };
     }, [pedido.cliente_id, puedeCotizar]);
+
+    const dinero = (valor) => `$${Number(valor || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fletesCaja = cajas.reduce((suma, caja) => suma + Number(caja.costo_envio || 0), 0);
+    const reexpedicion = Math.max(0, Number(pedido.costo_envio || 0) - fletesCaja);
+    const desglose = cotizada && !pendiente && Number(pedido.costo_envio) > 0 ? [
+        ['Mercancía', pedido.total_mercancia],
+        ['Flete', fletesCaja],
+        ['Reexpedición', reexpedicion],
+        ['Seguro', pedido.aplica_seguro ? pedido.costo_seguro : 0],
+    ] : [];
 
     const valorSeleccion = (campo) => seleccion[campo] ?? String(pedido[campo] || '');
     const direccionAgregada = (nueva) => {
@@ -99,51 +113,67 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
             <h3 className="m-0 text-base">{pendiente ? 'Pago de mercancía' : 'Cotización y pago'}</h3>
             {mercanciaPagada && <p className="m-0 text-sm" role="status">Mercancía pagada. Se conservan las exhibiciones verificadas.</p>}
             {puedeCotizar && (
-                <details className="space-y-3">
+                <details className="space-y-3" open={!cotizada || undefined}>
                     <summary className="cursor-pointer font-semibold min-h-[44px] py-2">{cotizada ? 'Revisar cotización' : 'Capturar cotización'}</summary>
-                    {[
-                        ['cliente_direccion_id', 'Dirección de entrega', direcciones, (item) => [item.etiqueta, item.nombre_destinatario, item.codigo_postal].filter(Boolean).join(' · ')],
-                        ['catalogo_tipo_guia_id', 'Tipo de guía', catalogos.tipos_guia || [], (item) => item.nombre],
-                        ['catalogo_zona_id', 'Reexpedición', catalogos.zonas || [], (item) => item.nombre],
-                    ].map(([campo, etiqueta, opciones, nombre]) => (
-                        <label className="block min-w-0 text-sm" key={campo}>
-                            {etiqueta}
-                            <select className={`${THEME_SELECT} mt-1 w-full min-h-[44px]`} value={valorSeleccion(campo)}
-                                onChange={(evento) => { setSeleccion({ ...seleccion, [campo]: evento.target.value }); setError(''); }}>
-                                <option value="">Elegir</option>
-                                {opciones.map((item) => <option key={item.id} value={item.id}>{nombre(item)}</option>)}
-                            </select>
-                        </label>
-                    ))}
-                    {cargandoDireccion && <p className="m-0 text-sm theme-text-muted" role="status">Cargando direcciones…</p>}
-                    {!cargandoDireccion && !errorDireccion && direcciones.length === 0 && (
-                        <p className="m-0 text-sm theme-text-muted">
-                            {puedeAgregarDireccion
-                                ? 'Este cliente no tiene direcciones verificadas. Agregue una para cotizar.'
-                                : 'Este cliente no tiene direcciones verificadas. Pida a un auxiliar con permiso de direcciones que la agregue y vuelva a abrir el pedido.'}
-                        </p>
-                    )}
-                    {puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
-                        <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
-                    )}
-                    {errorDireccion && <p className="m-0 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
-                    {cajas.map((caja, indice) => (
-                        <label className="block min-w-0 text-sm" key={caja.id}>
-                            Flete de caja {indice + 1}
-                            <input className={`${THEME_INPUT} mt-1 w-full min-h-[44px]`} type="number" min="0.01" step="0.01"
-                                value={fletes[caja.id] ?? (cotizada ? caja.costo_envio ?? '' : '')}
-                                onChange={(evento) => { setFletes({ ...fletes, [caja.id]: evento.target.value }); setError(''); }} />
-                        </label>
-                    ))}
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        {[
+                            ['cliente_direccion_id', 'Dirección de entrega', direcciones, (item) => [item.etiqueta, item.nombre_destinatario, item.codigo_postal].filter(Boolean).join(' · '), true],
+                            ['catalogo_tipo_guia_id', 'Tipo de guía', catalogos.tipos_guia || [], (item) => item.nombre, false],
+                            ['catalogo_zona_id', 'Reexpedición', catalogos.zonas || [], (item) => item.nombre, false],
+                        ].map(([campo, etiqueta, opciones, nombre, ancho]) => (
+                            <div className={`min-w-0 ${ancho ? 'sm:col-span-2' : ''}`} key={campo}>
+                                <label className="block min-w-0 text-sm">
+                                    {etiqueta}
+                                    <select className={`${THEME_SELECT} mt-1 w-full min-h-[44px]`} value={valorSeleccion(campo)}
+                                        onChange={(evento) => { setSeleccion({ ...seleccion, [campo]: evento.target.value }); setError(''); }}>
+                                        <option value="">Elegir</option>
+                                        {opciones.map((item) => <option key={item.id} value={item.id}>{nombre(item)}</option>)}
+                                    </select>
+                                </label>
+                                {ancho && cargandoDireccion && <p className="m-0 mt-2 text-sm theme-text-muted" role="status">Cargando direcciones…</p>}
+                                {ancho && !cargandoDireccion && !errorDireccion && direcciones.length === 0 && (
+                                    <p className="m-0 mt-2 text-sm theme-text-muted">
+                                        {puedeAgregarDireccion
+                                            ? 'Este cliente no tiene direcciones verificadas. Agregue una para cotizar.'
+                                            : 'Este cliente no tiene direcciones verificadas. Pida a un auxiliar con permiso de direcciones que la agregue y vuelva a abrir el pedido.'}
+                                    </p>
+                                )}
+                                {ancho && puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
+                                    <button type="button" className={`${GELIA_BTN_OUTLINE} mt-2 min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
+                                )}
+                                {ancho && errorDireccion && <p className="m-0 mt-2 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
+                            </div>
+                        ))}
+                        {cajas.map((caja, indice) => (
+                            <label className="block min-w-0 text-sm" key={caja.id}>
+                                Flete de caja {indice + 1} (MXN)
+                                <input className={`${THEME_INPUT} mt-1 w-full min-h-[44px]`} type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00"
+                                    value={fletes[caja.id] ?? (cotizada ? caja.costo_envio ?? '' : '')}
+                                    onChange={(evento) => { setFletes({ ...fletes, [caja.id]: evento.target.value }); setError(''); }} />
+                            </label>
+                        ))}
+                    </div>
                     <label className="flex min-h-[44px] items-center gap-2 text-sm">
                         <input type="checkbox" checked={seguro ?? Boolean(pedido.aplica_seguro)} onChange={(evento) => setSeguro(evento.target.checked)} />
                         Incluir seguro
                     </label>
-                    <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} disabled={ocupado} onClick={cotizar}>Guardar cotización</button>
+                    <button type="button" className={`${cotizada ? GELIA_BTN_OUTLINE : THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={cotizar}>Guardar cotización</button>
                 </details>
+            )}
+            {desglose.length > 0 && (
+                <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-1 rounded-lg border theme-border p-3 text-sm sm:grid-cols-4" aria-label="Desglose de la cotización">
+                    {desglose.map(([nombre, valor]) => (
+                        <div key={nombre} className="min-w-0">
+                            <dt className="theme-text-muted text-xs">{nombre}</dt>
+                            <dd className="m-0 font-semibold">{dinero(valor)}</dd>
+                        </div>
+                    ))}
+                </dl>
             )}
             {importePendiente && <p className="m-0 text-sm theme-text-muted" role="status">Guardando el importe de mercancía.</p>}
             {listaParaPago && (
+                // Cualquier acción en pagos invalida un aviso anterior («Faltan $…») que ya no aplica.
+                <div className="contents" onClickCapture={() => { if (error) setError(''); }}>
                 <SeccionPagosExhibicion
                     pedidoId={pedido.id}
                     bancos={bancos}
@@ -162,6 +192,7 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                     saldoAFavorConfirmado={pedido.saldo_a_favor}
                     revisionResumen={pedido.revision_registro}
                 />
+                </div>
             )}
             {puedeEnviar && listaParaPago && (
                 <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado}
@@ -170,7 +201,7 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                 </button>
             )}
             {fase === 'PENDIENTE_AUXILIAR' && <p className="m-0 text-sm" role="status">El auxiliar verifica el pago y la remisión.</p>}
-            {error && <p className="m-0 text-sm theme-text-aviso" role="alert">{error}</p>}
+            {error && <p ref={avisoError} className="m-0 text-sm theme-text-aviso" role="alert">{error}</p>}
             <ModalAgregarDireccionNacional
                 abierto={agregandoDireccion} onClose={() => setAgregandoDireccion(false)}
                 pedido={pedido} esPrimera={direcciones.length === 0} onGuardada={direccionAgregada}

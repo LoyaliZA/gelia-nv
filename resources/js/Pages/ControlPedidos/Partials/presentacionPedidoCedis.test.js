@@ -23,3 +23,10 @@ it('distingue el municipal histórico y el traslado interno sin inferir por nomb
     expect(presentacionPedidoCedis({ origen: { nombre: 'Transporte', requiere_logistica: true } }).nombre).toBe('NACIONAL');
     expect(presentacionPedidoCedis({ origen: { nombre: 'Tienda', requiere_logistica: true }, es_traslado_interno_pdv: true }).etiqueta).toBe('Tipo de pedido');
 });
+
+it('Nacional con domicilio capturado muestra municipio y estado, no «Por confirmar»', () => {
+    const base = { solicitud_preparacion: { modalidad_entrega: 'nacional' }, almacen: { nombre: 'CEDIS' } };
+    expect(presentacionPedidoCedis({ ...base, direccion_vigente: { municipio: 'Cuauhtémoc', estado: 'Ciudad de México' } }).destino)
+        .toBe('Cuauhtémoc, Ciudad de México');
+    expect(presentacionPedidoCedis(base).destino).toBe('Por confirmar');
+});
