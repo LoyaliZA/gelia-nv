@@ -9,6 +9,7 @@
 - [verificado] Regla definitiva de terminal: activa + categoría Local/Regional; Sin logística no la determina: `app/Models/ControlPedidos/CatalogoPaqueteriaPedido.php:81`.
 - [verificado] La referencia destino es `catalogo_paqueteria_id`; se conserva `municipio_destino` histórico sin usarlo como terminal: `gestion-pedidos-docs/M01_CONTINUIDAD_REGISTRO_Y_CONSULTA_CODEX.md:72`.
 - [verificado] Enviar consulta guarda automáticamente la captura común y municipal antes de enviarla: `resources/js/Pages/ControlPedidos/Municipal/FormularioRegistrarMunicipal.jsx:104`.
+- [verificado] Guardar el total de mercancía conserva `costo_envio`; «Cubrir pendiente» suma mercancía + envío (y el monto de la exhibición en edición): `FormularioRegistrarMunicipal.jsx`, `SeccionPagosExhibicion.jsx`.
 - [verificado] Primer envío requiere cliente, departamento, folio Wizerp, soporte activo y consignatario vigente: `app/Services/ControlPedidos/Municipal/EnviarConsultaMunicipalService.php:55`.
 - [verificado] Resguardo de envío: intención temprana en `resguardo_envio` (solicitud guardada, consulta puede seguir abierta). Exhibiciones tras cierre. Enviar a auditoría con interruptor on exige mercancía cubierta. M-04 vincula remisiones pagadas (`custodia_local` / `custodia_cedis` / `resguardo_envio`) sin encender el resguardo. Integración local no usa `pendiente_traslado`.
 
@@ -65,4 +66,4 @@
 
 - [verificado] M-02 abre el modal original de registro en modo conversión; no hay wizard de pasos. La reserva vive en `ModalFormPedido` y confirma por `/conversion-modalidad`.
 
-- Última verificación: 2026-11-23, sin commit, árbol de trabajo (M-03b, M-07 y S-06; pruebas dirigidas en SQLite).
+- Última verificación: 2026-11-23, sin commit, árbol de trabajo (M-03b, M-07, S-06; exhibición cubre envío).

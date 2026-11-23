@@ -260,7 +260,14 @@ export default function FormularioRegistrarMunicipal({
                 revision_esperada: actual.revision_registro,
                 base_captura: actual.base_captura,
             }, { headers: { Accept: 'application/json' } });
-            actualizar({ ...actual, ...data, total_mercancia: total, origen_id: data?.origen_id ?? Number(origen.id), almacen_id: data?.almacen_id ?? Number(salida) });
+            actualizar({
+                ...actual,
+                ...data,
+                total_mercancia: total,
+                costo_envio: data.costo_envio ?? actual.costo_envio ?? costo,
+                origen_id: data?.origen_id ?? Number(origen.id),
+                almacen_id: data?.almacen_id ?? Number(salida),
+            });
             setAviso('Importe guardado. Registre el pago de la mercancía y el envío por el total exigible.');
             return true;
         } catch (error) {
@@ -501,7 +508,7 @@ export default function FormularioRegistrarMunicipal({
                                 formasPago={catalogos.formas_pago || []}
                                 puedeRegistrar={!enRevision}
                                 totalMercancia={actual.total_mercancia}
-                                costoEnvio={actual.costo_envio}
+                                costoEnvio={Number(actual.costo_envio) > 0 ? actual.costo_envio : (costo === '' ? actual.costo_envio : costo)}
                                 aplicaSeguro={Boolean(actual.aplica_seguro)}
                                 costoSeguro={actual.costo_seguro}
                                 saldoAFavorAplicado={actual.saldo_a_favor}

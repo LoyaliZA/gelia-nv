@@ -51,8 +51,37 @@ export function etapaAlReabrir(usuarioId, pedidoId, etapasValidas) {
     };
 }
 
+const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
+
 /** Importe neto que el resumen financiero ya calculó. No registra el pago. */
-export function importeNetoRestante(resumen) {
-    const n = Math.round(Number(resumen?.pendiente || 0) * 100) / 100;
+export function importeNetoRestante(resumen, montoYaContado = 0) {
+    const n = round2(Number(resumen?.pendiente || 0) + Math.max(0, Number(montoYaContado || 0)));
     return n > 0 ? n : 0;
+}
+
+/** Pendiente (positivo) o excedente (negativo) si esta exhibición queda en montoPropuesto. */
+export function deltaPendienteExhibicion(resumen, { montoPropuesto = 0, montoYaContado = 0 } = {}) {
+    return round2(importeNetoRestante(resumen, montoYaContado) - Number(montoPropuesto || 0));
+}
+
+/** Envío para proyectar cobertura: captura del formulario o, si falta, el resumen ya calculado. */
+export function costoEnvioParaResumenVivo({
+    omiteEnvio = false,
+    costoEnvio = null,
+    totalMercancia = 0,
+    costoSeguro = 0,
+    aplicaSeguro = false,
+    resumen = null,
+} = {}) {
+    if (omiteEnvio) return 0;
+    const capturado = Number(costoEnvio);
+    if (Number.isFinite(capturado) && capturado > 0) return round2(capturado);
+    const desdeTotales = Number(resumen?.totales_envio?.costo_para_cobertura);
+    if (Number.isFinite(desdeTotales) && desdeTotales > 0) return round2(desdeTotales);
+    const inferido = round2(
+        Number(resumen?.total_a_cubrir || 0)
+        - Number(totalMercancia || 0)
+        - (aplicaSeguro ? Number(costoSeguro || 0) : 0),
+    );
+    return inferido > 0 ? inferido : 0;
 }
