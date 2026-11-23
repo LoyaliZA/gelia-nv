@@ -1664,7 +1664,7 @@ export default function ModalResponderPesaje({
                                 />
                                 {mensajeError('cedis-sku-pesaje')}
                                 <div className="flex flex-wrap gap-2">
-                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
+                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} title={!almacenBusquedaId ? 'Elija primero el almacén del catálogo' : String(skuQuery).trim().length < 2 ? 'Escriba al menos 2 caracteres del SKU o del nombre' : undefined} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Search className="w-3.5 h-3.5" /> {skuCargando ? 'Buscando…' : 'Buscar y agregar'}
                                     </button>
                                     {!esCampo && <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>

@@ -463,7 +463,8 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                             <option key={item.id} value={String(item.id)}>{item.nombre}</option>
                         ))}
                     </select>
-                    <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] mt-2`} disabled={enviando} onClick={actualizarPaqueteria}>
+                    <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] mt-2`} disabled={enviando || !paqueteriaPosterior}
+                        title={!paqueteriaPosterior ? 'Elija primero la nueva paquetería' : undefined} onClick={actualizarPaqueteria}>
                         {enviando ? 'Actualizando…' : 'Actualizar paquetería'}
                     </button>
                 </section>
@@ -538,6 +539,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     );
 
     return children({
-        contenido, panelEnvio, accion, pie: accion, guardarBorrador: () => guardarMercancia(), enviando,
+        contenido, panelEnvio, accion, pie: accion, guardarBorrador: () => guardarMercancia(), enviando, enviada: Boolean(enviada),
     });
 }

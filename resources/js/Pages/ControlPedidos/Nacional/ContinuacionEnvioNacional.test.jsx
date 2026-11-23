@@ -138,3 +138,18 @@ it('sin permiso de direcciones no ofrece el alta y pide ayuda a un auxiliar', as
     expect(boton('Agregar dirección')).toBeUndefined();
     expect(host.textContent).toContain('auxiliar');
 });
+
+it('muestra el desglose de mercancía, flete, reexpedición y seguro tras cotizar', async () => {
+    await render({
+        costo_envio: '330.00',
+        costo_seguro: '0.00',
+        aplica_seguro: false,
+        solicitud_preparacion: { cotizacion_nacional: { paqueteria_id: 2 } },
+        cajas: [{ id: 5, uuid_operativo: 'caja-1', estado_operativo: 'activa', costo_envio: '180.00' }],
+    });
+    const desglose = host.querySelector('[aria-label="Desglose de la cotización"]');
+    expect(desglose).not.toBeNull();
+    expect(desglose.textContent).toContain('Flete$180.00');
+    expect(desglose.textContent).toContain('Reexpedición$150.00');
+    expect(desglose.textContent).toContain('Seguro$0.00');
+});

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { History } from 'lucide-react';
-import { geliaCardClass, THEME_BTN_PRIMARY, THEME_BTN_ICON } from '../../../../utils/geliaTheme';
+import { geliaCardClass, GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_ICON } from '../../../../utils/geliaTheme';
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import {
     badgeEstatusPedido,
@@ -266,7 +266,7 @@ export default function TablaDelegado({
                                                     <button
                                                         type="button"
                                                         onClick={() => setPedidoDetalle(pedido)}
-                                                        className="text-xs font-bold theme-text-primario hover:underline min-h-[36px] px-2"
+                                                        className={`${cta === 'Capturar' ? THEME_BTN_PRIMARY : GELIA_BTN_OUTLINE} min-h-[36px] px-3 text-xs`}
                                                     >
                                                         {cta}
                                                     </button>

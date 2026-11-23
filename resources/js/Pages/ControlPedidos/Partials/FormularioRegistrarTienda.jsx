@@ -1667,12 +1667,15 @@ export default function FormularioRegistrarTienda({
                         )}
                     </div>
                     <div className="registrar-tienda-pie-acciones">
-                        <BotonBorrador
-                            guardando={guardando || nacional?.enviando}
-                            confirmado={borradorConfirmado && !nacionalSucia}
-                            deshabilitado={revisionSolicitada || enviando || estadoArchivo === 'cargando'}
-                            onClick={nacional?.guardarBorrador || (() => guardar())}
-                        />
+                        {/* Una vez enviada la consulta ya no es un borrador: ocultarlo evita «Borrador guardado» obsoleto. */}
+                        {!revisionSolicitada && !nacional?.enviada && (
+                            <BotonBorrador
+                                guardando={guardando || nacional?.enviando}
+                                confirmado={borradorConfirmado && !nacionalSucia}
+                                deshabilitado={enviando || estadoArchivo === 'cargando'}
+                                onClick={nacional?.guardarBorrador || (() => guardar())}
+                            />
+                        )}
                         {modalidad === 'tienda' && !revisionSolicitada && (
                             <button
                                 type="button"

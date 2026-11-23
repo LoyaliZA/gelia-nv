@@ -4,7 +4,7 @@
 - Ubicación: `routes/web/modules/control-pedidos/auditar.php`; `app/Http/Controllers/ControlPedidos/{PedidoBmaAuditoriaController,PedidoBmaSaldosPagosController}.php`.
 - Servicios: `app/Services/ControlPedidos/{ValidarPagoPedidoBmaService,GestionarRemisionPedidoBmaService}.php`; `app/Services/SaldosAFavor/`.
 - Frontend: `resources/js/Pages/ControlPedidos/Auditar/` y `Partials/{ImportesPagoTienda,SeccionPagosExhibicion}.jsx`.
-- Pruebas: `tests/Feature/ControlPedidos/{ImportesPagoTiendaTest,RemisionAuditoriaTest,Q8AccesoPagosSafEvidenciaTest}.php`; `tests/Feature/SaldosAFavor/`.
+- Pruebas: `tests/Feature/ControlPedidos/{ImportesPagoTiendaTest,RemisionAuditoriaTest,Q8AccesoPagosSafEvidenciaTest}.php`; `tests/Feature/SaldosAFavor/`; `persistenciaFormularioPedido.test.js`.
 
 ## Estado actual
 - [verificado] Registrar exhibición inicia revisión pendiente; no verifica ingreso: `app/Services/SaldosAFavor/RegistrarPagoPedidoBmaService.php:143`.
@@ -37,5 +37,6 @@
 - [verificado] `pagos_validos` del resumen no debe leerse como verificación bancaria; toma pagos activos para cobertura: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:46`.
 - [verificado] Excedentes desde $10 tienen gestión SAF; menores no se automatizan: `gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md:82`.
 - [inferido] Modificar la fórmula solo en React produciría una proyección incompatible con el bloqueo servidor; confirmar con resumen persistido: `app/Services/SaldosAFavor/CoberturaPagoPedidoBmaService.php:78`.
+- [verificado] «Cubrir pendiente» al editar suma el monto ya contado de esa exhibición (mercancía + envío + seguro). Si el formulario no trae flete, la proyección toma `totales_envio` o `total_a_cubrir` del resumen; el servidor no cambia: `persistenciaFormularioPedido.js`, `SeccionPagosExhibicion.jsx`.
 
-- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.
+- Última verificación: 2026-11-23, árbol de trabajo sobre `10d96aa5` (exhibición cubre envío).

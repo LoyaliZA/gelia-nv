@@ -77,6 +77,7 @@ class ListarPedidosDelegadoService
             'tipoGuia',
             'zona',
             'direccionVigente',
+            'cajas',
             'guiaCorregidaPor',
             'errorDatosPor',
             'historial.usuario',
