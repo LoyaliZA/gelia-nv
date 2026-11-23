@@ -365,6 +365,45 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertSame('0.00', number_format((float) $actual->costo_seguro, 2, '.', ''));
     }
 
+    public function test_la_guia_del_delegado_a_nivel_pedido_cubre_la_caja_y_la_salida_concluye(): void
+    {
+        $salida = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
+            'numero_rastreo' => 'DEL-1',
+            'empacado_at' => now(),
+        ]);
+        $caja = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1]);
+        $this->guia($salida, 'guias/del-1.pdf', 'del-1.pdf');
+
+        $enviado = app(MarcarEnviadoPedidoBmaService::class)->ejecutar($salida->fresh(), $this->usuario->id);
+
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENVIADO, $enviado->estatus->fase_ciclo);
+        $caja = $caja->fresh();
+        $this->assertSame(PedidoBmaCaja::ESTATUS_RECOLECTADA, $caja->estatus_recoleccion);
+        $this->assertSame('DEL-1', $caja->numero_rastreo);
+    }
+
+    public function test_la_guia_de_caja_que_llega_en_la_misma_peticion_cuenta_y_solo_se_revisan_las_cajas_que_salen(): void
+    {
+        $salida = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
+            'numero_rastreo' => 'DEL-2',
+            'empacado_at' => now(),
+        ]);
+        $primera = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1, 'orden' => 1]);
+        $segunda = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1, 'orden' => 2]);
+        $this->guia($salida, 'guias/del-2.pdf', 'del-2.pdf');
+
+        $parcial = app(MarcarEnviadoPedidoBmaService::class)->ejecutar(
+            $salida->fresh(),
+            $this->usuario->id,
+            [['id' => $primera->id, 'numero_rastreo' => 'CAJ-A']],
+        );
+
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $parcial->estatus->fase_ciclo);
+        $this->assertSame(PedidoBmaCaja::ESTATUS_RECOLECTADA, $primera->fresh()->estatus_recoleccion);
+        $this->assertSame('CAJ-A', $primera->fresh()->numero_rastreo);
+        $this->assertSame(PedidoBmaCaja::ESTATUS_PENDIENTE, $segunda->fresh()->estatus_recoleccion);
+    }
+
     public function test_credito_bloqueado_no_remisiona_ni_guia_ni_sale_ni_acepta_transferencia(): void
     {
         $auxiliar = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR);

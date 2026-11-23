@@ -82,3 +82,59 @@ it('registra cada flete y la dirección antes de abrir el pago del envío', asyn
     }), expect.anything());
     expect(onPedido).toHaveBeenCalledWith(respuesta);
 });
+
+async function renderSinDirecciones(extra = {}) {
+    axios.get.mockResolvedValue({ data: { direcciones: [] } });
+    await act(async () => root.render(
+        <ContinuacionEnvioNacional pedido={pedido} catalogos={catalogos} pendiente={false} onPedido={vi.fn()} {...extra} />,
+    ));
+}
+
+const boton = (texto) => [...document.body.querySelectorAll('button')].find((b) => b.textContent.trim() === texto);
+const escribir = async (campo, valor) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(campo, valor);
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+});
+const abrirCotizacion = async () => act(async () => { host.querySelector('summary').click(); });
+
+it('sin direcciones permite agregar una dentro del pedido y la deja elegida', async () => {
+    await renderSinDirecciones({ puedeAgregarDireccion: true });
+    await abrirCotizacion();
+    expect(host.textContent).toContain('no tiene direcciones verificadas');
+    await act(async () => boton('Agregar dirección').click());
+
+    const campos = [...document.body.querySelectorAll('[role="dialog"] input[type="text"]')];
+    // Orden del formulario: destinatario, teléfono, calle, ext., int., colonia, C.P., municipio, ciudad, estado, país.
+    await escribir(campos[0], 'Ana Prueba');
+    await escribir(campos[2], 'Calle 1');
+    await escribir(campos[5], 'Centro');
+    await escribir(campos[6], '86000');
+    await escribir(campos[7], 'Centro');
+    await escribir(campos[9], 'Tabasco');
+
+    axios.post.mockResolvedValue({ data: { ok: true, direccion: { id: 12, nombre_destinatario: 'Ana Prueba', codigo_postal: '86000' } } });
+    await act(async () => boton('Guardar dirección').click());
+
+    expect(axios.post).toHaveBeenCalledWith('/control-pedidos/registrar-direccion-catalogo', expect.objectContaining({
+        cliente_id: 4, pedido_id: 9, es_principal: true,
+        nombre_destinatario: 'Ana Prueba', calle: 'Calle 1', colonia: 'Centro', codigo_postal: '86000', municipio: 'Centro', estado: 'Tabasco',
+    }), expect.anything());
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    expect(host.querySelector('select').value).toBe('12');
+});
+
+it('no guarda una dirección incompleta y dice qué falta', async () => {
+    await renderSinDirecciones({ puedeAgregarDireccion: true });
+    await abrirCotizacion();
+    await act(async () => boton('Agregar dirección').click());
+    await act(async () => boton('Guardar dirección').click());
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(document.body.querySelector('[role="dialog"]').textContent).toContain('código postal');
+});
+
+it('sin permiso de direcciones no ofrece el alta y pide ayuda a un auxiliar', async () => {
+    await renderSinDirecciones();
+    await abrirCotizacion();
+    expect(boton('Agregar dirección')).toBeUndefined();
+    expect(host.textContent).toContain('auxiliar');
+});

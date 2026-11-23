@@ -77,7 +77,7 @@ class MarcarEnviadoPedidoBmaService
         }
 
         \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeSalir($pedido);
-        $this->assertGuiaVigente($pedido);
+        $this->assertGuiaVigente($pedido, $cajasSeleccion);
 
         $cajas = $pedido->cajas
             ->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())
@@ -131,6 +131,8 @@ class MarcarEnviadoPedidoBmaService
                 ];
                 if (isset($rastreos[$id])) {
                     $attrs['numero_rastreo'] = $rastreos[$id];
+                } elseif (! filled($caja->numero_rastreo) && filled($pedido->numero_rastreo)) {
+                    $attrs['numero_rastreo'] = $pedido->numero_rastreo;
                 }
                 $caja->update($attrs);
             }
@@ -216,7 +218,13 @@ class MarcarEnviadoPedidoBmaService
         }
     }
 
-    private function assertGuiaVigente(PedidoBma $pedido): void
+    /**
+     * Una caja que sale tiene guía si ya la guardó, si llega en esta misma petición
+     * o si el Delegado la capturó a nivel pedido. Solo se revisan las cajas que salen ahora.
+     *
+     * @param  list<array{id?: int|string, numero_rastreo?: string|null}>|null  $cajasSeleccion
+     */
+    private function assertGuiaVigente(PedidoBma $pedido, ?array $cajasSeleccion = null): void
     {
         $guias = $pedido->documentos()->where('tipo', \App\Models\ControlPedidos\PedidoBmaDocumento::TIPO_GUIA)->get();
         if ($guias->isNotEmpty() && $guias->where('activo', true)->isEmpty()) {
@@ -227,8 +235,18 @@ class MarcarEnviadoPedidoBmaService
             return;
         }
 
+        $seleccion = collect($cajasSeleccion ?? [])->filter(fn ($fila) => is_array($fila));
+        $saleAhora = $seleccion->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $guiaEnPeticion = $seleccion
+            ->filter(fn (array $fila) => filled($fila['numero_rastreo'] ?? null))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+
         $sinRastreo = $pedido->cajas
-            ->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->estaPendiente() && ! filled($caja->numero_rastreo))
+            ->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->estaPendiente())
+            ->filter(fn (PedidoBmaCaja $caja) => $saleAhora === [] || in_array((int) $caja->id, $saleAhora, true))
+            ->filter(fn (PedidoBmaCaja $caja) => ! filled($caja->numero_rastreo)
+                && ! filled($pedido->numero_rastreo)
+                && ! in_array((int) $caja->id, $guiaEnPeticion, true))
             ->isNotEmpty();
         if ($sinRastreo) {
             throw new \RuntimeException('Cada caja que sale requiere guía vigente.');

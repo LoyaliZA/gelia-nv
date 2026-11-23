@@ -1737,6 +1737,7 @@ export default function FormularioRegistrarTienda({
                 onBusyChange={setOperandoNacional}
                 bloqueado={estadoArchivo === 'cargando' || guardando}
                 importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
+                puedeAgregarDireccion={Boolean(superAdmin || (auth?.user?.permissions || []).includes('clientes.direcciones.crear'))}
                 campoImporteMercancia={(
                     <div className="min-w-0">
                         <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>

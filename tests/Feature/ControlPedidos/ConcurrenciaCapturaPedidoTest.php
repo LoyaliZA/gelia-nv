@@ -34,7 +34,7 @@ class ConcurrenciaCapturaPedidoTest extends TestCase
         $estado = CatalogoEstatusPedido::firstOrCreate(['fase_ciclo' => 'BORRADOR'], ['codigo_interno' => 'BORRADOR', 'nombre_visual' => 'Borrador', 'color_hex' => '#999999', 'orden' => 1, 'activo' => true]);
         $origen = CatalogoOrigenPedido::create(['codigo' => 'Q3', 'nombre' => 'Q3', 'requiere_logistica' => true, 'activo' => true]);
         $almacen = Almacen::create(['codigo' => 'Q3', 'nombre' => 'Q3', 'activo' => true, 'permite_salida_pedidos' => true]);
-        $this->pedido = PedidoBma::create(['folio' => 'Q3-SINTETICO', 'fecha' => '2026-10-15', 'vendedor_id' => $this->usuario->id, 'catalogo_estatus_pedido_id' => $estado->id, 'origen_id' => $origen->id, 'almacen_id' => $almacen->id, 'comentarios_drive' => 'inicial', 'prioridad_md' => true, 'solicitud_preparacion_json' => ['version' => 1, 'codigo_modalidad' => 'ENVIO_MUNICIPIO', 'entrega_municipal' => ['municipio_destino' => 'Municipio Q3', 'destinatario_es_cliente' => false]]]);
+        $this->pedido = PedidoBma::create(['folio' => 'Q3-SINTETICO', 'folio_remision' => 'WIZ-Q3-001', 'fecha' => '2026-10-15', 'vendedor_id' => $this->usuario->id, 'catalogo_estatus_pedido_id' => $estado->id, 'origen_id' => $origen->id, 'almacen_id' => $almacen->id, 'comentarios_drive' => 'inicial', 'prioridad_md' => true, 'solicitud_preparacion_json' => ['version' => 1, 'codigo_modalidad' => 'ENVIO_MUNICIPIO', 'entrega_municipal' => ['municipio_destino' => 'Municipio Q3', 'destinatario_es_cliente' => false]]]);
         $this->actingAs($this->usuario);
     }
 
