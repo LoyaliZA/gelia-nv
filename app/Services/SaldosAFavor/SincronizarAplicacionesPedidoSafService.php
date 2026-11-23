@@ -47,7 +47,7 @@ class SincronizarAplicacionesPedidoSafService
                 $montoTotal,
                 $usuarioId,
                 null,
-                array_merge(AlcanceSaf::desdePedido($pedido), ['pedido_bma_id' => $pedido->id])
+                array_merge(AlcanceSaf::desdePedido($pedido), ['pedido_bma_id' => $pedido->id, 'tope_transporte' => $this->topeTransporte($pedido)])
             );
 
             $total = 0.0;
@@ -109,6 +109,20 @@ class SincronizarAplicacionesPedidoSafService
 
             return (float) $pedido->saldo_a_favor;
         });
+    }
+
+    /**
+     * Gasto de envío del pedido destino que un saldo «solo transporte» puede cubrir. Con el transporte pendiente o
+     * incompleto el tope es cero: no se aplica sobre un importe que todavía no existe. El seguro no cuenta.
+     */
+    private function topeTransporte(PedidoBma $pedido): float
+    {
+        $totales = app(CalcularTotalesEnvioPedidoService::class)->calcular($pedido);
+        if ($totales['incompleto']) {
+            return 0.0;
+        }
+
+        return max(0.0, round((float) $totales['costo_para_cobertura'], 2));
     }
 
     private function refrescarTotalACobrar(PedidoBma $pedido): void

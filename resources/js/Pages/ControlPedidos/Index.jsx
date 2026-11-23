@@ -10,6 +10,8 @@ import FiltrosPedidos from './Partials/FiltrosPedidos';
 import MetricasBandejaPedidos from './Partials/MetricasBandejaPedidos';
 import TablaPedidos from './Partials/TablaPedidos';
 import ModalMovimientosTienda from './Partials/ModalMovimientosTienda';
+import ModalPiezasAdicionales from './Partials/ModalPiezasAdicionales';
+import ModalCambioATiendaMunicipal from './Partials/ModalCambioATiendaMunicipal';
 import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
@@ -57,6 +59,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [movimientoTienda, setMovimientoTienda] = useState(null);
+    const [piezasAdicionalesId, setPiezasAdicionalesId] = useState(null);
+    const [cambioATiendaId, setCambioATiendaId] = useState(null);
     const [modalBitacora, setModalBitacora] = useState({ abierto: false, pedido: null });
     const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
     const [pedidoAEliminarRegistro, setPedidoAEliminarRegistro] = useState(null);
@@ -357,6 +361,9 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         setMovimientoTienda({ pedido, modo });
                     }}
                     onCambiarModalidad={abrirConversion}
+                    onAgregarPiezas={(pedido) => setPiezasAdicionalesId(pedido.id)}
+                    onCambioATienda={(pedido) => setCambioATiendaId(pedido.id)}
+                    onSaldoEnvio={(pedido) => router.visit(route('saldos_favor.index', { saldo_envio_pedido: pedido.id }))}
                     onEditar={abrirEditar}
                     onEliminar={setPedidoAEliminar}
                     onEliminarRegistro={setPedidoAEliminarRegistro}
@@ -423,6 +430,19 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 abierto={modalDetalle.abierto}
                 pedido={modalDetalle.pedido}
                 onClose={() => setModalDetalle({ abierto: false, pedido: null })}
+            />
+            <ModalPiezasAdicionales
+                abierto={piezasAdicionalesId !== null}
+                pedido={(pedidosVista?.data || []).find((p) => p.id === piezasAdicionalesId) || null}
+                bancos={catalogos.bancos || []}
+                onClose={() => setPiezasAdicionalesId(null)}
+                onActualizado={onActualizar}
+            />
+            <ModalCambioATiendaMunicipal
+                abierto={cambioATiendaId !== null}
+                pedido={(pedidosVista?.data || []).find((p) => p.id === cambioATiendaId) || null}
+                onClose={() => setCambioATiendaId(null)}
+                onActualizado={onActualizar}
             />
             <ModalMovimientosTienda
                 abierto={Boolean(movimientoTienda)}

@@ -1,3 +1,5 @@
+import PiezasAdicionalesArea from '../../Partials/PiezasAdicionalesArea';
+import CambioATiendaArea from '../../Partials/CambioATiendaArea';
 import React, { useState } from 'react';
 import axios from 'axios';
 import { router, usePage } from '@inertiajs/react';
@@ -162,6 +164,9 @@ function TarjetaPedido({
                     ))}
                 </div>
             )}
+
+            <PiezasAdicionalesArea pedidoId={pedido.id} items={pedido.piezas_adicionales?.items} />
+            <CambioATiendaArea pedidoId={pedido.id} cambio={pedido.cambio_a_tienda} />
 
             {!municipal && mostrarNotaCompraCedis(fase) && (
                 <AvisoOperativoPedido
@@ -392,7 +397,9 @@ export default function TarjetasCedis({
             variante: 'primary',
         }
         : confirmacion?.accion === 'enviar'
-            ? { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' }
+            ? (pedidoEsTrasladoInternoPdv(confirmacion.pedido)
+                ? { titulo: 'Confirmar salida de CEDIS', mensaje: '¿Confirmas que el paquete salió de CEDIS hacia la sucursal? Empacado no significa enviado; la sucursal confirma después la recepción.', etiquetaConfirmar: 'Salió de CEDIS', variante: 'primary' }
+                : { titulo: 'Confirmar recolección', mensaje: '¿Confirmas que la paquetería recogió el paquete? Empacado no significa enviado.', etiquetaConfirmar: 'Paquetería recogió', variante: 'primary' })
             : confirmacion?.accion === 'reabrir'
                 ? { titulo: 'Reabrir recolección', mensaje: 'El pedido volverá a pendiente de recolección. Solo si la paquetería no recogió.', etiquetaConfirmar: 'Reabrir', variante: 'danger' }
                 : confirmacion?.accion === 'recepcion_nacional'

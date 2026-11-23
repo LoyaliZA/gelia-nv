@@ -20,6 +20,9 @@ import PanelPedidoRevisionResguardo from './PanelPedidoRevisionResguardo';
 import { AccionEntregaResguardo } from './ModalEntregaResguardo';
 import BotonConfirmarRecepcionResguardo, { BotonPasarARecepcionResguardo } from './BotonConfirmarRecepcionResguardo';
 import IntegracionFisicaConjunto from '../../../ControlPedidos/Municipal/IntegracionFisicaConjunto';
+import PiezasAdicionalesArea from '../../../ControlPedidos/Partials/PiezasAdicionalesArea';
+import CambioATiendaArea from '../../../ControlPedidos/Partials/CambioATiendaArea';
+import { SeccionCaratulaMunicipalResguardo, SeccionSalidaTerminalResguardo } from './AccionesMunicipalResguardo';
 import MiniaturaEvidenciaResguardo, { GaleriaEvidenciasResguardo } from './MiniaturaEvidenciaResguardo';
 
 export default function ContenidoDetalleResguardo({
@@ -41,6 +44,7 @@ export default function ContenidoDetalleResguardo({
         return <div className="space-y-4"><PanelPedidoRevisionResguardo resguardo={resguardo} /><SeguimientoTransferenciaTienda pedido={{ id: resguardo.pedido_bma_id, es_custodia_documental: true }} soloLectura={modoAuditoria} onActualizar={onAccionExito} /></div>;
     }
     const plazos = plazosOperativosResguardo(resguardo);
+    const salidaTerminal = resguardo.es_municipal ? resguardo.salida_terminal : null;
     const clasificacionesActivas = Object.entries(resguardo.clasificaciones || {})
         .filter(([, activa]) => activa)
         .map(([clave]) => ({
@@ -98,7 +102,11 @@ export default function ContenidoDetalleResguardo({
                     <DetalleCampo label="Bultos pendientes" value={cantidadBultosPendiente(resguardo)} />
                     <DetalleCampo label="Salida CEDIS" value={formatearFechaOperativa(resguardo.salida_cedis_at)} />
                     <DetalleCampo label="Recepción física" value={formatearFechaOperativa(resguardo.recepcion_fisica_at)} />
-                    <DetalleCampo label="Entrega completada" value={formatearFechaOperativa(resguardo.entrega_completada_at)} />
+                    {salidaTerminal ? (
+                        <DetalleCampo label="Salida a terminal" value={formatearFechaOperativa(salidaTerminal.at)} />
+                    ) : (
+                        <DetalleCampo label="Entrega completada" value={formatearFechaOperativa(resguardo.entrega_completada_at)} />
+                    )}
                     {plazos.map(({ id, etiqueta, fecha }) => (
                         <DetalleCampo
                             key={id}
@@ -139,6 +147,22 @@ export default function ContenidoDetalleResguardo({
                 />
             )}
 
+            {resguardo.es_municipal && resguardo.pedido_bma_id && resguardo.cambio_a_tienda && (
+                <CambioATiendaArea
+                    pedidoId={resguardo.pedido_bma_id}
+                    cambio={modoAuditoria ? { ...resguardo.cambio_a_tienda, puede_aplicar: false } : resguardo.cambio_a_tienda}
+                    onActualizado={() => onAccionExito?.()}
+                />
+            )}
+
+            {resguardo.es_municipal && resguardo.pedido_bma_id && (
+                <PiezasAdicionalesArea
+                    pedidoId={resguardo.pedido_bma_id}
+                    items={modoAuditoria ? (resguardo.complementos_municipales || []).map((c) => ({ ...c, puede_integrar: false })) : resguardo.complementos_municipales}
+                    onActualizado={() => onAccionExito?.()}
+                />
+            )}
+
             {resguardo.ultima_entrega && (
                 <PanelEntregaCompletada entrega={resguardo.ultima_entrega} />
             )}
@@ -152,7 +176,7 @@ export default function ContenidoDetalleResguardo({
                         <table className="w-full border-collapse min-w-[520px]">
                             <thead>
                                 <tr className="border-b theme-border">
-                                    {['Folio', 'Tipo', 'Estado', 'Recepción', 'Entrega'].map((col) => (
+                                    {['Folio', 'Tipo', 'Estado', 'Recepción', salidaTerminal ? 'Salida' : 'Entrega'].map((col) => (
                                         <th key={col} className="px-4 py-3 text-left text-[9px] font-black uppercase tracking-widest theme-text-muted">
                                             {col}
                                         </th>
@@ -164,7 +188,9 @@ export default function ContenidoDetalleResguardo({
                                     <tr key={bulto.id} className="border-b theme-border">
                                         <td className="px-4 py-3 text-sm font-semibold">{bulto.folio || `#${bulto.id}`}</td>
                                         <td className="px-4 py-3 text-sm theme-text-muted">{bulto.tipo}</td>
-                                        <td className="px-4 py-3 text-sm theme-text-muted">{bulto.estado}</td>
+                                        <td className="px-4 py-3 text-sm theme-text-muted">
+                                            {salidaTerminal && bulto.estado === 'entregado' ? 'Salida a terminal' : bulto.estado}
+                                        </td>
                                         <td className="px-4 py-3 text-[10px] theme-text-muted">{formatearFechaOperativa(bulto.recepcion_at)}</td>
                                         <td className="px-4 py-3 text-[10px] theme-text-muted">{formatearFechaOperativa(bulto.entrega_at)}</td>
                                     </tr>
@@ -173,6 +199,15 @@ export default function ContenidoDetalleResguardo({
                         </table>
                     </div>
                 </div>
+            )}
+
+            {resguardo.es_municipal && (
+                <>
+                    {!modoAuditoria && (
+                        <SeccionCaratulaMunicipalResguardo caratula={resguardo.caratula} onAccionExito={onAccionExito} />
+                    )}
+                    <SeccionSalidaTerminalResguardo resguardo={resguardo} onAccionExito={onAccionExito} soloLectura={modoAuditoria} />
+                </>
             )}
 
             {!modoAuditoria && (

@@ -37,6 +37,8 @@ final class AccionesHistorialPedidoBma
     public const CORRECCION = 'correccion';
     public const CORRECCION_SAF = 'correccion_saf';
     public const ENVIO_FINAL = 'envio_final';
+    public const SALIDA_CEDIS_PDV = 'salida_cedis_pdv';
+    public const SALIDA_TERMINAL = 'salida_terminal';
     public const REABRIR_ENVIO = 'reabrir_envio';
     public const ANEXO_PAGO_ENVIO = 'anexo_pago_envio';
     public const APROBAR_ANEXO = 'aprobar_anexo';
@@ -138,6 +140,8 @@ final class AccionesHistorialPedidoBma
         self::CORRECCION => 'Corrección',
         self::CORRECCION_SAF => 'Corrección de saldo a favor',
         self::ENVIO_FINAL => 'Paquetería recogió el paquete',
+        self::SALIDA_CEDIS_PDV => 'Salida de CEDIS hacia PDV',
+        self::SALIDA_TERMINAL => 'Salida a terminal registrada',
         self::REABRIR_ENVIO => 'Reapertura de envío',
         self::ANEXO_PAGO_ENVIO => 'Anexo de pago de envío',
         self::APROBAR_ANEXO => 'Aprobación de anexo',

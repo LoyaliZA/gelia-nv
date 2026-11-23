@@ -29,6 +29,7 @@ class SolicitudMunicipalController extends Controller
         $datos = $request->validate([
             'catalogo_paqueteria_id' => ['required', 'integer'],
             'almacen_id' => ['nullable', 'integer'],
+            'sucursal_destino_id' => ['nullable', 'integer'],
             'consignatario_id' => ['required', 'integer'],
             'leyenda_terminal' => ['required', 'in:PAGADO,POR_COBRAR'],
             'costo_transporte' => ['required', 'in:conocido,diferido'],

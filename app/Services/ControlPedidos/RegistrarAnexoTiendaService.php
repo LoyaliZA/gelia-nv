@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\ConsultaMunicipal;
+use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use Illuminate\Http\UploadedFile;
@@ -66,6 +67,13 @@ final class RegistrarAnexoTiendaService
 
             $municipal = ConsultaMunicipal::es($pedido);
             if ($municipal) {
+                // M-03a: sin remisión se modifica el pedido original. Con remisión o tras la salida a terminal no (M-03b/M-03c).
+                if (RecorridoFisicoMunicipal::envioYaSalioParaAjustes($pedido)) {
+                    throw ValidationException::withMessages(['anexo' => RecorridoFisicoMunicipal::MENSAJE_ANEXO_SALIO]);
+                }
+                if ($pedido->pedidoPagadoORemisionado()) {
+                    throw ValidationException::withMessages(['anexo' => RecorridoFisicoMunicipal::MENSAJE_ANEXO_CON_REMISION]);
+                }
                 ConsultaMunicipal::exigirRespuesta($pedido);
             } elseif ($pedido->tieneRemision() || filled($pedido->numero_remision)) {
                 return $this->pedidoRelacionado($pedido, $usuario, $lineas, $archivos, $solicitudId);

@@ -20,6 +20,7 @@ class SafMovimiento extends Model
     public const TIPO_REACTIVACION = 'reactivacion';
     public const TIPO_CANCELACION = 'cancelacion';
     public const TIPO_REVERSION = 'reversion';
+    public const TIPO_CLASIFICACION = 'clasificacion';
 
     protected $table = 'saf_movimientos';
 

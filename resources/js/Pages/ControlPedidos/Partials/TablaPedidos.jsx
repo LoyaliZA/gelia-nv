@@ -274,7 +274,7 @@ function useAccionesProps(props) {
     const {
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onCambiarModalidad, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     } = props;
 
     return useMemo(() => accionesPedidoLista({
@@ -295,6 +295,9 @@ function useAccionesProps(props) {
         onBitacora,
         onMovimientoTienda,
         onCambiarModalidad,
+        onAgregarPiezas,
+        onCambioATienda,
+        onSaldoEnvio,
         onVerGuia,
         onAnexarEnvio,
         onCompletarEnvio,
@@ -303,7 +306,7 @@ function useAccionesProps(props) {
     }), [
         pedido, can, esPapelera, puedeEditar, puedeEliminarBorrador, puedeEliminarRegistro, puedeCancelar,
         onVer, onEditar, onEliminar, onEliminarRegistro, onRestaurar, onVerAuditoria, onCancelar, onBitacora, onMovimientoTienda,
-        onCambiarModalidad, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
+        onCambiarModalidad, onAgregarPiezas, onCambioATienda, onSaldoEnvio, onVerGuia, onAnexarEnvio, onCompletarEnvio, onCargarGuia,
     ]);
 }
 
@@ -538,6 +541,9 @@ export default function TablaPedidos({
     onBitacora,
     onMovimientoTienda,
     onCambiarModalidad,
+    onAgregarPiezas,
+    onCambioATienda,
+    onSaldoEnvio,
     onAnexarEnvio,
     onCompletarEnvio,
     onCargarGuia,
@@ -592,6 +598,9 @@ export default function TablaPedidos({
         onBitacora,
         onMovimientoTienda,
         onCambiarModalidad,
+        onAgregarPiezas,
+        onCambioATienda,
+        onSaldoEnvio,
         onVerGuia: setDocPreview,
         onAnexarEnvio,
         onCompletarEnvio,

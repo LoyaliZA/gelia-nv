@@ -5,6 +5,7 @@
 - Frontend: `resources/js/Pages/ControlPedidos/Cedis/`; pruebas: `tests/Feature/ControlPedidos/{EmpaqueBultosCedisTest,BandejasOperativasTest}.php` y `tests/Unit/ControlPedidos/ControlPedidosCedisVisibilidadTest.php`.
 
 ## Estado actual
+- [verificado] Responder pesaje nacional ordinario usa dos vistas: Pedido y revisión (documento/productos 40/60 en escritorio) y Cajas y evidencias, con captura montada, Siguiente/Atrás y Enviar respuesta sin cambiar validaciones. Cada envío nacional agrupa datos de caja y catálogo a la izquierda, y la galería existente a la derecha; se apilan en móvil. Con adjuntos usa Adjuntar más y miniaturas en fila horizontal sin alterar el desplegable de catálogo; cabecera y pie único permanecen fuera del scroll. `soloRevisiones` y otras modalidades conservan sus pasos. `resources/js/Pages/ControlPedidos/Cedis/Partials/ModalResponderPesaje.jsx`; pruebas `ModalResponderPesaje.navegacion.test.jsx` junto al componente.
 - [verificado] Empaque opera sobre raíz y complementos con bloqueo ordenado por ID: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:25`.
 - [verificado] Bultos requieren evidencia cuando la variante lo exige: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:63`.
 - [verificado] Recolección de varias cajas permite selección parcial; el pedido espera las restantes: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:79` y `:128`.
@@ -30,4 +31,4 @@
 - [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
 - [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
 
-- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, cierre Ola 3 sin commit.
+- Última verificación: 2026-11-21, árbol de trabajo sobre `63d6c6d5`; navegación nacional comprobada con pruebas de componente y navegador aislado con datos ficticios, sin commit.

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { Truck } from 'lucide-react';
 import ContinuacionEnvioNacional from './ContinuacionEnvioNacional';
 import SeguimientoSolicitudNacional from './SeguimientoSolicitudNacional';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
@@ -22,6 +23,18 @@ function paqueteriasNacionales(catalogo = []) {
     ));
 }
 
+function almacenesSalidaNacional(catalogo = []) {
+    return catalogo.filter((almacen) => almacen.activo !== false
+        && almacen.visible_en_pedidos !== false
+        && almacen.permite_salida_pedidos === true
+        && almacen.tipo_almacen?.nombre === 'CEDIS');
+}
+
+function salidaInicial(pedido, almacenes) {
+    if (pedido?.almacen_id) return String(pedido.almacen_id);
+    return !pedido?.pesaje_solicitado_at && almacenes.length === 1 ? String(almacenes[0].id) : '';
+}
+
 function mensajeDe(error, reserva) {
     const datos = error?.response?.status < 500 ? error.response.data : null;
     const lista = datos?.errors ? Object.values(datos.errors).flat() : [];
@@ -29,9 +42,12 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, children }) {
+export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, children }) {
     const [actual, setActual] = useState(pedido);
     const [paqueteriaId, setPaqueteriaId] = useState(String(pedido?.catalogo_paqueteria_id || ''));
+    const almacenesSalida = useMemo(() => almacenesSalidaNacional(catalogos.almacenes), [catalogos.almacenes]);
+    const [almacenSalidaId, setAlmacenSalidaId] = useState(() => salidaInicial(pedido, almacenesSalida));
+    const [salidaEditada, setSalidaEditada] = useState(false);
     const [tocada, setTocada] = useState(false);
     const [error, setError] = useState('');
     const [enviando, setEnviando] = useState(false);
@@ -67,12 +83,15 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const mercancia = !enviada && mercanciaEditada ? piezas : mercanciaGuardada;
     const capturaIncompleta = Boolean(producto || descripcionCaptura.trim() || archivoCaptura.length);
     useEffect(() => {
-        onDirtyChange?.(!enviada && (mercanciaEditada || paqueteriaEditada || capturaIncompleta));
-    }, [enviada, mercanciaEditada, paqueteriaEditada, capturaIncompleta, onDirtyChange]);
+        onDirtyChange?.(!enviada && (mercanciaEditada || paqueteriaEditada || salidaEditada || capturaIncompleta));
+    }, [enviada, mercanciaEditada, paqueteriaEditada, salidaEditada, capturaIncompleta, onDirtyChange]);
     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
     useEffect(() => {
         if (!paqueteriaEditada) setPaqueteriaId(String(pedido?.catalogo_paqueteria_id || ''));
     }, [paqueteriaEditada, pedido?.catalogo_paqueteria_id]);
+    useEffect(() => {
+        if (!salidaEditada || actual?.pesaje_solicitado_at) setAlmacenSalidaId(salidaInicial(actual, almacenesSalida));
+    }, [salidaEditada, actual?.almacen_id, actual?.pesaje_solicitado_at, almacenesSalida]);
     const elegida = opciones.find((item) => String(item.id) === String(enviada ? actual?.catalogo_paqueteria_id : paqueteriaId));
     const cambio = actual?.cambio_a_tienda || actual?.solicitud_preparacion?.cambio_a_tienda;
     const fase = actual?.estatus?.fase_ciclo;
@@ -119,8 +138,10 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
         setEnviando(true);
         setError('');
         try {
+            const salida = !enviada && almacenSalidaId ? { almacen_id: Number(almacenSalidaId) } : {};
             const lectura = await guardar?.({
                 ...(paqueteriaId ? { catalogo_paqueteria_id: Number(paqueteriaId) } : {}),
+                ...salida,
                 ...(mercanciaEditada ? { guardar_mercancia_nacional: true, piezas_nacionales: piezas } : {}),
             });
             if (!lectura?.id) {
@@ -128,17 +149,20 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                 return;
             }
 
-            adoptar(lectura);
+            // El autoguardado confirma la captura pero no devuelve almacen_id.
+            // Conservar el id aceptado hasta la siguiente lectura completa del pedido.
+            adoptar({ ...lectura, ...salida });
             setPiezas([]);
             setMercanciaEditada(false);
             setPaqueteriaEditada(false);
+            setSalidaEditada(false);
             if (!solicitar) return;
 
             const { data } = await axios.post(`/control-pedidos/${lectura.id}/solicitar-pesaje`, {
                 revision_esperada: lectura.revision_registro,
                 base_captura: lectura.base_captura,
             }, { headers: { Accept: 'application/json' } });
-            adoptar({ ...lectura, ...data });
+            adoptar({ ...lectura, ...salida, ...data });
         } catch (fallo) {
             setError(mensajeDe(fallo, solicitar ? 'No se envió la consulta. Intente de nuevo.' : 'No se guardó el borrador. Intente de nuevo.'));
         } finally {
@@ -339,7 +363,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                 <button type="button" className={GELIA_BTN_OUTLINE} aria-pressed={entradaPieza === 'captura'} onClick={() => setEntradaPieza('captura')}>Por captura o documento</button>
             </div>
             {entradaPieza === 'catalogo' ? (
-                <div className="grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-end">
+                <div className="registrar-nacional-producto grid gap-2 grid-cols-[minmax(0,1fr)_auto] items-end">
                     <div className="min-w-0 col-span-full">
                         <label className={THEME_LABEL} htmlFor="nacional-buscar-producto">Producto</label>
                         <SelectorProducto
@@ -381,58 +405,89 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
         </>
     );
 
+    const salidaGuardadaFueraDeCatalogo = Boolean(actual?.almacen_id
+        && String(actual.almacen_id) === almacenSalidaId
+        && !almacenesSalida.some(almacen => String(almacen.id) === almacenSalidaId));
+    const nombreSalidaGuardada = (catalogos.almacenes || []).find(almacen => String(almacen.id) === almacenSalidaId)?.nombre
+        || actual?.almacen?.nombre || 'Almacén guardado';
+    const selectorSalida = (
+        <div className="min-w-0">
+            <label className={THEME_LABEL} htmlFor="almacen-salida-nacional">Almacén de salida</label>
+            <select id="almacen-salida-nacional" className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
+                value={almacenSalidaId} disabled={enviada || enviando || bloqueado}
+                onChange={(evento) => { setAlmacenSalidaId(evento.target.value); setSalidaEditada(true); }}>
+                <option value="" disabled>{almacenesSalida.length ? 'Elegir almacén' : 'Sin CEDIS habilitados para salida'}</option>
+                {salidaGuardadaFueraDeCatalogo && <option value={almacenSalidaId} disabled>{nombreSalidaGuardada} · no disponible</option>}
+                {almacenesSalida.map(almacen => <option key={almacen.id} value={String(almacen.id)}>{almacen.nombre}</option>)}
+            </select>
+        </div>
+    );
+
+    const panelEnvio = (
+        <section className="registrar-tienda-panel space-y-3" aria-labelledby="envio-nacional-titulo">
+            {enviada ? (
+                <div className="registrar-nacional-envio-guardado">
+                    <div className="min-w-0 space-y-3">
+                        <div className="registrar-tienda-seccion-titulo">
+                            <Truck size={18} aria-hidden="true" />
+                            <h3 id="envio-nacional-titulo">Envío nacional</h3>
+                        </div>
+                        {selectorSalida}
+                        <p className="text-sm theme-text-main m-0">Paquetería: {elegida?.nombre || actual?.paqueteria?.nombre || 'Consultar selección'}</p>
+                    </div>
+                    <div className="registrar-nacional-envio-importe min-w-0">
+                        {campoImporteMercancia}
+                    </div>
+                </div>
+            ) : (
+                <>
+                    <div className="registrar-tienda-seccion-titulo">
+                        <Truck size={18} aria-hidden="true" />
+                        <h3 id="envio-nacional-titulo">Envío nacional</h3>
+                    </div>
+                    {selectorSalida}
+                    <div className="registrar-tienda-datos">
+                        <div className="min-w-0">
+                            <label className={THEME_LABEL} htmlFor="paqueteria-nacional">Paquetería</label>
+                            <select
+                                id="paqueteria-nacional"
+                                className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
+                                value={paqueteriaId}
+                                disabled={enviando || bloqueado}
+                                aria-invalid={tocada && !paqueteriaId ? 'true' : undefined}
+                                aria-describedby={error ? 'paqueteria-nacional-error' : undefined}
+                                onBlur={() => {
+                                    setTocada(true);
+                                    if (!paqueteriaId) setError(opciones.length ? 'Elija la paquetería o seleccione PAQ. PENDIENTE.' : 'No hay paqueterías nacionales disponibles.');
+                                }}
+                                onFocus={() => setError('')}
+                                onChange={(evento) => {
+                                    setPaqueteriaId(evento.target.value);
+                                    setPaqueteriaEditada(true);
+                                    setError('');
+                                }}
+                            >
+                                <option value="">Elegir</option>
+                                {opciones.map((item) => (
+                                    <option key={item.id} value={String(item.id)}>{item.nombre}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {campoImporteMercancia}
+                    </div>
+                </>
+            )}
+            {elegida?.nombre === 'PAQ. PENDIENTE' && (
+                <p className="text-sm theme-text-muted m-0">El flete queda pendiente. Puede continuar con el pago de mercancía después de cerrar la consulta.</p>
+            )}
+        </section>
+    );
+
     const contenido = (
         <div className="grid min-w-0 gap-4">
-            {(!enviada || mercancia.length > 0) && (
-                <section className="registrar-tienda-panel space-y-3" aria-labelledby="mercancia-nacional-titulo">
-                    <h3 id="mercancia-nacional-titulo" className="m-0 text-base">Mercancía</h3>
-                    {!enviada && <>
-                        <p className="text-sm theme-text-muted m-0">Si el documento identifica las piezas, puede enviar la consulta con ese soporte.</p>
-                        {editorPiezas}
-                        {errorComplemento && <p className="text-sm theme-text-aviso m-0" role="alert">{errorComplemento}</p>}
-                    </>}
-                    {listaPiezas(mercancia, !enviada)}
-                </section>
-            )}
-            <section className="registrar-tienda-panel space-y-3" aria-labelledby="envio-nacional-titulo">
-                <h3 id="envio-nacional-titulo" className="m-0 text-base">Envío nacional</h3>
-                <p className="text-sm theme-text-main m-0">Salida: CEDIS</p>
-                {enviada ? (
-                    <p className="text-sm theme-text-main m-0">Paquetería: {elegida?.nombre || actual?.paqueteria?.nombre || 'Consultar selección'}</p>
-                ) : (
-                    <div className="min-w-0">
-                        <label className={THEME_LABEL} htmlFor="paqueteria-nacional">Paquetería</label>
-                        <select
-                            id="paqueteria-nacional"
-                            className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
-                            value={paqueteriaId}
-                            disabled={enviando || bloqueado}
-                            aria-invalid={tocada && !paqueteriaId ? 'true' : undefined}
-                            aria-describedby={error ? 'paqueteria-nacional-error' : undefined}
-                            onBlur={() => {
-                                setTocada(true);
-                                if (!paqueteriaId) setError(opciones.length ? 'Elija la paquetería o seleccione PAQ. PENDIENTE.' : 'No hay paqueterías nacionales disponibles.');
-                            }}
-                            onFocus={() => setError('')}
-                            onChange={(evento) => {
-                                setPaqueteriaId(evento.target.value);
-                                setPaqueteriaEditada(true);
-                                setError('');
-                            }}
-                        >
-                            <option value="">Elegir</option>
-                            {opciones.map((item) => (
-                                <option key={item.id} value={String(item.id)}>{item.nombre}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-                {elegida?.nombre === 'PAQ. PENDIENTE' && (
-                    <p className="text-sm theme-text-muted m-0">El flete queda pendiente. Puede continuar con el pago de mercancía después de cerrar la consulta.</p>
-                )}
-            </section>
             {enviada && (
-                <SeguimientoSolicitudNacional pedido={actual} onPedidoActualizado={adoptar} onVer={onVer} />
+                <SeguimientoSolicitudNacional pedido={actual} onPedidoActualizado={adoptar} onVer={onVer}
+                    referenciaMercancia={listaPiezas(mercancia, false)} />
             )}
             {puedeCambiarPaqueteria && (
                 <section className="registrar-tienda-panel space-y-2" aria-label="Cambiar paquetería">
@@ -557,6 +612,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     );
 
     return children({
-        contenido, accion, pie: accion, guardarBorrador: () => guardarMercancia(), enviando,
+        contenido, panelEnvio, accion, pie: accion, guardarBorrador: () => guardarMercancia(), enviando,
     });
 }

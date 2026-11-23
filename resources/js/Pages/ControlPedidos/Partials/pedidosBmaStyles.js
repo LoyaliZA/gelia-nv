@@ -187,8 +187,32 @@ export const estadoTransferenciaTienda = (pedido, fase = pedido?.estatus?.fase_c
     return null;
 };
 
+/**
+ * Municipal con recorrido físico (marca persistente): tras salir de CEDIS el pedido queda en fase ENVIADO
+ * por el traslado interno; la etiqueta distingue traslado, custodia en sucursal y salida a terminal.
+ */
+const ESTADOS_SUCURSAL_MUNICIPAL = {
+    en_transito: 'En traslado a sucursal',
+    recepcion_gerente_parcial: 'Pendiente de custodia',
+    recibido: 'Pendiente de custodia',
+    en_recepcion: 'Pendiente de custodia',
+    custodia_parcial: 'Pendiente de custodia',
+    en_custodia: 'En custodia',
+};
+
+export const estadoRecorridoMunicipal = (pedido, fase = pedido?.estatus?.fase_ciclo) => {
+    const solicitud = pedido?.solicitud_preparacion;
+    if (solicitud?.modalidad_entrega !== 'municipal' || solicitud?.recorrido_fisico_municipal !== true) return null;
+    if (['CANCELADO', 'ENTREGADO'].includes(fase)) return null;
+    if (solicitud.salida_terminal) return { label: 'Salida a terminal', color: 'var(--color-exito)' };
+    const estado = ESTADOS_SUCURSAL_MUNICIPAL[pedido.estatus_sucursal];
+    if (estado) return { label: estado, color: pedido.estatus_sucursal === 'en_custodia' ? 'var(--color-exito)' : 'var(--color-primario)' };
+    if (fase === 'ENVIADO') return { label: 'En traslado a sucursal', color: 'var(--color-primario)' };
+    return null;
+};
+
 export const etiquetaEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
-    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo);
+    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo) ?? estadoRecorridoMunicipal(pedido, estatus?.fase_ciclo);
     if (transferencia) return transferencia.label;
     if (pedido?.estatus_envio === 'apartado_liberado') return 'Apartado liberado';
     if (['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(estatus?.fase_ciclo) && (estadoConsultaPedido(pedido) || pedido?.consulta_cerrada || pedido?.consulta_cerrada_at)) {
@@ -514,7 +538,12 @@ export const operacionEmpaqueDe = (pedido) => (
     || null
 );
 
-export const complementosDe = (pedido) => pedido?.complementos || [];
+/** Complementos que se empacan con el grupo. Las piezas adicionales municipales se integran por su propia confirmación. */
+export const complementosDe = (pedido) => {
+    const adicionales = new Set((pedido?.piezas_adicionales?.items || []).map((c) => c.id));
+
+    return (pedido?.complementos || []).filter((c) => !adicionales.has(c.id));
+};
 
 export const miembrosGrupoEmpaque = (pedido) => {
     if (!pedido) return [];
@@ -796,7 +825,7 @@ export const tieneErrorGuiaReportado = (pedido) => {
 
 /** Badge con color del catálogo + etiqueta semántica del estado. */
 export const badgeEstatusPedido = (estatus, { esResguardo = false, requiereLogistica = true, pedido = null } = {}) => {
-    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo);
+    const transferencia = estadoTransferenciaTienda(pedido, estatus?.fase_ciclo) ?? estadoRecorridoMunicipal(pedido, estatus?.fase_ciclo);
     if (transferencia) return { label: transferencia.label, ...badgeClaseEstatusPedido({ color_hex: transferencia.color }) };
     const consulta = estadoConsultaPedido(pedido);
     if (pedido?.estatus_envio === 'apartado_liberado') return { label: 'Apartado liberado', ...badgeClaseEstatusPedido({ color_hex: 'var(--color-aviso)' }) };

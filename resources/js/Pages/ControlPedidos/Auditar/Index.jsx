@@ -139,7 +139,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const abrirAnexar = (pedido) => setModalAnexo({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
 
-    const atencion = (metricasVista.pendientes ?? 0) + (metricasVista.corregidos ?? 0);
+    // Un pago de envío o anexo por verificar también espera al auxiliar, aunque no esté en Pendientes.
+    const atencion = (metricasVista.pendientes ?? 0) + (metricasVista.corregidos ?? 0) + (metricasVista.anexo_por_verificar ?? 0);
     const hayFiltrosActivos = Boolean(busqueda) || Boolean(paqueteriaId) || Boolean(departamentoId)
         || Boolean(clienteFiltro) || (ordenar && ordenar !== 'fecha_desc');
 

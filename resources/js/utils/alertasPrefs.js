@@ -49,6 +49,8 @@ export const ALERTAS_TIPOS = {
     pedido_pendiente_envio: 'Pedido pendiente de recolección',
     pedido_guia_asignada: 'Guía asignada (pedido)',
     pedido_enviado: 'Paquetería recogió el paquete',
+    pedido_salida_cedis_pdv: 'Salida de CEDIS hacia PDV',
+    pedido_salida_terminal: 'Salida a terminal',
     pedido_resguardo_liberado: 'Resguardo liberado (CEDIS)',
     listo_cedis: 'Traspaso listo para CEDIS',
     detalle_dano_cedis: 'Detalle o daño CEDIS (traspaso)',

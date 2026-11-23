@@ -6,7 +6,11 @@ use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\ResguardoPdv;
 use App\Models\PuntoVenta\ResguardoPdvEvento;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\User;
+use App\Support\ControlPedidos\Municipal\PresentadorCambioATienda;
+use App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales;
+use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\PoliticaResguardoEnvio;
 use App\Support\PuntoVenta\Resguardos\AutorizacionConsultaResguardoPdv;
 use App\Support\PuntoVenta\Resguardos\EstadoRecepcionResguardoPdv;
@@ -31,6 +35,7 @@ class ConsultaDetalleResguardoPdvService
         private readonly ConsultaAuditoriaResguardoPdvService $auditoria,
         private readonly SincronizarCantidadBultosEsperadaResguardoPdvService $sincronizarCantidadBultos,
         private readonly AutorizacionConsultaResguardoPdv $autorizacion,
+        private readonly RegistrarSalidaTerminalResguardoPdvService $salidaTerminal,
     ) {}
 
     /**
@@ -102,10 +107,80 @@ class ConsultaDetalleResguardoPdvService
 
         $serializado = $this->serializarResguardo($resguardo);
         $serializado['integracion_municipal'] = $this->integracionMunicipal($user, $resguardo);
+        if ($resguardo->esOrigenMunicipal()) {
+            // Solo municipal: Tienda y Nacional conservan su forma.
+            $salida = $resguardo->salidaTerminal();
+            $serializado['puede_salida_terminal'] = $this->salidaTerminal->puedeRegistrar($user, $resguardo);
+            $serializado['salida_terminal'] = $salida ? [
+                'at' => $salida['at'] ?? null,
+                'receptor' => $salida['receptor'] ?? null,
+            ] : null;
+            $serializado['es_municipal'] = true;
+            $serializado['caratula'] = $this->resumenCaratulaMunicipal($user, $resguardo);
+            $serializado['complementos_municipales'] = $this->complementosMunicipales($user, $resguardo);
+            $pedidoCambio = $resguardo->pedido_bma_id ? PedidoBma::query()->find($resguardo->pedido_bma_id) : null;
+            $serializado['cambio_a_tienda'] = $pedidoCambio ? PresentadorCambioATienda::para($pedidoCambio, $user) : null;
+        }
 
         return [
             'resguardo' => $serializado,
             'timeline' => $auditoria['timeline'],
+        ];
+    }
+
+    /**
+     * Resumen de la carátula del envío municipal para las acciones del detalle. Las rutas de carátula repiten la
+     * validación de permiso y sucursal; aquí solo se decide qué acciones ofrecer.
+     *
+     * @return array<string, mixed>|null
+     */
+    /**
+     * M-03b: piezas adicionales del envío para la sucursal que tiene el paquete. La misma fuente que ve CEDIS y Ventas;
+     * «puede_integrar» exige pago y remisión propios, paquete en custodia y personal de la sucursal.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function complementosMunicipales(User $user, ResguardoPdv $resguardo): array
+    {
+        $principal = $resguardo->pedido_bma_id ? PedidoBma::query()->find($resguardo->pedido_bma_id) : null;
+
+        return $principal instanceof PedidoBma
+            ? (PresentadorPiezasAdicionales::para($principal, $user)['items'] ?? [])
+            : [];
+    }
+
+    private function resumenCaratulaMunicipal(User $user, ResguardoPdv $resguardo): ?array
+    {
+        // La relación del resguardo carga pocas columnas; la carátula necesita destino, cancelación y estatus.
+        $pedido = $resguardo->pedido_bma_id ? PedidoBma::query()->with('estatus')->find($resguardo->pedido_bma_id) : null;
+        if (! $pedido || ! RecorridoFisicoMunicipal::aplica($pedido)) {
+            return null;
+        }
+
+        $vigente = PedidoBmaCaratula::query()
+            ->where('pedido_bma_id', $pedido->id)
+            ->whereNull('pedido_bma_tarea_preparacion_id')
+            ->whereIn('estado', [PedidoBmaCaratula::ESTADO_GENERADA, PedidoBmaCaratula::ESTADO_COLOCADA])
+            ->whereNotNull('ruta_pdf')
+            ->orderByDesc('version')
+            ->first();
+
+        $sucursalOk = $pedido->sucursal_destino_id
+            && $user->idsSucursalesOperables()->contains((int) $pedido->sucursal_destino_id);
+        $cancelado = $pedido->cancelado_at || $pedido->estatus?->fase_ciclo === 'CANCELADO';
+        // Tras la salida a terminal el paquete ya no está en la sucursal: solo queda consultar la carátula.
+        $editable = ! $cancelado && ! RecorridoFisicoMunicipal::salioATerminal($pedido);
+
+        return [
+            'pedido_id' => (int) $pedido->id,
+            'id' => $vigente?->id,
+            'version' => $vigente?->version,
+            'estado' => $vigente?->estado,
+            'generada_at' => $vigente?->generada_at?->toIso8601String(),
+            'puede_generar' => ! $vigente && $sucursalOk && $editable && $user->can('control_pedidos.tienda.generar_caratula'),
+            'puede_regenerar' => $vigente !== null && $vigente->estado !== PedidoBmaCaratula::ESTADO_COLOCADA
+                && $sucursalOk && $editable && $user->can('control_pedidos.tienda.regenerar_caratula'),
+            'puede_descargar' => $vigente !== null && $sucursalOk && $user->can('control_pedidos.tienda.imprimir_caratula'),
         ];
     }
 
@@ -171,7 +246,7 @@ class ConsultaDetalleResguardoPdvService
             'id' => $resguardo->id,
             'version' => (int) $resguardo->version,
             'estado' => $resguardo->estado,
-            'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstado($resguardo->estado),
+            'estado_etiqueta' => EtiquetasResguardoPdv::etiquetaEstadoResguardo($resguardo),
             'pedido_bma_id' => $resguardo->pedido_bma_id,
             'es_t02_documental' => \App\Support\ControlPedidos\TransferenciaT02::documental($resguardo->pedido),
             'es_custodia_documental' => \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($resguardo->pedido),

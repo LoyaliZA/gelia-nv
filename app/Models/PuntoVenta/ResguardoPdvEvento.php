@@ -45,6 +45,9 @@ class ResguardoPdvEvento extends Model
 
     public const TIPO_ENTREGA_PARCIAL = 'resguardo.entrega_parcial';
 
+    /** Municipal: el repartidor llevó el paquete a terminal. No es entrega al cliente. */
+    public const TIPO_SALIDA_TERMINAL = 'resguardo.salida_terminal';
+
     public const TIPO_MARCADO_VENCIDO = 'resguardo.marcado_vencido';
 
     public const TIPO_VENCIDO_REPUESTO = 'resguardo.vencido_repuesto';

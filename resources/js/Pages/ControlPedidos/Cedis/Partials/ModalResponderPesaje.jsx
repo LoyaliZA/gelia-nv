@@ -1,10 +1,11 @@
 import { resumenActualizacionConsulta } from './resumenActualizacionConsulta';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
+import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
-import { X, Scale, Plus, Trash2, FileText, ChevronDown, Search, ExternalLink, Smartphone } from 'lucide-react';
+import { X, Scale, Plus, Trash2, FileText, ChevronDown, Search, ExternalLink, Smartphone, Package } from 'lucide-react';
 import {
     THEME_MODAL_OVERLAY,
     THEME_MODAL_SHELL,
@@ -210,10 +211,22 @@ const evidenciaProductoSigue = (rev) => (rev.previews || []).some((p) => {
     return Boolean(p.remoto);
 });
 
+function SeccionPesaje({ nacional, indice, titulo, paso, children }) {
+    if (!nacional) return children;
+    return (
+        <section id={`pesaje-nacional-seccion-${indice}`} hidden={paso === 2 ? indice !== 2 : indice === 2}
+            className="gelia-pesaje-nacional-seccion" aria-labelledby={`pesaje-nacional-titulo-${indice}`}>
+            <h3 id={`pesaje-nacional-titulo-${indice}`} className="gelia-pedidos-seccion-titulo m-0">{titulo}</h3>
+            <div className="gelia-pesaje-nacional-contenido space-y-4">{children}</div>
+        </section>
+    );
+}
+
 export default function ModalResponderPesaje({
     abierto, onClose, pedido, tiposCaja = [], almacenesBusqueda = [],
 }) {
     const soloRevisiones = cedisConsultaEsRevisionMercancia(pedido);
+    const nacional = !soloRevisiones && presentacionPedidoCedis(pedido || {}).modalidad === 'nacional';
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const exigeCajaSinPeso = soloRevisiones && !trasladoInterno && Boolean(pedido?.paqueteria?.requiere_caja);
     const empaqueConsulta = soloRevisiones
@@ -671,10 +684,10 @@ export default function ModalResponderPesaje({
     }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja, soloRevisiones]);
 
     useEffect(() => {
-        if (!abierto || esCampo || paso !== 1) return undefined;
+        if (nacional || !abierto || esCampo || paso !== 1) return undefined;
         const t = window.setTimeout(() => skuPistolaRef.current?.focus(), 200);
         return () => window.clearTimeout(t);
-    }, [abierto, esCampo, paso]);
+    }, [abierto, esCampo, paso, nacional]);
 
     useEffect(() => () => {
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
@@ -928,7 +941,8 @@ export default function ModalResponderPesaje({
     };
 
     const avisarCampo = (id, mensaje) => {
-        setPaso(id === 'cedis-sku-pesaje' || id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-') ? 1 : 2);
+        const destino = id === 'cedis-sku-pesaje' || id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-') ? 1 : 2;
+        setPaso(nacional && destino === 1 ? 0 : destino);
         if (id.startsWith('pesaje-comentario-') || id.startsWith('pesaje-evidencia-producto-')) setListaProductosAbierta(true);
         setErrorCampo({ id, mensaje });
         window.requestAnimationFrame(() => {
@@ -1032,6 +1046,7 @@ export default function ModalResponderPesaje({
         for (let i = 0; i < revisiones.length; i++) {
             const r = revisiones[i];
             if (!r.descripcion_producto.trim()) {
+                if (nacional) { setPaso(0); setListaProductosAbierta(true); }
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Producto sin descripción.' });
                 return;
             }
@@ -1040,6 +1055,7 @@ export default function ModalResponderPesaje({
                 || Number(r.cantidad_encontrada) < 0 || Number(r.cantidad_encontrada) > Number(r.cantidad_solicitada)
                 || (r.estado_fisico === 'sin_existencia' && Number(r.cantidad_encontrada) !== 0))) {
                 actualizarRevision(i, 'expandido', true);
+                if (nacional) { setPaso(0); setListaProductosAbierta(true); }
                 setAlerta({ abierto: true, tipo: 'error', titulo: `Producto ${i + 1}`, mensaje: 'Revise las cantidades solicitadas y encontradas.' });
                 return;
             }
@@ -1191,7 +1207,16 @@ export default function ModalResponderPesaje({
     ];
     const cambiarPaso = (siguiente) => {
         if (procesando) return;
-        setPaso(siguiente);
+        const destino = nacional && siguiente === 1 ? 0 : siguiente;
+        setPaso(destino);
+        if (nacional) {
+            window.requestAnimationFrame(() => {
+                cuerpoRef.current?.scrollTo({ top: 0, behavior: 'instant' });
+                if (destino === 0 && !esCampo) skuPistolaRef.current?.focus({ preventScroll: true });
+                else document.getElementById(destino === 2 ? 'pesaje-envios' : 'pesaje-referencia')?.focus({ preventScroll: true });
+            });
+            return;
+        }
         window.requestAnimationFrame(() => {
             cuerpoRef.current?.scrollTo({ top: 0, behavior: 'instant' });
             const id = ['pesaje-referencia', 'pesaje-productos', 'pesaje-envios'][siguiente];
@@ -1321,17 +1346,137 @@ export default function ModalResponderPesaje({
         );
     });
 
+    const almacenPreparacion = (
+        <>
+                        <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+                            <p className="text-sm font-bold theme-text-main m-0">Almacén y pedido</p>
+                            {pdfPedido?.url && (
+                                <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
+                                    <FileText className="w-3.5 h-3.5" /> Ver PDF del pedido
+                                </button>
+                            )}
+                        </div>
+                        <label className="block text-sm font-bold mb-3">Almacén del catálogo de preparación
+                            <select className={`${THEME_SELECT} w-full`} value={almacenBusquedaId || ''} disabled={procesando || revisiones.length > 0}
+                                onChange={(e) => { clearTimeout(skuDebounceRef.current); skuAbortRef.current?.abort(); setSkuQuery(''); setSkuResultados([]); setSkuError(''); setAlmacenElegidoId(e.target.value); }}>
+                                <option value="">Seleccione almacén…</option>
+                                {(almacenesBusqueda || []).map((a) => <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>)}
+                            </select>
+                            {revisiones.length > 0 && <span className="block text-xs theme-text-muted">Las piezas conservan el almacén utilizado al registrarlas.</span>}
+                        </label>
+        </>
+    );
+
     const accionesRespuesta = (
         <>
-            <button type="button" onClick={() => paso > 0 ? cambiarPaso(paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px]`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
+            <button type="button" onClick={() => paso > 0 ? cambiarPaso(nacional ? 0 : paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px]`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
             {paso < 2 ? (
-                <button type="button" onClick={() => cambiarPaso(paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{paso === 0 ? 'Revisar productos' : (soloRevisiones ? empaqueConsulta.ctaPaso : 'Cajas y evidencias')}</button>
+                <button type="button" onClick={() => cambiarPaso(nacional ? 2 : paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{nacional ? 'Siguiente' : paso === 0 ? 'Revisar productos' : (soloRevisiones ? empaqueConsulta.ctaPaso : 'Cajas y evidencias')}</button>
             ) : (
                 <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px]`}>
-                    <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
+                    <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (nacional ? 'Enviar respuesta' : soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
                 </button>
             )}
         </>
+    );
+
+    const encabezadoSeccion = (indice, titulo) => ({ nacional, indice, titulo, paso });
+
+    const comparacionRespuesta = resumenAntesDespues && (
+        <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
+            <p className={`${SECCION} m-0`}>Antes → después</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="rounded-lg border theme-border p-3 space-y-1">
+                    <p className="text-xs font-medium theme-text-muted m-0">Antes (CEDIS)</p>
+                    <p className="m-0 font-bold theme-text-main">
+                        {resumenAntesDespues.antes.productos.length} producto(s)
+                        {!soloRevisiones && (
+                            <> · {resumenAntesDespues.antes.envios} envío(s) · {Math.round((resumenAntesDespues.antes.pesoCobrado || 0) * 10000) / 10000} kg</>
+                        )}
+                    </p>
+                    <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                        {resumenAntesDespues.antes.productos.slice(0, 12).map((p, i) => (
+                            <li key={`a-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                        ))}
+                        {resumenAntesDespues.antes.productos.length > 12 && (
+                            <li>+{resumenAntesDespues.antes.productos.length - 12} más</li>
+                        )}
+                    </ul>
+                </div>
+                <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
+                    <p className="text-xs font-medium theme-text-muted m-0">Después (a guardar)</p>
+                    <p className="m-0 font-bold theme-text-main">
+                        {resumenAntesDespues.despues.productos.length} producto(s)
+                        {!soloRevisiones && (
+                            <> · {resumenAntesDespues.despues.envios} envío(s) · {Math.round((resumenAntesDespues.despues.pesoCobrado || 0) * 10000) / 10000} kg</>
+                        )}
+                    </p>
+                    <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
+                        {resumenAntesDespues.despues.productos.slice(0, 12).map((p, i) => (
+                            <li key={`d-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
+                        ))}
+                        {resumenAntesDespues.despues.productos.length > 12 && (
+                            <li>+{resumenAntesDespues.despues.productos.length - 12} más</li>
+                        )}
+                    </ul>
+                </div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+                {resumenAntesDespues.piezas.sinCambioPiezas && (
+                    <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
+                        Sin cambios de piezas. Se conserva el motivo de la actualización.
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.agregadas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
+                        {resumenAntesDespues.piezas.agregadas.length} agregada(s): {resumenAntesDespues.piezas.agregadas.map((p) => p.etiqueta).join(', ')}
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.retiradas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
+                        {resumenAntesDespues.piezas.retiradas.length} retirada(s): {resumenAntesDespues.piezas.retiradas.map((p) => p.etiqueta).join(', ')}
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.sustituidas.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.sustituidas.length} sustituida(s)
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.cantidades.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.cantidades.length} con cantidad modificada
+                    </span>
+                )}
+                {resumenAntesDespues.piezas.condiciones.length > 0 && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        {resumenAntesDespues.piezas.condiciones.length} con condición modificada
+                    </span>
+                )}
+                {resumenAntesDespues.cambioEnvios && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
+                    </span>
+                )}
+                {resumenAntesDespues.cambioPeso && (
+                    <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
+                        Peso cobrado cambió (se puede invalidar costo de envío)
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+
+    const pieRespuesta = (
+        <div className="flex flex-col gap-3 pt-2">
+            <p className="m-0 text-xs theme-text-muted" role="status">
+                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
+                {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
+                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
+            </p>
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+                {accionesRespuesta}
+            </div>
+        </div>
     );
 
     return createPortal(
@@ -1340,7 +1485,7 @@ export default function ModalResponderPesaje({
                 <div
                     {...dialog}
                     aria-labelledby="pesaje-titulo"
-                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-respuesta max-w-3xl w-full flex flex-col`}
+                    className={`${THEME_MODAL_SHELL} gelia-pedidos-dialog-workspace gelia-pedidos-respuesta ${nacional ? 'gelia-pesaje-nacional' : 'max-w-3xl'} w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
                 >
@@ -1377,12 +1522,12 @@ export default function ModalResponderPesaje({
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
-                        <div className="flex flex-wrap gap-2 sm:justify-end">
+                        {!nacional && <div className="flex flex-wrap gap-2 sm:justify-end">
                             {accionesRespuesta}
-                        </div>
+                        </div>}
                     </div>
 
-                    <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
+                    {!nacional && <nav className="gelia-pedidos-pasos" aria-label="Pasos para responder">
                         {pasos.map((label, index) => (
                             <button key={label} type="button" disabled={procesando}
                                 aria-current={paso === index ? 'step' : undefined}
@@ -1390,102 +1535,21 @@ export default function ModalResponderPesaje({
                                 <span aria-hidden="true">{index + 1}</span>{label}
                             </button>
                         ))}
-                    </nav>
+                    </nav>}
                     <div ref={cuerpoRef} className="gelia-modal-body p-4 md:p-6 space-y-5">
-                        <p className="text-xs theme-text-muted m-0" role="status">Paso {paso + 1} de 3 · {instrucciones[paso]}</p>
-                        {paso === 0 && (pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
+                        {!nacional && <p className="text-xs theme-text-muted m-0" role="status">Paso {paso + 1} de 3 · {instrucciones[paso]}</p>}
+                        {(nacional || paso === 0) && (pedido.motivo_repesaje || pedido.consulta_actualizacion_pendiente) && (
                             <AvisoOperativoPedido label="Actualización de consulta" tono="warning" icon={Scale}>
                                 Motivo: {LABELS_MOTIVO_REPESAJE[pedido.motivo_repesaje] || pedido.motivo_repesaje || 'cambio'}
                                 . Revise el resumen antes → después, ajuste piezas/cajas y guarde.
                             </AvisoOperativoPedido>
                         )}
 
-                        {paso === 2 && resumenAntesDespues && (
-                            <div className="p-4 rounded-xl border theme-border theme-element space-y-3">
-                                <p className={`${SECCION} m-0`}>Antes → después</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                                    <div className="rounded-lg border theme-border p-3 space-y-1">
-                                        <p className="text-xs font-medium theme-text-muted m-0">Antes (CEDIS)</p>
-                                        <p className="m-0 font-bold theme-text-main">
-                                            {resumenAntesDespues.antes.productos.length} producto(s)
-                                            {!soloRevisiones && (
-                                                <> · {resumenAntesDespues.antes.envios} envío(s) · {Math.round((resumenAntesDespues.antes.pesoCobrado || 0) * 10000) / 10000} kg</>
-                                            )}
-                                        </p>
-                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
-                                            {resumenAntesDespues.antes.productos.slice(0, 12).map((p, i) => (
-                                                <li key={`a-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
-                                            ))}
-                                            {resumenAntesDespues.antes.productos.length > 12 && (
-                                                <li>+{resumenAntesDespues.antes.productos.length - 12} más</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                    <div className="rounded-lg border theme-border p-3 space-y-1" style={{ borderColor: 'color-mix(in srgb, var(--color-primario) 45%, transparent)' }}>
-                                        <p className="text-xs font-medium theme-text-muted m-0">Después (a guardar)</p>
-                                        <p className="m-0 font-bold theme-text-main">
-                                            {resumenAntesDespues.despues.productos.length} producto(s)
-                                            {!soloRevisiones && (
-                                                <> · {resumenAntesDespues.despues.envios} envío(s) · {Math.round((resumenAntesDespues.despues.pesoCobrado || 0) * 10000) / 10000} kg</>
-                                            )}
-                                        </p>
-                                        <ul className="m-0 pl-4 list-disc theme-text-muted font-bold max-h-28 overflow-y-auto">
-                                            {resumenAntesDespues.despues.productos.slice(0, 12).map((p, i) => (
-                                                <li key={`d-${i}`}>{p.label} ({LABELS_ESTADO_FISICO[p.estado] || p.estado})</li>
-                                            ))}
-                                            {resumenAntesDespues.despues.productos.length > 12 && (
-                                                <li>+{resumenAntesDespues.despues.productos.length - 12} más</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap gap-2 text-xs font-semibold">
-                                    {resumenAntesDespues.piezas.sinCambioPiezas && (
-                                        <span className="px-2 py-1 rounded-lg theme-element theme-text-muted border theme-border">
-                                            Sin cambios de piezas. Se conserva el motivo de la actualización.
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.agregadas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/15 text-emerald-700">
-                                            {resumenAntesDespues.piezas.agregadas.length} agregada(s): {resumenAntesDespues.piezas.agregadas.map((p) => p.etiqueta).join(', ')}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.retiradas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg bg-rose-500/15 text-rose-700">
-                                            {resumenAntesDespues.piezas.retiradas.length} retirada(s): {resumenAntesDespues.piezas.retiradas.map((p) => p.etiqueta).join(', ')}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.sustituidas.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.sustituidas.length} sustituida(s)
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.cantidades.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.cantidades.length} con cantidad modificada
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.piezas.condiciones.length > 0 && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            {resumenAntesDespues.piezas.condiciones.length} con condición modificada
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.cambioEnvios && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            Envios {resumenAntesDespues.antes.envios} → {resumenAntesDespues.despues.envios}
-                                        </span>
-                                    )}
-                                    {resumenAntesDespues.cambioPeso && (
-                                        <span className="px-2 py-1 rounded-lg gelia-estado-vivo gelia-estado-vivo--aviso">
-                                            Peso cobrado cambió (se puede invalidar costo de envío)
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        )}
+                        {!nacional && paso === 2 && comparacionRespuesta}
 
-                        <div className="space-y-4">
-                        <div hidden={paso !== 0} className="gelia-pedidos-paso space-y-4">
+                        <div className={nacional ? "gelia-pesaje-nacional-vistas" : "space-y-4"}>
+                        <SeccionPesaje {...encabezadoSeccion(0, 'Pedido')}>
+                        <div hidden={!nacional && paso !== 0} className="gelia-pedidos-paso space-y-4">
                         <section id="pesaje-referencia" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1541,26 +1605,14 @@ export default function ModalResponderPesaje({
                         )}
 
                         </div>
-                        <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
-                            <p className="text-sm font-bold theme-text-main m-0">Almacén y pedido</p>
-                            {pdfPedido?.url && (
-                                <button type="button" onClick={() => abrirGaleria([pdfPedido], 0)} className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}>
-                                    <FileText className="w-3.5 h-3.5" /> Ver PDF del pedido
-                                </button>
-                            )}
-                        </div>
-                        <label className="block text-sm font-bold mb-3">Almacén del catálogo de preparación
-                            <select className={`${THEME_SELECT} w-full`} value={almacenBusquedaId || ''} disabled={procesando || revisiones.length > 0}
-                                onChange={(e) => { clearTimeout(skuDebounceRef.current); skuAbortRef.current?.abort(); setSkuQuery(''); setSkuResultados([]); setSkuError(''); setAlmacenElegidoId(e.target.value); }}>
-                                <option value="">Seleccione almacén…</option>
-                                {(almacenesBusqueda || []).map((a) => <option key={a.id} value={a.id}>{etiquetaAlmacen(a)}</option>)}
-                            </select>
-                            {revisiones.length > 0 && <span className="block text-xs theme-text-muted">Las piezas conservan el almacén utilizado al registrarlas.</span>}
-                        </label>
-                        <fieldset disabled={procesando} className="gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0">
-                        <section id="pesaje-productos" tabIndex={-1} hidden={paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
+                        {!nacional && almacenPreparacion}
+                        </SeccionPesaje>
+                        <fieldset disabled={procesando} className={`gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0 ${nacional ? 'gelia-pesaje-nacional-campos' : ''}`}>
+                        <SeccionPesaje {...encabezadoSeccion(1, 'Revisión física de productos')}>
+                        {nacional && almacenPreparacion}
+                        <section id="pesaje-productos" tabIndex={-1} hidden={!nacional && paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>
+                                {!nacional && <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>}
                                 <span className="text-xs theme-text-muted tabular-nums">{cantidadSolicitadaRevisada} de {pedido.cantidad_piezas || '—'} piezas</span>
                                 {borradorMsg && (
                                     <p className="text-xs font-medium theme-text-muted m-0" role="status">{borradorMsg}</p>
@@ -1676,6 +1728,7 @@ export default function ModalResponderPesaje({
                             )}
                         </section>
 
+                        </SeccionPesaje>
                         {soloRevisiones && (
                         <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Evidencia final del pedido</h3>
@@ -1736,7 +1789,8 @@ export default function ModalResponderPesaje({
                         )}
 
                         {!soloRevisiones && (
-                        <section id="pesaje-envios" tabIndex={-1} hidden={paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
+                        <SeccionPesaje {...encabezadoSeccion(2, 'Cajas y evidencias')}>
+                        <section id="pesaje-envios" tabIndex={-1} hidden={!nacional && paso !== 2} className="gelia-pedidos-paso gelia-pedidos-seccion">
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Envíos</h3>
                             <p className="text-xs theme-text-muted font-normal m-0 mb-3">
                                 Por cada caja adjunte la foto del lote de productos que van en ese envío.
@@ -1746,15 +1800,47 @@ export default function ModalResponderPesaje({
                                     const cobrado = calcularPesoCobradoGuia(envio.peso_real_kg, envio.peso_volumetrico_kg);
                                     const slot = evidenciasPorEnvio[idx] || slotEnvioVacio();
                                     const esUltimo = idx === envios.length - 1;
+                                    const datosCatalogo = (envio.catalogo_tipo_caja_id ? (
+                                        <details open={nacional || undefined} className={`rounded-xl border theme-border theme-surface p-3 sm:p-4 ${nacional ? 'gelia-pesaje-caja-catalogo' : ''}`}>
+                                            <summary className="cursor-pointer min-h-[44px] text-xs theme-text-muted">
+                                                Datos del catálogo · {envio.largo || '—'} × {envio.ancho || '—'} × {envio.alto || '—'} cm
+                                                <span className="block mt-1 text-sm font-semibold theme-text-main">Peso cobrado: {cobrado === '' ? '—' : cobrado} kg</span>
+                                            </summary>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                <div>
+                                                    <p className="text-xs font-medium theme-text-muted m-0">Largo</p>
+                                                    <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.largo || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium theme-text-muted m-0">Ancho</p>
+                                                    <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.ancho || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium theme-text-muted m-0">Alto</p>
+                                                    <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.alto || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-medium theme-text-muted m-0">Peso vol.</p>
+                                                    <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.peso_volumetrico_kg || '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
+                                                </div>
+                                                <div className="col-span-2 sm:col-span-2">
+                                                    <p className="text-xs font-medium theme-text-muted m-0">Peso cobrado</p>
+                                                    <p className="text-lg font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{cobrado !== '' ? cobrado : '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
+                                                </div>
+                                            </div>
+                                        </details>
+                                                ) : (
+                                        <p className="text-xs theme-text-muted font-normal m-0">Seleccione el tipo de caja para ver medidas del catálogo.</p>
+                                                ));
                                     return (
-                                        <div key={envio.client_uuid} ref={esUltimo ? envioNuevoRef : undefined} className="p-4 rounded-xl border theme-border theme-element space-y-3">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <p className="text-sm font-semibold theme-text-main m-0">{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
+                                        <div key={envio.client_uuid} ref={esUltimo ? envioNuevoRef : undefined} className={nacional ? "gelia-pesaje-caja" : "p-4 rounded-xl border theme-border theme-element space-y-3"}>
+                                            <div className={nacional ? "gelia-pesaje-caja-cabecera" : "flex items-center justify-between gap-2"}>
+                                                <p className="text-sm font-semibold theme-text-main m-0">{nacional && <Package size={20} aria-hidden="true" />}{etiquetaEnvio(idx, { tipo_caja: tiposCaja.find((t) => String(t.id) === String(envio.catalogo_tipo_caja_id)) })}</p>
                                                 <button type="button" onClick={() => envios.length > 1 && setConfirmacion({ tipo: 'quitar_envio', idx })} disabled={envios.length <= 1} className="p-2 min-h-[44px] min-w-[44px] rounded-xl border theme-border theme-element outline-none disabled:opacity-40 inline-flex items-center justify-center theme-text-main" aria-label={`Quitar envío ${idx + 1}`}>
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
                                             </div>
-                                            <div className="space-y-3">
+                                            <div className={nacional ? "gelia-pesaje-caja-datos" : "space-y-3"}>
                                                 <div>
                                                     <label htmlFor={`pesaje-caja-${envio.client_uuid}`} className={SECCION}>Tipo de caja *</label>
                                                     <select id={`pesaje-caja-${envio.client_uuid}`} {...atributosError(`pesaje-caja-${envio.client_uuid}`)} name={`caja-${envio.client_uuid}`} aria-required="true" value={envio.catalogo_tipo_caja_id} onChange={(e) => actualizarEnvio(idx, 'catalogo_tipo_caja_id', e.target.value)} className={`${THEME_SELECT} w-full py-3 min-h-[44px]`}>
@@ -1765,46 +1851,17 @@ export default function ModalResponderPesaje({
                                                     </select>
                                                     {mensajeError(`pesaje-caja-${envio.client_uuid}`)}
                                                 </div>
-                                                {envio.catalogo_tipo_caja_id ? (
-                                                    <details className="rounded-xl border theme-border theme-surface p-3 sm:p-4">
-                                                        <summary className="cursor-pointer min-h-[44px] text-xs theme-text-muted">
-                                                            Datos del catálogo · {envio.largo || '—'} × {envio.ancho || '—'} × {envio.alto || '—'} cm
-                                                            <span className="block mt-1 text-sm font-semibold theme-text-main">Peso cobrado: {cobrado === '' ? '—' : cobrado} kg</span>
-                                                        </summary>
-                                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                                            <div>
-                                                                <p className="text-xs font-medium theme-text-muted m-0">Largo</p>
-                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.largo || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-medium theme-text-muted m-0">Ancho</p>
-                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.ancho || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-medium theme-text-muted m-0">Alto</p>
-                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.alto || '—'} <span className="text-xs font-bold theme-text-muted">cm</span></p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-medium theme-text-muted m-0">Peso vol.</p>
-                                                                <p className="text-base font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{envio.peso_volumetrico_kg || '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
-                                                            </div>
-                                                            <div className="col-span-2 sm:col-span-2">
-                                                                <p className="text-xs font-medium theme-text-muted m-0">Peso cobrado</p>
-                                                                <p className="text-lg font-semibold theme-text-main m-0 mt-0.5 tabular-nums">{cobrado !== '' ? cobrado : '—'} <span className="text-xs font-bold theme-text-muted">kg</span></p>
-                                                            </div>
-                                                        </div>
-                                                    </details>
-                                                ) : (
-                                                    <p className="text-xs theme-text-muted font-normal m-0">Seleccione el tipo de caja para ver medidas del catálogo.</p>
-                                                )}
+                                                {!nacional && datosCatalogo}
                                                 <div>
                                                     <label htmlFor={`pesaje-peso-${envio.client_uuid}`} className={SECCION}>Peso real (kg) *</label>
                                                     <input id={`pesaje-peso-${envio.client_uuid}`} {...atributosError(`pesaje-peso-${envio.client_uuid}`)} name={`peso-${envio.client_uuid}`} aria-required="true" type="number" step="0.0001" min="0" inputMode="decimal" value={envio.peso_real_kg} onChange={(e) => actualizarEnvio(idx, 'peso_real_kg', e.target.value)} onFocus={(e) => e.target.scrollIntoView({ block: 'nearest' })} className={`${THEME_INPUT} w-full py-3 min-h-[44px] text-base`} placeholder="0.0000" />
                                                     {mensajeError(`pesaje-peso-${envio.client_uuid}`)}
                                                 </div>
+                                                {nacional && datosCatalogo}
                                             </div>
                                             <GaleriaEvidencias
                                                 id={`pesaje-evidencia-${envio.client_uuid}`} error={errorCampo?.id === `pesaje-evidencia-${envio.client_uuid}` ? errorCampo.mensaje : undefined} disabled={procesando}
+                                                etiquetaAdjuntar={nacional && slot.previews.length > 0 ? 'Adjuntar más' : undefined}
                                                 archivos={slot.archivos}
                                                 previews={slot.previews}
                                                 obligatorio
@@ -1840,20 +1897,14 @@ export default function ModalResponderPesaje({
                                 </div>
                             )}
                         </section>
+                        </SeccionPesaje>
                         )}
                         </fieldset>
-                        <div className="flex flex-col gap-3 pt-2">
-                            <p className="m-0 text-xs theme-text-muted" role="status">
-                                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
-                                {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
-                                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
-                            </p>
-                            <div className="flex flex-wrap gap-2 sm:justify-end">
-                                {accionesRespuesta}
-                            </div>
-                        </div>
+                        {nacional && paso === 2 && <div className="gelia-pesaje-nacional-comparacion">{comparacionRespuesta}</div>}
+                        {!nacional && pieRespuesta}
                         </div>
                     </div>
+                    {nacional && <footer className="gelia-pesaje-nacional-footer">{pieRespuesta}</footer>}
                 </div>
             </div>
             <ModalAlertaPedido

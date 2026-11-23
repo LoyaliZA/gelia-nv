@@ -38,6 +38,7 @@ class RegistrarSolicitudMunicipalService
             }
 
             $captura = app(ValidarCapturaMunicipal::class)->ejecutar($pedido, $datos);
+            $sucursalDestinoId = $this->sucursalDestino($pedido, $datos);
             if (array_key_exists('almacen_id', $datos)) {
                 // Intención de procedencia; enviar la consulta sigue siendo un hecho separado.
                 $json['almacen_revision_id'] = $captura['almacen_id'];
@@ -46,6 +47,9 @@ class RegistrarSolicitudMunicipalService
             $json['modalidad_entrega'] = 'municipal';
             $json['codigo_modalidad'] = CatalogoModalidadPreparacionPedido::CODIGO_ENVIO_MUNICIPIO;
             $json['expediente'] = $captura['expediente'];
+            if ($sucursalDestinoId !== null) {
+                $json['recorrido_fisico_municipal'] = true;
+            }
             $json['finanzas_municipales'] = [
                 'costo_transporte' => $captura['costo'],
                 'leyenda_terminal' => $captura['leyenda'],
@@ -56,6 +60,7 @@ class RegistrarSolicitudMunicipalService
                 : null;
             $pedido->update([
                 'solicitud_preparacion_json' => $json,
+                'sucursal_destino_id' => $sucursalDestinoId ?? $pedido->sucursal_destino_id,
                 'catalogo_paqueteria_id' => $captura['paqueteria']->id,
                 'costo_envio' => $captura['monto'],
                 'total_a_cobrar' => PedidoBma::calcularTotal((float) $pedido->total_mercancia, $captura['monto'] ?? 0, (bool) $pedido->aplica_seguro, (float) $pedido->costo_seguro, (float) $pedido->saldo_a_favor),
@@ -65,5 +70,22 @@ class RegistrarSolicitudMunicipalService
 
             return $pedido->fresh();
         });
+    }
+
+    /**
+     * Sucursal PDV que recibe el envío. Solo el guardado de la solicitud la resuelve; la conversión
+     * desde otra modalidad conserva la sucursal del pedido sin validarla contra la lista piloto.
+     *
+     * @param  array<string, mixed>  $datos
+     */
+    private function sucursalDestino(PedidoBma $pedido, array $datos): ?int
+    {
+        $solicitada = ($datos['sucursal_destino_id'] ?? null) ? (int) $datos['sucursal_destino_id'] : ($pedido->sucursal_destino_id ? (int) $pedido->sucursal_destino_id : null);
+        $resolver = app(ResolverSucursalDestinoMunicipal::class);
+
+        // Sin sucursales habilitadas y sin solicitud (catálogo sin configurar) el destino queda sin definir.
+        return $solicitada === null && $resolver->habilitadas() === []
+            ? null
+            : $resolver->ejecutar($solicitada);
     }
 }

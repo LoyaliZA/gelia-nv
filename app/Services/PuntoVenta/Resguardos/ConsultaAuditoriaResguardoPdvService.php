@@ -212,9 +212,9 @@ class ConsultaAuditoriaResguardoPdvService
             'estado_anterior_etiqueta' => $evento->estado_anterior
                 ? EtiquetasResguardoPdv::etiquetaEstado($evento->estado_anterior)
                 : null,
-            'estado_nuevo_etiqueta' => $evento->estado_nuevo
-                ? EtiquetasResguardoPdv::etiquetaEstado($evento->estado_nuevo)
-                : null,
+            'estado_nuevo_etiqueta' => $evento->tipo_evento === ResguardoPdvEvento::TIPO_SALIDA_TERMINAL
+                ? EtiquetasResguardoPdv::SALIDA_TERMINAL
+                : ($evento->estado_nuevo ? EtiquetasResguardoPdv::etiquetaEstado($evento->estado_nuevo) : null),
             'ocurrido_at' => $evento->ocurrido_at?->toIso8601String(),
             'orden_estable' => $evento->id,
             'actor_referencia' => $this->referenciaActor($evento->actor),

@@ -5,6 +5,7 @@ namespace App\Services\SaldosAFavor;
 use App\Models\SaldosAFavor\SafCredito;
 use App\Models\SaldosAFavor\SafMovimiento;
 use App\Support\SaldosAFavor\AlcanceSaf;
+use App\Support\SaldosAFavor\PoliticaUsoCreditoSaf;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -94,7 +95,28 @@ class ReservarSaldoSafService
         $restante = $montoTotal;
         $plan = [];
 
-        foreach ($creditos as $credito) {
+        // S-06: un saldo solo de transporte entra primero y únicamente hasta el tope de transporte del pedido destino.
+        $topeTransporte = min(round((float) ($extra['tope_transporte'] ?? 0), 2), $montoTotal);
+        $transporte = $topeTransporte > 0
+            ? $creditos->filter(fn (SafCredito $c) => PoliticaUsoCreditoSaf::usableParaTransporte($c))
+            : collect();
+        // Los créditos pendientes de conciliación no se usan en aplicaciones nuevas; los de solo transporte tampoco para mercancía.
+        $generales = $creditos->filter(fn (SafCredito $c) => PoliticaUsoCreditoSaf::usableParaMercancia($c));
+
+        foreach ($transporte as $credito) {
+            if ($topeTransporte <= 0 || $restante <= 0) {
+                break;
+            }
+            $tomar = min((float) $credito->monto_disponible, $restante, $topeTransporte);
+            if ($tomar <= 0) {
+                continue;
+            }
+            $plan[] = ['credito_id' => $credito->id, 'monto' => round($tomar, 2)];
+            $restante = round($restante - $tomar, 2);
+            $topeTransporte = round($topeTransporte - $tomar, 2);
+        }
+
+        foreach ($generales as $credito) {
             if ($restante <= 0) {
                 break;
             }
@@ -139,6 +161,13 @@ class ReservarSaldoSafService
         }
         if (! $credito->puedeUsarse()) {
             throw new InvalidArgumentException("El saldo a favor {$credito->folio} no está disponible para uso.");
+        }
+        $uso = PoliticaUsoCreditoSaf::uso($credito);
+        if ($uso === SafCredito::USO_PENDIENTE_CONCILIACION) {
+            throw new InvalidArgumentException("El saldo a favor {$credito->folio} espera que Administración confirme su origen.");
+        }
+        if ($uso === SafCredito::USO_SOLO_TRANSPORTE && (float) ($extra['tope_transporte'] ?? 0) <= 0) {
+            throw new InvalidArgumentException("El saldo a favor {$credito->folio} solo se aplica a gastos de envío.");
         }
         if ($credito->fecha_vencimiento->lt(now()->startOfDay())) {
             throw new InvalidArgumentException("El saldo a favor {$credito->folio} está vencido.");

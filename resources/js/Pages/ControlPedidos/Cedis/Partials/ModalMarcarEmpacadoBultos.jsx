@@ -1,3 +1,4 @@
+import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
@@ -129,6 +130,7 @@ function SeccionPedidoBultos({ pedido, bultos, onChange, disabled, mostrarPedido
                     key={`${pedido.id}-bulto-${idx}`}
                     numero={idx + 1}
                     soloBolsa={soloBolsa}
+                    esRemision={pedidoEsTrasladoInternoPdv(pedido)}
                     disabled={disabled}
                     fila={fila}
                     puedeQuitar={bultos.length > 1}
@@ -162,7 +164,7 @@ function SeccionPedidoBultos({ pedido, bultos, onChange, disabled, mostrarPedido
     );
 }
 
-function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTicket, soloBolsa, disabled }) {
+function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTicket, soloBolsa, esRemision = false, disabled }) {
     const inputBultoRef = useRef(null);
     const camaraBultoRef = useRef(null);
     const inputTicketRef = useRef(null);
@@ -196,7 +198,7 @@ function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTic
                     camaraRef={camaraBultoRef}
                 />
                 {!soloBolsa && <CapturaFoto
-                    etiqueta="Foto del ticket *"
+                    etiqueta={esRemision ? 'Foto de la remisión del bulto *' : 'Foto del ticket *'}
                     disabled={disabled}
                     preview={fila.preview_ticket}
                     onSeleccionar={onFotoTicket}
@@ -254,7 +256,7 @@ export default function ModalMarcarEmpacadoBultos({ abierto, onClose, pedido, on
                 if (!filas[i].foto_bulto || (!empaqueSoloBolsa(p) && !filas[i].foto_ticket)) {
                     return empaqueSoloBolsa(p)
                         ? `Toma la foto de la bolsa ${i + 1} del pedido ${p.folio_remision || p.folio}.`
-                        : `El bulto ${i + 1} de ${p.folio} requiere foto del bulto y del ticket.`;
+                        : `El bulto ${i + 1} de ${p.folio} requiere foto del bulto y de ${pedidoEsTrasladoInternoPdv(p) ? 'su remisión' : 'su ticket'}.`;
                 }
             }
         }
@@ -319,7 +321,7 @@ export default function ModalMarcarEmpacadoBultos({ abierto, onClose, pedido, on
                             <p className="text-sm theme-text-main font-semibold mt-2 mb-0 break-words">Pedido {pedido.folio_remision || pedido.folio}{pedido.cliente?.nombre ? ` · ${pedido.cliente.nombre}` : ''}</p>
                             {(pedido.sucursal_destino || pedido.sucursalDestino) && <p className="text-xs theme-text-muted mt-1 mb-0">Destino: {etiquetaSucursal(pedido.sucursal_destino || pedido.sucursalDestino)}</p>}
                             <p className="text-xs theme-text-muted mt-2 m-0">
-                                {soloBolsas ? 'Toma una foto completa de cada bolsa del pedido.' : 'Registra una foto del bulto y otra del ticket por cada bulto.'}
+                                {soloBolsas ? 'Toma una foto completa de cada bolsa del pedido.' : (pedidoEsTrasladoInternoPdv(pedido) ? 'Registra una foto del bulto y otra de la remisión que va engrapada a él, por cada bulto.' : 'Registra una foto del bulto y otra del ticket por cada bulto.')}
                             </p>
                         </div>
                         <button

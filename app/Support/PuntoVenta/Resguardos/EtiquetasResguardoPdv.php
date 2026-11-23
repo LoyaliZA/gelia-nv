@@ -10,6 +10,8 @@ use App\Models\PuntoVenta\ResguardoPdvIncidencia;
 
 final class EtiquetasResguardoPdv
 {
+    public const SALIDA_TERMINAL = 'Salida a terminal';
+
     /**
      * @return array<string, string>
      */
@@ -70,6 +72,7 @@ final class EtiquetasResguardoPdv
             ResguardoPdvEvento::TIPO_ENTREGA_TERCERO => 'Entrega a tercero',
             ResguardoPdvEvento::TIPO_ENTREGA_MULTIPLE => 'Entrega múltiple',
             ResguardoPdvEvento::TIPO_ENTREGA_PARCIAL => 'Entrega parcial',
+            ResguardoPdvEvento::TIPO_SALIDA_TERMINAL => self::SALIDA_TERMINAL,
             ResguardoPdvEvento::TIPO_MARCADO_VENCIDO => 'Marcado como vencido',
             ResguardoPdvEvento::TIPO_VENCIDO_REPUESTO => 'Vencido repuesto',
             ResguardoPdvEvento::TIPO_MARCADO_REZAGADO => 'Marcado como rezagado',
@@ -123,6 +126,16 @@ final class EtiquetasResguardoPdv
     public static function etiquetaEstado(string $estado): string
     {
         return self::estados()[$estado] ?? $estado;
+    }
+
+    /** Como etiquetaEstado(), pero un municipal que salió a terminal no se rotula como entregado. */
+    public static function etiquetaEstadoResguardo(ResguardoPdv $resguardo): string
+    {
+        if ($resguardo->estado === ResguardoPdv::ESTADO_ENTREGADO && $resguardo->salidaTerminal() !== null) {
+            return self::SALIDA_TERMINAL;
+        }
+
+        return self::etiquetaEstado((string) $resguardo->estado);
     }
 
     /**

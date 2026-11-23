@@ -135,7 +135,9 @@ class PedidoBmaCedisController extends Controller
         $completo = $pedido->estatus?->fase_ciclo === \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_ENVIADO;
 
         return redirect()->back()->with('success', $completo
-            ? 'Paquetería confirmada: el pedido fue recogido.'
+            ? ($pedido->esTrasladoInternoAPdv()
+                ? 'Salida de CEDIS registrada. La sucursal debe confirmar la recepción; aún no es salida a terminal ni entrega.'
+                : 'Paquetería confirmada: el pedido fue recogido.')
             : 'Se registraron los envíos recolectados; el pedido sigue pendiente mientras queden cajas.');
     }
 

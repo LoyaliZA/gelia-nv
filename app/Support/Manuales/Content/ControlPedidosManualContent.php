@@ -256,7 +256,7 @@ class ControlPedidosManualContent
     private static function erroresFiltrados(array $ids): array
     {
         $mapa = [
-            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_pesaje_listo', 'pedido_sin_existencia', 'pedido_retraso_empaque', 'pedido_retraso_recoleccion'],
+            'vendedora' => ['pedido_rechazado_auxiliar', 'pedido_error_datos', 'pedido_enviado', 'pedido_salida_cedis_pdv', 'pedido_salida_terminal', 'pedido_pesaje_listo', 'pedido_sin_existencia', 'pedido_retraso_empaque', 'pedido_retraso_recoleccion'],
             'auxiliar' => ['pedido_pendiente_auxiliar', 'pedido_error_remision', 'pedido_error_cedis', 'pedido_incidencia_cedis'],
             'cedis' => ['pedido_aprobado', 'pedido_consulta_pesaje', 'pedido_pendiente_envio', 'pedido_guia_asignada', 'pedido_error_guia', 'pedido_error_cedis', 'pedido_guia_retraso', 'pedido_sin_existencia', 'pedido_retraso_empaque', 'pedido_retraso_recoleccion'],
             'guias' => ['pedido_pendiente_guia', 'pedido_error_guia', 'pedido_retraso_recoleccion'],
@@ -290,6 +290,8 @@ class ControlPedidosManualContent
             'pedido_pendiente_envio' => 'Empacado; pendiente de recolección.',
             'pedido_guia_asignada' => 'Guía asignada; pendiente de recolección.',
             'pedido_enviado' => 'La paquetería recogió el paquete.',
+            'pedido_salida_cedis_pdv' => 'Envío municipal: salió de CEDIS hacia la sucursal que lo entrega a terminal.',
+            'pedido_salida_terminal' => 'Envío municipal: la sucursal registró la salida a terminal y quién recibe el paquete.',
         ];
 
         $out = [];

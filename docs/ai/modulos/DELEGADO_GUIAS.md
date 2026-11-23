@@ -6,6 +6,7 @@
 
 ## Estado actual
 - [verificado] Delegado tiene bandeja por permiso/fase, sin filtro de departamento: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:20`.
+- [verificado] La cola excluye municipales con recorrido físico (sin guía ni rastreo): `app/Services/ControlPedidos/ListarPedidosDelegadoService.php:94`.
 - [verificado] Asignar guía a pedido aún sin empaque guarda rastreo sin avanzar fase: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:95`.
 - [verificado] Importación aplica el servicio individual; errores de una fila se cuentan como omitidos: `app/Services/ControlPedidos/ImportarGuiasPedidoService.php:60`.
 

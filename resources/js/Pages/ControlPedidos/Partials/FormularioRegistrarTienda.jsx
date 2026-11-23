@@ -1269,15 +1269,6 @@ export default function FormularioRegistrarTienda({
                                     />
                                 </div>
                             </div>
-                            {nacional && (
-                                <div className="min-w-0">
-                                    <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>
-                                    <input id="importe-mercancia-nacional" type="number" min="0.01" step="0.01" inputMode="decimal"
-                                        className={campo} value={totalMercancia} disabled={avanzado || operandoNacional}
-                                        onChange={(evento) => setTotalMercancia(evento.target.value)}
-                                    />
-                                </div>
-                            )}
                             <div className="min-w-0">
                                 <label className={THEME_LABEL} htmlFor="modalidad-tienda">
                                     Modalidad
@@ -1323,7 +1314,7 @@ export default function FormularioRegistrarTienda({
                             )}
                         </div>
                     </section>
-                    <div className="registrar-tienda-atencion">
+                    <div className={`registrar-tienda-atencion ${nacional ? 'registrar-nacional-inicio' : ''}`}>
                         {(transito || modalidad) === 'tienda' && !conversion && (
                             <section
                                 className="registrar-tienda-panel"
@@ -1410,7 +1401,7 @@ export default function FormularioRegistrarTienda({
                                         Cargando
                                     </p>
                                 )}
-                                {!nacional && !documento?.url && estadoArchivo !== 'cargando' && (
+                                {!documento?.url && estadoArchivo !== 'cargando' && (
                                     <div className="registrar-tienda-archivo-vacio">
                                         <div
                                             className={`${GELIA_ICON_BOX} registrar-tienda-emblema`}
@@ -1425,14 +1416,23 @@ export default function FormularioRegistrarTienda({
                                     </div>
                                 )}
                                 {nacional && documento?.url && estadoArchivo !== 'cargando' && (
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        {esImagen(documento)
-                                            ? <img src={documento.url} alt="" className="w-14 h-14 shrink-0 object-contain rounded" />
-                                            : <span className={GELIA_ICON_BOX}><FileText size={18} aria-hidden="true" /></span>}
-                                        <div className="min-w-0">
-                                            <p className="m-0 break-words text-sm theme-text-main" role="status">{documento.nombre_original || 'Archivo del pedido'}</p>
-                                            <p className="m-0 text-xs theme-text-muted">{esImagen(documento) ? 'Imagen' : 'PDF'}</p>
+                                    <div className="registrar-tienda-archivo-listo w-full text-left">
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            {esImagen(documento)
+                                                ? <img src={documento.url} alt="" className="w-14 h-14 shrink-0 object-contain rounded" />
+                                                : <span className={GELIA_ICON_BOX}><FileText size={18} aria-hidden="true" /></span>}
+                                            <div className="min-w-0">
+                                                <p className="m-0 break-words text-sm theme-text-main" role="status">{documento.nombre_original || 'Archivo del pedido'}</p>
+                                                <p className="m-0 text-xs theme-text-muted">{esImagen(documento) ? 'Imagen' : 'PDF'}</p>
+                                            </div>
                                         </div>
+                                        {!esImagen(documento) && (
+                                            <VisorPdfPaginas
+                                                url={documento.url}
+                                                titulo={documento.nombre_original || 'Pedido'}
+                                                maxHeight="14rem"
+                                            />
+                                        )}
                                     </div>
                                 )}
                                 {!nacional && documento?.url && estadoArchivo !== 'cargando' && (
@@ -1510,6 +1510,7 @@ export default function FormularioRegistrarTienda({
                                 />
                             </div>
                         </section>
+                        {nacional?.panelEnvio}
                     </div>
                     {nacional?.contenido}
                     {(!conversion || (modalidad === 'municipal' && !resultadoConversion)) && municipal?.contenido}
@@ -1736,6 +1737,15 @@ export default function FormularioRegistrarTienda({
                 onBusyChange={setOperandoNacional}
                 bloqueado={estadoArchivo === 'cargando' || guardando}
                 importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
+                campoImporteMercancia={(
+                    <div className="min-w-0">
+                        <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>
+                        <input id="importe-mercancia-nacional" type="number" min="0.01" step="0.01" inputMode="decimal"
+                            className={`${campo} mt-1`} value={totalMercancia} disabled={avanzado || operandoNacional}
+                            onChange={(evento) => setTotalMercancia(evento.target.value)}
+                        />
+                    </div>
+                )}
             >
                 {(nacional) => renderFormulario(null, nacional)}
             </FormularioRegistrarNacional>

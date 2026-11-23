@@ -320,6 +320,15 @@ class ActualizarPedidoBmaService
             }
         }
 
+        // Municipal: el transporte lo captura el registro municipal; un guardado de importes (p. ej. con resguardo activo) no lo borra.
+        if ($tocaFinanzas && \App\Support\ControlPedidos\ConsultaMunicipal::es($pedido) && ! array_key_exists('costo_envio', $datos)) {
+            $attrs['costo_envio'] = $pedido->costo_envio;
+            $total = array_key_exists('total_mercancia', $attrs) ? $attrs['total_mercancia'] : $pedido->total_mercancia;
+            $attrs['total_a_cobrar'] = PedidoBma::calcularTotal(
+                (float) $total, (float) ($pedido->costo_envio ?? 0), (bool) $pedido->aplica_seguro, (float) $pedido->costo_seguro, (float) $pedido->saldo_a_favor
+            );
+        }
+
         return $attrs;
     }
 

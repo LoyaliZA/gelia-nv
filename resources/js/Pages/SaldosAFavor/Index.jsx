@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Search, Wallet, PlusCircle, ClipboardCheck, Upload, AlertTriangle, Settings2, Filter, ExternalLink, CheckCircle2, X, Save } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
@@ -45,6 +45,7 @@ export default function Index({
     generadores = [],
     colas = {},
     tab = 'creditos',
+    saldo_envio_prefill: saldoEnvioPrefill = null,
 }) {
     const { flash } = usePage().props;
     const permisos = auth?.user?.permissions || [];
@@ -72,7 +73,24 @@ export default function Index({
         canal_origen: 'bellaroma',
         documento_origen: '',
         observaciones: '',
+        pedido_bma_id: '',
+        es_saldo_envio: false,
     });
+
+    // Desde Gestión de pedidos: el saldo de envío de un cambio a recolección en sucursal se genera en esta misma pantalla.
+    useEffect(() => {
+        if (!saldoEnvioPrefill) return;
+        form.setData((datos) => ({
+            ...datos,
+            cliente_id: saldoEnvioPrefill.cliente_id,
+            saf_motivo_id: saldoEnvioPrefill.motivo_id || '',
+            documento_origen: saldoEnvioPrefill.folio || '',
+            pedido_bma_id: saldoEnvioPrefill.pedido_id,
+            es_saldo_envio: true,
+        }));
+        setClienteQuery(saldoEnvioPrefill.cliente || '');
+        setMostrarGenerar(true);
+    }, [saldoEnvioPrefill?.pedido_id]);
 
     const filtrosPayload = () => ({
         q: q || undefined,
@@ -519,10 +537,17 @@ export default function Index({
                     labelledBy="saf-generar-titulo"
                 >
                     <form onSubmit={enviarGenerar} className="gelia-modal-body p-6 space-y-4">
-                            <h2 id="saf-generar-titulo" className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">Generar saldo a favor</h2>
+                            <h2 id="saf-generar-titulo" className="text-lg font-black italic uppercase tracking-tight theme-text-main m-0">
+                                {form.data.es_saldo_envio ? 'Autorizar saldo de envío' : 'Generar saldo a favor'}
+                            </h2>
+                            {form.data.es_saldo_envio && (
+                                <p className="text-xs theme-text-muted font-bold m-0">
+                                    Reconoce el transporte pagado y no utilizado del envío {saldoEnvioPrefill?.folio}. Solo paga gastos de envío de pedidos posteriores de este cliente, nunca mercancía. El importe lo fija Administración.
+                                </p>
+                            )}
                             <div>
                                 <label className={THEME_LABEL}>Cliente</label>
-                                <input className={`${THEME_INPUT} w-full mt-1`} value={clienteQuery} onChange={(e) => buscarClientes(e.target.value)} placeholder="Número o nombre" />
+                                <input className={`${THEME_INPUT} w-full mt-1`} value={clienteQuery} onChange={(e) => buscarClientes(e.target.value)} placeholder="Número o nombre" readOnly={form.data.es_saldo_envio} />
                                 {clientes.length > 0 && (
                                     <div className="border theme-border rounded-xl mt-1 max-h-40 overflow-auto theme-surface">
                                         {clientes.map((c) => (
@@ -551,7 +576,7 @@ export default function Index({
                             </div>
                             <div>
                                 <label className={THEME_LABEL}>Motivo</label>
-                                <select required className={`${THEME_SELECT} w-full mt-1`} value={form.data.saf_motivo_id} onChange={(e) => form.setData('saf_motivo_id', e.target.value)}>
+                                <select required disabled={form.data.es_saldo_envio} className={`${THEME_SELECT} w-full mt-1`} value={form.data.saf_motivo_id} onChange={(e) => form.setData('saf_motivo_id', e.target.value)}>
                                     <option value="">Seleccionar…</option>
                                     {groupMotivosByCategoria(motivos).map(([cat, items]) => (
                                         <optgroup key={cat} label={LABEL_CATEGORIA_MOTIVO[cat] || cat}>
@@ -561,10 +586,11 @@ export default function Index({
                                 </select>
                                 {form.errors.saf_motivo_id && <p className="text-xs font-bold text-rose-600 mt-1 m-0">{form.errors.saf_motivo_id}</p>}
                             </div>
-                            {motivoSeleccionado?.requiere_detalle && (
+                            {(motivoSeleccionado?.requiere_detalle || form.data.es_saldo_envio) && (
                                 <div>
-                                    <label className={THEME_LABEL}>Detalle obligatorio</label>
-                                    <textarea required className={`${THEME_TEXTAREA} w-full mt-1`} value={form.data.detalle_motivo} onChange={(e) => form.setData('detalle_motivo', e.target.value)} />
+                                    <label className={THEME_LABEL}>{form.data.es_saldo_envio ? 'Antecedentes del transporte pagado y no utilizado (mínimo 10 caracteres)' : 'Detalle obligatorio'}</label>
+                                    <textarea required minLength={form.data.es_saldo_envio ? 10 : undefined} className={`${THEME_TEXTAREA} w-full mt-1`} value={form.data.detalle_motivo} onChange={(e) => form.setData('detalle_motivo', e.target.value)} />
+                                    {form.errors.detalle && <p className="text-xs font-bold text-rose-600 mt-1 m-0">{form.errors.detalle}</p>}
                                 </div>
                             )}
                             <div>

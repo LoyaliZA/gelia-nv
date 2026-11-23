@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { Layers } from 'lucide-react';
 import { AjustePiezas } from '../Partials/AjustePiezas';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
@@ -13,7 +14,7 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualizado, onVer }) {
+export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualizado, onVer, referenciaMercancia }) {
     const [aviso, setAviso] = useState('');
     const [error, setError] = useState('');
     const [ocupado, setOcupado] = useState(false);
@@ -51,6 +52,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
     };
 
     return (
+        <>
         <section className="registrar-tienda-panel space-y-3" aria-label="Consulta a CEDIS">
             <h3 className="m-0 text-base">Consulta a CEDIS</h3>
             {!respondida && !cerrada && (
@@ -88,19 +90,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
             {cerrada && <p className="text-sm theme-text-main m-0">Ventas registró el cierre de la consulta.</p>}
             {aviso && <p className="text-sm theme-text-main m-0" role="status">{aviso}</p>}
             {error && <p className="text-sm theme-text-aviso m-0" role="alert">{error}</p>}
-            {puedeAjustar && (
-                <AjustePiezas
-                    pedidoId={pedido.id}
-                    pedido={pedido}
-                    solicitud={pedido.solicitud_preparacion || {}}
-                    adaptador={adaptador}
-                    avisoAnexo="Anexo registrado. CEDIS debe responder el nuevo peso antes de cerrar."
-                    avisoRetiro="Retiro registrado. CEDIS debe responder el nuevo peso antes de cerrar."
-                    onVer={onVer}
-                    onSolicitud={(_, version, lectura) => lectura ? onPedidoActualizado?.(lectura) : ejecutar(refrescar)}
-                    onAviso={setAviso}
-                />
-            )}
+
             <div className="flex flex-col sm:flex-row gap-2">
                 <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => ejecutar(refrescar)}>
                     {ocupado ? 'Actualizando…' : 'Actualizar consulta'}
@@ -137,5 +127,28 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                 )}
             </div>
         </section>
+        {respondida && (
+            <section className="registrar-tienda-panel space-y-3" aria-labelledby="mercancia-nacional-titulo">
+                <div className="registrar-tienda-seccion-titulo">
+                    <Layers size={18} aria-hidden="true" />
+                    <h3 id="mercancia-nacional-titulo">Mercancía</h3>
+                </div>
+                {referenciaMercancia}
+                {puedeAjustar && (
+                    <AjustePiezas
+                        pedidoId={pedido.id}
+                        pedido={pedido}
+                        solicitud={pedido.solicitud_preparacion || {}}
+                        adaptador={adaptador}
+                        avisoAnexo="Anexo registrado. CEDIS debe responder el nuevo peso antes de cerrar."
+                        avisoRetiro="Retiro registrado. CEDIS debe responder el nuevo peso antes de cerrar."
+                        onVer={onVer}
+                        onSolicitud={(_, version, lectura) => lectura ? onPedidoActualizado?.(lectura) : ejecutar(refrescar)}
+                        onAviso={setAviso}
+                    />
+                )}
+            </section>
+        )}
+        </>
     );
 }

@@ -41,7 +41,10 @@ class MarcarEmpacadoPedidoBmaService
             'complementos.estatus', 'complementos.paqueteria', 'complementos.origen',
         ]);
 
-        $grupo = collect([$raiz])->merge($raiz->complementos ?? []);
+        // Las piezas adicionales de un envío municipal no se empacan con el grupo: las integra el área que tiene el paquete.
+        $grupo = collect([$raiz])->merge(($raiz->complementos ?? collect())->reject(
+            fn (PedidoBma $c) => \App\Support\ControlPedidos\Municipal\ComplementosMunicipales::es($c)
+        ));
 
         foreach ($grupo as $miembro) {
             if (!$miembro->esGestionablePorCedis()) {

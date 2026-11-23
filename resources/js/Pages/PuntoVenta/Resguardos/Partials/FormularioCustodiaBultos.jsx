@@ -189,8 +189,9 @@ export default function FormularioCustodiaBultos({
                             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">
                                 Bulto {indice + 1}: {bulto.folio}
                             </p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                <label className="space-y-1.5">
+                            <div className={`grid grid-cols-1 gap-3 ${resguardo?.origen_municipal ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+                                {/* Municipal desde CEDIS: el tipo de bulto ya consta en las evidencias del empaque. */}
+                                {!resguardo?.origen_municipal && <label className="space-y-1.5">
                                     <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Tipo</span>
                                     <select
                                         value={bulto.tipo}
@@ -202,7 +203,7 @@ export default function FormularioCustodiaBultos({
                                             <option key={valor} value={valor}>{etiqueta}</option>
                                         ))}
                                     </select>
-                                </label>
+                                </label>}
                                 <label className="space-y-1.5">
                                     <span className="text-[9px] font-black uppercase tracking-widest theme-text-muted">Condición</span>
                                     <select

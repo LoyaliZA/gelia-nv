@@ -114,13 +114,7 @@ class GenerarCaratulaPedidoService
                 'fecha' => now()->format('d/m/Y H:i'),
             ];
 
-            $pdf = Pdf::loadView($plantilla, ['caratula' => $snapshot])
-                ->setPaper('letter', 'portrait');
-            $contenido = $pdf->output();
-            $hash = hash('sha256', $contenido);
-            $nombre = 'caratula_'.Str::random(24).'.pdf';
-            $ruta = "pedidos_bma/caratulas/{$tarea->id}/{$nombre}";
-            Storage::disk('local')->put($ruta, $contenido);
+            ['ruta' => $ruta, 'hash' => $hash] = $this->guardarPdf((string) $tarea->id, $plantilla, $snapshot);
 
             $caratula = PedidoBmaCaratula::query()->create([
                 'pedido_bma_tarea_preparacion_id' => $tarea->id,
@@ -160,5 +154,22 @@ class GenerarCaratulaPedidoService
 
             return $caratula->fresh(['paqueteria']);
         });
+    }
+
+    /**
+     * Renderiza y guarda el PDF de una carátula. Compartido con la carátula municipal generada desde el pedido.
+     *
+     * @param  array<string, mixed>  $snapshot
+     * @return array{ruta: string, hash: string}
+     */
+    public function guardarPdf(string $carpeta, string $plantilla, array $snapshot): array
+    {
+        $contenido = Pdf::loadView($plantilla, ['caratula' => $snapshot])
+            ->setPaper('letter', 'portrait')
+            ->output();
+        $ruta = "pedidos_bma/caratulas/{$carpeta}/caratula_".Str::random(24).'.pdf';
+        Storage::disk('local')->put($ruta, $contenido);
+
+        return ['ruta' => $ruta, 'hash' => hash('sha256', $contenido)];
     }
 }

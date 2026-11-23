@@ -19,6 +19,10 @@ Route::prefix('saldos-favor')->name('saldos_favor.')->group(function () {
         ->post('/generar', [SaldosAFavorController::class, 'generar'])
         ->name('generar');
 
+    Route::middleware(['can:saldos_favor.autorizar_envio'])
+        ->post('/creditos/{credito}/conciliar-origen', [SaldosAFavorController::class, 'conciliar'])
+        ->name('conciliar_origen');
+
     Route::middleware(['can:saldos_favor.revisar'])->group(function () {
         Route::post('/creditos/{credito}/revisar', [SaldosAFavorController::class, 'revisar'])->name('revisar');
         Route::post('/pagos/{pago}/revisar', [SaldosAFavorController::class, 'revisarPago'])->name('pagos.revisar');

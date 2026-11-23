@@ -183,7 +183,30 @@ class SaldosAFavorController extends Controller
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'formas_pago' => PedidoBmaPago::formasPagoCatalogo(),
+            'saldo_envio_prefill' => $this->prefillSaldoEnvio($request),
         ]);
+    }
+
+    /** Desde Gestión de pedidos: datos del envío cuyo cambio a recolección en sucursal ya puede generar su saldo de envío. */
+    private function prefillSaldoEnvio(Request $request): ?array
+    {
+        $pedidoId = (int) $request->get('saldo_envio_pedido', 0);
+        $usuario = $request->user();
+        if ($pedidoId < 1 || ! $usuario?->can('saldos_favor.autorizar_envio')) {
+            return null;
+        }
+        $pedido = \App\Models\ControlPedidos\PedidoBma::query()->with('cliente:id,numero_cliente,nombre')->find($pedidoId);
+        if (! $pedido || ! (\App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario)['puede_autorizar_saldo'] ?? false)) {
+            return null;
+        }
+
+        return [
+            'pedido_id' => $pedido->id,
+            'folio' => $pedido->folio_remision ?: $pedido->folio,
+            'cliente_id' => $pedido->cliente_id,
+            'cliente' => $pedido->cliente ? "{$pedido->cliente->numero_cliente} — {$pedido->cliente->nombre}" : null,
+            'motivo_id' => SafMotivo::query()->where('codigo', \App\Services\SaldosAFavor\GenerarSaldoEnvioS06Service::MOTIVO_CODIGO)->value('id'),
+        ];
     }
 
     public function cuenta(Request $request, Cliente $cliente, ConsultarCuentaClienteSafService $consultar): Response
@@ -235,6 +258,8 @@ class SaldosAFavorController extends Controller
                         'url' => $e->ruta_archivo ? asset('storage/'.$e->ruta_archivo) : null,
                     ])->values(),
                     'pedido_origen_folio' => $c->pedidoOrigen?->folio,
+                    // Uso efectivo: incluye la regla de protección de históricos cuando está activa.
+                    'uso_efectivo' => \App\Support\SaldosAFavor\PoliticaUsoCreditoSaf::uso($c),
                 ];
             }),
             'movimientos' => $cuenta['movimientos'],
@@ -273,10 +298,29 @@ class SaldosAFavorController extends Controller
             'departamento' => ['nullable', 'string', 'max:128'],
             'documento_origen' => ['nullable', 'string', 'max:128'],
             'pedido_bma_id' => ['nullable', 'integer'],
+            'es_saldo_envio' => ['nullable', 'boolean'],
             'observaciones' => ['nullable', 'string', 'max:2000'],
             'evidencias' => ['required', 'array', 'min:1'],
             'evidencias.*' => ['file', 'max:10240'],
         ]);
+
+        // Saldo de envío (S-06): mismo módulo y misma pantalla, con las reglas del cambio a recolección en sucursal.
+        if ($request->boolean('es_saldo_envio')) {
+            if (empty($datos['pedido_bma_id'])) {
+                throw ValidationException::withMessages(['pedido_bma_id' => 'Indique el envío que cambió a recolección en sucursal.']);
+            }
+            $credito = app(\App\Services\SaldosAFavor\GenerarSaldoEnvioS06Service::class)->ejecutar(
+                \App\Models\ControlPedidos\PedidoBma::query()->findOrFail((int) $datos['pedido_bma_id']),
+                $request->user(),
+                (float) $datos['monto'],
+                (string) ($datos['detalle_motivo'] ?? ''),
+                $request->file('evidencias', []) ?? []
+            );
+
+            return redirect()
+                ->route('saldos_favor.cuenta', $credito->cliente_id)
+                ->with('success', "Saldo de envío {$credito->folio} autorizado. Solo paga gastos de envío de pedidos posteriores de este cliente.");
+        }
 
         try {
             $credito = $service->handle(
@@ -293,6 +337,23 @@ class SaldosAFavorController extends Controller
         return redirect()
             ->route('saldos_favor.cuenta', $credito->cliente_id)
             ->with('success', "Saldo a favor {$credito->folio} generado. Disponible a partir del siguiente pedido (pendiente de revisión).");
+    }
+
+    /** Conciliación del origen de un saldo pendiente: solo Administración. Cambia su uso, no sus montos. */
+    public function conciliar(
+        Request $request,
+        SafCredito $credito,
+        \App\Services\SaldosAFavor\ConciliarOrigenCreditoSafService $servicio,
+    ): \Illuminate\Http\JsonResponse {
+        $datos = $request->validate([
+            'uso' => ['required', 'in:solo_transporte,general'],
+            'motivo' => ['required', 'string', 'min:10', 'max:2000'],
+            'evidencias' => ['required', 'array', 'min:1', 'max:8'],
+            'evidencias.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+        $resultado = $servicio->ejecutar($credito, Auth::user(), $datos['uso'], $datos['motivo'], $datos['evidencias']);
+
+        return response()->json(['ok' => true, 'credito' => ['id' => $resultado->id, 'uso_permitido' => $resultado->uso_permitido, 'origen_economico' => $resultado->origen_economico]]);
     }
 
     public function revisar(

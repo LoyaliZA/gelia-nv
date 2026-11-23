@@ -175,6 +175,8 @@ class ListarPedidosBmaService
         if (ConsultaMunicipal::es($pedido)) {
             $pedido->setAttribute('etiqueta_consulta', EtiquetaConsultaMunicipal::de($pedido));
         }
+        $pedido->setAttribute('piezas_adicionales', \App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales::para($pedido, $usuario));
+        $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
         $pedido->setAttribute('es_consulta_mercancia', $pedido->esConsultaMercancia());
         $pedido->setAttribute('consulta_cedis_modo_revision_mercancia', $pedido->consultaCedisModoRevisionMercancia());
         $pedido->setAttribute('fuentes_pago', $pedido->fuentesPagoResumen());

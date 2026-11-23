@@ -370,6 +370,75 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->assertSame(PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION, $this->pedido->estatus_envio);
         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertStatus(422);
     }
+    private function pdvHabilitado(string $codigo): \App\Models\Sucursal
+    {
+        $sucursal = \App\Models\Sucursal::factory()->create();
+        $tipo = \App\Models\CatalogoTipoAlmacen::query()->firstOrCreate(['nombre' => 'PDV'], ['activo' => true]);
+        \App\Models\Almacen::create(['codigo' => $codigo, 'nombre' => $codigo, 'tipo_almacen_id' => $tipo->id,
+            'sucursal_id' => $sucursal->id, 'activo' => true, 'visible_en_pedidos' => true]);
+
+        return $sucursal;
+    }
+
+    public function test_guardar_con_un_pdv_habilitado_persiste_sucursal_y_marca_y_resguarda_al_reguardar(): void
+    {
+        $sucursal = $this->pdvHabilitado('M01-PDV-A');
+        $id = $this->guardarSolicitud();
+        $pedido = $this->pedido->fresh();
+        $this->assertSame($sucursal->id, $pedido->sucursal_destino_id);
+        $this->assertTrue($pedido->solicitud_preparacion_json['recorrido_fisico_municipal']);
+
+        $this->postJson(route('control_pedidos.municipal.solicitud', $this->pedido), [
+            'municipio_destino' => 'Otro destino', 'catalogo_paqueteria_id' => $this->jaguar->id,
+            'consignatario_id' => $id, 'leyenda_terminal' => 'PAGADO', 'costo_transporte' => 'diferido',
+        ])->assertOk();
+        $pedido = $this->pedido->fresh();
+        $this->assertSame($sucursal->id, $pedido->sucursal_destino_id);
+        $this->assertTrue($pedido->solicitud_preparacion_json['recorrido_fisico_municipal']);
+        $this->assertTrue(\App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal::aplica($pedido));
+    }
+
+    public function test_marca_sobrevive_al_merge_de_la_solicitud_de_preparacion(): void
+    {
+        $this->pdvHabilitado('M01-PDV-A');
+        $this->guardarSolicitud();
+        $actual = $this->pedido->fresh()->solicitud_preparacion_json;
+        $fusion = app(\App\Services\ControlPedidos\FusionarSolicitudPreparacionPedido::class)
+            ->ejecutar($actual, ['modalidad_entrega' => 'municipal']);
+        $this->assertTrue($fusion['recorrido_fisico_municipal']);
+    }
+
+    public function test_con_varias_sucursales_exige_elegir_y_acepta_la_elegida(): void
+    {
+        $a = $this->pdvHabilitado('M01-PDV-A');
+        $this->pdvHabilitado('M01-PDV-B');
+        $this->actingAs($this->ventas);
+        $id = $this->postJson(route('control_pedidos.municipal.expediente.store', $this->cliente), [
+            'nombre' => 'Consignatario prueba', 'telefono' => '3311111111', 'pedido_id' => $this->pedido->id,
+        ])->assertCreated()->json('id');
+        $datos = ['catalogo_paqueteria_id' => $this->jaguar->id, 'consignatario_id' => $id,
+            'leyenda_terminal' => 'PAGADO', 'costo_transporte' => 'diferido'];
+        $this->postJson(route('control_pedidos.municipal.solicitud', $this->pedido), $datos)
+            ->assertUnprocessable()->assertJsonValidationErrors('sucursal_destino_id');
+        $this->postJson(route('control_pedidos.municipal.solicitud', $this->pedido), $datos + ['sucursal_destino_id' => $a->id])->assertOk();
+        $this->assertSame($a->id, $this->pedido->fresh()->sucursal_destino_id);
+        // Re-guardar sin el campo conserva la sucursal ya almacenada.
+        $this->postJson(route('control_pedidos.municipal.solicitud', $this->pedido), $datos)->assertOk();
+        $this->assertSame($a->id, $this->pedido->fresh()->sucursal_destino_id);
+    }
+
+    public function test_municipal_en_vuelo_sin_marca_conserva_el_comportamiento_previo(): void
+    {
+        $this->guardarSolicitud();
+        $almacen = \App\Models\Almacen::create(['codigo' => 'M01-CEDIS-X', 'nombre' => 'CEDIS', 'activo' => true, 'visible_en_pedidos' => true]);
+        $this->pedido->update(['almacen_id' => $almacen->id, 'sucursal_destino_id' => \App\Models\Sucursal::factory()->create()->id]);
+        $pedido = $this->pedido->fresh();
+        $this->assertArrayNotHasKey('recorrido_fisico_municipal', $pedido->solicitud_preparacion_json);
+        $this->assertFalse($pedido->requiereSucursalDestino());
+        $this->assertTrue($pedido->prohibeSucursalDestino());
+        $this->assertFalse($pedido->esTrasladoInternoAPdv());
+    }
+
     private function guardarSolicitud(): int
     {
         $this->actingAs($this->ventas);
@@ -508,7 +577,7 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->actingAs($this->ventas)->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
     }
 
-    public function test_resolver_faltante_y_responder_actualizacion_permite_cierre_sin_pisar_flete(): void
+    public function test_resolver_faltante_retirando_permite_cierre_sin_pisar_flete(): void
     {
         $this->guardarSolicitud();
         $this->postJson(route('control_pedidos.municipal.consulta', $this->pedido))->assertOk();
@@ -523,12 +592,9 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->postJson('/control-pedidos/'.$this->pedido->id.'/disponibilidad-tienda', [
             'revision_id' => $revision->id, 'accion' => 'retirar', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
         ])->assertOk();
-        $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertUnprocessable();
-        $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
-            'confirmacion_explicita' => 1,
-            'actualizacion_id' => data_get($this->pedido->fresh()->solicitud_preparacion_json, 'revision_disponibilidad.actualizacion_id'),
-            'evidencias' => [UploadedFile::fake()->image('actualizada.jpg')],
-        ])->assertOk();
+        // Un retiro solo se informa («El retiro solicitado no exige reconfirmación», ActualizacionConsulta::requiereRespuesta):
+        // no deja actualización pendiente y el cierre procede. Un anexo sin responder sí lo bloquea (ver prueba de anexo y retiro).
+        $this->assertFalse((bool) $this->pedido->fresh()->consulta_actualizacion_pendiente);
         $this->postJson(route('control_pedidos.cerrar_consulta', $this->pedido))->assertOk();
         $this->assertNull($this->pedido->fresh()->costo_envio);
         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
@@ -791,6 +857,32 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->putJson(route('control_pedidos.enviar', $this->pedido))->assertOk()->assertJsonPath('estatus.fase_ciclo', 'PENDIENTE_AUXILIAR');
         $this->assertNull($this->pedido->fresh()->costo_envio);
         $this->assertSame('pendiente_regularizacion', $this->pedido->fresh()->estatus_envio);
+    }
+
+    public function test_anexo_municipal_con_remision_o_tras_salida_terminal_se_rechaza(): void
+    {
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['consulta_municipal'] = ['area' => 'cedis', 'estado' => 'respondida', 'enviada_at' => now()->toIso8601String()];
+        $json['revision_disponibilidad'] = ['estado' => 'sin_excepciones', 'aceptacion_vigente' => true, 'ciclo_id' => 'ciclo-municipal'];
+        $this->pedido->update(['solicitud_preparacion_json' => $json, 'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_REGULARIZACION]);
+        $url = '/control-pedidos/'.$this->pedido->id.'/anexo-tienda';
+        $enviar = fn () => $this->actingAs($this->ventas)->post($url, [
+            'entrada' => 'documento', 'solicitud_id' => (string) \Illuminate\Support\Str::uuid(),
+            'evidencia' => UploadedFile::fake()->createWithContent('anexo.pdf', 'anexo-'.uniqid()),
+        ], ['Accept' => 'application/json']);
+
+        // Con remisión: el pedido original no se modifica; el complemento llega con M-03b.
+        $this->pedido->update(['numero_remision' => 'REM-ANEXO']);
+        $enviar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertEmpty($this->pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'] ?? []);
+
+        // Sin remisión pero tras la salida a terminal: tampoco.
+        $json = $this->pedido->fresh()->solicitud_preparacion_json;
+        $json['recorrido_fisico_municipal'] = true;
+        $json['salida_terminal'] = ['at' => now()->toIso8601String(), 'receptor' => 'Terminal ficticia'];
+        $this->pedido->update(['numero_remision' => null, 'solicitud_preparacion_json' => $json]);
+        $enviar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertEmpty($this->pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'] ?? []);
     }
 
     public function test_anexo_y_retiro_municipal_no_crean_tienda_ni_pisan_wizerp_ni_cierran(): void

@@ -17,6 +17,7 @@ use App\Support\ControlPedidos\AlmacenPdv;
 use App\Support\ControlPedidos\ApartadoT01;
 use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -260,7 +261,7 @@ class PedidoBma extends Model
         // Proyección de lectura: las claves operativas solo las escriben los servicios municipales.
         // No ampliamos el contrato de entrada/autoguardado compartido.
         if (($solicitud['modalidad_entrega'] ?? null) === 'municipal') {
-            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino', 'resguardo_envio'] as $clave) {
+            foreach (['consulta_municipal', 'finanzas_municipales', 'expediente', 'municipio_destino', 'resguardo_envio', 'recorrido_fisico_municipal', 'salida_terminal'] as $clave) {
                 if (array_key_exists($clave, $this->solicitud_preparacion_json ?? [])) {
                     $solicitud[$clave] = $this->solicitud_preparacion_json[$clave];
                 }
@@ -681,6 +682,10 @@ class PedidoBma extends Model
 
     public function requiereSucursalDestino(?string $codigoModalidad = null): bool
     {
+        if ($codigoModalidad === null && RecorridoFisicoMunicipal::aplica($this)) {
+            return true;
+        }
+
         $codigo = $codigoModalidad ?? $this->codigoModalidadDestinoFisico();
         if ($codigo !== null) {
             return in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
@@ -700,6 +705,10 @@ class PedidoBma extends Model
 
     public function prohibeSucursalDestino(?string $codigoModalidad = null): bool
     {
+        if ($codigoModalidad === null && RecorridoFisicoMunicipal::aplica($this)) {
+            return false;
+        }
+
         $codigo = $codigoModalidad ?? $this->codigoModalidadDestinoFisico();
         if ($codigo !== null) {
             return ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true);
@@ -727,7 +736,8 @@ class PedidoBma extends Model
         }
 
         $codigo = $this->codigoModalidadDestinoFisico();
-        if ($codigo && ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)) {
+        if ($codigo && ! in_array($codigo, CatalogoModalidadPreparacionPedido::CODIGOS_FASE4, true)
+            && ! RecorridoFisicoMunicipal::aplica($this)) {
             return false;
         }
 
@@ -1306,6 +1316,10 @@ class PedidoBma extends Model
     /** Tras Fase 2: Envío y Tienda exigen cierre (salvo complemento de resguardo). */
     public function requiereConsultaCerradaParaProceder(): bool
     {
+        // Las piezas adicionales de un envío municipal no tienen consulta propia: se documentan, se pagan y las integra el área.
+        if (\App\Support\ControlPedidos\Municipal\ComplementosMunicipales::es($this)) {
+            return false;
+        }
         if ($this->esResguardoComplementario()) {
             return false;
         }
