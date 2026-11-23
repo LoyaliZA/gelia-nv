@@ -12,7 +12,8 @@ import TablaPedidos from './Partials/TablaPedidos';
 import ModalMovimientosTienda from './Partials/ModalMovimientosTienda';
 import ModalPiezasAdicionales from './Partials/ModalPiezasAdicionales';
 import ModalCambioATiendaMunicipal from './Partials/ModalCambioATiendaMunicipal';
-import ModalFormPedido, { hayBorradorPedidoLocal } from './Partials/ModalFormPedido';
+import ModalFormPedido from './Partials/ModalFormPedido';
+import ModalSeleccionarModalidad from './Partials/ModalSeleccionarModalidad';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
 import ModalCancelarPedido from './Partials/ModalCancelarPedido';
@@ -57,7 +58,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     const filtrosExtraRef = useRef(filtrosExtra);
     const [modalForm, setModalForm] = useState({ abierto: false, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
     const [lecturaPropiaFormulario, setLecturaPropiaFormulario] = useState(false);
-    const [confirmarBorradorNuevo, setConfirmarBorradorNuevo] = useState(false);
+    const [seleccionarModalidad, setSeleccionarModalidad] = useState(false);
     const [modalDetalle, setModalDetalle] = useState({ abierto: false, pedido: null });
     const [movimientoTienda, setMovimientoTienda] = useState(null);
     const [piezasAdicionalesId, setPiezasAdicionalesId] = useState(null);
@@ -183,7 +184,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         || modalCompletarEnvio.abierto
         || modalCargarGuia.abierto
         || modalLinkDireccion
-        || confirmarBorradorNuevo
+        || seleccionarModalidad
         || Boolean(pedidoAEliminar)
         || Boolean(pedidoAEliminarRegistro)
         || Boolean(pedidoACancelar)
@@ -247,19 +248,11 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
     };
 
     const abrirNuevo = () => {
-        if (hayBorradorPedidoLocal(auth?.user?.id)) {
-            setConfirmarBorradorNuevo(true);
-            return;
-        }
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
+        setSeleccionarModalidad(true);
     };
-    const abrirNuevoLimpio = () => {
-        setConfirmarBorradorNuevo(false);
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false, instancia: 'new-clean' });
-    };
-    const abrirNuevoConBorrador = () => {
-        setConfirmarBorradorNuevo(false);
-        setModalForm({ abierto: true, pedido: null, recuperarBorrador: true, instancia: 'new-draft' });
+    const abrirNuevoConModalidad = (modalidadInicial) => {
+        setSeleccionarModalidad(false);
+        setModalForm({ abierto: true, pedido: null, recuperarBorrador: false, instancia: `new-${modalidadInicial}`, modalidadInicial });
     };
     const abrirEditar = (pedido) => {
         setModalForm({ abierto: true, pedido, recuperarBorrador: false, instancia: `edit-${pedido.id}` });
@@ -389,6 +382,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     intencion={modalForm.intencion || 'alta'}
                     onActualizar={refrescarListado}
                     recuperarBorrador={modalForm.recuperarBorrador}
+                    modalidadInicial={modalForm.modalidadInicial}
                     onPedidoCreado={(p) => {
                         setModalForm((m) => {
                             if (!m.abierto || !p?.id) return m;
@@ -503,16 +497,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 onClose={() => setPedidoAEliminar(null)}
                 onConfirm={confirmarEliminar}
             />
-            <ModalConfirmarAccion
-                abierto={confirmarBorradorNuevo}
-                titulo="Borrador en curso"
-                mensaje="Hay un pedido en borrador. ¿Desea continuar con ese borrador o iniciar uno nuevo en limpio? El borrador previo se conserva en la lista si ya se guardó en el servidor."
-                etiquetaConfirmar="Iniciar limpio"
-                etiquetaAlternativa="Continuar borrador"
-                variante="primary"
-                onClose={() => setConfirmarBorradorNuevo(false)}
-                onConfirm={abrirNuevoLimpio}
-                onAlternativa={abrirNuevoConBorrador}
+            <ModalSeleccionarModalidad
+                abierto={seleccionarModalidad}
+                onClose={() => setSeleccionarModalidad(false)}
+                onSeleccionar={abrirNuevoConModalidad}
             />
             <ModalGenerarLinkDireccion
                 abierto={modalLinkDireccion}

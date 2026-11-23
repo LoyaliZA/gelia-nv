@@ -30,6 +30,7 @@ export default function ModalFormPedido({
     onLecturaPropia = null,
     intencion = 'alta',
     onActualizar = null,
+    modalidadInicial = '',
 }) {
     const conversion = intencion === 'conversion';
     const [modo, setModo] = useState(() => modoInicial(pedido, recuperarBorrador, intencion));
@@ -65,6 +66,7 @@ export default function ModalFormPedido({
             abierto={abierto}
             onClose={onClose}
             pedido={pedido}
+            modalidadInicial={modalidadInicial}
             catalogos={catalogos}
             registrarTienda={registrarTienda}
             onPedidoCreado={onPedidoCreado}
