@@ -1365,24 +1365,6 @@
 
 }
 
-.gelia-cedis-disponibilidad .gelia-cedis-producto details > div {
-    margin-left: calc(-2.75rem - var(--cedis-fila-gap));
-    margin-right: calc(-2.75rem - var(--cedis-fila-gap));
-    margin-top: 0.625rem;
-    border-top: 1px solid var(--theme-border);
-}
-
-.gelia-cedis-producto .gelia-cedis-etiquetas {
-    margin-left: -1.375rem;
-}
-
-.gelia-cedis-producto details:not([open]) .gelia-cedis-producto-identidad strong {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
 .gelia-cedis-disponibilidad .theme-field-with-icon .theme-input {
     padding-left: 2.75rem;
 }
@@ -2001,8 +1983,9 @@
 .consulta-seleccion-detalle-manual { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; }
 .consulta-seleccion-detalle-manual > label { flex: 1 1 12rem; min-width: 0; }
 .consulta-seleccion-detalle-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
-.consulta-seleccion-detalle-lista li { display: flex; gap: 0.6rem; align-items: center; border: 1px solid var(--theme-border); border-radius: 0.75rem; padding: 0.6rem; color: var(--theme-text-main); }
+.consulta-seleccion-detalle-lista li { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; border: 1px solid var(--theme-border); border-radius: 0.75rem; padding: 0.6rem; color: var(--theme-text-main); }
 .consulta-seleccion-detalle-lista li > svg, .consulta-seleccion-detalle-lista li > button { flex-shrink: 0; }
+.consulta-seleccion-detalle-pieza-extra { flex: 1 1 100%; display: grid; gap: 0.5rem; min-width: 0; }
 .consulta-seleccion-detalle-lista li > button { margin-inline-start: auto; min-height: 2.75rem; }
 .consulta-seleccion-detalle-lista strong { display: block; font-size: 0.75rem; overflow-wrap: anywhere; }
 .consulta-seleccion-detalle-lista span { font-size: 0.65rem; color: var(--theme-text-muted); }
@@ -2070,4 +2053,99 @@
 
 .gelia-preparacion-modal .gelia-preparacion-footer {
     bottom: 0;
+}
+
+/* Interruptores del caso de una pieza (Tienda, Municipal y Nacional): visibles sin abrir la pieza. */
+.gelia-interruptores-pieza {
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+}
+
+.gelia-interruptores-pieza > button {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem 0.375rem 0.5rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gelia-interruptores-pieza > button[aria-checked='true'] {
+    border-color: var(--color-primario);
+}
+
+.gelia-interruptores-pieza > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gelia-interruptores-pieza > button:focus-visible,
+.gelia-cedis-comentario-resumen:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-cedis-comentario-resumen {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.gelia-cedis-comentario-resumen::-webkit-details-marker {
+    display: none;
+}
+
+.gelia-cedis-producto details[open] > .gelia-cedis-comentario-resumen .gelia-cedis-desplegar {
+    transform: rotate(180deg);
+}
+
+/* Columna de acciones de una pieza: quitar y, debajo, comentario y fotos. */
+.gelia-cedis-acciones {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+}
+
+.gelia-cedis-acciones > button[data-activo='true'] {
+    border-color: var(--color-primario);
+}
+
+.gelia-cedis-acciones > button[aria-expanded='true'] {
+    background: color-mix(in srgb, var(--color-primario) 14%, var(--theme-surface-solid));
+}
+
+.consulta-seleccion-detalle-lista li > .gelia-cedis-acciones { margin-inline-start: auto; }
+.consulta-seleccion-detalle-lista li > .gelia-cedis-acciones > button { margin-inline-start: 0; }
+
+/* Siempre una sola fila: en un contenedor estrecho el interruptor se apila sobre su texto. */
+@container (max-width: 28rem) {
+    .gelia-interruptores-pieza > button {
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.25rem;
+        padding: 0.375rem 0.25rem;
+        font-size: 0.6875rem;
+        line-height: 1.2;
+        text-align: center;
+    }
 }

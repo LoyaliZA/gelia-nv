@@ -20,6 +20,7 @@
 - [verificado] Cerrar consulta corresponde al propietario y requiere respuesta/ajustes resueltos: `app/Services/ControlPedidos/CerrarConsultaPedidoBmaService.php:83`.
 - [verificado] Fusionar solo lectura operativa; conservar captura comercial y financiera local: `resources/js/Pages/ControlPedidos/Partials/vigenciaConsultaPedido.js:20`.
 - [verificado] En Nacional 2.0, CEDIS precarga las solicitudes vigentes y su evidencia. Cada UUID se vincula a su propia revisión y conserva cantidades y condición. El soporte general permite la consulta documental sin capturar líneas en Ventas.
+- [verificado] Nacional con peso responde el patrón 2.0 (Todo OK / excepciones) dentro de Responder pesaje, no en el panel de disponibilidad. La consulta documental sin kilogramos sigue en `cedis.disponibilidad`. El servidor completa las piezas vigentes no reportadas como Bueno.
 - [verificado] Un ajuste nacional previo al pago conserva la respuesta anterior y deja pendiente un nuevo pesaje. Al responder se invalida la cotización previa de las cajas ajustadas. El complemento tras pago o remisión mantiene su propio pedido, revisiones e idempotencia.
 - [verificado] `version_consulta` deriva del historial; no sustituye revisión comercial/huella: `app/Support/ControlPedidos/LecturaFinancieraPedido.php:17` y `:52`.
 
@@ -40,4 +41,4 @@
 - Archivos de consulta: PHP efectivo `sail` UID 1000. Si un directorio `storage/app/public/pedidos_bma/{id}` quedó `root:root`, `chown` solo esos ids en pruebas. Receta: `gestion-pedidos-docs/CONSULTAS_COMPARTIDAS_IMPLEMENTACION_Y_AUTOEVALUACION.md`.
 - [verificado] `ActualizacionConsulta::solicitar` no marca ronda si solo hay retiro; la reapertura sí (`forzar`). Anexos sí exigen respuesta y captura nueva.
 
-- Última verificación: 2026-11-24, sin commit, árbol de trabajo (municipal PDV: borrador vs envío).
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo; nacional con peso usa 2.0 en pesaje.

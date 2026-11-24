@@ -7,7 +7,7 @@ import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 const etiquetas = { aceptar_condicion: 'Estado confirmado con el cliente', retirar: 'Retiro registrado', sustituir: 'Sustitución solicitada' };
 
-export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null }) {
+export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null, ejecutor = null }) {
     const menuRef = useRef(null);
     useEffect(() => {
         const cerrar = e => { if (menuRef.current && !menuRef.current.contains(e.target)) menuRef.current.open = false; };
@@ -32,6 +32,13 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacen
     const enviar = async () => {
         if (ocupado) return;
         if (accion === 'sustituir' && ((entrada === 'catalogo' && !producto) || (entrada === 'documento' && !archivos.length))) return setError('Seleccione la alternativa por SKU o adjunte su captura.');
+        if (ejecutor) {
+            setOcupado(true); setError('');
+            try { const data = await ejecutor({ accion, entrada, producto, archivo: archivos[0] || null, solicitudId: clave.current }); setAccion(''); onActualizar?.(data); }
+            catch (e) { setError(Object.values(e?.response?.data?.errors || {}).flat()[0] || e?.response?.data?.message || 'No se pudo registrar la decisión.'); }
+            finally { setOcupado(false); }
+            return;
+        }
         const form = new FormData();
         form.append('revision_id', pieza.id); form.append('accion', accion); form.append('solicitud_id', clave.current);
         if (accion === 'sustituir') { form.append('entrada', entrada); if (producto && entrada === 'catalogo') form.append('producto_id', producto.id); if (archivos[0] && entrada === 'documento') form.append('evidencia', archivos[0]); }

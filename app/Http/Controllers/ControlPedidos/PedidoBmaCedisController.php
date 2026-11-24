@@ -25,9 +25,11 @@ use App\Services\ControlPedidos\ResponderPesajePedidoBmaService;
 use App\Services\ControlPedidos\ReabrirEnvioPedidoBmaService;
 use App\Services\ControlPedidos\RevertirEmpacadoPedidoBmaService;
 use App\Services\ControlPedidos\SesionEvidenciaCedisService;
+use App\Services\ControlPedidos\Municipal\EmitirCaratulaMunicipalCedisService;
 use App\Services\ControlPedidos\Nacional\CustodiaComplementoNacional;
 use App\Services\ControlPedidos\Nacional\ResponderPiezasComplementoNacional;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -290,6 +292,19 @@ class PedidoBmaCedisController extends Controller
                             'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
                         ];
                     })->all(),
+                    ...($request->has('confirmacion_explicita') ? [
+                        'confirmacion_explicita' => $request->boolean('confirmacion_explicita'),
+                    ] : []),
+                    ...($request->has('excepciones') ? [
+                        'excepciones' => collect($request->validated('excepciones') ?? [])->map(function (array $excepcion, int $i) use ($request) {
+                            $files = $request->file("excepciones.{$i}.evidencias") ?? [];
+
+                            return [
+                                ...$excepcion,
+                                'evidencias' => is_array($files) ? $files : ($files ? [$files] : []),
+                            ];
+                        })->all(),
+                    ] : []),
                 ]
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
@@ -522,6 +537,28 @@ class PedidoBmaCedisController extends Controller
         }
 
         return redirect()->back()->with('success', 'Mercancía liberada. Confirmó devolución a disponibilidad.');
+    }
+
+    public function caratulaMunicipal(
+        Request $request,
+        PedidoBma $pedidoBma,
+        EmitirCaratulaMunicipalCedisService $service,
+    ) {
+        Gate::authorize('control_pedidos.cedis');
+        abort_unless(VisibilidadPedidoBma::puedeVerEnCedis(Auth::user(), $pedidoBma), 403);
+
+        try {
+            $pdf = $service->ejecutar($pedidoBma, Auth::user(), (string) $request->query('variante', ''));
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => (string) collect($e->errors())->flatten()->first(),
+            ], 422);
+        }
+
+        return response($pdf['contenido'], 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$pdf['filename'].'"',
+        ]);
     }
 
     private function consultaLiberacionesCedis(): \Illuminate\Database\Eloquent\Builder

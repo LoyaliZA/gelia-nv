@@ -937,8 +937,12 @@ class PedidoBmaController extends Controller
         Gate::authorize('control_pedidos.crear');
         $listarService->asegurarAcceso($pedidoBma, Auth::user());
         $datos = $request->validate([
-            'tipo' => ['required', 'in:anexo,retiro'],
+            'tipo' => ['required', 'in:anexo,retiro,sustitucion'],
             'solicitud_id' => ['required', 'uuid'],
+            'alternativa' => ['nullable', 'array'],
+            'alternativa.sku' => ['nullable', 'string', 'max:80'],
+            'alternativa.descripcion' => ['nullable', 'string', 'max:180'],
+            'alternativa.cantidad' => ['nullable', 'integer', 'min:1'],
             'condicion' => ['nullable', 'string', 'max:500'],
             'motivo' => ['nullable', 'string', 'max:180'],
             'piezas' => ['nullable', 'array', 'max:20'],
@@ -990,6 +994,38 @@ class PedidoBmaController extends Controller
             'folio' => $resultado['pedido']->folio,
             'principal_id' => $resultado['pedido']->id,
         ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($resultado['pedido'])));
+    }
+
+    /** Ventas reconoce, con el cliente, una pieza con detalle de la respuesta de CEDIS. No cambia pesos ni pagos. */
+    public function confirmarPiezaNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate(['revision_id' => ['required', 'integer', 'min:1']]);
+        abort_unless((int) $pedidoBma->vendedor_id === (int) Auth::id(), 403);
+        if (! \App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedidoBma) || $pedidoBma->consultaCerrada()) {
+            return response()->json(['message' => 'La consulta no admite confirmar piezas en su estado actual.'], 422);
+        }
+        $revision = $pedidoBma->revisionesProducto()->whereNull('retirada_at')->find($datos['revision_id']);
+        if (! $revision) {
+            return response()->json(['message' => 'Elija una pieza vigente de la consulta.'], 422);
+        }
+        if ($revision->estado_fisico === 'sin_existencia') {
+            return response()->json(['message' => 'Una pieza sin existencias solo puede retirarse o sustituirse.'], 422);
+        }
+        if (! $revision->resolucion) {
+            $revision->update([
+                'resolucion' => 'aceptar_condicion',
+                'resolucion_nota' => 'El cliente confirma la pieza en el estado reportado.',
+                'resolucion_por_id' => Auth::id(),
+                'resolucion_at' => now(),
+            ]);
+        }
+
+        return response()->json(\App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($pedidoBma->fresh()));
     }
 
     /** Anexo extraordinario: minipedido nacional relacionado con su propia mini consulta a CEDIS. */

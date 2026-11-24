@@ -38,6 +38,19 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
             'evidencias_envios' => ['nullable', 'array'],
             'evidencias_envios.*' => ['nullable', 'array'],
             'evidencias_envios.*.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp,pdf'],
+            'confirmacion_explicita' => ['nullable', 'boolean'],
+            'excepciones' => ['nullable', 'array', 'max:50'],
+            'excepciones.*.descripcion' => ['required_with:excepciones', 'string', 'max:255'],
+            'excepciones.*.cantidad' => ['nullable', 'integer', 'min:1'],
+            'excepciones.*.condicion' => ['required_with:excepciones', 'in:detalle,faltante'],
+            'excepciones.*.detalle' => ['nullable', 'string', 'max:500'],
+            'excepciones.*.unica_pieza' => ['nullable', 'boolean'],
+            'excepciones.*.mejor_ejemplar' => ['nullable', 'boolean'],
+            'excepciones.*.sku' => ['nullable', 'string', 'max:64'],
+            'excepciones.*.producto_id' => ['nullable', 'integer'],
+            'excepciones.*.client_uuid' => ['nullable', 'string', 'max:64'],
+            'excepciones.*.evidencias' => ['nullable', 'array', 'max:5'],
+            'excepciones.*.evidencias.*' => ['file', 'max:10240', 'mimes:jpg,jpeg,png,webp'],
             'revisiones' => [$soloRevisiones ? 'required' : 'nullable', 'array', $soloRevisiones ? 'min:1' : 'nullable'],
             'revisiones.*.descripcion_producto' => ['required_with:revisiones', 'string', 'max:255'],
             'revisiones.*.producto_id' => ['nullable', 'integer'],
@@ -98,6 +111,21 @@ class ResponderPesajePedidoBmaRequest extends FormRequest
         $merge = [
             'estado_fisico_general' => $this->input('estado_fisico_general') ?: PedidoBmaRevisionProducto::ESTADO_BUENO,
         ];
+        if ($this->exists('confirmacion_explicita')) {
+            $merge['confirmacion_explicita'] = filter_var($this->input('confirmacion_explicita'), FILTER_VALIDATE_BOOLEAN);
+        }
+        $excepciones = $this->input('excepciones');
+        if (is_array($excepciones)) {
+            $merge['excepciones'] = array_map(function ($excepcion) {
+                if (! is_array($excepcion)) {
+                    return $excepcion;
+                }
+                $excepcion['unica_pieza'] = filter_var($excepcion['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $excepcion['mejor_ejemplar'] = filter_var($excepcion['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+                return $excepcion;
+            }, $excepciones);
+        }
 
         $revisiones = $this->input('revisiones');
         if (is_array($revisiones)) {

@@ -467,3 +467,71 @@ it('un anexo nuevo llegado por props conserva la captura local y aparece sin cer
  expect(envioFinal().get('cambios_revisados[0][resultado]')).toBe('correcto');
  expect(envioFinal().get('cambios_revisados[1][resultado]')).toBe('correcto');
 });
+
+it('el diálogo Registrar detalle permite elegir el caso y el comentario de cada pieza y llegan a la fila', async () => {
+ await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: {
+  documentos: [{ id: 21, url: '/anexo.png', mime_type: 'image/png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'documento', linea_id: 'linea-unica', documento_id: 21,
+   unidades: [{ unidad_id: 'anexo:linea-unica:doc:21', documento_id: 21, resultado: null }] }] },
+ } });
+ await click('Registrar detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
+ await act(() => modal.querySelector('[role=switch][aria-label="Mejor ejemplar"]').click());
+ await act(() => modal.querySelector('[aria-label^="Agregar comentario a"]').click());
+ const nota = modal.querySelector('textarea');
+ Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(nota, 'Caja abierta');
+ await act(() => nota.dispatchEvent(new Event('input', { bubbles: true })));
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (1)').click());
+ const fila = container.querySelector('.gelia-cedis-producto');
+ expect(fila.querySelector('[role=switch][aria-label="Mejor ejemplar"]').getAttribute('aria-checked')).toBe('true');
+ expect(fila.querySelector('[role=switch][aria-label="Única pieza"]').getAttribute('aria-checked')).toBe('false');
+ expect(fila.querySelector('textarea').value).toBe('Caja abierta');
+});
+
+it('al marcar Sin existencias en el diálogo la pieza llega como faltante sin pedir comentario', async () => {
+ await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: {
+  documentos: [{ id: 21, url: '/anexo.png', mime_type: 'image/png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'documento', linea_id: 'linea-unica', documento_id: 21,
+   unidades: [{ unidad_id: 'anexo:linea-unica:doc:21', documento_id: 21, resultado: null }] }] },
+ } });
+ await click('Registrar detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
+ await act(() => modal.querySelector('[role=switch][aria-label="Sin existencias"]').click());
+ expect(modal.querySelector('[aria-label^="Agregar comentario a"]')).toBeNull();
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (1)').click());
+ const fila = container.querySelector('.gelia-cedis-producto');
+ expect(fila.querySelector('[role=switch][aria-label="Sin existencias"]').getAttribute('aria-checked')).toBe('true');
+ expect(fila.textContent).toContain('Sin existencias');
+});
+
+it('la foto de la pieza se captura en el diálogo y llega adjunta a la fila', async () => {
+ URL.createObjectURL = vi.fn(() => 'blob:pieza');
+ URL.revokeObjectURL = vi.fn();
+ await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: {
+  documentos: [{ id: 21, url: '/anexo.png', mime_type: 'image/png' }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'documento', linea_id: 'linea-unica', documento_id: 21,
+   unidades: [{ unidad_id: 'anexo:linea-unica:doc:21', documento_id: 21, resultado: null }] }] },
+ } });
+ await click('Registrar detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
+ const input = modal.querySelector('input[aria-label="Adjuntar: Fotos del producto"]');
+ Object.defineProperty(input, 'files', { configurable: true, value: [new File(['foto'], 'pieza.png', { type: 'image/png' })] });
+ await act(() => input.dispatchEvent(new Event('change', { bubbles: true })));
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (1)').click());
+ const fila = container.querySelector('.gelia-cedis-producto');
+ expect(fila.querySelector('.gelia-cedis-foto img')).not.toBeNull();
+ expect(fila.textContent).toContain('1/5 fotos');
+});
+
+it('la fila ofrece el lápiz bajo el bote para abrir el comentario y las fotos', async () => {
+ await montar();await estado(1);await click('Elegir perfume');
+ const lapiz = container.querySelector('.gelia-cedis-acciones [aria-label^="Agregar comentario o fotos"]');
+ expect(lapiz.getAttribute('aria-expanded')).toBe('false');
+ expect(container.querySelector('details').open).toBe(false);
+ await act(() => lapiz.click());
+ expect(container.querySelector('details').open).toBe(true);
+ expect(container.querySelector('.gelia-cedis-acciones [aria-expanded="true"]')).not.toBeNull();
+});

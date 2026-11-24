@@ -71,9 +71,8 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         }
     }, [flash?.success, flash?.error]);
 
-    useEffect(() => {
-        modalAbiertoRef.current = modalRevisar.abierto || modalAnexo.abierto || modalBitacora.abierto;
-    }, [modalRevisar.abierto, modalAnexo.abierto, modalBitacora.abierto]);
+    // Durante el render: el hook de actualizaciones evalúa «pausado» al renderizar.
+    modalAbiertoRef.current = modalRevisar.abierto || modalAnexo.abierto || modalBitacora.abierto;
 
     useActualizacionesPedidos({ onActualizar: () => cargarYMarcar(paramsListado(), { silencioso: true }), pausado: () => modalAbiertoRef.current || cargando });
 

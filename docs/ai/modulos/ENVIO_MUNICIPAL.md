@@ -42,7 +42,7 @@
 - [verificado] Empaque CEDIS valida la sucursal destino y termina en PENDIENTE_DE_ENVIO sin guía ni rastreo; Delegado excluye estos pedidos salvo con tarea ENVIO_MUNICIPIO abierta: `app/Services/ControlPedidos/ListarPedidosDelegadoService.php:112`, `EmpaqueMunicipalCedisTest`.
 - [verificado] La salida de CEDIS crea el `ResguardoPdv` (`snapshot_json.origen='municipal'`), historial SALIDA_CEDIS_PDV y alerta `pedido_salida_cedis_pdv`; el pedido queda en FASE_ENVIADO (`envioYaSalio`), que no es «salida a terminal»: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:158`. PDV recibe y pasa a la custodia compartida: [Transferencia](TRANSFERENCIA_CUSTODIA.md).
 - [verificado] Ventas ve, para un municipal con marca, «En traslado a sucursal» / «Pendiente de custodia» / «En custodia» según `estatus_sucursal` y «Salida a terminal» con la marca; nunca «Enviado». Sin marca, Tienda y Nacional no cambian: `resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js:203`, proyección en `app/Models/ControlPedidos/PedidoBma.php:264`.
-- [verificado] Carátula desde el pedido, sin tarea (migración `2026_11_21_170000`): terminal = `municipio_destino` o `paqueteria->nombre`; no imprime la identificación. Rutas `control_pedidos.tienda.municipal.caratula.{generar,regenerar,pdf}`. Errores de negocio (`CaratulaMunicipalException`, validación) se muestran; otra falla se registra y muestra un mensaje genérico: `app/Http/Controllers/ControlPedidos/CaratulaMunicipalController.php:66`. Tras la salida a terminal solo queda descargarla: `ConsultaDetalleResguardoPdvService.php:152`.
+- [verificado] Carátula PDV desde el pedido, sin tarea (migración `2026_11_21_170000`): terminal = `municipio_destino` o `paqueteria->nombre`; rutas `control_pedidos.tienda.municipal.caratula.{generar,regenerar,pdf}`; solo sucursal destino. CEDIS emite PDF a demanda en Destino, carta, con o sin identificación (`control_pedidos.cedis.caratula_municipal`), sin sucursal destino ni `generar_caratula`: `EmitirCaratulaMunicipalCedisService`. Tras la salida a terminal en PDV solo queda descargarla: `ConsultaDetalleResguardoPdvService.php:152`.
 - [verificado] «Salida a terminal»: pide receptor; resguardo pasa a `entregado` con `snapshot_json.salida_terminal` (sin `ResguardoPdvEntrega`); el pedido recibe `solicitud_preparacion_json.salida_terminal`, que bloquea la conversión ordinaria, y la vendedora recibe una vez la alerta `pedido_salida_terminal` («Salida a terminal registrada», folio y receptor): `app/Services/PuntoVenta/Resguardos/RegistrarSalidaTerminalResguardoPdvService.php:222`. R-09 no la cuenta como entrega; una remisión salida responde «ya salió de custodia».
 - [verificado] Permisos para roles de Gerencia PDV (hoy solo Super Admin; Administración debe asignarlos): `control_pedidos.tienda.generar_caratula`, `control_pedidos.tienda.regenerar_caratula`, `control_pedidos.tienda.imprimir_caratula` y `punto_venta.resguardos.salida_terminal` (migración `2026_11_21_180000`).
 - [verificado] Cancelación ordinaria: no alcanza un municipal ya salido de CEDIS, porque `PedidoBma::puedeCancelarDirecto` rechaza FASE_ENVIADO: `app/Models/ControlPedidos/PedidoBma.php:1375`.
@@ -58,7 +58,7 @@
 - [pendiente] Complementos simultáneos, integración en paquete cerrado, gastos de transporte consumidos, seguro como envío, mínimo S-06, traslado a otra sucursal con traslado hecho, recorrido visual con cuentas reales.
 
 ## Cómo probar
-- [PRUEBAS](../PRUEBAS.md): `MunicipalOrdinarioM01Test`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `ResguardoMunicipalOla1Test`, `ResguardoMunicipalOla2Test`; terminales, expediente, diferido, conversión P0, resguardo M-04/M-09/M-10.
+- [PRUEBAS](../PRUEBAS.md): `MunicipalOrdinarioM01Test`, `CaratulaMunicipalCedisTest`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `ResguardoMunicipalOla1Test`, `ResguardoMunicipalOla2Test`; terminales, expediente, carátula CEDIS, diferido, conversión P0, resguardo M-04/M-09/M-10.
 
 ## Puntos blandos
 - [verificado] El refinamiento que exigía Sin logística está sustituido por Local/Regional; no restaurarlo: `gestion-pedidos-docs/M01_CONTINUIDAD_REGISTRO_Y_CONSULTA_CODEX.md:66`.
@@ -67,4 +67,4 @@
 
 - [verificado] M-02 abre el modal original de registro en modo conversión; no hay wizard de pasos. La reserva vive en `ModalFormPedido` y confirma por `/conversion-modalidad`.
 
-- Última verificación: 2026-11-24, sin commit, árbol de trabajo (consulta PDV: borrador vs envío; observaciones; M-F04).
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo (carátula CEDIS con/sin identificación).

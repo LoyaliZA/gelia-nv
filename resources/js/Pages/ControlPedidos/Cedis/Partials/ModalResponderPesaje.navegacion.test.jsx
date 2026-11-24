@@ -9,6 +9,15 @@ vi.mock('@inertiajs/react', () => ({ router: { post: vi.fn() } }));
 vi.mock('../../../Activos/Partials/useDispositivoCampo', () => ({
     default: () => ({ esCampo: false, esMovil: false }), esDispositivoCampo: () => false,
 }));
+vi.mock('../../../../Components/Almacenes/SelectorProducto', () => ({
+    default: ({ onChange, onEscanear, inputId }) => (
+        <>
+            <input id={inputId} readOnly />
+            <button type="button" onClick={() => onChange(7, { id: 7, sku: 'SKU-7', descripcion: 'Perfume de catálogo' })}>Elegir perfume</button>
+            <button type="button" onClick={() => onEscanear?.('SKU-7')}>Escanear producto</button>
+        </>
+    ),
+}));
 
 let root, host, draft, saved;
 const pedido = { id: 900, folio: 'QA-NACIONAL', cantidad_piezas: 0,
@@ -18,6 +27,10 @@ const button = text => [...document.querySelectorAll('button')].find(el => !el.c
 const panel = index => document.getElementById(`pesaje-nacional-seccion-${index}`);
 const tick = () => act(() => vi.advanceTimersByTimeAsync(20));
 const click = async el => { await act(async () => el.click()); await tick(); };
+const elegirEstado = async texto => {
+    const etiqueta = [...document.querySelectorAll('label')].find(el => el.textContent.trim() === texto);
+    await click(etiqueta.querySelector('input') || etiqueta);
+};
 const change = (el, value) => act(async () => {
     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, value);
     el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
@@ -60,36 +73,91 @@ afterEach(async () => {
     await act(() => root.unmount()); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals();
 });
 
-it('permite abrir Cajas sin completar Pedido ni Productos y mantiene un solo pie', async () => {
+it('muestra radios 2.0, oculta la lista Bueno y bloquea Siguiente sin estado', async () => {
     await mount();
     expect(document.querySelector('[aria-label="Pasos para responder"]')).toBeNull();
     expect(document.querySelectorAll('.gelia-pesaje-nacional-footer')).toHaveLength(1);
+    expect(document.body.textContent).toContain('Todo OK');
+    expect(document.body.textContent).toContain('Con detalle o faltante');
+    expect(document.body.textContent).toContain('Ver pedido');
+    expect(document.body.textContent).not.toContain('Cada pieza inicia en Bueno');
+    expect(document.querySelector('iframe')).toBeNull();
     expect(panel(0).hidden).toBe(false); expect(panel(1).hidden).toBe(false);
     await click(button('Siguiente'));
-    expect(panel(2).hidden).toBe(false);
-    expect(button('Enviar respuesta')).toBeTruthy();
+    expect(panel(2).hidden).toBe(true);
+    expect(document.body.textContent).toContain('Indica el estado del pedido.');
     expect(router.post).not.toHaveBeenCalled();
 });
 
-it('muestra documento y productos juntos y permite regresar sin validar', async () => {
+it('con Todo OK avanza a Cajas y permite regresar al estado', async () => {
     await mount();
-    expect(panel(0).hidden).toBe(false);
-    expect(panel(1).hidden).toBe(false);
-    expect(panel(2).hidden).toBe(true);
-    expect(document.querySelector('.gelia-pesaje-nacional-desplegar')).toBeNull();
+    await elegirEstado('Todo OK');
     await click(button('Siguiente'));
     expect(panel(0).hidden).toBe(true);
     expect(panel(1).hidden).toBe(true);
     expect(panel(2).hidden).toBe(false);
+    expect(button('Enviar respuesta')).toBeTruthy();
     await click(button('Atrás'));
     expect(panel(0).hidden).toBe(false);
     expect(panel(1).hidden).toBe(false);
-    expect(document.activeElement.id).toBe('cedis-sku-pesaje');
+    expect(document.activeElement.name).toBe('estado-pesaje-nacional');
     expect(router.post).not.toHaveBeenCalled();
+});
+
+it('Con detalle muestra captura de afectadas y Siguiente exige una unidad', async () => {
+    await mount();
+    await elegirEstado('Con detalle o faltante');
+    expect(document.body.textContent).toContain('Registra solo las piezas afectadas');
+    expect(document.body.textContent).toContain('Capturar sin catálogo');
+    expect(document.body.textContent).not.toContain('Almacén del catálogo');
+    expect(document.body.textContent).not.toContain('Seleccione almacén');
+    await click(button('Siguiente'));
+    expect(panel(2).hidden).toBe(true);
+    expect(document.body.textContent).toContain('Agrega las piezas con detalle o faltante.');
+    expect(router.post).not.toHaveBeenCalled();
+});
+
+it('recupera Sin existencias y no pide retiro si el borrador no cubre cajas guardadas', async () => {
+    const uuid = 'ab463593-230f-4a18-8d69-38177cd871e5';
+    draft = {
+        estadoPedido: 'detalle',
+        excepciones: [{ descripcion: 'C ABERCROMBIE', sku: '85715166708', condicion: 'faltante', detalle: 'Sin existencias' }],
+        envios: [],
+        revisiones: [],
+        evidenciasPorEnvio: [],
+    };
+    await mount({
+        cajas: [{
+            id: 11, uuid_operativo: uuid, catalogo_tipo_caja_id: 1,
+            largo: 10, ancho: 10, alto: 10, peso_real_kg: 1.1, peso_volumetrico_kg: 0.2,
+        }],
+    });
+    expect(document.body.textContent).toContain('Sin existencias');
+    expect(document.body.textContent).toContain('C ABERCROMBIE');
+    await click(button('Siguiente'));
+    expect(panel(2).hidden).toBe(false);
+    expect(document.getElementById(`pesaje-peso-${uuid}`).value).toBe('1.1');
+    expect(document.body.textContent).not.toContain('Motivo de retiro');
+    const file = new File(['foto'], 'caja.jpg', { type: 'image/jpeg' });
+    const input = panel(2).querySelector('input[type="file"]');
+    await act(async () => {
+        Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await click(button('Enviar respuesta'));
+    expect(document.body.textContent).not.toContain('Motivo de retiro');
+    await click(document.querySelector('[aria-label="Confirmar acción"] button'));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(router.post).toHaveBeenCalledOnce();
+    const payload = router.post.mock.calls[0][1];
+    expect(payload.get('excepciones[0][condicion]')).toBe('faltante');
+    expect(payload.get('excepciones[0][sku]')).toBe('85715166708');
+    expect(payload.get('almacen_id')).toBeNull();
 });
 
 it('conserva los controles, el peso y el archivo al avanzar y retroceder', async () => {
     await mount();
+    await elegirEstado('Todo OK');
     await click(button('Siguiente'));
     const peso = document.querySelector('input[id^="pesaje-peso-"]');
     await change(peso, '2.75');
@@ -101,7 +169,7 @@ it('conserva los controles, el peso y el archivo al avanzar y retroceder', async
     });
     await click(button('Atrás'));
     expect(panel(2).hidden).toBe(true);
-    expect(document.activeElement.id).toBe('cedis-sku-pesaje');
+    expect(document.activeElement.name).toBe('estado-pesaje-nacional');
     await click(button('Siguiente'));
     expect(document.querySelector('input[id^="pesaje-peso-"]')).toBe(peso);
     expect(peso.value).toBe('2.75');
@@ -109,6 +177,7 @@ it('conserva los controles, el peso y el archivo al avanzar y retroceder', async
     await act(() => vi.advanceTimersByTimeAsync(700));
     expect(saved.envios[0].peso_real_kg).toBe('2.75');
     expect(saved.evidenciasPorEnvio[0].archivos[0]).toBe(file);
+    expect(saved.estadoPedido).toBe('correcto');
     await change(panel(2).querySelector('select[id^="pesaje-caja-"]'), '1');
     await click(button('Enviar respuesta'));
     expect(router.post).not.toHaveBeenCalled();
@@ -120,10 +189,13 @@ it('conserva los controles, el peso y el archivo al avanzar y retroceder', async
     expect(payload.get('cajas[0][peso_real_kg]')).toBe('2.75');
     expect(payload.get('cajas[0][catalogo_tipo_caja_id]')).toBe('1');
     expect(payload.get('evidencias_envios[0][0]')).toBe(file);
+    expect(payload.get('confirmacion_explicita')).toBe('1');
+    expect(payload.get('almacen_id')).toBeNull();
 });
 
 it('muestra Cajas y enfoca el campo con error sin enfocar el escáner', async () => {
     await mount();
+    await elegirEstado('Todo OK');
     await click(button('Siguiente'));
     await click(button('Enviar respuesta'));
     expect(panel(2).hidden).toBe(false);
@@ -135,7 +207,7 @@ it('muestra Cajas y enfoca el campo con error sin enfocar el escáner', async ()
 });
 
 it('recupera el borrador sin cambiar la vista inicial sin cambiar sus UUID', async () => {
-    draft = { envios: [{ client_uuid: 'ab463593-230f-4a18-8d69-38177cd871e5',
+    draft = { estadoPedido: 'correcto', envios: [{ client_uuid: 'ab463593-230f-4a18-8d69-38177cd871e5',
         catalogo_tipo_caja_id: 1, largo: 10, ancho: 10, alto: 10, peso_real_kg: '3', peso_volumetrico_kg: 0.2 }],
         revisiones: [], evidenciasPorEnvio: [] };
     await mount();
@@ -143,23 +215,6 @@ it('recupera el borrador sin cambiar la vista inicial sin cambiar sus UUID', asy
     await click(button('Siguiente'));
     expect(document.getElementById('pesaje-peso-ab463593-230f-4a18-8d69-38177cd871e5').value).toBe('3');
     expect(document.body.textContent).toContain('Borrador recuperado');
-});
-
-it('abre Productos y su detalle al faltar comentario y mantiene allí el foco', async () => {
-    draft = { envios: [{ client_uuid: 'ab463593-230f-4a18-8d69-38177cd871e5',
-        catalogo_tipo_caja_id: 1, largo: 10, ancho: 10, alto: 10, peso_real_kg: '3', peso_volumetrico_kg: 0.2 }],
-        revisiones: [{ client_uuid: '2422bb99-9437-4f1c-aa84-76c32facfb63', descripcion_producto: 'Producto de prueba',
-            estado_fisico: 'sin_existencia', comentario: '', evidencias: [], previews: [] }],
-        evidenciasPorEnvio: [{ archivos: [new File(['foto'], 'caja.jpg', { type: 'image/jpeg' })] }] };
-    await mount();
-    await click(button('Siguiente'));
-    expect(panel(1).hidden).toBe(true);
-    await click(button('Enviar respuesta'));
-    expect(panel(1).hidden).toBe(false);
-    expect(document.activeElement.id).toBe('pesaje-comentario-2422bb99-9437-4f1c-aa84-76c32facfb63');
-    await act(() => vi.advanceTimersByTimeAsync(250));
-    expect(document.activeElement.id).toBe('pesaje-comentario-2422bb99-9437-4f1c-aa84-76c32facfb63');
-    expect(router.post).not.toHaveBeenCalled();
 });
 
 it.each([
@@ -171,4 +226,6 @@ it.each([
     expect(document.querySelector('[aria-label="Pasos para responder"]')).toBeTruthy();
     expect(document.querySelector('.gelia-pesaje-nacional-footer')).toBeNull();
     expect(document.querySelector('.gelia-pesaje-nacional-seccion')).toBeNull();
+    expect(document.querySelector('input[name="estado-pesaje-nacional"]')).toBeNull();
+    expect(document.body.textContent).toContain('Cada pieza inicia en Bueno');
 });
