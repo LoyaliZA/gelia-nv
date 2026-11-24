@@ -201,6 +201,12 @@ class ListarPedidosCedisService
                         $tiendaCedis->where('solicitud_preparacion_json->modalidad_entrega', 'tienda')
                             ->where('solicitud_preparacion_json->area_revision', 'control_pedidos')
                             ->whereNotNull('solicitud_preparacion_json->revision_disponibilidad->estado');
+                    })->orWhere(function (Builder $nacional) {
+                        // Nacional: permanece en CEDIS desde la consulta hasta que Ventas cierra.
+                        $nacional->where('solicitud_preparacion_json->modalidad_entrega', 'nacional')
+                            ->whereNotNull('pesaje_solicitado_at')
+                            ->whereNull('consulta_cerrada_at')
+                            ->whereNull('empacado_at');
                     });
                 })
         );

@@ -88,3 +88,26 @@ it('las observaciones físicas de un municipal siguen el área consultada, no la
     expect(etiquetas(municipalObs('cedis'))).toContain('Observaciones CEDIS');
     expect(etiquetas(municipalObs('cedis'))).not.toContain('Observaciones de Tienda');
 });
+
+const municipalTienda = (extra = {}) => ({
+    id: 12,
+    estatus: { fase_ciclo: extra.fase || 'PESAJE_RESPONDIDO' },
+    estatus_envio: 'pendiente_pesaje',
+    solicitud_preparacion: {
+        modalidad_entrega: 'municipal',
+        consulta_municipal: { area: 'tienda', estado: extra.estado || 'respondida', enviada_at: '2026-11-24T10:00:00Z' },
+        revision_disponibilidad: { estado: extra.revision || 'sin_excepciones', actualizacion_pendiente: Boolean(extra.anexo) },
+        ...(extra.anexo ? { anexo_sin_remision: [{ pendiente_revision: true, unidades: [{ resultado: 'correcto', respondida_at: '2026-11-24T11:00:00Z' }] }] } : {}),
+    },
+});
+it('un municipal a tienda respondido no deja Pendiente de respuesta de Tienda', () => {
+    expect(estadoConsultaPedido(municipalTienda())).toBe('respondida');
+    expect(etiquetas(municipalTienda())).toEqual(['Consulta respondida']);
+    expect(etiquetas(municipalTienda())).not.toContain('Pendiente de respuesta de Tienda');
+});
+it('un anexo municipal a tienda vuelve a pendiente aunque haya avance de pieza', () => {
+    const pedido = municipalTienda({ anexo: true, estado: 'excepciones_pendientes', revision: 'sin_excepciones', fase: 'PESAJE_PENDIENTE' });
+    expect(estadoConsultaPedido(pedido)).toBe('pendiente');
+    expect(etiquetas(pedido)).toContain('Excepciones pendientes');
+    expect(etiquetas(pedido)).not.toContain('Pendiente de respuesta de Tienda');
+});

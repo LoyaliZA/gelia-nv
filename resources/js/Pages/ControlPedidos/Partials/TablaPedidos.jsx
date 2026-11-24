@@ -1,4 +1,6 @@
 import { esRegistroMunicipal, nombreTerminalMunicipal } from '../Municipal/terminalMunicipal';
+import { esNacional } from '../Nacional/superficieNacional';
+import { destinoDomicilioNacional } from './presentacionPedidoCedis';
 import React, {
     useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState,
 } from 'react';
@@ -364,6 +366,12 @@ function iconoEntrega(pedido) {
 function datosEntrega(pedido) {
     if (esRegistroMunicipal(pedido)) {
         return { titulo: 'Envío municipal', destino: `Terminal: ${nombreTerminalMunicipal(pedido)}` };
+    }
+    if (esNacional(pedido)) {
+        return {
+            titulo: etiquetaTransportePedido(pedido) || 'Envío nacional',
+            destino: destinoDomicilioNacional(pedido, { prefijoRecibe: true }),
+        };
     }
     const almacen = etiquetaAlmacen(pedido.almacen);
     return { titulo: etiquetaTransportePedido(pedido) || '—', destino: almacen !== '—' ? almacen : null };

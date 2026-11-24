@@ -12,15 +12,15 @@ use App\Models\User;
 use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Permission;
+use Tests\Support\RefreshDatabaseSafe;
 use Tests\TestCase;
 
 class MunicipalOrdinarioM01Test extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabaseSafe;
 
     private User $ventas;
 
@@ -942,6 +942,60 @@ class MunicipalOrdinarioM01Test extends TestCase
         $this->assertNull($trasRetiro->consulta_cerrada_at);
         $this->assertCount(1, $trasRetiro->solicitud_preparacion_json['retiro_piezas']);
         $this->assertSame($pdf->ruta_archivo, $trasRetiro->documentos()->where('tipo', 'pdf_pedido')->value('ruta_archivo'));
+    }
+
+    public function test_persistir_unidad_municipal_no_cierra_y_el_envio_final_si(): void
+    {
+        $tipo = \App\Models\CatalogoTipoAlmacen::firstOrCreate(['nombre' => 'PDV']);
+        $sucursal = \App\Models\Sucursal::create(['codigo' => 'M01-PDV-U', 'nombre' => 'Sucursal unidad', 'activo' => true]);
+        $almacen = \App\Models\Almacen::create([
+            'codigo' => 'M01-PDV-U', 'nombre' => 'PDV U', 'tipo_almacen_id' => $tipo->id,
+            'sucursal_id' => $sucursal->id, 'activo' => true, 'visible_en_pedidos' => true,
+        ]);
+        $this->ventas->givePermissionTo(Permission::findOrCreate('control_pedidos.municipal.responder_consulta', 'web'));
+        $this->ventas->concederAccesoSucursal($sucursal);
+        $this->guardarSolicitud();
+        $this->postJson(route('control_pedidos.municipal.consulta', $this->pedido), ['almacen_id' => $almacen->id])->assertOk();
+        $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+            'confirmacion_explicita' => 1, 'evidencias' => [UploadedFile::fake()->image('conjunto.jpg')],
+        ])->assertOk();
+        $this->assertSame('respondida', $this->pedido->fresh()->solicitud_preparacion_json['consulta_municipal']['estado']);
+
+        $clave = (string) \Illuminate\Support\Str::uuid();
+        $this->post('/control-pedidos/'.$this->pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento', 'solicitud_id' => $clave,
+            'evidencia' => UploadedFile::fake()->createWithContent('anexo.pdf', 'anexo-unidad'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $pedido = $this->pedido->fresh();
+        $this->assertSame('excepciones_pendientes', $pedido->solicitud_preparacion_json['consulta_municipal']['estado']);
+        $anexo = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
+        $unidadId = 'anexo:'.$anexo['solicitud_id'].':doc:'.$anexo['documento_id'];
+
+        $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+            'persistir_unidad' => 1,
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo', 'indice' => 0, 'unidad_id' => $unidadId,
+                'documento_id' => $anexo['documento_id'], 'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $borrador = $this->pedido->fresh();
+        $this->assertSame('excepciones_pendientes', $borrador->solicitud_preparacion_json['consulta_municipal']['estado']);
+        $this->assertSame('correcto', $borrador->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades'][0]['resultado']);
+        $this->assertTrue(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($borrador->solicitud_preparacion_json));
+
+        $this->post(route('control_pedidos.municipal.disponibilidad', $this->pedido), [
+            'actualizacion_id' => $actualizacionId,
+            'cambios_revisados' => [[
+                'tipo' => 'anexo', 'indice' => 0, 'unidad_id' => $unidadId,
+                'documento_id' => $anexo['documento_id'], 'resultado' => 'correcto',
+            ]],
+        ], ['Accept' => 'application/json'])->assertOk();
+        $enviado = $this->pedido->fresh();
+        $this->assertSame('respondida', $enviado->solicitud_preparacion_json['consulta_municipal']['estado']);
+        $this->assertFalse($enviado->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_pendiente']);
+        $this->assertFalse(\App\Support\ControlPedidos\ActualizacionConsulta::pendiente($enviado->solicitud_preparacion_json));
     }
 
     public function test_un_fallo_parcial_al_guardar_adjuntos_no_deja_archivos_ni_referencias(): void

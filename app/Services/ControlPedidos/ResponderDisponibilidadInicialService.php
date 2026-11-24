@@ -183,7 +183,7 @@ class ResponderDisponibilidadInicialService
             if ($tarea !== null && $imagenesNuevas === [] && $guardadas === [] && ! $capturaVigente) {
                 throw ValidationException::withMessages(['evidencias' => self::MENSAJE_FOTO]);
             }
-            if ($tarea === null && $archivos === []) {
+            if ($tarea === null && $archivos === [] && ! $capturaVigente) {
                 throw ValidationException::withMessages(['evidencias' => 'Adjunte la evidencia de la revisión.']);
             }
 

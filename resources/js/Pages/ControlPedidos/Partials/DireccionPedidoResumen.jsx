@@ -14,6 +14,7 @@ export default function DireccionPedidoResumen({
     className = '',
     compact = false,
     conCopia = false,
+    etiquetaDestinatario = 'Destinatario',
 }) {
     const d = direccion || {};
     const tieneEstructura = Boolean(
@@ -63,7 +64,7 @@ export default function DireccionPedidoResumen({
     if (compact) {
         return (
             <div className={`rounded-xl border theme-border theme-element p-3 space-y-2 ${className}`}>
-                {d.nombre_destinatario && <Campo label="Destinatario" valor={d.nombre_destinatario} />}
+                {d.nombre_destinatario && <Campo label={etiquetaDestinatario} valor={d.nombre_destinatario} />}
                 {conCopia ? <CampoTel /> : (telefono ? <Campo label="Teléfono" valor={telefono} /> : null)}
                 <Campo label="Domicilio" valor={textoCompleto || textoLegacy || '—'} />
                 {barraCopia}
@@ -89,7 +90,7 @@ export default function DireccionPedidoResumen({
                 </span>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Campo label="Destinatario" valor={d.nombre_destinatario} />
+                <Campo label={etiquetaDestinatario} valor={d.nombre_destinatario} />
                 {conCopia ? <CampoTel /> : <Campo label="Teléfono" valor={telefono} />}
                 <Campo label="Calle" valor={d.calle} />
                 <Campo label="Número" valor={numero} />

@@ -320,7 +320,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
 
                 </dl>
             </div>
-            {(origen === 'CEDIS' || presentacion.modalidad === 'municipal') && <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.modalidad === 'municipal' ? 'terminal' : 'sucursal'} />}
+            {(origen === 'CEDIS' || presentacion.modalidad === 'municipal') && <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.tipoDestino} />}
             <button className={GELIA_BTN_OUTLINE} type="button" disabled={!referencias.length || !puedeLeerDocumentos} onClick={() => setVista({ documentos: referencias, indice: 0 })}><FileText size={16} aria-hidden />Ver pedido{referencias.length > 1 ? ` (${referencias.length})` : ''}</button>
         </header>
         <div className="gelia-preparacion-workspace" data-pedido-visible="false">

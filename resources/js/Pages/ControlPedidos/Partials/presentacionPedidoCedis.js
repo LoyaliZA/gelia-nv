@@ -1,6 +1,24 @@
 import { etiquetaSucursal } from './pedidosBmaStyles';
 import { pedidoEsTrasladoInternoPdv } from './destinoSucursalPedido';
 
+function recolectaEnSucursal(pedido) {
+    return Boolean(pedido?.cambio_a_tienda || pedido?.solicitud_preparacion?.cambio_a_tienda);
+}
+
+/** Destino nacional: quien recibe y domicilio. Sucursal solo si hay recolección en sucursal. */
+export function destinoDomicilioNacional(pedido = {}, { prefijoRecibe = false } = {}) {
+    if (recolectaEnSucursal(pedido)) {
+        const sucursal = pedido.sucursal_destino || pedido.sucursalDestino;
+        return sucursal ? etiquetaSucursal(sucursal) : pedido.sucursal_destino_nombre || 'Sucursal por confirmar';
+    }
+    const domicilio = pedido.direccion_vigente || pedido.direccionVigente;
+    const recibe = String(domicilio?.nombre_destinatario || '').trim();
+    const lugar = [domicilio?.municipio || domicilio?.ciudad, domicilio?.estado].filter(Boolean).join(', ');
+    const cuerpo = [recibe, lugar].filter(Boolean).join(' · ');
+    if (!cuerpo) return 'Domicilio por confirmar';
+    return prefijoRecibe && recibe ? `Recibe: ${cuerpo}` : cuerpo;
+}
+
 /** Presentación comercial; no cambia la modalidad ni activa un recorrido operativo. */
 export function presentacionPedidoCedis(pedido = {}) {
     const solicitud = pedido.solicitud_preparacion || {};
@@ -10,21 +28,19 @@ export function presentacionPedidoCedis(pedido = {}) {
         && !String(solicitud.codigo_modalidad || '').startsWith('RECOGE_TIENDA')
         && pedido.origen?.requiere_logistica === true) modalidad = 'nacional';
     const municipal = modalidad === 'municipal';
-    const envio = municipal || modalidad === 'nacional';
+    const nacional = modalidad === 'nacional';
+    const envio = municipal || nacional;
     const sucursal = pedido.sucursal_destino || pedido.sucursalDestino;
-    // Nacional con domicilio ya capturado: el destino es el lugar de entrega, no «Por confirmar».
-    const domicilio = pedido.direccion_vigente || pedido.direccionVigente;
-    const destinoNacional = modalidad === 'nacional' && !sucursal && domicilio
-        ? [domicilio.municipio || domicilio.ciudad, domicilio.estado].filter(Boolean).join(', ') || null
-        : null;
+    const cambioSucursal = nacional && recolectaEnSucursal(pedido);
     return {
         modalidad,
         etiqueta: envio ? 'Envío:' : 'Tipo de pedido',
-        nombre: municipal ? 'MUNICIPAL' : modalidad === 'nacional' ? 'NACIONAL' : pedido.origen?.nombre || 'Tipo no disponible',
+        nombre: municipal ? 'MUNICIPAL' : nacional ? 'NACIONAL' : pedido.origen?.nombre || 'Tipo no disponible',
         origen: pedido.almacen?.nombre || pedido.almacen?.codigo
             || (!envio && solicitud.area_revision === 'control_pedidos' ? 'CEDIS' : 'Por confirmar'),
         destino: municipal ? pedido.paqueteria?.nombre || 'Por confirmar'
-            : destinoNacional ? destinoNacional
+            : nacional ? destinoDomicilioNacional(pedido)
             : sucursal ? etiquetaSucursal(sucursal) : pedido.sucursal_destino_nombre || pedido.expediente_registrar?.sucursal || 'Por confirmar',
+        tipoDestino: municipal ? 'terminal' : (nacional && !cambioSucursal) ? 'domicilio' : 'sucursal',
     };
 }

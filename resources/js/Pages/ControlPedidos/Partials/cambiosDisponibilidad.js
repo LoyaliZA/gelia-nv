@@ -68,9 +68,14 @@ export function revisionesDelCicloEnCurso(solicitud = {}) {
     return ids;
 }
 
+function consultaComoTienda(solicitud = {}) {
+    return (solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda')
+        || (solicitud.modalidad_entrega === 'municipal' && solicitud.consulta_municipal?.area === 'tienda');
+}
+
 export function revisionesNoEnviadasTienda(solicitud = {}) {
     const ids = new Set();
-    if (solicitud.modalidad_entrega !== 'tienda' || solicitud.area_revision !== 'preparacion_tienda') return ids;
+    if (!consultaComoTienda(solicitud)) return ids;
     for (const anexo of solicitud.anexo_sin_remision || []) {
         for (const unidad of anexo.unidades || []) {
             const vigentes = unidad.resultado === 'incidencia' ? (unidad.revision_ids || []).map(Number) : [];
@@ -137,7 +142,7 @@ function ficha(linea, extra, tienda = false) {
 }
 
 export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
-    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
+    const tienda = consultaComoTienda(solicitud);
     const decisiones = Object.values(solicitud.acciones_disponibilidad || {});
     const corte = solicitud.revision_disponibilidad?.respondida_at;
     const anexos = (solicitud.anexo_sin_remision || []).flatMap((a, indice) => {

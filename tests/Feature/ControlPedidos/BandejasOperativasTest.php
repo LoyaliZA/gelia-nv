@@ -84,6 +84,46 @@ class BandejasOperativasTest extends TestCase
         $this->assertNotContains($borrador->id, $ids);
     }
 
+    public function test_cedis_conserva_nacional_hasta_cerrar_consulta(): void
+    {
+        $json = ['modalidad_entrega' => 'nacional', 'captura_nacional' => 'compartida'];
+        $pendiente = $this->pedido('NAC-PENDIENTE', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PENDIENTE_PESAJE,
+            'pesaje_solicitado_at' => '2026-11-08 10:00:00',
+            'solicitud_preparacion_json' => $json,
+        ]);
+        $respondido = $this->pedido('NAC-RESPONDIDO', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'pesaje_solicitado_at' => '2026-11-08 10:00:00',
+            'pesaje_respondido_at' => '2026-11-08 11:00:00',
+            'solicitud_preparacion_json' => $json,
+        ]);
+        $cerrado = $this->pedido('NAC-CERRADO', [
+            'estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'pesaje_solicitado_at' => '2026-11-08 10:00:00',
+            'pesaje_respondido_at' => '2026-11-08 11:00:00',
+            'consulta_cerrada_at' => '2026-11-08 12:00:00',
+            'solicitud_preparacion_json' => $json,
+        ]);
+
+        $listar = app(ListarPedidosCedisService::class);
+        $todos = $listar->ejecutar([], false)->pluck('id')->all();
+        $pesaje = $listar->ejecutar(['tab' => 'PENDIENTES_PESAJE'], false)->pluck('id')->all();
+        $nacionales = $listar->ejecutar(['tipo' => 'nacional'], false)->pluck('id')->all();
+
+        $this->assertContains($pendiente->id, $todos);
+        $this->assertContains($respondido->id, $todos);
+        $this->assertNotContains($cerrado->id, $todos);
+
+        $this->assertContains($pendiente->id, $pesaje);
+        $this->assertNotContains($respondido->id, $pesaje);
+        $this->assertNotContains($cerrado->id, $pesaje);
+
+        $this->assertContains($pendiente->id, $nacionales);
+        $this->assertContains($respondido->id, $nacionales);
+        $this->assertNotContains($cerrado->id, $nacionales);
+    }
+
     public function test_cedis_fecha_de_solicitud_vendedora_y_orden_antes_de_paginar(): void
     {
         $antiguo = $this->pedido('ANTIGUO', ['pesaje_solicitado_at' => '2026-11-07 09:00:00']);

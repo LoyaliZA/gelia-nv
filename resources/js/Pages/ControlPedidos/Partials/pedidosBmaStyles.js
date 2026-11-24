@@ -130,12 +130,14 @@ export const estadoConsultaPedido = (pedido) => {
     if (!pedido) return null;
     const solicitud = pedido.solicitud_preparacion || {};
     const tarea = pedido.tarea_preparacion;
+    const consultaMunicipal = solicitud.modalidad_entrega === 'municipal' && Boolean(solicitud.consulta_municipal?.enviada_at);
     const consultaTienda = !['municipal', 'nacional'].includes(solicitud.modalidad_entrega)
         && (['preparacion_tienda', 'control_pedidos'].includes(solicitud.area_revision) || solicitud.modalidad_entrega === 'tienda');
-    const esConsulta = consultaTienda || cedisConsultaEsRevisionMercancia(pedido);
+    const esConsulta = consultaTienda || consultaMunicipal || cedisConsultaEsRevisionMercancia(pedido);
     if (!esConsulta) return null;
     const fase = pedido.estatus?.fase_ciclo;
     const enviada = Boolean(tarea || pedido.pesaje_solicitado_at || solicitud.revision_disponibilidad
+        || solicitud.consulta_municipal?.enviada_at
         || ['PESAJE_PENDIENTE', 'PESAJE_RESPONDIDO'].includes(fase)
         || ['pendiente_pesaje', 'pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio));
     if (!enviada) return null;
@@ -144,9 +146,12 @@ export const estadoConsultaPedido = (pedido) => {
         || tarea?.respuesta?.respondida === true
         || Boolean(pedido.pesaje_respondido_at)
         || ['pesaje_listo', 'apartado_confirmado'].includes(pedido.estatus_envio)
-        || fase === 'PESAJE_RESPONDIDO';
-    const actualizacionTiendaPendiente = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda'
-        && (solicitud.revision_disponibilidad?.actualizacion_pendiente || anexosPendientesRevision(solicitud));
+        || fase === 'PESAJE_RESPONDIDO'
+        || ['respondida', 'excepciones_pendientes'].includes(solicitud.consulta_municipal?.estado);
+    const actualizacionTiendaPendiente = (
+        (solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda')
+        || (solicitud.modalidad_entrega === 'municipal' && solicitud.consulta_municipal?.area === 'tienda')
+    ) && (solicitud.revision_disponibilidad?.actualizacion_pendiente || anexosPendientesRevision(solicitud));
     return pedido.consulta_actualizacion_pendiente || actualizacionTiendaPendiente ? 'pendiente' : (respondida ? 'respondida' : 'pendiente');
 };
 

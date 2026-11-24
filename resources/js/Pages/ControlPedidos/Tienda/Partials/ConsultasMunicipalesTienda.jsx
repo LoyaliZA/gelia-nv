@@ -2,6 +2,29 @@ import React, { useState } from 'react';
 import PanelRespuestaDisponibilidad from '../../Partials/PanelRespuestaDisponibilidad';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 
+function esBorradorUnidad(form) {
+    return typeof FormData !== 'undefined' && form instanceof FormData && form.get('persistir_unidad') === '1';
+}
+
+/** POST de consulta municipal: el borrador de pieza no recarga; el envío del conjunto cierra el panel. */
+export async function enviarRespuestaMunicipal(pedidoId, form, { onBorrador, onEnviado } = {}) {
+    await window.axios.post(route('control_pedidos.municipal.disponibilidad', pedidoId), form, { headers: { Accept: 'application/json' } });
+    if (esBorradorUnidad(form)) {
+        const { data } = await window.axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`);
+        onBorrador?.(data);
+        return;
+    }
+    onEnviado?.();
+}
+
+function PanelMunicipal({ pedido, onPedido, onCerrar }) {
+    return <PanelRespuestaDisponibilidad key={pedido.id} modo="dialogo" abierto
+        pedido={pedido} documentos={pedido.documentos || []}
+        revision={pedido.solicitud_preparacion?.revision_disponibilidad}
+        origen="Tienda" puedeResponder tomada onClose={onCerrar}
+        onEnviar={(form) => enviarRespuestaMunicipal(pedido.id, form, { onBorrador: onPedido, onEnviado: onCerrar })} />;
+}
+
 /** Consultas municipales pendientes que se preparan en tienda; el almacén indica la sucursal que responde. */
 /** Abre el panel de respuesta de una consulta municipal desde una fila de la bandeja. */
 export function PanelConsultaMunicipalTienda({ pedidoId, onClose }) {
@@ -16,14 +39,7 @@ export function PanelConsultaMunicipalTienda({ pedidoId, onClose }) {
     }, [pedidoId]);
     if (error) return <p className="text-sm theme-text-aviso" role="alert">{error} <button type="button" className="underline" onClick={onClose}>Cerrar</button></p>;
     if (!pedido) return null;
-    return <PanelRespuestaDisponibilidad key={pedido.id} modo="dialogo" abierto
-        pedido={pedido} documentos={pedido.documentos || []}
-        revision={pedido.solicitud_preparacion?.revision_disponibilidad}
-        origen="Tienda" puedeResponder tomada onClose={onClose}
-        onEnviar={async (form) => {
-            await window.axios.post(route('control_pedidos.municipal.disponibilidad', pedido.id), form, { headers: { Accept: 'application/json' } });
-            window.location.reload();
-        }} />;
+    return <PanelMunicipal pedido={pedido} onPedido={setPedido} onCerrar={onClose} />;
 }
 
 export default function ConsultasMunicipalesTienda({ pedidos = [], vacio = null }) {
@@ -51,14 +67,7 @@ export default function ConsultasMunicipalesTienda({ pedidos = [], vacio = null 
                 ))}
                 {pedidos.length === 0 && vacio && <li className="text-sm theme-text-muted">{vacio}</li>}
             </ul>
-            {seleccionado && <PanelRespuestaDisponibilidad key={seleccionado.id} modo="dialogo" abierto
-                pedido={seleccionado} documentos={seleccionado.documentos || []}
-                revision={seleccionado.solicitud_preparacion?.revision_disponibilidad}
-                origen="Tienda" puedeResponder tomada onClose={() => setSeleccionado(null)}
-                onEnviar={async (form) => {
-                    await window.axios.post(route('control_pedidos.municipal.disponibilidad', seleccionado.id), form, { headers: { Accept: 'application/json' } });
-                    window.location.reload();
-                }} />}
+            {seleccionado && <PanelMunicipal pedido={seleccionado} onPedido={setSeleccionado} onCerrar={() => setSeleccionado(null)} />}
         </>
     );
 }

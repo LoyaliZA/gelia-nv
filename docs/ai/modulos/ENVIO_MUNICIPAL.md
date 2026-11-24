@@ -18,7 +18,7 @@
 - [verificado] Respuesta no autoriza pago/remisión: exigir cierre municipal vigente y sin bloqueo. Conversión Tienda→Municipal no relaja esa barrera: consulta heredada abierta bloquea exhibiciones nuevas hasta cerrar con `modalidad_esperada=municipal` y `version_consulta`; el cargo histórico no cubre el transporte: `PoliticaFinancieraMunicipal.php`; caso 10 de `ConversionModalidadM02Test`.
 - [verificado] No refrescar silenciosamente el snapshot si se guarda el mismo consignatario: `ValidarCapturaMunicipal::expediente`.
 - [verificado] M-02 P0: Tienda→Municipal sobre el mismo pedido solo antes del primer cierre (`ConsultaPedidoYaCerradaAlgunaVez`). Reserva por `instancia_id` con `Cache::add`. Cerrar consulta exige contexto; conversión confirmada sin `modalidad_esperada=municipal` → 409. Heredada+`enviada_at` no hace unset de `revision_disponibilidad`.
-- [verificado] Tienda responde con permiso municipal y sucursal operable; CEDIS mantiene departamentos: `app/Support/ControlPedidos/AlcanceConsultaMunicipal.php:20`.
+- [verificado] Tienda responde con permiso municipal y sucursal operable; CEDIS mantiene departamentos: `app/Support/ControlPedidos/AlcanceConsultaMunicipal.php:20`. El listado de Ventas sigue `consulta_municipal` / `revision_disponibilidad`; no reusa `estatus_envio` de pesaje como «Pendiente de respuesta de Tienda»: `estadoConsultaPedido`, `pedidosListadoUi.js`.
 - [verificado] Resguardo municipal: la intención no exige pago; enviar a auditoría sí (mensaje canónico). M-09 exige mercancía y transporte auditados más fecha; M-10 acumula con flete pendiente/diferido y cajas N/A (`numero_cajas` nulo). Liberación auxiliar exige continuación y conjunto listo; conserva pivote/`pedido_principal_id`/cobros. Crédito Wizerp no habilita el resguardo. `puede_reconducir` es falso tras despacho/enviado. `es_resguardo` no se limpia si hay otra retención: `PoliticaResguardoEnvio.php`.
 
 ## Dependencias con otros módulos
@@ -67,4 +67,4 @@
 
 - [verificado] M-02 abre el modal original de registro en modo conversión; no hay wizard de pasos. La reserva vive en `ModalFormPedido` y confirma por `/conversion-modalidad`.
 
-- Última verificación: 2026-11-24, sin commit, árbol de trabajo (observaciones PDV; M-F04 Ver y Atendidos).
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo (consulta PDV: borrador vs envío; observaciones; M-F04).

@@ -72,6 +72,22 @@ it.each(['correcto', 'incidencia'])('el resumen de Ventas conserva pendiente el 
  expect(container.textContent).toContain(resultado === 'correcto' ? 'Todo OK' : 'Con piezas reportadas');
 });
 
+it.each(['correcto', 'incidencia'])('municipal a tienda conserva pendiente el avance %s hasta el envío', async resultado => {
+ const solicitud = base().solicitud_preparacion;
+ solicitud.modalidad_entrega = 'municipal';
+ solicitud.consulta_municipal = { area: 'tienda', estado: 'excepciones_pendientes', enviada_at: '2026-11-01T09:00:00Z' };
+ delete solicitud.area_revision;
+ solicitud.anexo_sin_remision[0].unidades[0].resultado = resultado;
+ await act(() => root.render(<ResumenCambiosDisponibilidad solicitud={solicitud} />));
+ expect(container.textContent).toContain('Pendiente de revisión');
+ expect(container.textContent).not.toContain('Todo OK');
+ expect(container.textContent).not.toContain('Con piezas reportadas');
+ solicitud.anexo_sin_remision[0].pendiente_revision = false;
+ solicitud.anexo_sin_remision[0].respondida_at = '2026-11-02T10:00:00Z';
+ await act(() => root.render(<ResumenCambiosDisponibilidad solicitud={solicitud} />));
+ expect(container.textContent).toContain(resultado === 'correcto' ? 'Todo OK' : 'Con piezas reportadas');
+});
+
 it('varias piezas guardadas conservan pendientes, evidencias y fecha anterior al recargar y hasta enviar', async () => {
  const pedido = base();
  const solicitud = pedido.solicitud_preparacion;
