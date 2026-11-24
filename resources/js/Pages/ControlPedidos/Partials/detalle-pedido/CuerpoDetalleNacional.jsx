@@ -6,6 +6,7 @@ import DireccionPedidoResumen from '../DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../codigoDireccionCliente';
 import SeccionGuiaRastreo from '../SeccionGuiaRastreo';
 import SeccionRevisionFisicaPedido from '../SeccionRevisionFisicaPedido';
+import { cambioATiendaNacional } from '../../Nacional/superficieNacional';
 import {
     BTN_SECONDARY,
     etiquetaAlmacen,
@@ -43,11 +44,11 @@ export default function CuerpoDetalleNacional({
         esResguardo: pedido.es_resguardo,
         requiereLogistica: pedidoRequiereLogistica(pedido),
     };
-    const sucursal = pedido.sucursal_destino || (pedido.sucursal_destino_id ? {
+    const sucursal = cambioATiendaNacional(pedido) ? (pedido.sucursal_destino || (pedido.sucursal_destino_id ? {
         id: pedido.sucursal_destino_id,
         nombre: pedido.sucursal_destino_nombre,
         codigo: pedido.sucursal_destino_codigo,
-    } : null);
+    } : null)) : null;
     const snap = pedido.direccion_vigente || pedido.direccionVigente;
     const sinRevision = !pedido.estado_fisico_general
         && !(pedido.revisiones_producto || pedido.revisionesProducto || []).length
@@ -93,7 +94,7 @@ export default function CuerpoDetalleNacional({
                     <DetallePedidoDato icon={ClipboardCheck} label="Estado" value={etiquetaEstatusPedido(pedido.estatus, opcionesEstatus)} obligatorio />
                     <DetallePedidoDato icon={Truck} label="Tipo de pedido" value={pedido.origen?.nombre} obligatorio={vacios} />
                     <DetallePedidoDato icon={Building2} label="Almacén" value={pedido.almacen ? etiquetaAlmacen(pedido.almacen) : null} obligatorio={vacios} />
-                    <DetallePedidoDato icon={Store} label="Sucursal destino" value={sucursal ? etiquetaSucursal(sucursal) : null} />
+                    <DetallePedidoDato icon={Store} label="Sucursal de recolección" value={sucursal ? etiquetaSucursal(sucursal) : null} />
                     <DetallePedidoDato icon={CreditCard} label="Pagos / bancos" value={textoPagosPedido(pedido)} obligatorio={vacios} />
                     <DetallePedidoDato icon={Package} label="Tipo caja" value={pedido.tipo_caja?.nombre} obligatorio={vacios} />
                     <DetallePedidoDato icon={Scale} label="Peso vol." value={kg(pedido.peso_volumetrico_kg)} obligatorio={vacios} />
@@ -165,6 +166,7 @@ export default function CuerpoDetalleNacional({
                     codigoPostal={pedido.codigo_postal}
                     codigoDireccion={codigoDireccionCliente(pedido.cliente?.numero_cliente, snap?.numero_direccion)}
                     compact={!vacios}
+                    etiquetaDestinatario="Nombre de quien recibe"
                 />
                 <DetallePedidoDatos>
                     <DetallePedidoDato icon={UserRound} label="Destinatario alterno" value={pedido.envia_a_otra_persona ? pedido.envia_otra_persona : null} obligatorio={vacios && pedido.envia_a_otra_persona} />

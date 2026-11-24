@@ -181,7 +181,7 @@ function TarjetaPedido({
             )}
 
             <div className="gelia-pedidos-tarjeta-datos grid grid-cols-2 gap-x-3 gap-y-3 text-xs font-medium theme-text-muted">
-                <div className="col-span-2 gelia-cedis-tarjeta-ruta"><RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.modalidad === 'municipal' ? 'terminal' : 'sucursal'} /></div>
+                <div className="col-span-2 gelia-cedis-tarjeta-ruta"><RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.tipoDestino} /></div>
                 {!municipal && preparacion?.modalidad?.nombre && <div><p className="text-xs font-medium m-0">Preparación</p><p className="text-sm theme-text-main m-0 mt-0.5">{preparacion.modalidad.nombre}</p></div>}
                 {!municipal && !requiereLogistica && pedido.numero_cajas != null && (
                     <div>
@@ -206,7 +206,7 @@ function TarjetaPedido({
                 </>
                 )}
             </div>
-            {requiereLogistica && (() => {
+            {requiereLogistica && presentacion.modalidad !== 'nacional' && (() => {
                 const dir = pedido.direccion_vigente || pedido.direccionVigente || {};
                 const dest = dir.nombre_destinatario;
                 const cp = pedido.codigo_postal || dir.codigo_postal;

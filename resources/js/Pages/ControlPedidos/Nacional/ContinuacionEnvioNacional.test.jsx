@@ -29,7 +29,11 @@ beforeEach(() => {
     document.body.append(host);
     root = createRoot(host);
     vi.resetAllMocks();
-    axios.get.mockResolvedValue({ data: { direcciones: [{ id: 8, codigo_postal: '86000', etiqueta: 'Casa' }] } });
+    axios.get.mockResolvedValue({ data: { direcciones: [{
+        id: 8, codigo_postal: '86000', etiqueta: 'Casa', es_principal: true,
+        nombre_destinatario: 'Ana Ruiz', telefono_destinatario: '9931112233',
+        calle: 'Calle 1', colonia: 'Centro', municipio: 'Centro', estado: 'Tabasco',
+    }] } });
 });
 
 afterEach(async () => {
@@ -137,6 +141,24 @@ it('sin permiso de direcciones no ofrece el alta y pide ayuda a un auxiliar', as
     await abrirCotizacion();
     expect(boton('Agregar dirección')).toBeUndefined();
     expect(host.textContent).toContain('auxiliar');
+});
+
+it('elige la dirección principal y muestra el nombre de quien recibe', async () => {
+    axios.get.mockResolvedValue({ data: { direcciones: [
+        { id: 9, es_principal: false, etiqueta: 'Oficina', nombre_destinatario: 'Luis Pérez', codigo_postal: '86100', municipio: 'Centro', estado: 'Tabasco' },
+        {
+            id: 8, es_principal: true, etiqueta: 'Casa', nombre_destinatario: 'Ana Ruiz',
+            telefono_destinatario: '9931112233', calle: 'Calle 1', colonia: 'Centro',
+            codigo_postal: '86000', municipio: 'Centro', estado: 'Tabasco',
+        },
+    ] } });
+    await render();
+    expect(host.querySelector('select').value).toBe('8');
+    const preview = host.querySelector('[aria-label="Dirección elegida"]');
+    expect(preview.textContent).toContain('Nombre de quien recibe');
+    expect(preview.textContent).toContain('Ana Ruiz');
+    expect(preview.textContent).toContain('Calle 1');
+    expect(host.textContent).toContain('Principal · Ana Ruiz · 86000');
 });
 
 it('muestra el desglose de mercancía, flete, reexpedición y seguro tras cotizar', async () => {

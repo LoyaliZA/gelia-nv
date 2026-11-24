@@ -85,7 +85,7 @@ export default function ModalAgregarDireccionNacional({ abierto, onClose, pedido
                     </button>
                 </div>
                 <div className="p-5 overflow-y-auto">
-                    <CamposDireccionPedido valores={campos} onChange={setCampos} disabled={guardando} />
+                    <CamposDireccionPedido valores={campos} onChange={setCampos} disabled={guardando} etiquetaDestinatario="Nombre de quien recibe" />
                 </div>
                 <div className="p-5 border-t theme-border shrink-0 space-y-3">
                     {error && <p className="m-0 text-sm theme-text-aviso" role="alert">{error}</p>}

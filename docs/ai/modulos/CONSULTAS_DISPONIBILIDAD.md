@@ -2,8 +2,8 @@
 
 - Propósito: obtener respuesta del conjunto y decisiones de Ventas sin declarar movimientos físicos.
 - Ubicación: `app/Http/Controllers/ControlPedidos/DisponibilidadTiendaController.php`; `app/Services/ControlPedidos/{ResponderDisponibilidadInicialService,CerrarConsultaPedidoBmaService,ReabrirConsultaPedidoBmaService}.php`.
-- Frontend: `resources/js/Pages/ControlPedidos/Partials/{PanelRespuestaDisponibilidad.jsx,useActualizacionesPedidos.js,vigenciaConsultaPedido.js}`.
-- Pruebas: `tests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php`; `Partials/{PanelRespuestaDisponibilidad.test.jsx,useActualizacionesPedidos.test.jsx}` junto al frontend.
+- Frontend: `resources/js/Pages/ControlPedidos/Partials/{PanelRespuestaDisponibilidad.jsx,useActualizacionesPedidos.js,vigenciaConsultaPedido.js}`; municipal PDV: `Tienda/Partials/ConsultasMunicipalesTienda.jsx`.
+- Pruebas: `tests/Feature/ControlPedidos/SolicitudRegistrarTiendaTest.php`; `MunicipalOrdinarioM01Test` (`persistir_unidad`); `Partials/{PanelRespuestaDisponibilidad.test.jsx,cambiosDisponibilidadIdentidad.test.js}` junto al frontend.
 
 ## Estado actual
 - [verificado] Consulta inicial y actualización comparten servicio, con contratos distintos de evidencia/ciclo: `app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php`.
@@ -11,7 +11,7 @@
 - [verificado] Los anexos nuevos de Preparación Tienda reciben `linea_id` y unidades persistentes distintas aunque compartan solicitud, SKU o documento. Se conservan las claves existentes; los alias se resuelven antes del guardado parcial/final y se rechazan si son ambiguos o ajenos. `UnidadesRevisionConsulta` y `cambiosDisponibilidad` reconcilian la captura sin reidentificar históricos. El índice no es identidad; `documentos_soporte` y `documentos_peticion` no son unidades.
 - [verificado] El retiro se informa; no pide reconfirmación ni recaptura. Cerrar consulta se habilita, no se dispara solo; Ventas puede seguir anexando o retirando.
 - [verificado] `AjustePiezas` consume adaptadores. Tienda conserva sus rutas. Municipal usa el editor sin pedido relacionado ni pesaje. Nacional reutiliza el editor y vincula el retiro a la revisión elegida, incluso sin SKU: `adaptadoresConsulta.js` y `RegistrarAjusteConsultaNacional`.
-- [verificado] Ventas ve respuestas enviadas desplegadas y solicitudes contraídas. En Tienda, la fecha del avance de unidad se separa de la fecha del envío del anexo: mientras este siga pendiente muestra «Pendiente de revisión», incluso con resultado y fotos guardados. Se conservan respuesta anterior, evidencias y fecha. CEDIS/Tienda ven el ciclo pedido desplegado y lo anterior contraído. Captura vigente al final de Ventas.
+- [verificado] Ventas ve respuestas enviadas desplegadas y solicitudes contraídas. En Tienda y municipal a PDV (`consulta_municipal.area=tienda`), el avance de unidad no acredita el envío: «Pendiente de revisión» hasta `respondida_at` del anexo. `ConsultasMunicipalesTienda` no recarga en `persistir_unidad`; refresca el JSON. CEDIS municipal conserva la lectura inmediata. Captura vigente al final de Ventas.
 
 ## Reglas que no se rompen
 - [verificado] Rechazar actualización obsoleta y pedidos ya pagados/remisionados, empacados o salidos: `app/Services/ControlPedidos/ResponderDisponibilidadInicialService.php:54`.
@@ -40,4 +40,4 @@
 - Archivos de consulta: PHP efectivo `sail` UID 1000. Si un directorio `storage/app/public/pedidos_bma/{id}` quedó `root:root`, `chown` solo esos ids en pruebas. Receta: `gestion-pedidos-docs/CONSULTAS_COMPARTIDAS_IMPLEMENTACION_Y_AUTOEVALUACION.md`.
 - [verificado] `ActualizacionConsulta::solicitar` no marca ronda si solo hay retiro; la reapertura sí (`forzar`). Anexos sí exigen respuesta y captura nueva.
 
-- Última verificación: 2026-11-20, árbol de trabajo sobre `f410db92`.
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo (municipal PDV: borrador vs envío).

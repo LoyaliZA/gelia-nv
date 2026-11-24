@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowRight, Store, Truck, Warehouse } from 'lucide-react';
+import { ArrowRight, MapPin, Store, Truck, Warehouse } from 'lucide-react';
 
 export default function RutaPedidoTienda({ origen = 'CEDIS', destino = 'Por confirmar', tipoDestino = 'sucursal' }) {
-    const IconoDestino = tipoDestino === 'terminal' ? Truck : Store;
+    const IconoDestino = tipoDestino === 'terminal' ? Truck : tipoDestino === 'domicilio' ? MapPin : Store;
     return <div className="gelia-cedis-ruta" aria-label="Origen y destino del pedido">
         <span className="gelia-cedis-ruta-badge"><Warehouse size={18} aria-hidden /><span><small>Origen</small><strong>{origen}</strong></span></span>
         <ArrowRight size={20} className="shrink-0 theme-text-muted" aria-hidden />

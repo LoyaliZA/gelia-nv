@@ -3,6 +3,8 @@ import axios from 'axios';
 import SeccionPagosExhibicion from '../Partials/SeccionPagosExhibicion';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_SELECT } from '../../../utils/geliaTheme';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
+import { elegirDireccionParaPedido } from '../Partials/elegirDireccionParaPedido';
+import { camposDesdeDireccion, resumirCamposDireccion } from '../Partials/CamposDireccionPedido';
 import ModalAgregarDireccionNacional from './ModalAgregarDireccionNacional';
 
 const opcionesJson = { headers: { Accept: 'application/json' } };
@@ -47,6 +49,15 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
         return () => { vigente = false; };
     }, [pedido.cliente_id, puedeCotizar]);
 
+    useEffect(() => {
+        if (!puedeCotizar || !direcciones.length) return;
+        setSeleccion((previa) => {
+            if (previa.cliente_direccion_id || pedido.cliente_direccion_id) return previa;
+            const elegida = elegirDireccionParaPedido(direcciones);
+            return elegida ? { ...previa, cliente_direccion_id: String(elegida.id) } : previa;
+        });
+    }, [puedeCotizar, direcciones, pedido.cliente_direccion_id]);
+
     const dinero = (valor) => `$${Number(valor || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const fletesCaja = cajas.reduce((suma, caja) => suma + Number(caja.costo_envio || 0), 0);
     const reexpedicion = Math.max(0, Number(pedido.costo_envio || 0) - fletesCaja);
@@ -58,6 +69,12 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
     ] : [];
 
     const valorSeleccion = (campo) => seleccion[campo] ?? String(pedido[campo] || '');
+    const direccionElegida = direcciones.find((item) => String(item.id) === String(valorSeleccion('cliente_direccion_id')));
+    const etiquetaOpcionDireccion = (item) => [
+        item.es_principal ? 'Principal' : (item.etiqueta || 'Adicional'),
+        item.nombre_destinatario,
+        item.codigo_postal,
+    ].filter(Boolean).join(' · ');
     const direccionAgregada = (nueva) => {
         setDirecciones((previas) => [nueva, ...previas.filter((item) => String(item.id) !== String(nueva.id))]);
         setSeleccion((previa) => ({ ...previa, cliente_direccion_id: String(nueva.id) }));
@@ -116,32 +133,59 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                 <details className="space-y-3" open={!cotizada || undefined}>
                     <summary className="cursor-pointer font-semibold min-h-[44px] py-2">{cotizada ? 'Revisar cotización' : 'Capturar cotización'}</summary>
                     <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="min-w-0 sm:col-span-2">
+                            <label className="block min-w-0 text-sm">
+                                Dirección de entrega
+                                <select className={`${THEME_SELECT} mt-1 w-full min-h-[44px]`} value={valorSeleccion('cliente_direccion_id')}
+                                    onChange={(evento) => { setSeleccion({ ...seleccion, cliente_direccion_id: evento.target.value }); setError(''); }}>
+                                    <option value="">Elegir</option>
+                                    {direcciones.map((item) => <option key={item.id} value={item.id}>{etiquetaOpcionDireccion(item)}</option>)}
+                                </select>
+                            </label>
+                            {cargandoDireccion && <p className="m-0 mt-2 text-sm theme-text-muted" role="status">Cargando direcciones…</p>}
+                            {direccionElegida && (
+                                <dl className="m-0 mt-2 grid gap-1 rounded-lg border theme-border p-3 text-sm" aria-label="Dirección elegida">
+                                    <div>
+                                        <dt className="theme-text-muted text-xs">Nombre de quien recibe</dt>
+                                        <dd className="m-0 font-semibold">{direccionElegida.nombre_destinatario || '—'}</dd>
+                                    </div>
+                                    {direccionElegida.telefono_destinatario ? (
+                                        <div>
+                                            <dt className="theme-text-muted text-xs">Teléfono</dt>
+                                            <dd className="m-0">{direccionElegida.telefono_destinatario}</dd>
+                                        </div>
+                                    ) : null}
+                                    <div>
+                                        <dt className="theme-text-muted text-xs">Domicilio</dt>
+                                        <dd className="m-0">{resumirCamposDireccion(camposDesdeDireccion(direccionElegida)) || '—'}</dd>
+                                    </div>
+                                </dl>
+                            )}
+                            {!cargandoDireccion && !errorDireccion && direcciones.length === 0 && (
+                                <p className="m-0 mt-2 text-sm theme-text-muted">
+                                    {puedeAgregarDireccion
+                                        ? 'Este cliente no tiene direcciones verificadas. Agregue una para cotizar.'
+                                        : 'Este cliente no tiene direcciones verificadas. Pida a un auxiliar con permiso de direcciones que la agregue y vuelva a abrir el pedido.'}
+                                </p>
+                            )}
+                            {puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
+                                <button type="button" className={`${GELIA_BTN_OUTLINE} mt-2 min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
+                            )}
+                            {errorDireccion && <p className="m-0 mt-2 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
+                        </div>
                         {[
-                            ['cliente_direccion_id', 'Dirección de entrega', direcciones, (item) => [item.etiqueta, item.nombre_destinatario, item.codigo_postal].filter(Boolean).join(' · '), true],
-                            ['catalogo_tipo_guia_id', 'Tipo de guía', catalogos.tipos_guia || [], (item) => item.nombre, false],
-                            ['catalogo_zona_id', 'Reexpedición', catalogos.zonas || [], (item) => item.nombre, false],
-                        ].map(([campo, etiqueta, opciones, nombre, ancho]) => (
-                            <div className={`min-w-0 ${ancho ? 'sm:col-span-2' : ''}`} key={campo}>
+                            ['catalogo_tipo_guia_id', 'Tipo de guía', catalogos.tipos_guia || []],
+                            ['catalogo_zona_id', 'Reexpedición', catalogos.zonas || []],
+                        ].map(([campo, etiqueta, opciones]) => (
+                            <div className="min-w-0" key={campo}>
                                 <label className="block min-w-0 text-sm">
                                     {etiqueta}
                                     <select className={`${THEME_SELECT} mt-1 w-full min-h-[44px]`} value={valorSeleccion(campo)}
                                         onChange={(evento) => { setSeleccion({ ...seleccion, [campo]: evento.target.value }); setError(''); }}>
                                         <option value="">Elegir</option>
-                                        {opciones.map((item) => <option key={item.id} value={item.id}>{nombre(item)}</option>)}
+                                        {opciones.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
                                     </select>
                                 </label>
-                                {ancho && cargandoDireccion && <p className="m-0 mt-2 text-sm theme-text-muted" role="status">Cargando direcciones…</p>}
-                                {ancho && !cargandoDireccion && !errorDireccion && direcciones.length === 0 && (
-                                    <p className="m-0 mt-2 text-sm theme-text-muted">
-                                        {puedeAgregarDireccion
-                                            ? 'Este cliente no tiene direcciones verificadas. Agregue una para cotizar.'
-                                            : 'Este cliente no tiene direcciones verificadas. Pida a un auxiliar con permiso de direcciones que la agregue y vuelva a abrir el pedido.'}
-                                    </p>
-                                )}
-                                {ancho && puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
-                                    <button type="button" className={`${GELIA_BTN_OUTLINE} mt-2 min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
-                                )}
-                                {ancho && errorDireccion && <p className="m-0 mt-2 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
                             </div>
                         ))}
                         {cajas.map((caja, indice) => (

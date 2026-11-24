@@ -522,6 +522,7 @@ export default function ModalDetalleCedis({
                                     pedido.cliente?.numero_cliente,
                                     (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
                                 )}
+                                etiquetaDestinatario="Nombre de quien recibe"
                             />
                         </section>
                         ))}
