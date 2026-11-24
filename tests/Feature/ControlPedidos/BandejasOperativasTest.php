@@ -49,6 +49,19 @@ class BandejasOperativasTest extends TestCase
         $this->assertCount(5, $listar->ejecutar([], false));
     }
 
+    public function test_cedis_no_lista_municipales_que_se_empacan_en_tienda(): void
+    {
+        $pdv = $this->pedido('MUN-PDV', ['estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal', 'consulta_municipal' => ['area' => 'tienda', 'estado' => 'cerrada']]]);
+        $cedis = $this->pedido('MUN-CEDIS', ['estatus_envio' => PedidoBma::ESTATUS_ENVIO_PESAJE_LISTO,
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal', 'consulta_municipal' => ['area' => 'cedis', 'estado' => 'respondida']]]);
+
+        $ids = app(ListarPedidosCedisService::class)->ejecutar([], false)->pluck('id')->all();
+
+        $this->assertNotContains($pdv->id, $ids);
+        $this->assertContains($cedis->id, $ids);
+    }
+
     public function test_cedis_conserva_consultas_respondidas_en_todos(): void
     {
         $respondida = $this->pedido('TIENDA-RESPONDIDA', [

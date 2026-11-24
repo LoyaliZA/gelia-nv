@@ -90,8 +90,8 @@ class PedidoBmaTiendaController extends Controller
         Gate::authorize('control_pedidos.tienda.ver');
 
         return Inertia::render('ControlPedidos/Tienda/Index', [
-            'tareas' => fn () => $this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())),
-            'metricas' => fn () => $listarService->metricas(Auth::user(), $request->all()),
+            'tareas' => fn () => \App\Support\ControlPedidos\FilasConsultaMunicipalTienda::mezclar($this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())), Auth::user(), $request->all()),
+            'metricas' => fn () => \App\Support\ControlPedidos\FilasConsultaMunicipalTienda::sumarMetricas($listarService->metricas(Auth::user(), $request->all()), Auth::user(), $request->all()),
             'cola_estados_cuenta' => fn () => $colaEstadosCuenta->resumen(Auth::user(), $config),
             'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
             'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page', 'tarea']),
@@ -111,8 +111,8 @@ class PedidoBmaTiendaController extends Controller
         Gate::authorize('control_pedidos.tienda.ver');
 
         return response()->json([
-            'tareas' => $this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())),
-            'metricas' => $listarService->metricas(Auth::user(), $request->all()),
+            'tareas' => \App\Support\ControlPedidos\FilasConsultaMunicipalTienda::mezclar($this->paginaTareas($listarService->ejecutar(Auth::user(), $request->all())), Auth::user(), $request->all()),
+            'metricas' => \App\Support\ControlPedidos\FilasConsultaMunicipalTienda::sumarMetricas($listarService->metricas(Auth::user(), $request->all()), Auth::user(), $request->all()),
             'fecha_hoy' => now(app(\App\Services\ControlPedidos\PreparacionTiendaConfig::class)->zonaHoraria())->toDateString(),
             'filtros' => $request->only(['tab', 'q', 'tipo', 'desde', 'hasta', 'vendedora', 'orden', 'modalidad', 'almacen_id', 'estado', 'origen_solicitud', 'prioridad_md', 'page']),
         ]);

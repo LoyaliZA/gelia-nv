@@ -42,6 +42,8 @@ export function novedadTienda(tarea) {
 }
 
 export function accionPrincipalTienda(tarea, puedeTomar = false) {
+    if (tarea.tipo_fila === 'empaque_municipal') return { label: 'Marcar empacado', atender: false };
+    if (tarea.tipo_fila === 'consulta_municipal') return { label: 'Revisar disponibilidad', atender: false };
     if ((tarea.pedido?.anexos_pendientes || []).length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
     const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);
     if (atender) return { label: 'Atender pedido', atender: true };
