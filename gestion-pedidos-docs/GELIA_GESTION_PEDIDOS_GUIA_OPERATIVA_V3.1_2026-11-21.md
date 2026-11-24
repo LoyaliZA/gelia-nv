@@ -191,9 +191,9 @@ Son dos *motivos distintos* de mantener mercancía en resguardo, no dos modalida
 **Entrada:** Ventas consultó disponibilidad a un almacén de tipo PDV (el sistema lo clasifica como consulta de **Tienda**) y el Auxiliar aprobó el pedido con pago validado y remisión. **Decisión del 23 de noviembre de 2026.**
 
 1. **Ventas** cierra la consulta con la sucursal PDV; **Auxiliar** aprueba. El pedido **no se envía a la bandeja de CEDIS** ni se traslada desde CEDIS: la mercancía ya está en el PDV consultado.
-2. **Tienda (PDV consultado).** El pedido aparece en **Preparación Tienda** como fila «Aprobado: por empacar» del almacén consultado, para quien tiene la facultad de responder consultas municipales en esa sucursal (o administración).
+2. **Tienda (PDV consultado).** El pedido aparece en **Preparación Tienda** como fila «Aprobado: por empacar» del almacén consultado, para quien tiene la facultad de responder consultas municipales en esa sucursal (o administración). **Ver** muestra consignatario, remisión y el resto del pedido; el folio no empaca.
 3. **Tienda** empaca físicamente y pulsa **Marcar empacado** (con confirmación). Queda el registro de quién y cuándo en el historial del pedido.
-4. **Fin del flujo en Tienda.** Marcar empacado **concluye** este recorrido: no hay traslado, recepción, custodia ni guía. La fila sale de la bandeja y el pedido conserva estatus «Pendiente de recolección o envío» para Ventas.
+4. **Fin del flujo en Tienda.** Marcar empacado **concluye** este recorrido: no hay traslado, recepción, custodia ni guía. La fila **sale de Pendientes** y queda en **Atendidos** con Ver. El pedido conserva estatus «Pendiente de recolección o envío» para Ventas.
 
 **No hace:** no crea tarea de preparación (no reabre la consulta), no registra salida a terminal ni entrega al cliente; esos hechos, si se requieren, se registran por su propio camino. Los municipales cuyo almacén consultado es CEDIS siguen M-F01 sin cambios.
 
@@ -469,7 +469,7 @@ Estas aclaraciones están respondidas en el archivo `.md` de V02.1. Se presentan
 | **QA-T02** Tienda transferencia | Ventas documento→CEDIS responde→Auxiliar valida→CEDIS bolsa→PDV recibe→custodia→cliente recoge. | Misma mercancía/remisión y foto final; sin entrega ficticia. |
 | **QA-T03** Tienda MD | Venta antes/después de 13:00, permisos, lunes-viernes vs sábado. | Prioridad solo autorizada y sin promesa indebida. |
 | **QA-T04** Cambio Tienda | Tienda a Municipal/Nacional con mercancía en distintas ubicaciones. | Solicitud sustituta, pago conservado y traslado real. |
-| **QA-M01** Municipal ordinario | PDF→CEDIS→carátula→Auxiliar→CEDIS→PDV→repartidor→terminal. Variante PDV (M-F04): consulta a PDV→Auxiliar aprueba→aparece en Tienda→Marcar empacado→fin. | Evento de terminal y destino correcto; no declarar entrega domicilio. |
+| **QA-M01** Municipal ordinario | PDF→CEDIS→carátula→Auxiliar→CEDIS→PDV→repartidor→terminal. Variante PDV (M-F04): consulta a PDV→Auxiliar aprueba→aparece en Tienda→Ver/Marcar empacado→Atendidos. | Evento de terminal y destino correcto; no declarar entrega domicilio. |
 | **QA-M02** Jaguar | Mercancía pagada, flete indeterminado→terminal da costo→PAGO ENVÍO→ficha. | Mercancía no se cobra doble y flete no queda ficticiamente pagado. |
 | **QA-M03** Municipal espera/acumulación | Azul por fecha o compra acumulada→liberación Ventas→cajas reales. | No salida adelantada; N/A no se toma como cero. |
 | **QA-N01** Nacional ordinario | Wizerp/PDF→paquetería+importe preliminar→CEDIS individual/peso→Ventas cierra→dirección→cotiza→Auxiliar→Delegado→CEDIS. | Caja/guía/pago/remisión coherentes; salida solo CEDIS. |
@@ -569,5 +569,6 @@ Cada cambio indica fecha, regla sustituida, decisión humana y casos afectados. 
 | Fecha | Cambio | Regla sustituida | Decisión | Casos |
 |---|---|---|---|---|
 | 23-nov-2026 | Un municipal aprobado con almacén consultado PDV se muestra en Preparación Tienda como «Aprobado: por empacar», se empaca ahí y **Marcar empacado** concluye el flujo. Sale de la bandeja de CEDIS. | M-F01 paso 5 (todo municipal se empaca en CEDIS y se traslada a PDV) y el diseño del 21-nov que descartó la tarea de Tienda para municipal. | Usuario: el pedido «desapareció» tras auditar; lo prepara Tienda y los municipales empacados en Tienda no pasan a custodia. | M-F01, M-F04, QA-M01 |
+| 24-nov-2026 | Observaciones de un municipal consultado en PDV dicen **Observaciones de Tienda**. En Preparación Tienda, **Ver** muestra consignatario y remisión; el folio no empaca. Tras **Marcar empacado** la fila sale de Pendientes y queda en Atendidos (solo Ver). Sigue sin CEDIS, custodia ni guía. | M-F04 paso 4 (la fila salía de la bandeja) y el badge de observaciones que usaba la tarea de preparación. | Usuario: pedido 26560, observación CEDIS en Ventas; en Auxiliar PDV faltaba Ver y el empacado desaparecía. | M-F04, QA-M01 |
 
 **Fin de la guía operativa maestra V3.1.**

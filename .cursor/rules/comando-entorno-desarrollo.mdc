@@ -1,5 +1,6 @@
 ---
-alwaysApply: true
+description: cuando el entorno sea de debug true y si es debug false es produccion entonces no aplicar
+alwaysApply: false
 ---
 # Entorno de ejecución GELIA
 

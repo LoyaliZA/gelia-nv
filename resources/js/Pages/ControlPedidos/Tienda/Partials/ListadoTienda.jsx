@@ -6,7 +6,7 @@ import {
 import GeliaPaginacion from '../../../../Components/GeliaPaginacion';
 import { geliaCardClass, geliaToggleBtnClass, THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 import { BTN_PRIMARY } from '../../Partials/pedidosBmaStyles';
-import { TarjetaTareaVacia, TarjetaTarea } from './TarjetasTienda';
+import { TarjetaTareaVacia, TarjetaTarea, AccionesEmpaqueMunicipal } from './TarjetasTienda';
 import {
     STORAGE_VISTA_LISTADO,
     avisoParaTarea,
@@ -17,7 +17,10 @@ import {
     accionPrincipalTienda,
 } from './tiendaUi';
 
-function CtaTabla({ t, puedeTomar, showUrl, onAbrir }) {
+function CtaTabla({ t, puedeTomar, showUrl, onAbrir, onVer, onEmpacar }) {
+    if (t.tipo_fila === 'empaque_municipal') {
+        return <AccionesEmpaqueMunicipal t={t} onVer={onVer || onAbrir} onEmpacar={onEmpacar} />;
+    }
     if (onAbrir) {
         const accion = accionPrincipalTienda(t, puedeTomar);
         return <button type="button" className={`${BTN_PRIMARY} inline-flex items-center gap-1.5 text-xs px-3 py-2 min-h-[36px]`}
@@ -67,7 +70,7 @@ function CtaTabla({ t, puedeTomar, showUrl, onAbrir }) {
     );
 }
 
-function TablaTareas({ items, puedeTomar, onAbrir }) {
+function TablaTareas({ items, puedeTomar, onAbrir, onVer, onEmpacar }) {
     return (
         <div className="gelia-tienda-op-table-wrap">
             <table className="gelia-tienda-op-table">
@@ -94,7 +97,11 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                         return (
                             <tr key={t.id} data-alerta={alerta}>
                                 <td>
-                                    <Link href={showUrl} onClick={(e) => { if (onAbrir && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onAbrir(t); } }} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
+                                    <Link href={showUrl} onClick={(e) => {
+                                        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                                        if (t.tipo_fila === 'empaque_municipal' && (onVer || onAbrir)) { e.preventDefault(); (onVer || onAbrir)(t); return; }
+                                        if (onAbrir) { e.preventDefault(); onAbrir(t); }
+                                    }} className="gelia-tienda-op-fila-link block truncate max-w-[10rem]" title={folio}>
                                         {folio}
                                     </Link>
                                     {t.modalidad?.nombre && (
@@ -159,7 +166,7 @@ function TablaTareas({ items, puedeTomar, onAbrir }) {
                                     )}
                                 </td>
                                 <td className="text-right whitespace-nowrap">
-                                    <CtaTabla t={t} puedeTomar={puedeTomar} showUrl={showUrl} onAbrir={onAbrir} />
+                                    <CtaTabla t={t} puedeTomar={puedeTomar} showUrl={showUrl} onAbrir={onAbrir} onVer={onVer} onEmpacar={onEmpacar} />
                                     {t.pedido?.es_t01_documental && t.pedido?.seguimiento_entrega_pdv_habilitado && t.apartado?.estado === 'APARTADO_CONFIRMADO' && <Link href={showUrl} className="inline-flex items-center gap-2 text-sm font-semibold theme-text-primario underline min-h-[44px]">Pago y entrega</Link>}
                                 </td>
                             </tr>
@@ -180,6 +187,8 @@ export default function ListadoTienda({
     tabLabel = '',
     buscando = false,
     onAbrir,
+    onVer,
+    onEmpacar,
 }) {
     const permisos = auth?.user?.permissions || [];
     const puedeTomar = permisos.includes('control_pedidos.tienda.tomar')
@@ -258,14 +267,14 @@ export default function ListadoTienda({
 
             {usarTabla ? (
                 <div className="hidden md:block">
-                    <TablaTareas items={items} puedeTomar={puedeTomar} onAbrir={onAbrir} />
+                    <TablaTareas items={items} puedeTomar={puedeTomar} onAbrir={onAbrir} onVer={onVer} onEmpacar={onEmpacar} />
                 </div>
             ) : null}
 
             <div className={usarTabla ? 'md:hidden' : ''}>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 md:gap-4">
                     {items.map((t) => (
-                        <TarjetaTarea key={t.id} tarea={t} puedeTomar={puedeTomar} onAbrir={onAbrir} compacto />
+                        <TarjetaTarea key={t.id} tarea={t} puedeTomar={puedeTomar} onAbrir={onAbrir} onVer={onVer} onEmpacar={onEmpacar} compacto />
                     ))}
                 </div>
             </div>

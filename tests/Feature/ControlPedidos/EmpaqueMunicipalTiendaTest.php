@@ -50,6 +50,8 @@ class EmpaqueMunicipalTiendaTest extends TestCase
 
         $this->assertSame([$pedido->id], collect(AlcanceConsultaMunicipal::porEmpacarTienda($u))->pluck('id')->all());
         $this->assertSame('empaque_municipal', FilasConsultaMunicipalTienda::filas($u, ['tab' => 'TODOS'])[0]['tipo_fila']);
+        $this->assertSame('Aprobado: por empacar', FilasConsultaMunicipalTienda::filas($u, ['tab' => 'PENDIENTES'])[0]['estado_label']);
+        $this->assertSame([], FilasConsultaMunicipalTienda::filas($u, ['tab' => 'ATENDIDOS']));
 
         $this->actingAs($u)->postJson(route('control_pedidos.municipal.empacar_tienda', $pedido))->assertOk();
 
@@ -57,6 +59,12 @@ class EmpaqueMunicipalTiendaTest extends TestCase
         $this->assertNotNull($pedido->empacado_at);
         $this->assertSame($u->id, (int) $pedido->empacado_por_id);
         $this->assertSame([], AlcanceConsultaMunicipal::porEmpacarTienda($u));
+        $this->assertSame([$pedido->id], collect(AlcanceConsultaMunicipal::empacadosTienda($u))->pluck('id')->all());
+        $this->assertSame([], FilasConsultaMunicipalTienda::filas($u, ['tab' => 'PENDIENTES']));
+        $atendido = FilasConsultaMunicipalTienda::filas($u, ['tab' => 'ATENDIDOS'])[0];
+        $this->assertSame('empaque_municipal', $atendido['tipo_fila']);
+        $this->assertSame('Empacado', $atendido['estado_label']);
+        $this->actingAs($u)->getJson(route('control_pedidos.disponibilidad_tienda.show', $pedido))->assertOk();
         $this->actingAs($u)->postJson(route('control_pedidos.municipal.empacar_tienda', $pedido))->assertStatus(422);
     }
 

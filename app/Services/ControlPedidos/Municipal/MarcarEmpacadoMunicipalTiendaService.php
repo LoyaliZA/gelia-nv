@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Municipal aprobado cuyo almacén es PDV: Tienda lo empaca y con marcarlo empacado el flujo concluye en Tienda
- * (sin traslado desde CEDIS, sin recepción ni custodia, sin guía).
+ * Municipal aprobado cuyo almacén es PDV: Tienda lo empaca y el flujo concluye en Tienda
+ * (sin traslado desde CEDIS, sin recepción ni custodia, sin guía). La fila pasa a Atendidos.
  */
 class MarcarEmpacadoMunicipalTiendaService
 {

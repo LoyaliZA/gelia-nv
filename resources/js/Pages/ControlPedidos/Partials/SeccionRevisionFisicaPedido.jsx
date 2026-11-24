@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ClipboardCheck, AlertTriangle } from 'lucide-react';
 import ListaProductosOk, { MAX_PRODUCTOS_OK_ABIERTOS } from './ListaProductosOk';
-import { badgeEstadoFisico, etiquetasInstanciaRevision, LABELS_RESOLUCION_SIN_EXISTENCIA, revisionSinExistenciaAbierta, formatearFechaHoraAuditoria, BTN_SECONDARY } from './pedidosBmaStyles';
+import { badgeEstadoFisico, etiquetasInstanciaRevision, LABELS_RESOLUCION_SIN_EXISTENCIA, revisionSinExistenciaAbierta, formatearFechaHoraAuditoria, BTN_SECONDARY, respondeComoTienda } from './pedidosBmaStyles';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalAtenderSinExistencia from './ModalAtenderSinExistencia';
 
@@ -10,11 +10,12 @@ import ModalAtenderSinExistencia from './ModalAtenderSinExistencia';
  * Revisión física CEDIS (detalle + formulario vendedora).
  */
 export default function SeccionRevisionFisicaPedido({
-    pedido, onVerDoc, onVerGaleria, titulo = 'Revisión física CEDIS', puedeAtender = false, puedeCancelar = false,
+    pedido, onVerDoc, onVerGaleria, titulo, puedeAtender = false, puedeCancelar = false,
     ocultarFotosEnvio = false,
 }) {
     const [revisionActiva, setRevisionActiva] = useState(null);
     if (!pedido) return null;
+    const tituloSeccion = titulo || (respondeComoTienda(pedido) ? 'Revisión física de Tienda' : 'Revisión física CEDIS');
     const badgeFisico = pedido.estado_fisico_general ? badgeEstadoFisico(pedido.estado_fisico_general) : null;
     const evidenciasCondicion = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion');
     const revisionesTodas = [...(pedido.revisiones_producto || pedido.revisionesProducto || [])]
@@ -63,12 +64,12 @@ export default function SeccionRevisionFisicaPedido({
     const productosOkCompactos = revisionesOk.length > MAX_PRODUCTOS_OK_ABIERTOS;
 
     return (
-        <section className="gelia-pedidos-revision space-y-4" aria-label={titulo}>
+        <section className="gelia-pedidos-revision space-y-4" aria-label={tituloSeccion}>
             <div className="flex flex-wrap items-center gap-2">
-                <h3 className="gelia-pedidos-seccion-titulo flex items-center gap-2"><ClipboardCheck className="w-4 h-4 theme-text-muted" aria-hidden="true" />{titulo}</h3>
+                <h3 className="gelia-pedidos-seccion-titulo flex items-center gap-2"><ClipboardCheck className="w-4 h-4 theme-text-muted" aria-hidden="true" />{tituloSeccion}</h3>
                 {pedido.tiene_observaciones_fisicas && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold gelia-estado-vivo gelia-estado-vivo--aviso">
-                        Observaciones CEDIS
+                        {respondeComoTienda(pedido) ? 'Observaciones de Tienda' : 'Observaciones CEDIS'}
                     </span>
                 )}
                 {hayAbierta && (

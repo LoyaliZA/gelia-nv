@@ -1,9 +1,6 @@
 ---
-description: En JSX Inertia/React usar solo el sistema global de estilos GELIA (tokens, primitivas, geliaTheme, componentes Gelia*). Corregir legado solo dentro del alcance autorizado.
-globs: resources/js/**/*.jsx
 alwaysApply: false
 ---
-
 # Estilos GELIA — sistema global obligatorio
 
 Las fases 1–3 del sistema de estilos **ya están hechas** (inventario, contrato, guards). De aquí en adelante **no se definen colores ni temas en vistas**: solo se **consumen** las fuentes globales.

@@ -2,12 +2,13 @@
 
 - Propósito: conservar la captura comercial y dirigir cada modalidad al recorrido compatible.
 - Ubicación: `routes/web/modules/control-pedidos/core.php`; `app/Http/Controllers/ControlPedidos/PedidoBmaController.php`; `app/Services/ControlPedidos/{CrearPedidoBmaService,ActualizarPedidoBmaService}.php`.
-- Frontend: `resources/js/Pages/ControlPedidos/{Index.jsx,Partials/ModalFormPedido.jsx,Partials/FormularioRegistrarTienda.jsx,Partials/ModalFormPedidoLegado.jsx}`.
+- Frontend: `resources/js/Pages/ControlPedidos/{Index.jsx,Partials/ModalFormPedido.jsx,Partials/FormularioRegistrarTienda.jsx,Partials/ModalFormPedidoLegado.jsx,Partials/ModalDetallePedido.jsx}`.
 - Pruebas: `tests/Feature/ControlPedidos/{ConcurrenciaCapturaPedidoTest,SolicitudRegistrarTiendaTest,NacionalAltaConsultaTest,NacionalOla3CierreTest}.php` y `Partials/ModalFormPedido.seleccion.test.jsx` junto al frontend.
 
 ## Estado actual
 - [verificado] En Nacional, Mercancía aparece solo con respuesta CEDIS vigente; oculta registro, borrador y consulta/actualización pendiente. Reutiliza los ajustes nacionales y conserva sus bloqueos; piezas precapturadas y envío documental sin SKU se mantienen. `FormularioRegistrarNacional.jsx` y `SeguimientoSolicitudNacional.jsx`.
 - [verificado] Nacional selecciona la salida entre CEDIS habilitados del catálogo; preselecciona el único elegible, guarda `almacen_id` y bloquea cambios tras solicitar pesaje. Conserva el id guardado si deja de estar disponible: `FormularioRegistrarNacional.jsx`; pruebas de selección e integración junto al componente.
+- [verificado] «Ver detalles» de vendedores elige cuerpo por `modalidad_entrega` (Tienda, Municipal, Nacional) o el circuito logístico anterior; no mezcla pesos, domicilio ni guía ajenos. `Partials/detalle-pedido/`.
 - [verificado] Tienda, Municipal marcado y Nacional 2.0 (`captura_nacional=compartida`) comparten captura. Nacional histórico y el borrador legado siguen en el formulario anterior; abrirlos no escribe la marca: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:13`.
 - [verificado] Anexo extraordinario (solo Nacional compartido con remisión o pago, antes o después de salir): acción «Anexo extraordinario» del menú de la fila y `POST /control-pedidos/{id}/anexo-extraordinario` crean un pedido hijo independiente (`pedido_principal_id` nulo, folio `-C{n}`, vínculo en `solicitud_preparacion_json.complemento_nacional`) sin pago prevalidado, con folio Wizerp capturado, piezas en `piezas_nacionales` y su mini consulta a CEDIS; sale en caja y guía aparte y no toca al principal. Ajuste ordinario con remisión o pago ya no crea complemento. Etiqueta «Anexo de …» vía `EncabezadoFolioPedido`: `app/Services/ControlPedidos/Nacional/RegistrarComplementoNacional.php`, `resources/js/Pages/ControlPedidos/Nacional/ModalAnexoExtraordinario.jsx`.
 - [verificado] Abrir/seleccionar modalidad sin captura significativa no debe crear borradores: `gestion-pedidos-docs/M01_CORTE_ETAPAS_1_2.md:13`.
@@ -41,3 +42,4 @@
 - Última verificación: 2026-11-23, árbol de trabajo sobre `94668a09`; anexo extraordinario comprobado en navegador (creación, etiqueta, mini consulta de CEDIS, dirección heredada), sin commit.
 - Última verificación: 2026-11-21, árbol de trabajo sobre `c3e44924`; selector nacional comprobado con transporte simulado, sin commit.
 - Última verificación: 2026-11-23, merge de anexo extraordinario (`94668a09`, navegador) y selector de modalidad (`1c0f841f`, transporte simulado).
+- Última verificación: 2026-11-24, detalle de vendedores por modalidad (`Partials/detalle-pedido/`).

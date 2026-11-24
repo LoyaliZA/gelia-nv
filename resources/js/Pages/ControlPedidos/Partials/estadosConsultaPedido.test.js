@@ -72,3 +72,19 @@ it('al cerrar la consulta distingue separación aprobada y pesaje respondido', (
  const logistico={...pendiente,origen:{requiere_logistica:true},solicitud_preparacion:{modalidad_entrega:'nacional'},consulta_cerrada:true};
  expect(etiquetas(logistico)).toEqual(['Pesaje respondido']);
 });
+
+const municipalObs = (area) => ({
+    id: 26560,
+    estatus: { fase_ciclo: 'PESAJE_PENDIENTE' },
+    tiene_observaciones_fisicas: true,
+    solicitud_preparacion: {
+        modalidad_entrega: 'municipal',
+        consulta_municipal: { area, estado: 'excepciones_pendientes', enviada_at: '2026-11-24T10:00:00Z' },
+    },
+});
+it('las observaciones físicas de un municipal siguen el área consultada, no la tarea de preparación', () => {
+    expect(etiquetas(municipalObs('tienda'))).toContain('Observaciones de Tienda');
+    expect(etiquetas(municipalObs('tienda'))).not.toContain('Observaciones CEDIS');
+    expect(etiquetas(municipalObs('cedis'))).toContain('Observaciones CEDIS');
+    expect(etiquetas(municipalObs('cedis'))).not.toContain('Observaciones de Tienda');
+});

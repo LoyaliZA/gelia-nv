@@ -937,6 +937,14 @@ export const badgeGuiaLista = () => ({
     label: 'Guía Lista',
 });
 
+/** Quién respondió la revisión física: consulta municipal a PDV, captura Tienda o tarea de preparación. */
+export function respondeComoTienda(pedido) {
+    if (pedido?.solicitud_preparacion?.consulta_municipal?.area === 'tienda') return true;
+    if (pedido?.solicitud_preparacion?.modalidad_entrega === 'tienda'
+        && pedido?.solicitud_preparacion?.area_revision === 'preparacion_tienda') return true;
+    return Boolean(pedido?.usa_preparacion_tienda);
+}
+
 export const badgeObservacionesCedis = ({ respondeTienda = false } = {}) => ({
     className: 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold bg-orange-500/15 text-orange-600',
     label: respondeTienda ? 'Observaciones de Tienda' : 'Observaciones CEDIS',

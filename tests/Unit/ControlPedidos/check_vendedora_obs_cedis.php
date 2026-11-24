@@ -15,7 +15,10 @@ $listadoUi = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partial
 $listar = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosBmaService.php');
 $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx');
 $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionRevisionFisicaPedido.jsx');
-$detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
+$detalleDir = $root.'/resources/js/Pages/ControlPedidos/Partials';
+$detalle = file_get_contents($detalleDir.'/ModalDetallePedido.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleNacional.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleMunicipal.jsx');
 $responder = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
 $alerta = file_get_contents($root.'/app/Notifications/AlertaPedidoBma.php');
 

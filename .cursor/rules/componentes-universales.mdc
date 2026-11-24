@@ -1,7 +1,6 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
-
 # Mandatory Component Reuse
 
 Before creating any new component, UI element, or reusable interface block:
