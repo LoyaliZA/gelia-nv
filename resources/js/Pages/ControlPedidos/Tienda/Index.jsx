@@ -11,6 +11,7 @@ import useFiltrosOperacion from '../Partials/useFiltrosOperacion';
 import ListadoTienda from './Partials/ListadoTienda';
 import ModalPreparacionTienda from './Partials/ModalPreparacionTienda';
 import AvisoResultadoTienda from './Partials/AvisoResultadoTienda';
+import { PanelConsultaMunicipalTienda } from './Partials/ConsultasMunicipalesTienda';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 
@@ -25,7 +26,18 @@ export default function Index({
     const { flash } = usePage().props;
     const [modalTarea, setModalTarea] = useState(null);
     const tareaDesdeFiltro = useRef(null);
-    const abrirPreparacion = (tarea, atender = false) => setModalTarea({ id: tarea.id, atender });
+    const [consultaMunicipalId, setConsultaMunicipalId] = useState(null);
+    const abrirPreparacion = (tarea, atender = false) => {
+        if (tarea.tipo_fila === 'empaque_municipal') {
+            if (!window.confirm(`¿Marcar como empacado el pedido ${tarea.pedido.folio_visible || tarea.pedido.folio}? El flujo municipal concluye en Tienda.`)) return;
+            window.axios.post(route('control_pedidos.municipal.empacar_tienda', tarea.pedido.id), {}, { headers: { Accept: 'application/json' } })
+                .then(() => onActualizar())
+                .catch((e) => window.alert(e.response?.data?.message || e.response?.data?.errors?.pedido?.[0] || 'No se pudo marcar como empacado.'));
+            return;
+        }
+        if (tarea.tipo_fila === 'consulta_municipal') { setConsultaMunicipalId(tarea.pedido.id); return; }
+        setModalTarea({ id: tarea.id, atender });
+    };
     const {
         tareas: tareasVista,
         metricas: metricasVista,
@@ -120,6 +132,7 @@ export default function Index({
                     onIrAPagina={(page) => cargar(paramsListado({ page }))}
                 />
             </GeliaPageShell>
+            {consultaMunicipalId && <PanelConsultaMunicipalTienda pedidoId={consultaMunicipalId} onClose={() => { setConsultaMunicipalId(null); onActualizar(); }} />}
             {modalTarea && <ModalPreparacionTienda key={modalTarea.id} tareaId={modalTarea.id} atender={modalTarea.atender} auth={auth}
                 onClose={() => { setModalTarea(null); onActualizar(); }} onActualizado={onActualizar} />}
         </AppLayout>

@@ -291,6 +291,8 @@ class ListarPedidosCedisService
 
     private function excluirPreparacionTienda(Builder $query): Builder
     {
+        \App\Support\ControlPedidos\AlcanceConsultaMunicipal::excluirEmpaqueTienda($query);
+
         return $query->whereDoesntHave('tareaPreparacionVigente');
     }
 

@@ -29,6 +29,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::delete('/municipal/{pedidoBma}/remisiones-pagadas/{origen}', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'desvincular'])->name('municipal.remisiones.desvincular');
     Route::post('/municipal/{pedidoBma}/remisiones-pagadas/{origen}/integrar-local', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'integrarLocal'])->name('municipal.remisiones.integrar_local');
     Route::post('/municipal/{pedidoBma}/remisiones-pagadas/{origen}/integrar-cedis', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'integrarCedis'])->name('municipal.remisiones.integrar_cedis');
+    Route::post('/municipal/{pedidoBma}/empacar-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'empacarTienda'])->name('municipal.empacar_tienda');
     Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');

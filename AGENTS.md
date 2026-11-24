@@ -21,6 +21,8 @@ Actualizado el 4 de noviembre de 2026 para continuar el trabajo en otro servidor
 
 Ajuste posterior: leer [Configuración operativa y consulta por sucursal](gestion-pedidos-docs/CONFIGURACION_OPERATIVA_TIENDA.md). No restaurar la tercera entrada inicial TIENDA MD ni párrafos del proceso. Mismo día se solicita en transferencia después de cerrar consulta. Las capacidades de consulta se reutilizan de Catálogos → Almacenes, conservando las restricciones piloto.
 
+Guía operativa viva: [GELIA_GESTION_PEDIDOS_GUIA_OPERATIVA_V3.1_2026-11-21.md](gestion-pedidos-docs/GELIA_GESTION_PEDIDOS_GUIA_OPERATIVA_V3.1_2026-11-21.md). Al corregir un flujo operativo, actualizar su recorrido y la tabla §15 (fecha, regla sustituida, decisión, casos) en el mismo trabajo, con el flujo realista esperado en las pruebas.
+
 ## Ejecución y comprobaciones
 
 - Ejecutar PHP, Artisan, Composer, npm y pruebas mediante `./vendor/bin/sail`. Si Sail no está disponible, diagnosticar el entorno antes de sustituir sus comandos por los del host.
