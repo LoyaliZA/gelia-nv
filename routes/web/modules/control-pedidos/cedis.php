@@ -27,6 +27,7 @@ Route::middleware(['can:control_pedidos.cedis'])
         Route::put('/{pedidoBma}/sesion-evidencia/snapshot', [PedidoBmaCedisController::class, 'snapshotSesionEvidencia'])->name('sesion_evidencia.snapshot');
         Route::post('/{pedidoBma}/sesion-evidencia/cancelar', [PedidoBmaCedisController::class, 'cancelarSesionEvidencia'])->name('sesion_evidencia.cancelar');
         Route::get('/{pedidoBma}/sesion-evidencia/fotos/{foto}', [PedidoBmaCedisController::class, 'verFotoSesionEvidencia'])->name('sesion_evidencia.foto');
+        Route::get('/{pedidoBma}/caratula-municipal', [PedidoBmaCedisController::class, 'caratulaMunicipal'])->name('caratula_municipal');
         Route::post('/tareas/{tarea}/liberar', [PedidoBmaCedisController::class, 'liberarTarea'])
             ->middleware('can:control_pedidos.cedis.liberar')
             ->name('liberar');

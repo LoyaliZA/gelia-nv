@@ -1848,7 +1848,7 @@
 
 .gelia-pedidos-cedis .gelia-pedidos-estados:empty { display: none; }
 
-/* Las dos vistas nacionales conservan montada toda la captura. */
+/* Las dos vistas nacionales conservan montada toda la captura, en una columna. */
 .gelia-pesaje-nacional-vistas {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -1858,9 +1858,6 @@
 .gelia-pesaje-nacional-seccion[hidden] { display: none !important; }
 #pesaje-nacional-seccion-2,
 .gelia-pesaje-nacional-comparacion { grid-column: 1 / -1; }
-@media (min-width: 1024px) {
-    .gelia-pesaje-nacional-vistas { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-}
 
 /* Solo Cajas y evidencias del pesaje nacional ordinario. */
 .gelia-pesaje-nacional .gelia-pesaje-caja {

@@ -12,7 +12,7 @@ final class LecturaConsultaNacional
     /** @return array<string, mixed> */
     public static function de(PedidoBma $pedido): array
     {
-        $pedido->loadMissing(['estatus', 'cajas', 'documentos', 'revisionesProducto', 'complementos.revisionesProducto', 'complementos.documentos', 'sucursalDestino']);
+        $pedido->loadMissing(['estatus', 'cajas', 'documentos', 'revisionesProducto', 'complementos.revisionesProducto', 'complementos.documentos', 'sucursalDestino', 'cajas.tipoCaja']);
         $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
         $vinculo = is_array($json['vinculo_resguardo'] ?? null) ? $json['vinculo_resguardo'] : null;
         $vinculoPedidoId = $pedido->id;
@@ -74,6 +74,12 @@ final class LecturaConsultaNacional
             'cajas' => $pedido->cajas->map(fn (PedidoBmaCaja $caja) => [
                 'id' => $caja->id,
                 'uuid_operativo' => $caja->uuid_operativo,
+                'orden' => $caja->orden,
+                'retirada_at' => $caja->retirada_at?->toIso8601String(),
+                'tipo_caja' => $caja->tipoCaja?->nombre,
+                'largo' => $caja->largo,
+                'ancho' => $caja->ancho,
+                'alto' => $caja->alto,
                 'peso_real_kg' => $caja->peso_real_kg,
                 'peso_volumetrico_kg' => $caja->peso_volumetrico_kg,
                 'peso_cobrado_kg' => $caja->peso_cobrado_kg,

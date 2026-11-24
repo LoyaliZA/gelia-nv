@@ -56,6 +56,7 @@ class ListarPedidosCedisService
 
             $pedido->setAttribute('piezas_adicionales', \App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales::para($pedido, $usuario));
             $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
+            $pedido->setAttribute('caratula_municipal', \App\Support\ControlPedidos\Municipal\PresentadorCaratulaMunicipalCedis::para($pedido));
 
             return BitacoraCedis::presentar($pedido, $usuario);
         };

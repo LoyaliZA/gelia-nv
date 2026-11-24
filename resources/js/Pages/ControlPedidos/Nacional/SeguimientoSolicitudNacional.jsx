@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { CheckCircle2, ChevronDown, Clock, Eye, Layers, MapPin, PackagePlus, Scale, Boxes, Weight } from 'lucide-react';
 import { AjustePiezas } from '../Partials/AjustePiezas';
+import AccionesRapidasDisponibilidad from '../Partials/AccionesRapidasDisponibilidad';
+import { MiniaturaDocumento } from '../Partials/ModalVistaPreviaDocumento';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import RespuestaDisponibilidadPedido from '../Partials/RespuestaDisponibilidadPedido';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
@@ -20,15 +22,18 @@ function etiquetaConsulta({ respondida, cerrada, actualizando }) {
 }
 
 /** Datos del pesaje que CEDIS respondió, cada uno en su propia celda con icono. */
-function ResumenPesaje({ pedido }) {
+function ResumenPesaje({ pedido, onVer }) {
     const datos = [
         pedido.numero_cajas ? { clave: 'cajas', icono: Boxes, titulo: pedido.numero_cajas > 1 ? 'Cajas' : 'Cajas', valor: String(numero(pedido.numero_cajas)) } : null,
         pedido.peso_real_kg != null ? { clave: 'real', icono: Scale, titulo: 'Peso real', valor: `${numero(pedido.peso_real_kg)} kg` } : null,
         pedido.peso_cobrado_guia_kg != null ? { clave: 'cobrar', icono: Weight, titulo: 'Peso a cobrar', valor: `${numero(pedido.peso_cobrado_guia_kg)} kg` } : null,
     ].filter(Boolean);
     if (!datos.length) return null;
+    const cajas = (pedido.cajas || []).filter((caja) => !caja.retirada_at);
+    const medida = (v) => (v == null || v === '' ? null : String(Number(v)));
 
     return (
+        <>
         <dl className="nacional-pesaje-resumen" aria-label="Resumen del pesaje">
             {datos.map(({ clave, icono: Icono, titulo, valor }) => (
                 <div className="nacional-pesaje-dato" key={clave}>
@@ -40,6 +45,33 @@ function ResumenPesaje({ pedido }) {
                 </div>
             ))}
         </dl>
+        {cajas.length > 0 && (
+            <ul className="grid gap-2 mt-3 p-0 list-none" aria-label="Envíos registrados por CEDIS">
+                {cajas.map((caja, indice) => {
+                    const medidas = [medida(caja.largo), medida(caja.ancho), medida(caja.alto)];
+                    const fotos = (pedido.documentos || []).filter((doc) => doc.tipo === 'evidencia_condicion' && doc.activo !== false && doc.url
+                        && doc.relacion_tipo === 'envio_caja' && Number(doc.relacion_id) === Number(caja.id));
+                    return (
+                        <li key={caja.id} className="rounded-xl border theme-border p-3 grid gap-2">
+                            <p className="text-sm font-semibold theme-text-main m-0">Envío {indice + 1}{caja.tipo_caja ? ` · ${caja.tipo_caja}` : ''}</p>
+                            <p className="text-xs theme-text-muted m-0">
+                                {medidas.every(Boolean) ? `${medidas.join(' × ')} cm · ` : ''}
+                                {caja.peso_real_kg != null ? `Peso real ${numero(caja.peso_real_kg)} kg` : ''}
+                                {caja.peso_cobrado_kg != null ? ` · A cobrar ${numero(caja.peso_cobrado_kg)} kg` : ''}
+                            </p>
+                            {fotos.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {fotos.slice(0, 4).map((doc, i) => (
+                                        <MiniaturaDocumento key={doc.id} documento={doc} onVer={() => onVer?.(fotos, i)} />
+                                    ))}
+                                </div>
+                            )}
+                        </li>
+                    );
+                })}
+            </ul>
+        )}
+        </>
     );
 }
 
@@ -93,6 +125,38 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         return data;
     };
 
+    const ejecutarPieza = async (pieza, { accion, entrada, producto, archivo, solicitudId }) => {
+        const cabeceras = { Accept: 'application/json' };
+        if (accion === 'confirmar') {
+            const { data } = await axios.post(`/control-pedidos/${pedido.id}/confirmar-pieza-nacional`, { revision_id: pieza.id }, { headers: cabeceras });
+            return data;
+        }
+        const form = new FormData();
+        form.append('tipo', accion === 'retirar' ? 'retiro' : 'sustitucion');
+        form.append('solicitud_id', solicitudId);
+        form.append('revision_esperada', String(pedido.revision_registro ?? ''));
+        form.append('base_captura', String(pedido.base_captura ?? ''));
+        form.append('piezas[0][revision_id]', String(pieza.id));
+        form.append('piezas[0][sku]', pieza.sku || '');
+        form.append('piezas[0][descripcion]', pieza.descripcion_producto || pieza.descripcion || '');
+        form.append('piezas[0][cantidad]', String(Math.max(1, Number(pieza.cantidad_solicitada) || Number(pieza.cantidad_encontrada) || 1)));
+        form.append('motivo', accion === 'retirar' ? 'Retiro confirmado con el cliente' : 'Sustitución solicitada por el cliente');
+        if (accion === 'sustituir') {
+            if (entrada === 'catalogo' && producto) {
+                form.append('alternativa[sku]', producto.sku || '');
+                form.append('alternativa[descripcion]', producto.descripcion || '');
+                form.append('alternativa[cantidad]', '1');
+            } else if (archivo) {
+                form.append('evidencias[]', archivo);
+            }
+        }
+        const { data } = await axios.post(`/control-pedidos/${pedido.id}/ajuste-nacional`, form, { headers: cabeceras });
+        setAviso(accion === 'retirar'
+            ? 'Retiro registrado. CEDIS debe responder el nuevo peso antes de cerrar.'
+            : 'Sustitución registrada. CEDIS debe responder la alternativa y el nuevo peso antes de cerrar.');
+        return data;
+    };
+
     const ejecutar = async (accion) => {
         if (ocupado) return;
         setOcupado(true);
@@ -132,8 +196,19 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                     cantidad={filas.length ? filas.reduce((total, fila) => total + numero(fila.cantidad || 0), 0) : null}
                     labelCantidad="Unidades encontradas"
                     onVer={onVer}
+                    accionesDePieza={(pieza) => (!puedeAjustar || !ESTADOS_CON_DETALLE.includes(pieza?.estado_fisico) ? null : (
+                        <AccionesRapidasDisponibilidad
+                            compacta
+                            pieza={pieza}
+                            pedidoId={pedido.id}
+                            almacenId={adaptador.almacenId}
+                            onActualizar={onPedidoActualizado}
+                            onVer={onVer}
+                            ejecutor={(datos) => ejecutarPieza(pieza, datos)}
+                        />
+                    ))}
                 >
-                    <ResumenPesaje pedido={pedido} />
+                    <ResumenPesaje pedido={pedido} onVer={onVer} />
                     {documentosRespuesta.length > 0 && onVer && (
                         <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] mt-3 inline-flex items-center gap-2`} onClick={() => onVer(documentosRespuesta, 0)}>
                             <Eye size={16} aria-hidden="true" /> Ver evidencias de CEDIS

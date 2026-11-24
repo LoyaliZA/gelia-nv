@@ -1,18 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, AlertTriangle, Camera, ChevronDown, ClipboardCheck, FileText, Package, Plus, Trash2, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ChevronDown, ClipboardCheck, FileText, X } from 'lucide-react';
 import usePedidoDialog from './usePedidoDialog';
 import RutaPedidoTienda from './RutaPedidoTienda';
 import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from './ModalSeleccionProductosDetalle';
 import { anexosPendientesRevision, cambiosDisponibilidad, equivalenciasUnidades } from './cambiosDisponibilidad';
-import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
-import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { presentacionPedidoCedis } from './presentacionPedidoCedis';
+import CapturaExcepcionesConsulta, {
+    EstadoPedidoConsulta, EtiquetasPieza, aplicarCambioExcepcion, excepcionDesdeElegido, liberarPreviews, mensajeValidacionExcepciones,
+} from './CapturaExcepcionesConsulta';
 
 function formDataDe({ confirmacion, excepciones, archivos }) {
     const form = new FormData();
@@ -115,8 +117,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const almacenId = pedido.almacen?.id || pedido.almacen_id;
     const agregar = elegido => {
         if (!elegido) return;
-        const fila = { descripcion: elegido.descripcion || '', sku: elegido.sku || '', clave: ++secuencia.current, cantidad: 1, origen_cambio: origenIncidencia?.clave, condicion: 'detalle', detalle: '', unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] };
-        setExcepciones(actual => [...actual, fila]);
+        setExcepciones(actual => [...actual, excepcionDesdeElegido(elegido, { clave: ++secuencia.current, origen_cambio: origenIncidencia?.clave })]);
         if (origenIncidencia) setRespuestasCambios(actual => ({ ...actual, [origenIncidencia.clave]: 'incidencia' }));
     };
     const escaneo = useEscaneoPreparacion({ almacenId, permitirSinAlmacen: true, onProducto: agregar });
@@ -209,14 +210,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (cambio && completas.length) persistirUnidad(cambio, 'incidencia', completas);
     };
     const cambiar = (indice, cambiosPieza) => setExcepciones(actual => {
-        const siguiente = actual.map((fila, i) => {
-            if (i !== indice) return fila;
-            if (cambiosPieza.condicion === 'faltante') liberarPreviews(fila.previews);
-            return { ...fila, ...cambiosPieza, ...(cambiosPieza.condicion ? {
-                detalle: cambiosPieza.condicion === 'faltante' ? 'Sin existencias' : fila.detalle === 'Sin existencias' ? '' : fila.detalle,
-                ...(cambiosPieza.condicion === 'faltante' ? { archivos: [], previews: [], unica_pieza: false, mejor_ejemplar: false } : {}),
-            } : {}) };
-        });
+        const siguiente = actual.map((fila, i) => i !== indice ? fila : aplicarCambioExcepcion(fila, cambiosPieza));
         if (!tienda) persistirSiCompleta(siguiente[indice]?.origen_cambio, siguiente);
         return siguiente;
     });
@@ -239,20 +233,18 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     };
     const reportarCambio = (cambio, condicion) => {
         if (cambio.esDocumento) { setCapturaRapida({ origen: cambio }); return; }
-        const pieza = { descripcion: cambio.descripcion || '', sku: cambio.sku || '', cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
-            clave: ++secuencia.current, origen_cambio: cambio.clave, condicion, detalle: condicion === 'faltante' ? 'Sin existencias' : '',
-            unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] };
+        const pieza = excepcionDesdeElegido(cambio, {
+            clave: ++secuencia.current, origen_cambio: cambio.clave, condicion,
+            cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
+        });
         setOrigenIncidencia(cambio);
         setRespuestasCambios(actual => ({ ...actual, [cambio.clave]: 'incidencia' }));
         setExcepciones(actual => actual.some(f => f.origen_cambio === cambio.clave) ? actual : [...actual, pieza]);
         if (condicion === 'faltante') persistirUnidad(cambio, 'incidencia', [pieza]);
     };
     const agregarSeleccionDetalle = (seleccionadas, origen) => {
-        setExcepciones(actual => [...actual, ...seleccionadas.map(pieza => ({
-            descripcion: pieza.descripcion, sku: pieza.sku || '', cantidad: 1,
-            clave: ++secuencia.current, origen_cambio: origen?.clave, condicion: 'detalle', detalle: '',
-            unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [],
-            abrir_detalle: seleccionadas.length === 1,
+        setExcepciones(actual => [...actual, ...seleccionadas.map(pieza => excepcionDesdeElegido(pieza, {
+            clave: ++secuencia.current, origen_cambio: origen?.clave, abrir_detalle: seleccionadas.length === 1,
         }))]);
         if (seleccionadas.some(pieza => !pieza.sku)) setManual(true);
         if (origen) {
@@ -271,13 +263,17 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         setError('');
         const afectadas = actualizacion || estado === 'detalle' ? excepciones : [];
         if (!actualizacion && !estado) return setError('Indica el estado del pedido.');
-        if (!actualizacion && estado === 'detalle' && !afectadas.length) return setError('Agrega las piezas con detalle o faltante.');
+        if (!actualizacion && estado === 'detalle') {
+            const mensaje = mensajeValidacionExcepciones(afectadas, { usaPreviews: tienda });
+            if (mensaje) return setError(mensaje);
+        }
         const pendientes = cambios.filter(c => c.pendiente && !respuestasCambios[c.clave] && !c.persistida);
         if (actualizacion && pendientes.length) return setError('Revise cada captura: marque Todo OK o registre las piezas con detalle.');
         if (actualizacion && cambios.some(c => (respuestasCambios[c.clave] || c.resultado) === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave) && !(c.persistida && c.resultado === 'incidencia'))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
-        if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
-        if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
-        if (afectadas.some(p => p.condicion === 'detalle' && !(tienda ? p.previews?.length : p.archivos?.length))) return setError('Adjunta una foto de cada producto con detalle.');
+        if (actualizacion) {
+            const mensaje = mensajeValidacionExcepciones(afectadas, { usaPreviews: tienda });
+            if (afectadas.length && mensaje) return setError(mensaje);
+        }
         if (!archivos.length && (actualizacion ? !capturaAnterior.length : !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
         setOcupado(true);
         try {
@@ -339,29 +335,15 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
                         return <li key={p.id || i} className="gelia-cedis-panel"><details open={resultado.length <= 3 ? true : undefined}><summary className="gelia-cedis-producto-resumen"><span><strong>{p.descripcion}</strong><span className="block text-xs theme-text-muted">{p.sku}{Number(p.cantidad) > 1 ? ` · ${p.cantidad} pza(s)` : ''}</span><EtiquetasPieza fila={p} /></span><ChevronDown size={18} aria-hidden /></summary><p className="text-sm">{p.detalle}</p>{fotos.length > 0 && <GaleriaEvidenciasPedido compacto label="Fotos del defecto" previews={fotos} disabled onVer={(docs, indice) => setVista({ documentos: docs, indice })} />}</details></li>;
                     })}</ul>}
                 </div> : !editable ? <p className="text-sm theme-text-muted">Toma la revisión para responder.</p> : <>
-                    {!actualizacion && <fieldset className="gelia-cedis-panel grid gap-2 m-0">
-                        <legend className="text-sm font-semibold theme-text-main mb-2">Estado del pedido</legend>
-                        {[['correcto', 'Todo OK'], ['detalle', 'Con detalle o faltante']].map(([valor, texto]) => <label key={valor} className="gelia-cedis-opcion flex items-center gap-3 border theme-border rounded-xl p-3 text-sm theme-text-main" data-seleccionado={estado === valor}>
-                            <input type="radio" name="estado-disponibilidad-cedis" className="gelia-checkbox" checked={estado === valor} disabled={guardando} onChange={() => setEstado(valor)} />{texto}
-                        </label>)}
-                    </fieldset>}
-                    {(estado === 'detalle' || actualizacion && excepciones.length > 0) && <section ref={incidenciasRef} className="gelia-cedis-panel grid gap-3" aria-label="Productos con detalle o faltantes">
-                        <div className="registrar-tienda-seccion-titulo"><Package size={18} aria-hidden /><h3>{actualizacion ? 'Productos con detalle' : 'Productos con detalle o faltantes'}</h3><span className="text-xs theme-text-muted">{excepciones.length}</span></div>
-                        {origenIncidencia && <p className="consulta-incidencia-origen"><FileText size={16} aria-hidden />{origenIncidencia.esDocumento ? 'Piezas de la captura seleccionada' : origenIncidencia.descripcion}</p>}
-                        <p className="text-xs theme-text-muted m-0">Registra solo las piezas afectadas.</p>
-                        {actualizacion ? <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando} onClick={() => setCapturaRapida({ origen: origenIncidencia })}><Plus size={16} aria-hidden />Agregar productos con detalle</button> : <>
-                        <div>
-                            <label className={THEME_LABEL} htmlFor="cedis-buscar-producto">Buscar o escanear producto</label>
-                            <SelectorProducto inputId="cedis-buscar-producto" almacenId={almacenId} incluirSinInventario value="" onChange={(_, elegido) => { if (elegido) agregar(elegido); }} onEscanear={capturarCodigo} disabled={ocupado} />
-                            <p className="text-xs theme-text-muted mt-2 mb-0">Cada lectura o selección registra una unidad.</p>
-                        </div>
-                        {escaneo.ultimo && <p className="text-xs theme-text-muted m-0" role="status">{escaneo.ultimo}</p>}
-                        {escaneo.fallos.map((fallo, i) => <p key={i} role="alert" className="text-sm theme-text-peligro">{fallo.codigo}: {fallo.mensaje}</p>)}
-                        <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando} onClick={() => { setManual(true); agregar({ descripcion: '', sku: '' }); }}><Plus size={16} aria-hidden />Capturar sin catálogo</button>
-                        </>}
-                        <p className="text-xs theme-text-muted m-0">Abre una unidad para registrar sus detalles.</p>
-                        {excepciones.map((fila, i) => <PiezaExcepcionCedis key={fila.clave} fila={fila} indice={i} repeticion={repeticionDe(excepciones, fila)} manual={manual} disabled={guardando} onChange={cambios => cambiar(i, cambios)} onQuitar={() => quitar(i)} onVer={(docs, indice) => setVista({ documentos: docs, indice })} />)}
-                    </section>}
+                    {!actualizacion && <EstadoPedidoConsulta estado={estado} onChange={setEstado} disabled={guardando} />}
+                    {(estado === 'detalle' || actualizacion && excepciones.length > 0) && <CapturaExcepcionesConsulta
+                        actualizacion={actualizacion} excepciones={excepciones} origenIncidencia={origenIncidencia}
+                        incidenciasRef={incidenciasRef} manual={manual} almacenId={almacenId} disabled={guardando} ocupado={ocupado}
+                        escaneo={escaneo} onAgregar={agregar} onCapturarCodigo={capturarCodigo}
+                        onCapturarManual={() => { setManual(true); agregar({ descripcion: '', sku: '' }); }}
+                        onAgregarDetalle={() => setCapturaRapida({ origen: origenIncidencia })}
+                        onChange={cambiar} onQuitar={quitar} onVer={(docs, indice) => setVista({ documentos: docs, indice })}
+                    />}
 
                 </>}
                 {(actualizacion || estado || respondida) && <section className="gelia-cedis-panel" aria-label="Captura del pedido">{capturaAnterior.length > 0 && !respondida && <div className="grid gap-2 mb-3"><p className="text-sm font-semibold theme-text-main m-0">Captura vigente del pedido</p><div className="flex flex-wrap gap-2">{capturaAnterior.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => setVista({ documentos: capturaAnterior, indice: i })} />)}</div><p className="text-xs theme-text-muted m-0">Se conserva. Adjunta una nueva solo si el pedido completo cambió.</p></div>}<GaleriaEvidenciasPedido compacto accionesCamara id="cedis-evidencias-disponibilidad" label={capturaAnterior.length > 0 && !respondida ? 'Nueva captura (opcional)' : 'Captura del pedido'} obligatorio={!respondida && !capturaAnterior.length} maxArchivos={8} archivos={archivos} previews={previews} disabled={guardando || respondida} onChange={(files, vistas) => { setArchivos(files); setPreviews(vistas); }} onVer={(docs, indice) => setVista({ documentos: docs, indice })} /></section>}
@@ -389,62 +371,4 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             <div className="gelia-modal-body min-h-0 flex-1 overflow-y-auto">{contenido}</div>
         </div>
     </div>, document.body);
-}
-
-function liberarPreviews(previews = []) {
-    previews.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); });
-}
-
-function repeticionDe(filas, fila) {
-    if (!fila.sku) return null;
-    const repetidas = filas.filter(f => f.sku === fila.sku);
-    return repetidas.length > 1 ? `${repetidas.indexOf(fila) + 1}/${repetidas.length}` : null;
-}
-
-function EtiquetasPieza({ fila }) {
-    const faltante = fila.condicion === 'faltante';
-    return <span className="gelia-cedis-etiquetas">
-        <span className="gelia-cedis-etiqueta" data-tipo={faltante ? 'faltante' : 'detalle'}>{faltante ? 'Sin existencias' : 'Con detalle'}</span>
-        {!faltante && fila.unica_pieza && <span className="gelia-cedis-etiqueta">Única pieza</span>}
-        {!faltante && fila.mejor_ejemplar && <span className="gelia-cedis-etiqueta">Mejor ejemplar</span>}
-        {!faltante && fila.previews?.length > 0 && <span className="gelia-cedis-etiqueta">{fila.previews.length}/5 fotos</span>}
-    </span>;
-}
-
-function PiezaExcepcionCedis({ fila, indice, repeticion, manual, disabled, onChange, onQuitar, onVer }) {
-    const [expandida, setExpandida] = useState(Boolean(fila.abrir_detalle) || manual && !fila.sku);
-    const capturaRef = useRef(null);
-    const sinExistencias = fila.condicion === 'faltante';
-    const limiteFotos = fila.previews.length >= 5;
-    return <article className="gelia-cedis-producto">
-        <button type="button" className="gelia-cedis-foto" disabled={disabled || sinExistencias || limiteFotos} aria-label={`Agregar evidencia del producto ${indice + 1}`} title={sinExistencias ? 'Sin existencias: no requiere foto' : limiteFotos ? 'Máximo de 5 fotos por producto' : 'Tomar foto del producto'} onClick={() => capturaRef.current?.tomarFoto()}>
-            {fila.previews[0] ? <img src={fila.previews[0].url} alt="Foto del defecto" /> : <Camera size={22} aria-hidden />}
-            <Plus size={14} className="gelia-cedis-foto-mas" aria-hidden />
-        </button>
-        <details open={expandida} onToggle={e => setExpandida(e.currentTarget.open)} className="min-w-0">
-            <summary className="gelia-cedis-producto-resumen">
-                <ChevronDown size={16} className="gelia-cedis-desplegar" aria-hidden />
-                <span className="min-w-0">
-                    <span className="gelia-cedis-producto-identidad">{repeticion && <span className="gelia-cedis-unidad">{repeticion}</span>}<strong title={`${fila.sku} — ${fila.descripcion}`}>{fila.sku ? `${fila.sku} — ` : ''}{fila.descripcion || 'Pieza por identificar'}</strong></span>
-                    <EtiquetasPieza fila={fila} />
-                </span>
-            </summary>
-            <div className="grid gap-3 pt-3">
-                {manual && !fila.sku && <label className={THEME_LABEL}>Pieza<input className={`${THEME_INPUT} w-full`} maxLength={255} value={fila.descripcion} disabled={disabled} onChange={e => onChange({ descripcion: e.target.value })} /></label>}
-                <div className="gelia-cedis-interruptores" aria-label={`Estados del producto ${indice + 1}`}>
-                    {[['unica_pieza', 'Única pieza'], ['mejor_ejemplar', 'Mejor ejemplar'], ['faltante', 'Sin existencias']].map(([campo, etiqueta]) => {
-                        const activo = campo === 'faltante' ? sinExistencias : Boolean(fila[campo]);
-                        return <button key={campo} type="button" role="switch" aria-checked={activo} aria-label={etiqueta} disabled={disabled || (sinExistencias && campo !== 'faltante')} onClick={() => onChange(campo === 'faltante' ? { condicion: activo ? 'detalle' : 'faltante' } : { [campo]: !activo })}>
-                            <span className="gelia-switch pointer-events-none shrink-0" data-active={activo ? 'true' : 'false'}><span className="gelia-switch-thumb" /></span><span>{etiqueta}</span>
-                        </button>;
-                    })}
-                </div>
-                {!sinExistencias && <>
-                    <label className={THEME_LABEL}>{fila.unica_pieza || fila.mejor_ejemplar ? 'Observaciones (opcional)' : 'Detalle del defecto'}<textarea className={`${THEME_TEXTAREA} w-full`} rows={2} maxLength={500} value={fila.detalle} disabled={disabled} onChange={e => onChange({ detalle: e.target.value })} /></label>
-                    <GaleriaEvidenciasPedido compacto capturaExterna controlRef={capturaRef} soloImagenes label="Fotos del producto" maxArchivos={5} archivos={fila.archivos} previews={fila.previews} disabled={disabled} onChange={(archivos, previews) => onChange({ archivos, previews })} onVer={onVer} />
-                </>}
-            </div>
-        </details>
-        <button type="button" className={`${GELIA_BTN_OUTLINE} gelia-cedis-quitar`} disabled={disabled} aria-label={`Quitar pieza ${indice + 1}`} title="Quitar de la lista" onClick={onQuitar}><Trash2 size={16} aria-hidden /></button>
-    </article>;
 }

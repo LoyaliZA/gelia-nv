@@ -6,6 +6,7 @@ use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\CatalogoTipoCajaPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Support\ControlPedidos\Nacional\CapturaNacional;
+use App\Support\ControlPedidos\Nacional\CompletarRevisionesPesajeNacional;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaRevisionProducto;
@@ -32,6 +33,8 @@ class ResponderPesajePedidoBmaService
      *   evidencias_generales?: list<UploadedFile>,
      *   evidencias_envios?: array<int, list<UploadedFile>>,
      *   revisiones?: list<array<string, mixed>>,
+     *   excepciones?: list<array<string, mixed>>,
+     *   confirmacion_explicita?: bool,
      *   motivo_retiro?: string|null
      * }  $revisionFisica
      */
@@ -45,8 +48,13 @@ class ResponderPesajePedidoBmaService
                     throw new \InvalidArgumentException('El almacén no está habilitado para buscar productos.');
                 }
                 foreach ($revisionFisica['revisiones'] ?? [] as $revision) {
-                    if (! empty($revision['producto_id']) && ! \App\Models\Producto::whereKey($revision['producto_id'])->whereHas('inventarios', fn ($q) => $q->where('almacen_id', $almacen->id))->exists()) {
-                        throw new \InvalidArgumentException('Una pieza no pertenece al catálogo del almacén seleccionado.');
+                    if (empty($revision['producto_id'])) {
+                        continue;
+                    }
+                    $pid = (int) $revision['producto_id'];
+                    $enCatalogo = \App\Models\Producto::whereKey($pid)->where('activo', true)->exists();
+                    if (! $enCatalogo) {
+                        throw new \InvalidArgumentException('Una pieza no está en el catálogo de productos.');
                     }
                 }
                 app(ValidarAlmacenSalidaPedido::class)->ejecutar($almacen->id, $pedido->almacen_id);
@@ -91,8 +99,20 @@ class ResponderPesajePedidoBmaService
             fn ($f) => $f instanceof UploadedFile
         ));
 
-        $revisiones = $this->normalizarRevisiones($revisionFisica['revisiones'] ?? [], $pedido->esTrasladoInternoAPdv());
-        $solicitadas = collect(CapturaNacional::piezasVigentes($pedido))->keyBy('id');
+        $revisionesCrudas = $revisionFisica['revisiones'] ?? [];
+        $solicitadasLista = CapturaNacional::piezasVigentes($pedido);
+        if (! $soloRevisiones && CapturaNacional::es($pedido)
+            && (array_key_exists('confirmacion_explicita', $revisionFisica) || ($revisionFisica['excepciones'] ?? []) !== [])) {
+            $this->validarExcepcionesPesaje($pedido, $revisionFisica['excepciones'] ?? [], (bool) ($revisionFisica['confirmacion_explicita'] ?? false));
+            $revisionesCrudas = CompletarRevisionesPesajeNacional::completar(
+                $solicitadasLista,
+                $revisionFisica['excepciones'] ?? [],
+                (bool) ($revisionFisica['confirmacion_explicita'] ?? false),
+                $revisionesCrudas
+            );
+        }
+        $revisiones = $this->normalizarRevisiones($revisionesCrudas, $pedido->esTrasladoInternoAPdv());
+        $solicitadas = collect($solicitadasLista)->keyBy('id');
         if ($solicitadas->isNotEmpty()) {
             $contestadas = collect($revisiones)->groupBy('client_uuid');
             $idsPrevios = $pedido->solicitud_preparacion_json['respuestas_piezas_nacionales'] ?? [];
@@ -165,7 +185,8 @@ class ResponderPesajePedidoBmaService
                 $uuid = (string) ($linea['client_uuid'] ?? '');
                 $hayLocal = ($evidenciasEnvios[$i] ?? []) !== [];
                 $haySesion = $uuid !== '' && $this->sesionEvidencia->tieneFotoCaja($pedido, $uuid, $i);
-                $fotoPrevia = ! $cambioPaquete && $this->cajaTieneFoto($pedido, $uuid);
+                // Nacional: la foto vigente del mismo envío (mismo uuid) basta; añadir o retirar piezas no la invalida.
+                $fotoPrevia = (CapturaNacional::es($pedido) || ! $cambioPaquete) && $this->cajaTieneFoto($pedido, $uuid);
                 if (! $hayLocal && ! $haySesion && ! $fotoPrevia) {
                     throw new \InvalidArgumentException('Adjunte al menos una foto del contenido del envío '.($i + 1).'.');
                 }
@@ -357,6 +378,15 @@ class ResponderPesajePedidoBmaService
             }
 
             foreach ($cajasCreadas as $idxCaja => $caja) {
+                if (($evidenciasEnvios[$idxCaja] ?? []) !== []) {
+                    // La captura nueva del envío es la vigente; la anterior se conserva como histórico.
+                    $pedido->documentos()
+                        ->where('tipo', PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION)
+                        ->where('relacion_tipo', PedidoBmaDocumento::RELACION_ENVIO_CAJA)
+                        ->where('relacion_id', $caja->id)
+                        ->where('activo', true)
+                        ->update(['activo' => false]);
+                }
                 foreach ($evidenciasEnvios[$idxCaja] ?? [] as $file) {
                     $this->guardarEvidencia(
                         $pedido,
@@ -675,6 +705,79 @@ class ResponderPesajePedidoBmaService
         }
 
         return $peor;
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $excepciones
+     */
+    private function validarExcepcionesPesaje(PedidoBma $pedido, array $excepciones, bool $confirmacion): void
+    {
+        if ($confirmacion) {
+            if ($excepciones !== []) {
+                throw new \InvalidArgumentException('La confirmación sin excepciones no admite piezas afectadas.');
+            }
+
+            return;
+        }
+        if ($excepciones === []) {
+            throw new \InvalidArgumentException('Agrega las piezas con detalle o faltante.');
+        }
+        foreach ($excepciones as $excepcion) {
+            $descripcion = trim((string) ($excepcion['descripcion'] ?? ''));
+            if ($descripcion === '') {
+                throw new \InvalidArgumentException('Identifica el producto de cada unidad reportada.');
+            }
+            $condicion = (string) ($excepcion['condicion'] ?? '');
+            if (! in_array($condicion, ['detalle', 'faltante'], true)) {
+                throw new \InvalidArgumentException('Indique si la pieza tiene detalle o está sin existencias.');
+            }
+            if ($condicion === 'faltante') {
+                continue;
+            }
+            $unica = filter_var($excepcion['unica_pieza'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $mejor = filter_var($excepcion['mejor_ejemplar'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            if (! $unica && ! $mejor && trim((string) ($excepcion['detalle'] ?? '')) === '') {
+                throw new \InvalidArgumentException('Describe el defecto de la unidad reportada.');
+            }
+            $fotos = array_values(array_filter(
+                $excepcion['evidencias'] ?? [],
+                fn ($archivo) => $archivo instanceof UploadedFile
+            ));
+            if ($fotos === [] && ! $this->excepcionTieneEvidencia($pedido, $excepcion)) {
+                throw new \InvalidArgumentException('Adjunta una foto de cada producto con detalle.');
+            }
+        }
+    }
+
+    /**
+     * La foto de una pieza con detalle ya registrada (misma pieza) o tomada con el celular
+     * en esta sesión cuenta como evidencia; no se vuelve a pedir al actualizar la consulta.
+     *
+     * @param  array<string, mixed>  $excepcion
+     */
+    private function excepcionTieneEvidencia(PedidoBma $pedido, array $excepcion): bool
+    {
+        $uuid = trim((string) ($excepcion['client_uuid'] ?? ''));
+        if ($uuid !== '' && $this->sesionEvidencia->tieneFotoProducto($pedido, $uuid)) {
+            return true;
+        }
+        $productoId = (int) ($excepcion['producto_id'] ?? 0);
+        $sku = trim((string) ($excepcion['sku'] ?? ''));
+        $descripcion = trim((string) ($excepcion['descripcion'] ?? ''));
+        $consulta = $pedido->revisionesProducto();
+        if (PedidoBmaRevisionProducto::conservaRetiradas()) {
+            $consulta->whereNull('retirada_at');
+        }
+        foreach ($consulta->get() as $fila) {
+            $mismo = $productoId > 0 && (int) $fila->producto_id === $productoId
+                || ($productoId === 0 && $sku !== '' && (string) $fila->sku === $sku)
+                || ($productoId === 0 && $sku === '' && $descripcion !== '' && $fila->descripcion_producto === $descripcion);
+            if ($mismo && $fila->evidencias()->where(fn ($q) => $q->where('activo', true)->orWhereNull('activo'))->exists()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
