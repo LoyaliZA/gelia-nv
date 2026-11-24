@@ -5,14 +5,13 @@ import EncabezadoFolioPedido from '../Partials/EncabezadoFolioPedido';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import RespuestaDisponibilidadPedido from '../Partials/RespuestaDisponibilidadPedido';
 import AccionesRapidasDisponibilidad from '../Partials/AccionesRapidasDisponibilidad';
-import ResumenCambiosDisponibilidad from '../Partials/ResumenCambiosDisponibilidad';
 import CapturaConjuntoPedido from '../Partials/CapturaConjuntoPedido';
 import { AjustePiezas } from '../Partials/AjustePiezas';
 import { adaptadorConsultaMunicipal } from '../Partials/adaptadoresConsulta';
 import ModalVistaPreviaDocumento from '../Partials/ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from '../Partials/pedidosBmaStyles';
 import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
-import { anexosPendientesRevision, revisionesDelCicloEnCurso } from '../Partials/cambiosDisponibilidad';
+import { anexosPendientesRevision, filasDeCambios, revisionesDelCicloEnCurso } from '../Partials/cambiosDisponibilidad';
 
 function etiquetaConsulta(consulta, revision, solicitud) {
     if (consulta?.estado === 'cerrada') return { texto: 'Consulta cerrada', tono: 'gelia-estado-vivo--exito' };
@@ -66,6 +65,8 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
         observacion: p.comentario, original: p,
         documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
     }));
+    const cambios = filasDeCambios(solicitud, pedido.documentos || [], { revisionIdsEnTabla: new Set(filas.map(f => Number(f.id))) });
+    const avisoReapertura = solicitud.reapertura_disponibilidad ? `Consulta reabierta por ${solicitud.reapertura_disponibilidad.por}.` : '';
     const bloqueo = pedido?.motivo_bloqueo_cierre;
     const puedeCerrar = respondida && !cerrada && !pendiente && pedido?.puede_cerrar_consulta !== false && !bloqueo;
     const adaptador = adaptadorConsultaMunicipal({ pedidoId: pedido.id, pedido: { ...pedido, solicitud_preparacion: solicitud } });
@@ -99,6 +100,7 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
                     estado={revision.estado}
                     aceptacionVigente={revision.aceptacion_vigente !== false && !pendiente}
                     mostrarCaptura={false}
+                    cambios={cambios} avisoReapertura={avisoReapertura}
                     filas={filas}
                     generales={vigentes}
                     anteriores={anteriores}
@@ -112,7 +114,9 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
             <AvisoOperativoPedido tono="info">
                 CEDIS o Tienda confirman mercancía. Ventas registra el cierre con el cliente. Una respuesta positiva no cierra ni autoriza el pago.
             </AvisoOperativoPedido>
-            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || []} vista="ventas" onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+            {!(respondida && revision?.estado) && (cambios.actuales.length > 0 || cambios.anteriores.length > 0) && (
+                <RespuestaDisponibilidadPedido titulo="Cambios solicitados" ariaLabel="Cambios solicitados" estado={null} cantidad={null} mostrarCaptura={false} cambios={cambios} avisoReapertura={avisoReapertura} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+            )}
             <CapturaConjuntoPedido pedido={{ ...pedido, solicitud_preparacion: solicitud }} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
             {aviso && <p className="text-sm theme-text-main m-0" role="status">{aviso}</p>}
             {puedeAjustar && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar((actual) => !actual)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}

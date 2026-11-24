@@ -1127,6 +1127,43 @@ class PedidoBmaController extends Controller
         ], \App\Support\ControlPedidos\Nacional\LecturaConsultaNacional::de($pedido)));
     }
 
+    public function vistaPreviaCotizacionNacional(
+        Request $request,
+        PedidoBma $pedidoBma,
+        ListarPedidosBmaService $listarService,
+        \App\Services\ControlPedidos\Nacional\VistaPreviaCotizacionNacional $vistaPrevia,
+    ): JsonResponse {
+        Gate::authorize('control_pedidos.crear');
+        $listarService->asegurarAcceso($pedidoBma, Auth::user());
+        $datos = $request->validate([
+            'catalogo_paqueteria_id' => ['required', 'integer'],
+            'catalogo_zona_id' => ['nullable', 'integer'],
+            'aplica_seguro' => ['nullable', 'boolean'],
+            'lineas' => ['required', 'array'],
+            'lineas.*.uuid_operativo' => ['required', 'uuid'],
+            'lineas.*.costo_envio' => ['required', 'numeric', 'min:0'],
+        ]);
+        $paqueteria = \App\Models\ControlPedidos\CatalogoPaqueteriaPedido::query()
+            ->whereKey((int) $datos['catalogo_paqueteria_id'])->where('activo', true)->first();
+        if (! $paqueteria?->habilitadaParaNacional()) {
+            return response()->json(['message' => 'Seleccione una paquetería.'], 422);
+        }
+
+        try {
+            $desglose = $vistaPrevia->calcular(
+                $pedidoBma,
+                $paqueteria,
+                $datos['lineas'],
+                (bool) ($datos['aplica_seguro'] ?? false),
+                isset($datos['catalogo_zona_id']) ? (int) $datos['catalogo_zona_id'] : null,
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($desglose);
+    }
+
     public function custodiaNacional(
         Request $request,
         PedidoBma $pedidoBma,

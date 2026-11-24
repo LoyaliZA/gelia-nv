@@ -13,12 +13,11 @@ import { adaptadorConsultaTienda } from './adaptadoresConsulta';
 
 export { AjustePiezas };
 import { lecturaConsultaVigente } from './vigenciaConsultaPedido';
-import { anexosPendientesRevision, revisionesDelCicloEnCurso, revisionesNoEnviadasTienda } from './cambiosDisponibilidad';
+import { anexosPendientesRevision, filasDeCambios, revisionesDelCicloEnCurso, revisionesNoEnviadasTienda } from './cambiosDisponibilidad';
 import AvisoOperativoPedido from './AvisoOperativoPedido';
 import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import AccionesRapidasDisponibilidad from './AccionesRapidasDisponibilidad';
-import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
 import RespuestaDisponibilidadPedido from './RespuestaDisponibilidadPedido';
 import CapturaConjuntoPedido from './CapturaConjuntoPedido';
@@ -93,7 +92,15 @@ function EsperaRevision({ area, nombreAlmacen }) {
 
 function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePieza }) {
     const revision = pedido?.solicitud_preparacion?.revision_disponibilidad;
-    if (!revision?.estado || preparacionVisible(pedido?.tarea_preparacion)) return null;
+    if (preparacionVisible(pedido?.tarea_preparacion)) return null;
+    const solicitudCambios = pedido?.solicitud_preparacion || {};
+    const avisoReapertura = solicitudCambios.reapertura_disponibilidad ? `Consulta reabierta por ${solicitudCambios.reapertura_disponibilidad.por}.` : '';
+    if (!revision?.estado) {
+        const pendientes = filasDeCambios(solicitudCambios, pedido?.documentos || []);
+        return pendientes.actuales.length || pendientes.anteriores.length
+            ? <RespuestaDisponibilidadPedido titulo="Cambios solicitados" ariaLabel="Cambios solicitados" estado={null} cantidad={null} mostrarCaptura={false} cambios={pendientes} avisoReapertura={avisoReapertura} onVer={onVer} />
+            : null;
+    }
     const documentos = (pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && !String(d.comentario || '').startsWith('Evidencia petición'));
     const capturas = documentos.filter(d => !d.relacion_tipo || d.relacion_tipo === 'revision_general');
     const generales = capturas.filter(d => !revision.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id));
@@ -107,7 +114,9 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
         observacion: p.comentario, original: p,
         documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
     }));
+    const cambios = filasDeCambios(solicitudCambios, pedido.documentos || [], { revisionIdsEnTabla: new Set(filas.map(f => Number(f.id))) });
     return <RespuestaDisponibilidadPedido
+        cambios={cambios} avisoReapertura={avisoReapertura}
         titulo={revision.actualizacion_pendiente ? 'Respuesta anterior de disponibilidad' : 'Respuesta de disponibilidad'} origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'} mostrarCaptura={false}
         responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
         fecha={revision.respondida_at} estado={revision.estado} aceptacionVigente={revision.aceptacion_vigente !== false}
@@ -290,7 +299,6 @@ export default function SeguimientoSolicitudTienda({
                 accionesDePieza={accionesDePieza}
                 onVer={(documentos, indice) => setVista({ documentos, indice })}
             />
-            <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={visto?.documentos || []} vista="ventas" onVer={(documentos, indice) => setVista({ documentos, indice })} />
             <CapturaConjuntoPedido pedido={{ ...visto, solicitud_preparacion: solicitud }} tarea={visto?.tarea_preparacion} onVer={(documentos, indice) => setVista({ documentos, indice })} />
             {!soloLectura && !cerrada && <button type="button" className="tienda-ajustes-desplegar" aria-expanded={modificar} onClick={() => setModificar(!modificar)}><span className={GELIA_ICON_BOX}><PackagePlus size={20} aria-hidden /></span><span>Modificar pedido</span><ChevronDown size={18} aria-hidden /></button>}
             {!soloLectura && !cerrada && (

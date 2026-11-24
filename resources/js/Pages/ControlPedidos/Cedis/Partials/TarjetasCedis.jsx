@@ -1,4 +1,5 @@
 import PiezasAdicionalesArea from '../../Partials/PiezasAdicionalesArea';
+import { etiquetaMarcarEnviado } from './etiquetaEnvioCedis';
 import CambioATiendaArea from '../../Partials/CambioATiendaArea';
 import React, { useState } from 'react';
 import axios from 'axios';
@@ -286,7 +287,7 @@ function TarjetaPedido({
                         className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
                     >
                         <Truck className="w-4 h-4" />
-                        {requiereSeleccionEnvios ? 'Elegir envíos a recolectar' : 'Marcar enviado'}
+                        {requiereSeleccionEnvios ? 'Elegir envíos a recolectar' : etiquetaMarcarEnviado(pedido)}
                     </button>
                 )}
                 {puedeReabrirEnvio && (

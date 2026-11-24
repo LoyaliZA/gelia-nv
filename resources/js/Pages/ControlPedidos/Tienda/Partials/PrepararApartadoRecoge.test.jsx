@@ -196,7 +196,7 @@ it('en la consulta de tienda responde disponibilidad y separa solo la selección
     expect(container.textContent).toContain('Captura del pedido');
     expect(container.querySelector('#tienda-productos')).toBeNull();
     await elegir('Con detalle o faltante');
-    expect(container.textContent).toContain('Buscar o escanear producto');
+    expect(container.textContent).toContain('Agregar productos con detalle');
     expect(button('Agregar pieza')).toBeUndefined();
     expect(container.querySelector('[aria-label="Productos con detalle o faltantes"]')).not.toBeNull();
     expect(container.querySelector('#tienda-evidencias')).toBeNull();

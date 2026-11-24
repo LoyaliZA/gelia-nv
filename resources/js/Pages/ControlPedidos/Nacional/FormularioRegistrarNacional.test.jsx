@@ -131,7 +131,7 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
         select.value = '9';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Actualizar paquetería'));
+    const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Seleccionar paquetería'));
     expect(boton.disabled).toBe(false);
     await act(async () => boton.click());
     expect(axios.post).toHaveBeenCalledWith(

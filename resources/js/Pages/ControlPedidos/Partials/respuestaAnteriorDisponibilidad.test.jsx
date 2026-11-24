@@ -24,6 +24,7 @@ const base = (extra = {}) => ({
     ],
     ...extra,
 });
+const estadosCambios = () => [...container.querySelectorAll('[aria-label="Productos de la respuesta"] [data-origen="cambio"] .tienda-respuesta-estado')].map(e => e.textContent);
 it('Tienda: una pieza guardada por persistir_unidad no se mezcla con la respuesta anterior', async () => {
     await act(() => root.render(<ConsultaSolicitudTienda pedido={base()} />));
     expect(container.textContent).toContain('Pieza de la respuesta anterior');
@@ -104,8 +105,8 @@ it('varias piezas guardadas conservan pendientes, evidencias y fecha anterior al
  const render = async p => act(() => root.render(<ConsultaSolicitudTienda pedido={p} />));
  for (const lectura of [pedido, structuredClone(pedido)]) {
   await render(lectura);
-  expect([...container.querySelectorAll('.consulta-cambio-estado')].map(e => e.textContent)).toEqual(Array(4).fill('Pendiente de revisión'));
-  expect(container.querySelector('.consulta-cambios-actuales')).toBeNull();
+  expect(estadosCambios()).toEqual(Array(4).fill('Por revisar'));
+  expect(container.textContent).not.toContain('Cambios del pedido');
   expect(container.textContent).toContain('Pieza de la respuesta anterior');
   expect(container.textContent).not.toContain('Pieza revisada a medias');
   expect(container.textContent).not.toContain('Faltante todavía no enviado');
@@ -121,8 +122,7 @@ it('varias piezas guardadas conservan pendientes, evidencias y fecha anterior al
  s.anexo_sin_remision.forEach(a => { a.pendiente_revision = false; a.respondida_at = '2026-11-03T10:00:00Z'; });
  s.revision_disponibilidad = { ...s.revision_disponibilidad, actualizacion_pendiente: false, respondida_at: '2026-11-03T10:00:00Z' };
  await render(enviada);
- expect([...container.querySelectorAll('.consulta-cambio-estado')].map(e => e.textContent)).toEqual(['Con piezas reportadas', 'Todo OK', 'Con piezas reportadas', 'Todo OK']);
- expect(container.querySelectorAll('.consulta-cambios-actuales .consulta-cambio')).toHaveLength(4);
+ expect(estadosCambios()).toEqual(['Con piezas reportadas', 'Todo OK', 'Con piezas reportadas', 'Todo OK']);
  expect(container.querySelector('img[src="/foto-borrador.png"]')).not.toBeNull();
  expect(container.textContent).toContain('Faltante todavía no enviado');
 });

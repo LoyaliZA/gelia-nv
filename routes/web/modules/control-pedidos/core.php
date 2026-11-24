@@ -87,6 +87,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/confirmar-pieza-nacional', [PedidoBmaController::class, 'confirmarPiezaNacional'])->name('confirmar_pieza_nacional');
         Route::post('/{pedidoBma}/anexo-extraordinario', [PedidoBmaController::class, 'anexoExtraordinario'])->name('anexo_extraordinario');
         Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
+        Route::post('/{pedidoBma}/cotizacion-nacional/vista-previa', [PedidoBmaController::class, 'vistaPreviaCotizacionNacional'])->name('vista_previa_cotizacion_nacional');
         Route::post('/{pedidoBma}/custodia-nacional', [PedidoBmaController::class, 'custodiaNacional'])->name('custodia_nacional');
         Route::post('/{pedidoBma}/remision-caja', [PedidoBmaController::class, 'remisionCajaNacional'])->name('remision_caja_nacional');
         Route::post('/{pedidoBma}/cambio-tienda-nacional', [PedidoBmaController::class, 'cambioTiendaNacional'])->name('cambio_tienda_nacional');

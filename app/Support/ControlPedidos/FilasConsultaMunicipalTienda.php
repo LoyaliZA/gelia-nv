@@ -56,6 +56,12 @@ final class FilasConsultaMunicipalTienda
             }
         }
         if (in_array($tab, ['TODOS', 'ATENDIDOS'], true)) {
+            foreach (AlcanceConsultaMunicipal::atendidasTienda($usuario, 200) as $consulta) {
+                if (! $coincide($consulta)) {
+                    continue;
+                }
+                $filas[] = self::filaConsulta($consulta, 'RESPONDIDA', $consulta['cerrada'] ? 'Consulta cerrada' : 'Consulta respondida');
+            }
             foreach (AlcanceConsultaMunicipal::empacadosTienda($usuario, 200) as $pedido) {
                 if (! $coincide($pedido)) {
                     continue;
@@ -93,13 +99,13 @@ final class FilasConsultaMunicipalTienda
     }
 
     /** @param array<string, mixed> $consulta */
-    private static function filaConsulta(array $consulta): array
+    private static function filaConsulta(array $consulta, string $estado = 'PENDIENTE', string $estadoLabel = 'Consulta pendiente'): array
     {
         return [
             'id' => 'consulta-'.$consulta['id'],
             'tipo_fila' => self::TIPO,
-            'estado' => 'PENDIENTE',
-            'estado_label' => 'Consulta pendiente',
+            'estado' => $estado,
+            'estado_label' => $estadoLabel,
             'solicitada_at' => $consulta['enviada_at'],
             'fecha_limite' => null,
             'piezas_solicitadas' => null,

@@ -1,4 +1,5 @@
 import { esRegistroMunicipal } from '../../Municipal/terminalMunicipal';
+import { etiquetaMarcarEnviado } from './etiquetaEnvioCedis';
 import IntegracionFisicaConjunto from '../../Municipal/IntegracionFisicaConjunto';
 import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
 import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
@@ -202,7 +203,7 @@ export default function ModalDetalleCedis({
         && idsSeleccionados.length === cajasPendientes.length
         && cajasPendientes.every((c) => idsSeleccionados.includes(Number(c.id)));
     const etiquetaBotonEnviar = cajasOrdenadas.length === 0 || (cajasPendientes.length > 0 && seleccionCompletaPendientes)
-        ? 'Marcar enviado'
+        ? etiquetaMarcarEnviado(pedido)
         : 'Marcar recolectadas';
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;

@@ -6,6 +6,7 @@ import AccionesRapidasDisponibilidad from '../Partials/AccionesRapidasDisponibil
 import { MiniaturaDocumento } from '../Partials/ModalVistaPreviaDocumento';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import RespuestaDisponibilidadPedido from '../Partials/RespuestaDisponibilidadPedido';
+import { filasDeCambios } from '../Partials/cambiosDisponibilidad';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
 import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import { vinculoFisicoNacional } from './superficieNacional';
@@ -113,6 +114,9 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         documentos: (pedido?.documentos || []).filter((doc) => doc.tipo === 'evidencia_condicion' && doc.activo !== false && doc.url
             && doc.relacion_tipo === 'revision_producto' && Number(doc.relacion_id) === Number(pieza.id)),
     }));
+    const solicitudCambios = pedido?.solicitud_preparacion || {};
+    const cambios = filasDeCambios(solicitudCambios, pedido?.documentos || [], { revisionIdsEnTabla: new Set(filas.map((fila) => Number(fila.id))) });
+    const avisoReapertura = solicitudCambios.reapertura_disponibilidad ? `Consulta reabierta por ${solicitudCambios.reapertura_disponibilidad.por}.` : '';
     const conPago = Boolean(pedido?.numero_remision || pedido?.pago_validado_at);
     const hayMercancia = respondida;
 
@@ -192,6 +196,8 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                     estado={filas.length ? (conDetalle ? 'excepciones_pendientes' : 'sin_excepciones') : null}
                     aceptacionVigente={!actualizando}
                     mostrarCaptura={false}
+                    cambios={cambios}
+                    avisoReapertura={avisoReapertura}
                     filas={filas}
                     cantidad={filas.length ? filas.reduce((total, fila) => total + numero(fila.cantidad || 0), 0) : null}
                     labelCantidad="Unidades encontradas"
@@ -215,6 +221,9 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                         </button>
                     )}
                 </RespuestaDisponibilidadPedido>
+            )}
+            {!respondida && (cambios.actuales.length > 0 || cambios.anteriores.length > 0) && (
+                <RespuestaDisponibilidadPedido titulo="Cambios solicitados" ariaLabel="Cambios solicitados" estado={null} cantidad={null} mostrarCaptura={false} cambios={cambios} avisoReapertura={avisoReapertura} onVer={onVer} />
             )}
             {cerrada && (
                 <AvisoOperativoPedido label="Consulta cerrada" tono="success" icon={CheckCircle2}>

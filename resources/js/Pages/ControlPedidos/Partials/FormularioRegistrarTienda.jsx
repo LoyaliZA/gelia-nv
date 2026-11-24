@@ -1744,6 +1744,7 @@ export default function FormularioRegistrarTienda({
                 bloqueado={estadoArchivo === 'cargando' || guardando}
                 importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
                 puedeAgregarDireccion={Boolean(superAdmin || (auth?.user?.permissions || []).includes('clientes.direcciones.crear'))}
+                puedeGenerarEnlace={Boolean(superAdmin || (auth?.user?.permissions || []).includes('clientes.direcciones.generar_enlace'))}
                 campoImporteMercancia={(
                     <div className="min-w-0">
                         <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>

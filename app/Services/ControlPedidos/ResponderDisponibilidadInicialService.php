@@ -652,15 +652,12 @@ class ResponderDisponibilidadInicialService
             if ($cedis && $condicion === 'faltante' && $detalle === '') {
                 $detalle = 'Sin existencias';
             }
-            if ($detalle === '' && (! $cedis || (! $unica && ! $mejor))) {
-                throw ValidationException::withMessages(["excepciones.{$indice}.detalle" => 'Describa el defecto de la unidad reportada.']);
+            if ($cedis && $condicion === 'detalle' && ! $unica && ! $mejor) {
+                throw ValidationException::withMessages(["excepciones.{$indice}.condicion" => 'Indique el estado de la pieza: mejor pieza, última pieza o sin existencias.']);
             }
             $fotos = array_values(array_filter($fila['evidencias'] ?? [], fn ($archivo) => $archivo instanceof UploadedFile));
             if ($condicion === 'faltante' && $fotos !== []) {
                 throw ValidationException::withMessages(["excepciones.{$indice}.evidencias" => 'Una pieza sin existencias no admite fotos del defecto.']);
-            }
-            if (count($fotos) > 5) {
-                throw ValidationException::withMessages(["excepciones.{$indice}.evidencias" => 'Adjunte hasta 5 fotos por producto.']);
             }
             if ($condicion === 'faltante' && ($unica || $mejor)) {
                 throw ValidationException::withMessages(["excepciones.{$indice}.condicion" => 'Sin existencias no admite atributos de una pieza disponible.']);

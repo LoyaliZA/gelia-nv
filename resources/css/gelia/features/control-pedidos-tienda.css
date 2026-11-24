@@ -1427,6 +1427,24 @@
     min-width: 0;
 }
 
+.tienda-respuesta-fila[data-tono] {
+    --tono-fila: var(--color-aviso);
+
+    border-color: color-mix(in srgb, var(--tono-fila) 40%, var(--theme-border));
+    border-left: 4px solid var(--tono-fila);
+    background: color-mix(in srgb, var(--tono-fila) 7%, var(--theme-element-bg));
+}
+
+.tienda-respuesta-fila[data-tono='exito'] { --tono-fila: var(--color-exito); }
+.tienda-respuesta-fila[data-tono='peligro'] { --tono-fila: var(--color-peligro); }
+
+.tienda-respuesta-movimientos > summary {
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--theme-text-muted);
+    margin-bottom: 0.5rem;
+}
+
 .tienda-respuesta-producto {
     grid-column: 1 / -1;
     display: flex;

@@ -6,6 +6,11 @@ import axios from 'axios';
 import ContinuacionEnvioNacional from './ContinuacionEnvioNacional';
 
 vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }));
+vi.mock('../Partials/ModalGenerarLinkDireccion', () => ({
+    default: ({ abierto, clientePreseleccionado, onEnlaceGenerado }) => (abierto
+        ? <div role="dialog" aria-label="Link de dirección">Enlace para {clientePreseleccionado?.nombre}<button type="button" onClick={onEnlaceGenerado}>Enlace generado</button></div>
+        : null),
+}));
 vi.mock('../Partials/SeccionPagosExhibicion', () => ({
     default: ({ omiteEnvio, costoEnvio }) => <p>{omiteEnvio ? 'Solo mercancía' : `Flete guardado ${costoEnvio}`}</p>,
 }));
@@ -104,7 +109,7 @@ const abrirCotizacion = async () => act(async () => { host.querySelector('summar
 it('sin direcciones permite agregar una dentro del pedido y la deja elegida', async () => {
     await renderSinDirecciones({ puedeAgregarDireccion: true });
     await abrirCotizacion();
-    expect(host.textContent).toContain('no tiene direcciones verificadas');
+    expect(host.textContent).toContain('no tiene dirección principal ni adicional');
     await act(async () => boton('Agregar dirección').click());
 
     const campos = [...document.body.querySelectorAll('[role="dialog"] input[type="text"]')];
@@ -174,4 +179,128 @@ it('muestra el desglose de mercancía, flete, reexpedición y seguro tras cotiza
     expect(desglose.textContent).toContain('Flete$180.00');
     expect(desglose.textContent).toContain('Reexpedición$150.00');
     expect(desglose.textContent).toContain('Seguro$0.00');
+});
+
+const escribirFlete = (valor) => escribir(host.querySelector('[aria-label="Costo de envío"] input[type="number"]'), valor);
+const avanzar = async (ms = 500) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+const previa = (extra = {}) => ({ data: { venta: 100, flete: 200, reexpedicion: 0, guia: 200, seguro: 0, total: 300, cobertura_seguro: true, ...extra } });
+
+it('separa en contenedores propios la dirección y el costo de envío', async () => {
+    await render();
+    const direccion = host.querySelector('[aria-label="Dirección de entrega"]');
+    const costo = host.querySelector('[aria-label="Costo de envío"]');
+    expect(direccion).not.toBeNull();
+    expect(costo).not.toBeNull();
+    expect(direccion.contains(costo)).toBe(false);
+    expect(direccion.querySelector('select')).not.toBeNull();
+    expect(costo.textContent).toContain('Flete de caja 1');
+    expect(costo.textContent).toContain('Incluir seguro');
+    expect(direccion.textContent).not.toContain('Flete de caja');
+});
+
+it('deja el seguro apagado por defecto', async () => {
+    await render();
+    expect(host.querySelector('[aria-label="Costo de envío"] input[type="checkbox"]').checked).toBe(false);
+});
+
+it('no ofrece el seguro cuando la paquetería no tiene cobertura', async () => {
+    await act(async () => root.render(
+        <ContinuacionEnvioNacional pedido={pedido} onPedido={vi.fn()} pendiente={false}
+            catalogos={{ ...catalogos, paqueterias: [{ id: 2, nombre: 'PAQUETEXPRESS', cobertura_seguro: false }] }} />,
+    ));
+    expect(host.querySelector('input[type="checkbox"]')).toBeNull();
+});
+
+it('muestra el desglose en vivo con el seguro que calcula el servidor', async () => {
+    vi.useFakeTimers();
+    try {
+        axios.post.mockResolvedValue(previa({ seguro: 30, total: 330 }));
+        await render();
+        await act(async () => host.querySelector('[aria-label="Costo de envío"] input[type="checkbox"]').click());
+        await escribirFlete('200');
+        await avanzar();
+        expect(axios.post).toHaveBeenCalledWith('/control-pedidos/9/cotizacion-nacional/vista-previa', expect.objectContaining({
+            catalogo_paqueteria_id: 2,
+            aplica_seguro: true,
+            lineas: [{ uuid_operativo: 'caja-1', costo_envio: 200 }],
+        }), expect.anything());
+        const desglose = host.querySelector('[aria-label="Desglose de la cotización"]');
+        expect(desglose.textContent).toContain('Seguro$30.00');
+        expect(desglose.textContent).toContain('Total$330.00');
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('no consulta ni muestra NaN mientras el flete está vacío', async () => {
+    vi.useFakeTimers();
+    try {
+        await render();
+        await escribirFlete('');
+        await avanzar();
+        expect(axios.post).not.toHaveBeenCalled();
+        expect(host.textContent).not.toContain('NaN');
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('descarta una respuesta vieja cuando llega después de una más reciente', async () => {
+    vi.useFakeTimers();
+    try {
+        let soltarPrimera;
+        axios.post
+            .mockImplementationOnce(() => new Promise((resolver) => { soltarPrimera = () => resolver(previa({ flete: 100, total: 200 })); }))
+            .mockResolvedValueOnce(previa({ flete: 200, total: 300 }));
+        await render();
+        await escribirFlete('100');
+        await avanzar();
+        await escribirFlete('200');
+        await avanzar();
+        await act(async () => soltarPrimera());
+        expect(host.querySelector('[aria-label="Desglose de la cotización"]').textContent).toContain('Total$300.00');
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('avisa dentro del pedido que falta una dirección y ofrece agregarla o enviar el enlace', async () => {
+    await renderSinDirecciones({ puedeAgregarDireccion: true, puedeGenerarEnlace: true });
+    await abrirCotizacion();
+    const aviso = host.querySelector('[aria-label="Dirección de entrega"] [role="status"]');
+    expect(aviso.textContent).toContain('no tiene dirección principal ni adicional');
+    expect(boton('Agregar dirección')).toBeDefined();
+    expect(boton('Enviar enlace al cliente')).toBeDefined();
+});
+
+it('con solo el permiso de enlaces ofrece el enlace y no el alta manual', async () => {
+    await renderSinDirecciones({ puedeGenerarEnlace: true });
+    await abrirCotizacion();
+    expect(boton('Agregar dirección')).toBeUndefined();
+    expect(boton('Enviar enlace al cliente')).toBeDefined();
+});
+
+it('sin ningún permiso de direcciones solo avisa y pide ayuda a un auxiliar', async () => {
+    await renderSinDirecciones();
+    await abrirCotizacion();
+    expect(boton('Enviar enlace al cliente')).toBeUndefined();
+    expect(host.textContent).toContain('auxiliar');
+});
+
+it('abre el enlace para el cliente del pedido', async () => {
+    await renderSinDirecciones({ puedeGenerarEnlace: true, pedido: { ...pedido, cliente: { numero_cliente: '04950', nombre: 'Ana Ruiz' } } });
+    await abrirCotizacion();
+    await act(async () => boton('Enviar enlace al cliente').click());
+    expect(document.body.querySelector('[role="dialog"]').textContent).toContain('Enlace para Ana Ruiz');
+});
+
+it('vuelve a consultar las direcciones cuando el cliente ya registró la suya', async () => {
+    await renderSinDirecciones({ puedeGenerarEnlace: true });
+    await abrirCotizacion();
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    axios.get.mockResolvedValue({ data: { direcciones: [{ id: 20, es_principal: false, etiqueta: 'Casa', nombre_destinatario: 'Ana Ruiz', codigo_postal: '86000' }] } });
+    await act(async () => boton('Actualizar direcciones').click());
+    expect(axios.get).toHaveBeenCalledTimes(2);
+    expect(host.querySelector('[aria-label="Dirección de entrega"] select').value).toBe('20');
+    expect(boton('Actualizar direcciones')).toBeUndefined();
 });

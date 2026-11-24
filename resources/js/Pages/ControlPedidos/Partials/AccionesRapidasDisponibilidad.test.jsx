@@ -49,9 +49,9 @@ it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste
 it('los ajustes guardados permanecen visibles cuando la captura avanzada está plegada', async () => {
     const pedido = { id: 1, solicitud_preparacion: { revision_disponibilidad: { estado: 'excepciones_pendientes' }, anexo_sin_remision: [{ descripcion: 'Alternativa enviada', entrada: 'documento' }] } };
     await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos" />));
-    expect(container.textContent).toContain('Alternativa enviada'); expect(container.textContent).toContain('Cambios del pedido');
-    expect(container.querySelector('.consulta-cambios-actuales')).toBeNull();
-    expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Alternativa enviada');
+    const fila = container.querySelector('[data-origen="cambio"]');
+    expect(fila.textContent).toContain('Alternativa enviada'); expect(fila.textContent).toContain('Por revisar'); expect(fila.getAttribute('data-tono')).toBe('aviso');
+    expect(container.textContent).not.toContain('Cambios del pedido');
     expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
 });
 
@@ -65,13 +65,13 @@ it('en Ventas despliega la respuesta del almacén y contrae anexos y retiros ped
   retiro_piezas:[{estado:'pendiente',solicitado_at:'2026-11-06T11:05:00Z',piezas:[{descripcion:'Retiro pedido',sku:'R',cantidad:1}]}],
  }};
  await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos"/>));
- const abiertos=container.querySelector('.consulta-cambios-actuales').textContent;
- expect(abiertos).toContain('Pieza respondida');
- expect(abiertos).not.toContain('Anexo pedido');
- expect(abiertos).not.toContain('Retiro pedido');
- expect(container.querySelector('summary').textContent).toBe('Movimientos (2)');
- expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Anexo pedido');
- expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Retiro pedido');
+ const tabla=container.querySelector('[aria-label="Productos de la respuesta"]');
+ const abiertos=[...tabla.querySelectorAll('[data-origen="cambio"]')].map(f=>[f.textContent,f.getAttribute('data-tono')]);
+ expect(abiertos).toHaveLength(3);
+ expect(abiertos[0][0]).toContain('Pieza respondida'); expect(abiertos[0][1]).toBe('exito');
+ expect(abiertos[1][0]).toContain('Anexo pedido'); expect(abiertos[1][1]).toBe('aviso');
+ expect(abiertos[2][0]).toContain('Retiro pedido'); expect(abiertos[2][1]).toBe('peligro');
+ expect(container.querySelector('.tienda-respuesta-movimientos')).toBeNull();
 });
 
 it('genera la clave contra duplicados cuando el acceso HTTP no ofrece randomUUID', () => {

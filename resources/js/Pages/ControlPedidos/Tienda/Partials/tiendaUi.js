@@ -47,7 +47,9 @@ export function accionPrincipalTienda(tarea, puedeTomar = false) {
             ? { label: 'Marcar empacado', atender: false }
             : { label: 'Ver', atender: false };
     }
-    if (tarea.tipo_fila === 'consulta_municipal') return { label: 'Revisar disponibilidad', atender: false };
+    if (tarea.tipo_fila === 'consulta_municipal') {
+        return { label: tarea.estado === 'PENDIENTE' ? 'Revisar disponibilidad' : 'Ver', atender: false };
+    }
     if ((tarea.pedido?.anexos_pendientes || []).length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente) return { label: 'Actualización de consulta', atender: true };
     const atender = tarea.estado === 'PENDIENTE' && (tarea.puede_tomar ?? puedeTomar);
     if (atender) return { label: 'Atender pedido', atender: true };

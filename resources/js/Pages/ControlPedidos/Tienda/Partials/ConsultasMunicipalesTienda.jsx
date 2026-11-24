@@ -17,17 +17,17 @@ export async function enviarRespuestaMunicipal(pedidoId, form, { onBorrador, onE
     onEnviado?.();
 }
 
-function PanelMunicipal({ pedido, onPedido, onCerrar }) {
+function PanelMunicipal({ pedido, onPedido, onCerrar, soloLectura = false }) {
     return <PanelRespuestaDisponibilidad key={pedido.id} modo="dialogo" abierto
         pedido={pedido} documentos={pedido.documentos || []}
         revision={pedido.solicitud_preparacion?.revision_disponibilidad}
-        origen="Tienda" puedeResponder tomada onClose={onCerrar}
+        origen="Tienda" puedeResponder={!soloLectura} tomada onClose={onCerrar}
         onEnviar={(form) => enviarRespuestaMunicipal(pedido.id, form, { onBorrador: onPedido, onEnviado: onCerrar })} />;
 }
 
 /** Consultas municipales pendientes que se preparan en tienda; el almacén indica la sucursal que responde. */
 /** Abre el panel de respuesta de una consulta municipal desde una fila de la bandeja. */
-export function PanelConsultaMunicipalTienda({ pedidoId, onClose }) {
+export function PanelConsultaMunicipalTienda({ pedidoId, onClose, soloLectura = false }) {
     const [pedido, setPedido] = useState(null);
     const [error, setError] = useState('');
     React.useEffect(() => {
@@ -39,7 +39,7 @@ export function PanelConsultaMunicipalTienda({ pedidoId, onClose }) {
     }, [pedidoId]);
     if (error) return <p className="text-sm theme-text-aviso" role="alert">{error} <button type="button" className="underline" onClick={onClose}>Cerrar</button></p>;
     if (!pedido) return null;
-    return <PanelMunicipal pedido={pedido} onPedido={setPedido} onCerrar={onClose} />;
+    return <PanelMunicipal pedido={pedido} onPedido={setPedido} onCerrar={onClose} soloLectura={soloLectura} />;
 }
 
 export default function ConsultasMunicipalesTienda({ pedidos = [], vacio = null }) {

@@ -43,7 +43,7 @@ function mensajeDe(error, reserva) {
     return lista[0] || datos?.message || reserva;
 }
 
-export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, puedeAgregarDireccion = false, children }) {
+export default function FormularioRegistrarNacional({ pedido, catalogos = {}, guardar, onPedido, onVer, onDirtyChange, onBusyChange, bloqueado, importePendiente, campoImporteMercancia, puedeAgregarDireccion = false, puedeGenerarEnlace = false, children }) {
     const [actual, setActual] = useState(pedido);
     const [paqueteriaId, setPaqueteriaId] = useState(String(pedido?.catalogo_paqueteria_id || ''));
     const almacenesSalida = useMemo(() => almacenesSalidaNacional(catalogos.almacenes), [catalogos.almacenes]);
@@ -440,8 +440,8 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     referenciaMercancia={listaPiezas(mercancia, false)} />
             )}
             {puedeCambiarPaqueteria && (
-                <section className="registrar-tienda-panel space-y-2" aria-label="Cambiar paquetería">
-                    <label className={THEME_LABEL} htmlFor="paqueteria-posterior">Cambiar paquetería</label>
+                <section className="registrar-tienda-panel space-y-2" aria-label="Seleccionar paquetería">
+                    <label className={THEME_LABEL} htmlFor="paqueteria-posterior">Seleccionar paquetería</label>
                     <select
                         id="paqueteria-posterior"
                         className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
@@ -465,7 +465,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     </select>
                     <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px] mt-2`} disabled={enviando || !paqueteriaPosterior}
                         title={!paqueteriaPosterior ? 'Elija primero la nueva paquetería' : undefined} onClick={actualizarPaqueteria}>
-                        {enviando ? 'Actualizando…' : 'Actualizar paquetería'}
+                        {enviando ? 'Guardando…' : 'Seleccionar paquetería'}
                     </button>
                 </section>
             )}
@@ -475,6 +475,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     pedido={actual} catalogos={catalogos}
                     pendiente={elegida.nombre === 'PAQ. PENDIENTE'} importePendiente={importePendiente} onPedido={adoptar}
                     puedeAgregarDireccion={puedeAgregarDireccion}
+                    puedeGenerarEnlace={puedeGenerarEnlace}
                 />
             )}
             {conComplemento && !cambio && (
