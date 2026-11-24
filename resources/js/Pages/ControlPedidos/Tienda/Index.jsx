@@ -12,6 +12,7 @@ import ListadoTienda from './Partials/ListadoTienda';
 import ModalPreparacionTienda from './Partials/ModalPreparacionTienda';
 import AvisoResultadoTienda from './Partials/AvisoResultadoTienda';
 import { PanelConsultaMunicipalTienda } from './Partials/ConsultasMunicipalesTienda';
+import ModalDetallePedido from '../Partials/ModalDetallePedido';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 
 
@@ -27,14 +28,22 @@ export default function Index({
     const [modalTarea, setModalTarea] = useState(null);
     const tareaDesdeFiltro = useRef(null);
     const [consultaMunicipalId, setConsultaMunicipalId] = useState(null);
+    const [pedidoDetalle, setPedidoDetalle] = useState(null);
+    const abrirVerPedido = (tarea) => {
+        const id = tarea?.pedido?.id;
+        if (!id) return;
+        window.axios.get(route('control_pedidos.disponibilidad_tienda.show', id), { headers: { Accept: 'application/json' } })
+            .then(({ data }) => setPedidoDetalle(data))
+            .catch((e) => window.alert(e.response?.data?.message || 'No se pudo abrir el pedido.'));
+    };
+    const empacarMunicipal = (tarea) => {
+        if (!window.confirm(`¿Marcar como empacado el pedido ${tarea.pedido.folio_visible || tarea.pedido.folio}? El flujo municipal concluye en Tienda.`)) return;
+        window.axios.post(route('control_pedidos.municipal.empacar_tienda', tarea.pedido.id), {}, { headers: { Accept: 'application/json' } })
+            .then(() => onActualizar())
+            .catch((e) => window.alert(e.response?.data?.message || e.response?.data?.errors?.pedido?.[0] || 'No se pudo marcar como empacado.'));
+    };
     const abrirPreparacion = (tarea, atender = false) => {
-        if (tarea.tipo_fila === 'empaque_municipal') {
-            if (!window.confirm(`¿Marcar como empacado el pedido ${tarea.pedido.folio_visible || tarea.pedido.folio}? El flujo municipal concluye en Tienda.`)) return;
-            window.axios.post(route('control_pedidos.municipal.empacar_tienda', tarea.pedido.id), {}, { headers: { Accept: 'application/json' } })
-                .then(() => onActualizar())
-                .catch((e) => window.alert(e.response?.data?.message || e.response?.data?.errors?.pedido?.[0] || 'No se pudo marcar como empacado.'));
-            return;
-        }
+        if (tarea.tipo_fila === 'empaque_municipal') { abrirVerPedido(tarea); return; }
         if (tarea.tipo_fila === 'consulta_municipal') { setConsultaMunicipalId(tarea.pedido.id); return; }
         setModalTarea({ id: tarea.id, atender });
     };
@@ -123,6 +132,8 @@ export default function Index({
 
                 <ListadoTienda
                     onAbrir={abrirPreparacion}
+                    onVer={abrirVerPedido}
+                    onEmpacar={empacarMunicipal}
                     tareas={tareasVista}
                     auth={auth}
                     tabLabel={tabLabel}
@@ -133,6 +144,7 @@ export default function Index({
                 />
             </GeliaPageShell>
             {consultaMunicipalId && <PanelConsultaMunicipalTienda pedidoId={consultaMunicipalId} onClose={() => { setConsultaMunicipalId(null); onActualizar(); }} />}
+            {pedidoDetalle && <ModalDetallePedido abierto pedido={pedidoDetalle} onClose={() => setPedidoDetalle(null)} />}
             {modalTarea && <ModalPreparacionTienda key={modalTarea.id} tareaId={modalTarea.id} atender={modalTarea.atender} auth={auth}
                 onClose={() => { setModalTarea(null); onActualizar(); }} onActualizado={onActualizar} />}
         </AppLayout>

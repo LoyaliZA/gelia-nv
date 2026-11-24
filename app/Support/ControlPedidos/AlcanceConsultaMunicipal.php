@@ -60,26 +60,51 @@ final class AlcanceConsultaMunicipal
     }
 
     /**
-     * Municipales aprobados cuyo almacén es PDV: se empacan en Tienda. Con empacado_at el flujo concluye en Tienda.
+     * Municipales aprobados cuyo almacén es PDV: se empacan en Tienda.
      *
      * @return array<int, array<string, mixed>>
      */
     public static function porEmpacarTienda(User $usuario, int $limite = 50): array
     {
+        return self::filasEmpaqueTienda($usuario, $limite, empacados: false);
+    }
+
+    /**
+     * Municipales de PDV ya empacados: visibles en Atendidos, sin reabrir CEDIS ni custodia.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function empacadosTienda(User $usuario, int $limite = 50): array
+    {
+        return self::filasEmpaqueTienda($usuario, $limite, empacados: true);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function filasEmpaqueTienda(User $usuario, int $limite, bool $empacados): array
+    {
         if (! $usuario->can('control_pedidos.municipal.responder_consulta')) {
             return [];
         }
+        $fase = $empacados
+            ? \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO
+            : \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_EN_CEDIS;
         $query = PedidoBma::query()
             ->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
             ->where('solicitud_preparacion_json->consulta_municipal->area', 'tienda')
             ->where('solicitud_preparacion_json->consulta_municipal->estado', ConsultaMunicipal::CERRADA)
-            ->whereNull('empacado_at')
             ->whereNotNull('pago_validado_at')
             ->whereHas('remision')
-            ->whereHas('estatus', fn ($e) => $e->where('fase_ciclo', \App\Models\ControlPedidos\CatalogoEstatusPedido::FASE_EN_CEDIS));
+            ->whereHas('estatus', fn ($e) => $e->where('fase_ciclo', $fase));
+        if ($empacados) {
+            $query->whereNotNull('empacado_at')->orderByDesc('empacado_at');
+        } else {
+            $query->whereNull('empacado_at')->orderBy('id');
+        }
         self::aplicarTienda($query, $usuario);
 
-        return $query->with(['cliente:id,nombre,numero_cliente', 'paqueteria:id,nombre'])->orderBy('id')->limit($limite)->get()
+        return $query->with(['cliente:id,nombre,numero_cliente', 'paqueteria:id,nombre'])->limit($limite)->get()
             ->map(function (PedidoBma $pedido) {
                 $almacenId = ConsultaMunicipal::seguimiento($pedido)['almacen_id'] ?? null;
                 $visible = \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido);
@@ -91,6 +116,7 @@ final class AlcanceConsultaMunicipal
                     'folio_etiqueta' => $visible['etiqueta'],
                     'folio_remision' => $pedido->folio_remision,
                     'aprobado_at' => $pedido->pago_validado_at?->toIso8601String(),
+                    'empacado_at' => $pedido->empacado_at?->toIso8601String(),
                     'cliente' => $pedido->cliente?->nombre,
                     'terminal_destino' => $pedido->paqueteria?->nombre,
                     'almacen_id' => $almacenId,

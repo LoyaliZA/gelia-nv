@@ -23,7 +23,11 @@ $form = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/Mod
 $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionPagosExhibicion.jsx');
 $styles = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/pedidosBmaStyles.js');
 $tabla = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
-$detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
+$detalleDir = $root.'/resources/js/Pages/ControlPedidos/Partials';
+$detalle = file_get_contents($detalleDir.'/ModalDetallePedido.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/resolverModalidadDetalle.js')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleNacional.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleMunicipal.jsx');
 $routes = control_pedidos_routes_content($root);
 $controller = file_get_contents($root.'/app/Http/Controllers/ControlPedidos/PedidoBmaSaldosPagosController.php');
 $acciones = file_get_contents($root.'/app/Support/ControlPedidos/AccionesHistorialPedidoBma.php');

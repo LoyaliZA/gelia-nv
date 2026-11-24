@@ -17,7 +17,10 @@ export default function ReferenciaPedidoCompartido({ pedido, onVerGaleria, id, d
     return (
         <section id={id} tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
             <div className="flex items-center justify-between gap-2">
-                <h3 className="gelia-pedidos-seccion-titulo">Pedido compartido</h3>
+                <h3 className="gelia-pedidos-seccion-titulo">
+                    <span className="gelia-pedidos-seccion-icono"><FileText aria-hidden="true" /></span>
+                    Pedido compartido
+                </h3>
                 {principal?.url && <button type="button" onClick={() => ver(principal)} className={`${BTN_SECONDARY} inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs`}><FileText className="w-4 h-4" aria-hidden="true" /> Ampliar</button>}
             </div>
             <p className="text-xs theme-text-muted m-0">{descripcion}</p>

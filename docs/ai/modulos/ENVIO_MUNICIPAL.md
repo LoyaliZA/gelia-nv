@@ -46,7 +46,8 @@
 - [verificado] «Salida a terminal»: pide receptor; resguardo pasa a `entregado` con `snapshot_json.salida_terminal` (sin `ResguardoPdvEntrega`); el pedido recibe `solicitud_preparacion_json.salida_terminal`, que bloquea la conversión ordinaria, y la vendedora recibe una vez la alerta `pedido_salida_terminal` («Salida a terminal registrada», folio y receptor): `app/Services/PuntoVenta/Resguardos/RegistrarSalidaTerminalResguardoPdvService.php:222`. R-09 no la cuenta como entrega; una remisión salida responde «ya salió de custodia».
 - [verificado] Permisos para roles de Gerencia PDV (hoy solo Super Admin; Administración debe asignarlos): `control_pedidos.tienda.generar_caratula`, `control_pedidos.tienda.regenerar_caratula`, `control_pedidos.tienda.imprimir_caratula` y `punto_venta.resguardos.salida_terminal` (migración `2026_11_21_180000`).
 - [verificado] Cancelación ordinaria: no alcanza un municipal ya salido de CEDIS, porque `PedidoBma::puedeCancelarDirecto` rechaza FASE_ENVIADO: `app/Models/ControlPedidos/PedidoBma.php:1375`.
-- [pendiente] Rama «preparar en Tienda» (municipal con almacén PDV y marca): sin camino físico definido; requiere decisión de negocio.
+- [verificado] Observaciones físicas CEDIS/Tienda en Ventas usan `consulta_municipal.area` (no la tarea de preparación): `respondeComoTienda` en `pedidosBmaStyles.js`.
+- [verificado] M-F04: municipal de PDV se empaca en Preparación Tienda (`MarcarEmpacadoMunicipalTiendaService`). Ver abre el detalle (consignatario/remisión). Empacado sale de Pendientes y queda en Atendidos; no va a CEDIS ni a custodia: `AlcanceConsultaMunicipal::{porEmpacar,empacados}Tienda`, `EmpaqueMunicipalTiendaTest`.
 - [pendiente] Selector de sucursal destino en el registro municipal. Recorrido con cuentas reales y MySQL no probados; migraciones 170000 y 180000 pendientes en este servidor.
 
 ## Piezas adicionales (M-03b), cambio a recolección (M-07) y saldo de envío (S-06) (2026-11-23)
@@ -66,4 +67,4 @@
 
 - [verificado] M-02 abre el modal original de registro en modo conversión; no hay wizard de pasos. La reserva vive en `ModalFormPedido` y confirma por `/conversion-modalidad`.
 
-- Última verificación: 2026-11-23, sin commit, árbol de trabajo (M-03b, M-07, S-06; exhibición cubre envío).
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo (observaciones PDV; M-F04 Ver y Atendidos).

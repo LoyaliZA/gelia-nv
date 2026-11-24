@@ -17,7 +17,11 @@ $listarBma = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidos
 $listarAud = file_get_contents($root.'/app/Services/ControlPedidos/ListarPedidosAuditoriaService.php');
 $tablaAud = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Auditar/Partials/TablaAuditoria.jsx');
 $tablaPed = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/TablaPedidos.jsx');
-$detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
+$detalleDir = $root.'/resources/js/Pages/ControlPedidos/Partials';
+$detalle = file_get_contents($detalleDir.'/ModalDetallePedido.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleNacional.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleMunicipal.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/resolverModalidadDetalle.js');
 $cedis = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx');
 $pesaje = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalResponderPesaje.jsx');
 $revisar = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Auditar/Partials/ModalRevisarPedido.jsx');

@@ -15,7 +15,7 @@ final class FilasConsultaMunicipalTienda
 
     public const TIPO_EMPAQUE = 'empaque_municipal';
 
-    private const TABS = ['TODOS', 'PENDIENTES'];
+    private const TABS = ['TODOS', 'PENDIENTES', 'ATENDIDOS'];
 
     /** @return array<int, array<string, mixed>> */
     public static function filas(User $usuario, array $filtros): array
@@ -32,64 +32,36 @@ final class FilasConsultaMunicipalTienda
         }
         $q = mb_strtolower(trim((string) ($filtros['q'] ?? '')));
         $almacenId = (int) ($filtros['almacen_id'] ?? 0);
+        $coincide = function (array $fila) use ($q, $almacenId): bool {
+            if ($almacenId && (int) $fila['almacen_id'] !== $almacenId) {
+                return false;
+            }
+
+            return $q === '' || str_contains(mb_strtolower($fila['folio'].' '.$fila['folio_visible'].' '.$fila['folio_remision'].' '.$fila['cliente']), $q);
+        };
 
         $filas = [];
-        foreach (AlcanceConsultaMunicipal::pendientesTienda($usuario, 200) as $consulta) {
-            if ($almacenId && (int) $consulta['almacen_id'] !== $almacenId) {
-                continue;
+        if (in_array($tab, ['TODOS', 'PENDIENTES'], true)) {
+            foreach (AlcanceConsultaMunicipal::pendientesTienda($usuario, 200) as $consulta) {
+                if (! $coincide($consulta)) {
+                    continue;
+                }
+                $filas[] = self::filaConsulta($consulta);
             }
-            if ($q !== '' && ! str_contains(mb_strtolower($consulta['folio'].' '.$consulta['folio_visible'].' '.$consulta['folio_remision'].' '.$consulta['cliente']), $q)) {
-                continue;
+            foreach (AlcanceConsultaMunicipal::porEmpacarTienda($usuario, 200) as $pedido) {
+                if (! $coincide($pedido)) {
+                    continue;
+                }
+                $filas[] = self::filaEmpaque($pedido, 'PENDIENTE', 'Aprobado: por empacar', $pedido['aprobado_at']);
             }
-            $filas[] = [
-                'id' => 'consulta-'.$consulta['id'],
-                'tipo_fila' => self::TIPO,
-                'estado' => 'PENDIENTE',
-                'estado_label' => 'Consulta pendiente',
-                'solicitada_at' => $consulta['enviada_at'],
-                'fecha_limite' => null,
-                'piezas_solicitadas' => null,
-                'almacen' => ['id' => $consulta['almacen_id'], 'nombre' => $consulta['almacen']],
-                'modalidad' => ['codigo' => 'ENVIO_MUNICIPIO', 'nombre' => 'Envío municipal'],
-                'terminal_destino' => $consulta['terminal_destino'],
-                'pedido' => [
-                    'id' => $consulta['id'],
-                    'folio' => $consulta['folio'],
-                    'folio_visible' => $consulta['folio_visible'],
-                    'folio_etiqueta' => $consulta['folio_etiqueta'],
-                    'folio_remision' => $consulta['folio_remision'],
-                    'cliente_nombre' => $consulta['cliente'],
-                ],
-            ];
         }
-
-        foreach (AlcanceConsultaMunicipal::porEmpacarTienda($usuario, 200) as $pedido) {
-            if ($almacenId && (int) $pedido['almacen_id'] !== $almacenId) {
-                continue;
+        if (in_array($tab, ['TODOS', 'ATENDIDOS'], true)) {
+            foreach (AlcanceConsultaMunicipal::empacadosTienda($usuario, 200) as $pedido) {
+                if (! $coincide($pedido)) {
+                    continue;
+                }
+                $filas[] = self::filaEmpaque($pedido, 'RESPONDIDA', 'Empacado', $pedido['empacado_at'] ?? $pedido['aprobado_at']);
             }
-            if ($q !== '' && ! str_contains(mb_strtolower($pedido['folio'].' '.$pedido['folio_visible'].' '.$pedido['folio_remision'].' '.$pedido['cliente']), $q)) {
-                continue;
-            }
-            $filas[] = [
-                'id' => 'empaque-'.$pedido['id'],
-                'tipo_fila' => self::TIPO_EMPAQUE,
-                'estado' => 'PENDIENTE',
-                'estado_label' => 'Aprobado: por empacar',
-                'solicitada_at' => $pedido['aprobado_at'],
-                'fecha_limite' => null,
-                'piezas_solicitadas' => null,
-                'almacen' => ['id' => $pedido['almacen_id'], 'nombre' => $pedido['almacen']],
-                'modalidad' => ['codigo' => 'ENVIO_MUNICIPIO', 'nombre' => 'Envío municipal'],
-                'terminal_destino' => $pedido['terminal_destino'],
-                'pedido' => [
-                    'id' => $pedido['id'],
-                    'folio' => $pedido['folio'],
-                    'folio_visible' => $pedido['folio_visible'],
-                    'folio_etiqueta' => $pedido['folio_etiqueta'],
-                    'folio_remision' => $pedido['folio_remision'],
-                    'cliente_nombre' => $pedido['cliente'],
-                ],
-            ];
         }
 
         return $filas;
@@ -111,11 +83,62 @@ final class FilasConsultaMunicipalTienda
     /** @param array<string, mixed> $metricas */
     public static function sumarMetricas(array $metricas, User $usuario, array $filtros): array
     {
-        // Las métricas cuentan sobre todas las pestañas: se evalúa la consulta como visible en TODOS.
-        $n = count(self::filas($usuario, array_merge($filtros, ['tab' => 'TODOS'])));
-        $metricas['todos'] = (int) ($metricas['todos'] ?? 0) + $n;
-        $metricas['pendientes'] = (int) ($metricas['pendientes'] ?? 0) + $n;
+        $pendientes = count(self::filas($usuario, array_merge($filtros, ['tab' => 'PENDIENTES'])));
+        $atendidos = count(self::filas($usuario, array_merge($filtros, ['tab' => 'ATENDIDOS'])));
+        $metricas['todos'] = (int) ($metricas['todos'] ?? 0) + $pendientes + $atendidos;
+        $metricas['pendientes'] = (int) ($metricas['pendientes'] ?? 0) + $pendientes;
+        $metricas['atendidos'] = (int) ($metricas['atendidos'] ?? 0) + $atendidos;
 
         return $metricas;
+    }
+
+    /** @param array<string, mixed> $consulta */
+    private static function filaConsulta(array $consulta): array
+    {
+        return [
+            'id' => 'consulta-'.$consulta['id'],
+            'tipo_fila' => self::TIPO,
+            'estado' => 'PENDIENTE',
+            'estado_label' => 'Consulta pendiente',
+            'solicitada_at' => $consulta['enviada_at'],
+            'fecha_limite' => null,
+            'piezas_solicitadas' => null,
+            'almacen' => ['id' => $consulta['almacen_id'], 'nombre' => $consulta['almacen']],
+            'modalidad' => ['codigo' => 'ENVIO_MUNICIPIO', 'nombre' => 'Envío municipal'],
+            'terminal_destino' => $consulta['terminal_destino'],
+            'pedido' => [
+                'id' => $consulta['id'],
+                'folio' => $consulta['folio'],
+                'folio_visible' => $consulta['folio_visible'],
+                'folio_etiqueta' => $consulta['folio_etiqueta'],
+                'folio_remision' => $consulta['folio_remision'],
+                'cliente_nombre' => $consulta['cliente'],
+            ],
+        ];
+    }
+
+    /** @param array<string, mixed> $pedido */
+    private static function filaEmpaque(array $pedido, string $estado, string $estadoLabel, ?string $solicitadaAt): array
+    {
+        return [
+            'id' => 'empaque-'.$pedido['id'],
+            'tipo_fila' => self::TIPO_EMPAQUE,
+            'estado' => $estado,
+            'estado_label' => $estadoLabel,
+            'solicitada_at' => $solicitadaAt,
+            'fecha_limite' => null,
+            'piezas_solicitadas' => null,
+            'almacen' => ['id' => $pedido['almacen_id'], 'nombre' => $pedido['almacen']],
+            'modalidad' => ['codigo' => 'ENVIO_MUNICIPIO', 'nombre' => 'Envío municipal'],
+            'terminal_destino' => $pedido['terminal_destino'],
+            'pedido' => [
+                'id' => $pedido['id'],
+                'folio' => $pedido['folio'],
+                'folio_visible' => $pedido['folio_visible'],
+                'folio_etiqueta' => $pedido['folio_etiqueta'],
+                'folio_remision' => $pedido['folio_remision'],
+                'cliente_nombre' => $pedido['cliente'],
+            ],
+        ];
     }
 }

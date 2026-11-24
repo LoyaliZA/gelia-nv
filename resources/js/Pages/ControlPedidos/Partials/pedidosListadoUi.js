@@ -4,6 +4,7 @@ import {
     badgeEstatusEnvio,
     badgeGuiaLista,
     badgeObservacionesCedis,
+    respondeComoTienda,
     badgeSinExistencias,
     mostrarBadgeSinExistencias,
     badgesRetrasoSla,
@@ -46,10 +47,11 @@ export function badgesListaPedido(pedido) {
     }
 
     const fase = pedido.estatus?.fase_ciclo;
+    const respondeTienda = respondeComoTienda(pedido);
     const badgeEnvio = badgeEstatusEnvio(pedido.estatus_envio, {
         pedido,
         faseCiclo: fase,
-        respondeTienda: Boolean(pedido.usa_preparacion_tienda),
+        respondeTienda,
     });
     // En un envío municipal el transporte diferido se regulariza en terminal: no es un pendiente de la vendedora.
     const regularizacionMunicipal = municipal && pedido.estatus_envio === 'pendiente_regularizacion';
@@ -59,7 +61,7 @@ export function badgesListaPedido(pedido) {
     if (badgeRevision) items.push({ key: 'revision', ...badgeRevision });
 
     if (pedido.tiene_observaciones_fisicas && esFasePreVenta(fase)) {
-        const obs = badgeObservacionesCedis({ respondeTienda: Boolean(pedido.usa_preparacion_tienda) });
+        const obs = badgeObservacionesCedis({ respondeTienda });
         items.push({ key: 'obs', className: obs.className, label: obs.label });
     }
     if (mostrarBadgeSinExistencias(pedido)) {
