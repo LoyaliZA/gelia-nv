@@ -10,6 +10,8 @@ vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 let container, root;
 const faltante = { id: 8, descripcion_producto: 'Aroma agotado', sku: 'SKU-8', estado_fisico: 'sin_existencia', cantidad_solicitada: 1 };
 const boton = texto => [...container.querySelectorAll('button')].find(b => b.textContent === texto);
+const disparador = (raiz = container) => raiz.querySelector('button[aria-haspopup="menu"]');
+const opciones = (raiz = container) => [...raiz.querySelectorAll('[role="menuitem"]')];
 beforeEach(() => { vi.clearAllMocks(); globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); });
 it('libera la pausa al desaparecer la acción de una pieza resuelta', async () => {
@@ -28,8 +30,9 @@ it('un faltante ofrece solo retirar o sustituir, sin aceptar su inexistencia', a
     axios.post.mockResolvedValue({ data: { id: 1 } }); await act(() => boton('Confirmar retiro').click());
     expect(axios.post.mock.calls[0][1].get('revision_id')).toBe('8'); expect(axios.post.mock.calls[0][1].get('accion')).toBe('retirar');
 });
-it('un detalle permite confirmar estado y una sustitución admite captura pegada', async () => {
-    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} />));
+it.each([false, true])('un detalle permite confirmar y sustituir por captura (menú compacto: %s)', async compacta => {
+    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} compacta={compacta} />));
+    if (compacta) await act(() => disparador().click());
     expect(boton('Confirmar estado')).toBeDefined();
     await act(() => boton('Sustituir').click()); await act(() => boton('Por captura o PDF').click());
     expect(container.textContent).toContain('pega con Ctrl+V');
@@ -42,7 +45,9 @@ it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste
     expect(container.querySelector('[role=alert]').className).toContain('tienda-alerta-disponibilidad');
     expect(container.textContent).toContain('Consulta cerrada con piezas sin existencias');
     await act(() => boton('Reabrir consulta').click());
-    expect(axios.post.mock.calls[0][0]).toContain('reabrir-consulta'); expect(boton('Retirar')).toBeDefined();
+    expect(axios.post.mock.calls[0][0]).toContain('reabrir-consulta');
+    await act(() => disparador().click());
+    expect(boton('Retirar')).toBeDefined();
     expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
     await act(() => boton('Modificar pedido').click()); expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('true');
 });
@@ -87,10 +92,15 @@ it('el menú compacto conserva el ID de la segunda unidad con SKU repetido y ado
  const pedido={id:1,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'excepciones_pendientes'}},revisiones_producto:[primera,segunda],motivo_bloqueo_cierre:'Resolver el faltante original'};
  await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={[primera,segunda]} area="control_pedidos"/>));
  const filas=container.querySelectorAll('.tienda-respuesta-fila');expect(filas).toHaveLength(2);
- await act(()=>filas[1].querySelector('summary').click());
- expect(filas[1].querySelector('details').open).toBe(true);
- expect(filas[1].textContent).not.toContain('Confirmar estado');
- await act(()=>[...filas[1].querySelectorAll('button')].find(b=>b.textContent==='Retirar').click());
+ const controlDetalle = disparador(filas[0]);
+ await act(() => controlDetalle.click());
+ expect(opciones().map(opcion => opcion.textContent)).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+ await act(() => controlDetalle.click());
+ const control = disparador(filas[1]);
+ await act(() => control.click());
+ expect(control.getAttribute('aria-expanded')).toBe('true');
+ expect(opciones().map(opcion => opcion.textContent)).toEqual(['Retirar', 'Sustituir']);
+ await act(() => boton('Retirar').click());
  expect(axios.post).not.toHaveBeenCalled();
  axios.post.mockResolvedValue({data:{...pedido,revisiones_producto:[primera,{...segunda,resolucion:'retirar'}],motivo_bloqueo_cierre:'Confirma el estado de la primera unidad'}});
  await act(()=>boton('Confirmar retiro').click());
@@ -106,6 +116,7 @@ it('al confirmar el retiro deja Cerrar consulta disponible y Modificar pedido, s
  expect(boton('Cerrar consulta')).toBeUndefined();
  expect(boton('Modificar pedido')).toBeDefined();
  axios.post.mockResolvedValue({data:{id:1,puede_cerrar_consulta:true,motivo_bloqueo_cierre:null,consulta_cerrada:false,revisiones_producto:[{...faltante,resolucion:'retirar'}],solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'decision_registrada',aceptacion_vigente:true},retiro_piezas:[{estado:'aplicada',piezas:[{descripcion:'Aroma agotado',sku:'SKU-8',cantidad:1}]}]}}});
+ await act(() => disparador().click());
  await act(()=>boton('Retirar').click());
  await act(()=>boton('Confirmar retiro').click());
  expect(axios.post.mock.calls.every(c => !String(c[0]).includes('cerrar-consulta'))).toBe(true);
@@ -131,9 +142,60 @@ it('un agregado nuevo conserva el historial y bloquea el cierre anterior hasta r
 });
 
 it('Escape cierra el menú compacto y devuelve foco sin propagar el cierre al modal', async () => {
- await act(()=>root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} compacta/>));
- const summary=container.querySelector('summary');await act(()=>summary.click());expect(container.querySelector('details').open).toBe(true);
- const modalEscape=vi.fn();document.addEventListener('keydown',modalEscape,true);
- try {await act(()=>summary.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));expect(container.querySelector('details').open).toBe(false);expect(document.activeElement).toBe(summary);expect(modalEscape).not.toHaveBeenCalled();}
- finally {document.removeEventListener('keydown',modalEscape,true);}
+    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} compacta />));
+    const control = disparador();
+    await act(() => control.click());
+    expect(control.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(opciones()[0]);
+    await act(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(opciones()[1]);
+
+    const modalEscape = vi.fn();
+    document.addEventListener('keydown', modalEscape, true);
+    try {
+        await act(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+        expect(control.getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(control);
+        expect(modalEscape).not.toHaveBeenCalled();
+    } finally {
+        document.removeEventListener('keydown', modalEscape, true);
+    }
+});
+
+it('ancla el menú fuera de la lista y lo cierra cuando el desplazamiento oculta el botón', async () => {
+    await act(() => root.render(
+        <div role="dialog">
+            <div className="gelia-modal-body">
+                <div className="tienda-respuesta-lista" data-desplazable>
+                    <AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} compacta />
+                </div>
+            </div>
+        </div>,
+    ));
+    const dialogo = container.querySelector('[role="dialog"]');
+    const cuerpo = dialogo.querySelector('.gelia-modal-body');
+    const lista = cuerpo.firstElementChild;
+    const control = disparador(lista);
+    cuerpo.getBoundingClientRect = () => new DOMRect(20, 40, 320, 300);
+    lista.getBoundingClientRect = () => new DOMRect(30, 60, 300, 220);
+    control.getBoundingClientRect = () => new DOMRect(240, 100, 44, 44);
+    await act(() => control.click());
+    const menu = dialogo.querySelector('[role="menu"]');
+    expect(lista.contains(menu)).toBe(false);
+    expect(menu.style.top).toBe('150px');
+    expect(opciones(menu).map(opcion => opcion.textContent)).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+
+    control.getBoundingClientRect = () => new DOMRect(240, 220, 44, 44);
+    Object.defineProperties(menu, {
+        scrollHeight: { value: 148 },
+        offsetHeight: { value: 148 },
+        clientHeight: { value: 148 },
+    });
+    await act(() => lista.dispatchEvent(new Event('scroll')));
+    expect(menu.style.top).toBe('66px');
+    control.getBoundingClientRect = () => new DOMRect(240, 5, 44, 44);
+    await act(() => lista.dispatchEvent(new Event('scroll')));
+    expect(dialogo.querySelector('[role="menu"]')).toBeNull();
+    expect(control.getAttribute('aria-expanded')).toBe('false');
+    expect(axios.post).not.toHaveBeenCalled();
 });

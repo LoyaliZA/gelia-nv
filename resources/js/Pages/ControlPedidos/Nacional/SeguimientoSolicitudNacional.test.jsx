@@ -173,17 +173,21 @@ const conDetalle = {
 
 it('ofrece acciones rápidas por pieza con detalle o sin existencias, sin Confirmar en faltantes', async () => {
     await render(vi.fn(), conDetalle);
-    expect(document.querySelector('[aria-label="Acciones rápidas de Aroma con detalle"]')).not.toBeNull();
-    expect(document.querySelector('[aria-label="Acciones rápidas de Aroma agotado"]')).not.toBeNull();
-    const textos = [...document.querySelectorAll('.tienda-respuesta-menu-lista button')].map((b) => b.textContent);
-    expect(textos.filter((t) => t.includes('Confirmar estado'))).toHaveLength(1);
-    expect(textos.filter((t) => t.includes('Retirar'))).toHaveLength(2);
+    const detalle = document.querySelector('button[aria-label="Acciones de Aroma con detalle"]');
+    const faltante = document.querySelector('button[aria-label="Acciones de Aroma agotado"]');
+    const textos = () => [...document.querySelectorAll('[role="menuitem"]')].map(b => b.textContent);
+    await act(() => detalle.click());
+    expect(textos()).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+    await act(() => detalle.click());
+    await act(() => faltante.click());
+    expect(textos()).toEqual(['Retirar', 'Sustituir']);
 });
 
 it('registra el retiro rápido como ajuste nacional de retiro con la pieza exacta', async () => {
     axios.post.mockResolvedValue({ data: { id: 9 } });
     await render(vi.fn(), conDetalle);
-    const retirar = [...document.querySelectorAll('.tienda-respuesta-menu-lista button')].find((b) => b.textContent.includes('Retirar'));
+    await act(() => document.querySelector('button[aria-label="Acciones de Aroma con detalle"]').click());
+    const retirar = [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Retirar');
     await act(async () => { retirar.click(); });
     const confirmar = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Confirmar retiro'));
     await act(async () => { confirmar.click(); });

@@ -8,7 +8,6 @@ import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from '../Partials/GaleriaEvidenciasPedido';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '../../../utils/geliaTheme';
-import { sucursalRecoleccionNacional } from './superficieNacional';
 
 function esPaqueteriaNacional(item) {
     return item?.activo !== false
@@ -65,14 +64,11 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const [archivoCaptura, setArchivoCaptura] = useState([]);
     const [previewCaptura, setPreviewCaptura] = useState([]);
     const [piezas, setPiezas] = useState([]);
-    const [sucursalId, setSucursalId] = useState('');
     const [mercanciaEditada, setMercanciaEditada] = useState(false);
     const [paqueteriaEditada, setPaqueteriaEditada] = useState(false);
     const clavePaqueteria = useRef(uuidSolicitud());
-    const claveSucursal = useRef(uuidSolicitud());
     useEffect(() => { setActual(pedido); }, [pedido]);
     const opciones = useMemo(() => paqueteriasNacionales(catalogos.paqueterias), [catalogos.paqueterias]);
-    const sucursales = catalogos.sucursales || [];
     const enviada = Boolean(actual?.pesaje_solicitado_at);
     const cerrada = Boolean(actual?.consulta_cerrada || actual?.consulta_cerrada_at);
     const conPago = Boolean(actual?.numero_remision || actual?.pago_validado_at || actual?.mercancia_pagada || actual?.solicitud_preparacion?.pago_solo_mercancia_nacional);
@@ -97,9 +93,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const yaSalio = ['ENVIADO', 'ENTREGADO', 'EN_RUTA', 'CANCELADO'].includes(fase)
         || (actual?.cajas || []).some((caja) => caja.estatus_recoleccion === 'recolectada' || caja.recolectada_at);
     const puedeCambiarPaqueteria = cerrada && !yaSalio && !cambio && elegida?.nombre === 'PAQ. PENDIENTE';
-    const puedePedirSucursal = cerrada && conPago && !yaSalio && !cambio && sucursales.length > 0;
     const guiaInvalidada = actual?.invalidacion_guia || solicitud.invalidacion_guia;
-    const nombreSucursal = sucursalRecoleccionNacional(actual, sucursales);
 
     const adoptar = (lectura) => {
         const siguiente = { ...actual, ...lectura };
@@ -249,31 +243,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
             evidencia: archivo,
         }]);
         if (agregada) limpiarPieza();
-    };
-
-    const solicitarSucursal = async () => {
-        if (enviando) return;
-        if (!sucursalId) {
-            setError('Elija la sucursal de recolección.');
-
-            return;
-        }
-        setEnviando(true);
-        setError('');
-        try {
-            const { data } = await axios.post(`/control-pedidos/${actual.id}/cambio-tienda-nacional`, {
-                sucursal_destino_id: Number(sucursalId),
-                solicitud_id: claveSucursal.current,
-                revision_esperada: actual.revision_registro,
-                base_captura: actual.base_captura,
-            }, { headers: { Accept: 'application/json' } });
-            claveSucursal.current = uuidSolicitud();
-            adoptar(data);
-        } catch (fallo) {
-            setError(mensajeDe(fallo, 'No se solicitó la recolección en sucursal. Intente de nuevo.'));
-        } finally {
-            setEnviando(false);
-        }
     };
 
     const listaPiezas = (filas, editable) => filas.length > 0 && (
@@ -492,37 +461,6 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                         </p>
                     )}
                     <ModalAnexoExtraordinario abierto={anexoAbierto} onClose={() => setAnexoAbierto(false)} pedido={actual} onCreado={setAnexoCreado} />
-                </section>
-            )}
-            {(cambio || puedePedirSucursal) && (
-                <section className="registrar-tienda-panel space-y-2" aria-label="Recolección en sucursal">
-                    {cambio ? (
-                        <>
-                            <p className="text-sm theme-text-main m-0">Recolección en sucursal: {nombreSucursal || 'Sucursal elegida'}.</p>
-                            {Number(cambio.saldo_envio) > 0 && <p className="text-sm m-0">Costo de envío conservado: {cambio.saldo_envio}.</p>}
-                        </>
-                    ) : (
-                        <>
-                            <label className={THEME_LABEL} htmlFor="sucursal-recoleccion-nacional">Sucursal de recolección</label>
-                            <select
-                                id="sucursal-recoleccion-nacional"
-                                className={`${THEME_SELECT} w-full min-h-[44px] text-base mt-1`}
-                                value={sucursalId}
-                                onChange={(evento) => {
-                                    setSucursalId(evento.target.value);
-                                    setError('');
-                                }}
-                            >
-                                <option value="">Elegir sucursal</option>
-                                {sucursales.map((item) => (
-                                    <option key={item.id} value={String(item.id)}>{item.nombre}</option>
-                                ))}
-                            </select>
-                            <button type="button" className={`${THEME_BTN_PRIMARY} min-h-[44px] mt-2`} disabled={enviando} onClick={solicitarSucursal}>
-                                {enviando ? 'Solicitando…' : 'Solicitar recolección en sucursal'}
-                            </button>
-                        </>
-                    )}
                 </section>
             )}
             {guiaInvalidada && !guiaInvalidada.cancelacion_paqueteria_confirmada && (
