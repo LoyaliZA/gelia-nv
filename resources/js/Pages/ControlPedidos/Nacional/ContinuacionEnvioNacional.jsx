@@ -12,6 +12,10 @@ import useVistaPreviaCotizacion from './useVistaPreviaCotizacion';
 
 const opcionesJson = { headers: { Accept: 'application/json' } };
 const fasesCaptura = ['PESAJE_RESPONDIDO', 'RECHAZADO_VENDEDORA'];
+const maximoEnvio = 9_999_999_999.99;
+const mensajeCosto = 'Ingrese un costo de envío válido con hasta dos decimales.';
+const costoValido = (valor) => valor === ''
+    || (/^\d+(?:\.\d{1,2})?$/.test(valor) && Number(valor) <= maximoEnvio);
 
 export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente, importePendiente, onPedido, puedeAgregarDireccion = false, puedeGenerarEnlace = false }) {
     const [direcciones, setDirecciones] = useState([]);
@@ -21,7 +25,8 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
     const [errorDireccion, setErrorDireccion] = useState('');
     const [cargandoDireccion, setCargandoDireccion] = useState(false);
     const [seleccion, setSeleccion] = useState({});
-    const [fletes, setFletes] = useState({});
+    const [costos, setCostos] = useState({});
+    const [costosInvalidos, setCostosInvalidos] = useState({});
     const [seguro, setSeguro] = useState(null);
     const [ocupado, setOcupado] = useState(false);
     const [error, setError] = useState('');
@@ -65,9 +70,9 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
 
     const fletesCaja = cajas.reduce((suma, caja) => suma + Number(caja.costo_envio || 0), 0);
     const reexpedicion = Math.max(0, Number(pedido.costo_envio || 0) - fletesCaja);
-    const desglose = cotizada && !pendiente && Number(pedido.costo_envio) > 0 ? [
+    const desglose = cotizada && !pendiente ? [
         ['Mercancía', pedido.total_mercancia],
-        ['Flete', fletesCaja],
+        ['Envío', fletesCaja],
         ['Reexpedición', reexpedicion],
         ['Seguro', pedido.aplica_seguro ? pedido.costo_seguro : 0],
     ] : [];
@@ -82,9 +87,11 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
     const paqueteria = (catalogos.paqueterias || []).find((item) => String(item.id) === String(pedido.catalogo_paqueteria_id));
     const coberturaSeguro = paqueteria?.cobertura_seguro !== false;
     const seguroActivo = coberturaSeguro && (seguro ?? Boolean(pedido.aplica_seguro));
+    const costoCapturado = (caja) => costos[caja.id] ?? caja.costo_envio ?? '';
+    const costosValidos = cajas.every((caja) => costoValido(costoCapturado(caja)));
     const lineasCaptura = cajas.map((caja) => ({
         uuid_operativo: caja.uuid_operativo,
-        costo_envio: Number(fletes[caja.id] ?? (cotizada ? caja.costo_envio : '')) || 0,
+        costo_envio: Number(costoCapturado(caja)),
     }));
     const { datos: vistaPrevia, cargando: calculando } = useVistaPreviaCotizacion({
         pedidoId: pedido.id,
@@ -92,11 +99,11 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
         zonaId: valorSeleccion('catalogo_zona_id'),
         lineas: lineasCaptura,
         aplicaSeguro: seguroActivo,
-        activo: puedeCotizar,
+        activo: puedeCotizar && costosValidos,
     });
     const desgloseVivo = vistaPrevia ? [
         ['Mercancía', vistaPrevia.venta],
-        ['Flete', vistaPrevia.flete],
+        ['Envío', vistaPrevia.flete],
         ['Reexpedición', vistaPrevia.reexpedicion],
         ['Seguro', vistaPrevia.seguro],
         ['Total', vistaPrevia.total],
@@ -131,12 +138,12 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
         const cotizacion = Object.fromEntries(
             ['cliente_direccion_id', 'catalogo_tipo_guia_id', 'catalogo_zona_id'].map((campo) => [campo, Number(valorSeleccion(campo))]),
         );
-        const lineas = cajas.map((caja) => ({
-            uuid_operativo: caja.uuid_operativo,
-            costo_envio: Number(fletes[caja.id] ?? (cotizada ? caja.costo_envio : '')),
-        }));
-        if (Object.values(cotizacion).some((id) => !id) || lineas.some((linea) => !(linea.costo_envio > 0))) {
-            setError('Elija dirección, tipo de guía y reexpedición. Indique el flete de cada caja.');
+        if (!costosValidos) {
+            setCostosInvalidos(Object.fromEntries(cajas.map((caja) => [caja.id, !costoValido(costoCapturado(caja))])));
+            return;
+        }
+        if (Object.values(cotizacion).some((id) => !id)) {
+            setError('Elija dirección, tipo de guía y reexpedición.');
             return;
         }
         ejecutar(async () => {
@@ -146,12 +153,13 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                 revision_esperada: pedido.revision_registro,
                 base_captura: pedido.base_captura,
                 aplica_seguro: seguroActivo,
-                lineas,
+                lineas: lineasCaptura,
                 cotizacion,
             }, opcionesJson);
             clave.current = uuidSolicitud();
             setSeleccion({});
-            setFletes({});
+            setCostos({});
+            setCostosInvalidos({});
             setSeguro(null);
             return respuesta;
         });
@@ -198,9 +206,9 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                                     Este cliente no tiene dirección principal ni adicional. {ayudaSinDirecciones}
                                 </p>
                             )}
-                            {sinDirecciones && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                    {puedeAgregarDireccion && (
+                            {!cargandoDireccion && (
+                                <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Opciones de dirección">
+                                    {puedeAgregarDireccion && !errorDireccion && (
                                         <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
                                     )}
                                     {puedeGenerarEnlace && (
@@ -209,13 +217,11 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                                     <button type="button" className={`${GELIA_BTN_OUTLINE} min-h-[44px]`} onClick={() => setRecarga((n) => n + 1)}>Actualizar direcciones</button>
                                 </div>
                             )}
-                            {!sinDirecciones && puedeAgregarDireccion && !cargandoDireccion && !errorDireccion && (
-                                <button type="button" className={`${GELIA_BTN_OUTLINE} mt-2 min-h-[44px]`} onClick={() => setAgregandoDireccion(true)}>Agregar dirección</button>
-                            )}
                             {errorDireccion && <p className="m-0 mt-2 text-sm theme-text-aviso" role="alert">{errorDireccion}</p>}
                         </div>
                     </div>
                     <div role="group" aria-label="Costo de envío" className="space-y-3 rounded-lg border theme-border p-3">
+                        <p className="m-0 text-sm">Paquetería: {paqueteria?.nombre || 'Consultar selección'}</p>
                         <div className="grid gap-3 sm:grid-cols-2">
                             {[
                                 ['catalogo_tipo_guia_id', 'Tipo de guía', catalogos.tipos_guia || []],
@@ -232,13 +238,36 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                                     </label>
                                 </div>
                             ))}
+                            <p className="m-0 min-w-0 text-sm">
+                                <span className="block">No. de caja</span>
+                                <span className="mt-1 block min-h-[44px] font-semibold">{cajas.length}</span>
+                            </p>
                             {cajas.map((caja, indice) => (
-                                <label className="block min-w-0 text-sm" key={caja.id}>
-                                    Flete de caja {indice + 1} (MXN)
-                                    <input className={`${THEME_INPUT} mt-1 w-full min-h-[44px]`} type="number" inputMode="decimal" min="0.01" step="0.01" placeholder="0.00"
-                                        value={fletes[caja.id] ?? (cotizada ? caja.costo_envio ?? '' : '')}
-                                        onChange={(evento) => { setFletes({ ...fletes, [caja.id]: evento.target.value }); setError(''); }} />
-                                </label>
+                                <div className="min-w-0" key={caja.id}>
+                                    <label className="block min-w-0 text-sm">
+                                        {cajas.length === 1 ? 'Envío (MXN)' : `Envío de caja ${indice + 1} (MXN)`}
+                                        <input
+                                            className={`${THEME_INPUT} mt-1 w-full min-h-[44px]`}
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={costoCapturado(caja)}
+                                            aria-invalid={costosInvalidos[caja.id] || undefined}
+                                            aria-describedby={costosInvalidos[caja.id] ? `costo-envio-${caja.id}-error` : undefined}
+                                            onFocus={() => setCostosInvalidos((anteriores) => ({ ...anteriores, [caja.id]: false }))}
+                                            onBlur={() => setCostosInvalidos((anteriores) => ({ ...anteriores, [caja.id]: !costoValido(costoCapturado(caja)) }))}
+                                            onChange={(evento) => {
+                                                setCostos({ ...costos, [caja.id]: evento.target.value.replace(',', '.') });
+                                                setCostosInvalidos((anteriores) => ({ ...anteriores, [caja.id]: false }));
+                                                setError('');
+                                            }}
+                                        />
+                                    </label>
+                                    {costosInvalidos[caja.id] && (
+                                        <p className="m-0 mt-1 text-sm theme-text-aviso" id={`costo-envio-${caja.id}-error`} role="alert">
+                                            {mensajeCosto}
+                                        </p>
+                                    )}
+                                </div>
                             ))}
                         </div>
                         {coberturaSeguro && (
@@ -247,12 +276,17 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
                                 Incluir seguro (opcional)
                             </label>
                         )}
-                        <DesgloseCotizacionNacional filas={desgloseVivo} cargando={calculando} />
+                        {desgloseVivo.length > 0 && (
+                            <div className="space-y-1">
+                                <p className="m-0 text-sm font-semibold">Vista previa</p>
+                                <DesgloseCotizacionNacional filas={desgloseVivo} cargando={calculando} etiqueta="Vista previa de la cotización" />
+                            </div>
+                        )}
                     </div>
                     <button type="button" className={`${cotizada ? GELIA_BTN_OUTLINE : THEME_BTN_PRIMARY} min-h-[44px]`} disabled={ocupado} onClick={cotizar}>Guardar cotización</button>
                 </details>
             )}
-            {!desgloseVivo.length && <DesgloseCotizacionNacional filas={desglose} />}
+            <DesgloseCotizacionNacional filas={desglose} />
             {importePendiente && <p className="m-0 text-sm theme-text-muted" role="status">Guardando el importe de mercancía.</p>}
             {listaParaPago && (
                 // Cualquier acción en pagos invalida un aviso anterior («Faltan $…») que ya no aplica.

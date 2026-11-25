@@ -67,10 +67,11 @@ it('en Ventas despliega la respuesta del almacén y contrae anexos y retiros ped
  await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos"/>));
  const tabla=container.querySelector('[aria-label="Productos de la respuesta"]');
  const abiertos=[...tabla.querySelectorAll('[data-origen="cambio"]')].map(f=>[f.textContent,f.getAttribute('data-tono')]);
- expect(abiertos).toHaveLength(3);
- expect(abiertos[0][0]).toContain('Pieza respondida'); expect(abiertos[0][1]).toBe('exito');
- expect(abiertos[1][0]).toContain('Anexo pedido'); expect(abiertos[1][1]).toBe('aviso');
- expect(abiertos[2][0]).toContain('Retiro pedido'); expect(abiertos[2][1]).toBe('peligro');
+ expect(abiertos).toHaveLength(2);
+ expect(abiertos[0][0]).toContain('Anexo pedido'); expect(abiertos[0][1]).toBe('aviso');
+ expect(abiertos[1][0]).toContain('Retiro pedido'); expect(abiertos[1][1]).toBe('peligro');
+ const minis=[...container.querySelectorAll('.tienda-respuesta-oks .consulta-cambio')].map(m=>m.textContent);
+ expect(minis).toHaveLength(1);expect(minis[0]).toContain('Pieza respondida');expect(minis[0]).toContain('Todo OK');
  expect(container.querySelector('.tienda-respuesta-movimientos')).toBeNull();
 });
 

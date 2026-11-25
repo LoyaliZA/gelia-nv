@@ -106,7 +106,7 @@ it('envía la consulta de pesaje con la paquetería comercial', async () => {
     expect(document.getElementById('almacen-salida-nacional').disabled).toBe(true);
 });
 
-it('actualiza la paquetería después del cierre, incluida la pendiente', async () => {
+it('conserva la paquetería comercial del alta y no la vuelve a pedir tras el cierre', async () => {
     const cerrado = {
         ...pedido,
         consulta_cerrada_at: '2026-11-20T18:00:00Z',
@@ -115,7 +115,29 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
         revision_registro: 4,
         base_captura: 'd'.repeat(64),
     };
-    axios.post.mockResolvedValue({ data: { ok: true, catalogo_paqueteria_id: 9 } });
+    await act(async () => {
+        root.render(
+            <FormularioRegistrarNacional pedido={cerrado} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
+                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
+            </FormularioRegistrarNacional>,
+        );
+    });
+    expect(document.getElementById('paqueteria-posterior')).toBeNull();
+    expect(document.getElementById('paqueteria-nacional')).toBeNull();
+    expect(document.body.textContent).toContain('Paquetería: DHL');
+    expect([...document.querySelectorAll('button')].some((item) => item.textContent.includes('Seleccionar paquetería'))).toBe(false);
+});
+
+it('con PAQ. PENDIENTE ofrece DHL y las demás nacionales para definir la empresa', async () => {
+    const cerrado = {
+        ...pedido,
+        consulta_cerrada_at: '2026-11-20T18:00:00Z',
+        pesaje_solicitado_at: '2026-11-20T12:00:00Z',
+        catalogo_paqueteria_id: 9,
+        revision_registro: 4,
+        base_captura: 'd'.repeat(64),
+    };
+    axios.post.mockResolvedValue({ data: { ok: true, catalogo_paqueteria_id: 8 } });
     await act(async () => {
         root.render(
             <FormularioRegistrarNacional pedido={cerrado} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
@@ -125,10 +147,11 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
     });
     const select = document.getElementById('paqueteria-posterior');
     expect(select).not.toBeNull();
+    expect(select.textContent).toContain('DHL');
     expect(select.textContent).toContain('PAQ. PENDIENTE');
     expect(document.getElementById('paqueteria-nacional')).toBeNull();
     await act(async () => {
-        select.value = '9';
+        select.value = '8';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Seleccionar paquetería'));
@@ -137,7 +160,7 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
     expect(axios.post).toHaveBeenCalledWith(
         '/control-pedidos/9/paqueteria-nacional',
         expect.objectContaining({
-            catalogo_paqueteria_id: 9,
+            catalogo_paqueteria_id: 8,
             revision_esperada: 4,
             base_captura: 'd'.repeat(64),
         }),

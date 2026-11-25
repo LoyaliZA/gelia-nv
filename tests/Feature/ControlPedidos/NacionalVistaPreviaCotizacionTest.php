@@ -120,6 +120,18 @@ class NacionalVistaPreviaCotizacionTest extends TestCase
         $this->vistaPrevia($pedido, $caja, 0, true)->assertOk()->assertJsonPath('flete', 0);
     }
 
+    public function test_dhl_con_flete_cero_cobra_seguro_sobre_mercancia(): void
+    {
+        [$pedido, $caja] = $this->pedidoConCaja('DHL');
+
+        $this->vistaPrevia($pedido, $caja, 0, true)
+            ->assertOk()
+            ->assertJsonPath('venta', 1000)
+            ->assertJsonPath('flete', 0)
+            ->assertJsonPath('seguro', 71)
+            ->assertJsonPath('total', 1071);
+    }
+
     public function test_el_catalogo_marca_que_paqueterias_tienen_cobertura_de_seguro(): void
     {
         $this->pedidoConCaja('DHL');

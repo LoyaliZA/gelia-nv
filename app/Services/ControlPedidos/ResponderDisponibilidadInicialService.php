@@ -341,6 +341,7 @@ class ResponderDisponibilidadInicialService
                 'confirmada' => $estado === 'sin_excepciones',
                 'respondida_at' => now()->toIso8601String(),
                 'respondida_por_id' => $usuario->id,
+                'respondida_por_nombre' => $usuario->name,
             ];
             if ($esMunicipal) {
                 $json = ConsultaMunicipal::aplicarEstado($json, $estado);

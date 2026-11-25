@@ -45,7 +45,7 @@ function piezasRespuesta(tarea, revisiones = []) {
     return [...reportadas, ...conocidas];
 }
 
-export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange, avisoAnexo = '', avisoRetiro = '' }) {
+export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso, onVer, adaptador, onDirtyChange, avisoAnexo = '', avisoRetiro = '', bloqueoAnexo = '' }) {
     const operaciones = adaptador || adaptadorConsultaTienda({ pedidoId, pedido });
     const puedeAnexar = operaciones.capacidades?.anexar !== false;
     const puedeRetirar = operaciones.capacidades?.retirar !== false;
@@ -134,7 +134,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
     };
 
     const solicitarAnexo = async () => {
-        if (ocupado) return;
+        if (ocupado || bloqueoAnexo) return;
         if (evidenciasAnexo.length === 0) {
             setError(entrada === 'documento' ? 'Adjunte el PDF o la captura del anexo.' : 'Adjunte el soporte del anexo.');
             return;
@@ -321,7 +321,9 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                 </aside>
                 <div className="tienda-ajustes-captura">
                     <div className="tienda-ajustes-captura-titulo">{modo === 'anexo' ? <PackagePlus size={20} aria-hidden /> : <PackageMinus size={20} aria-hidden />}<h4>{modo === 'anexo' ? 'Agregar piezas' : 'Retirar piezas'} · {(modo === 'anexo' ? entrada : entradaRetiro) === 'documento' ? 'PDF / imágenes' : 'SKU / nombre'}</h4></div>
-            {modo === 'anexo' ? (
+            {modo === 'anexo' ? (bloqueoAnexo ? (
+                <p className="text-sm theme-text-muted m-0" role="status">{bloqueoAnexo}</p>
+            ) : (
                 <div className="grid gap-3">
                     {entrada === 'documento' ? (
                         <p className="text-sm theme-text-muted m-0">
@@ -373,7 +375,7 @@ export function AjustePiezas({ pedidoId, pedido, solicitud, onSolicitud, onAviso
                         <Send size={16} aria-hidden />{ocupado ? 'Enviando…' : 'Solicitar agregado'}
                     </button>
                 </div>
-            ) : (
+            )) : (
                 <div className="grid gap-3">
                     <p className="text-sm theme-text-muted m-0">
                         {entradaRetiro === 'documento'

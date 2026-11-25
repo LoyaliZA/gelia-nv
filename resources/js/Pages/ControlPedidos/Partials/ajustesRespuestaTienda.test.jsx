@@ -57,6 +57,63 @@ it('ofrece el faltante sin SKU desde la respuesta para retirarlo sin buscar inve
     await act(() => container.querySelector('input[type=checkbox]').click());
     expect(cantidad.disabled).toBe(false);
 });
+it('bloquea Agregar piezas mientras Ventas tenga una decisión pendiente y conserva el retiro', async () => {
+    const pedido = { id: 1, solicitud_preparacion: { modalidad_entrega: 'tienda', area_revision: 'preparacion_tienda', revision_disponibilidad: { estado: 'excepciones_pendientes' } } };
+    const revisiones = [
+        { id: 1, descripcion_producto: 'Pieza con detalle 2', estado_fisico: 'regular', cantidad_solicitada: 1, resolucion: 'aceptar_condicion' },
+        { id: 2, descripcion_producto: 'Crema agotada', sku: 'SKU-1', estado_fisico: 'sin_existencia', cantidad_solicitada: 1 },
+        { id: 3, descripcion_producto: 'Pieza con detalle 2', estado_fisico: 'regular', cantidad_solicitada: 1, resolucion: 'aceptar_condicion' },
+        { id: 4, descripcion_producto: 'Pieza con detalle 8', estado_fisico: 'regular', cantidad_solicitada: 1, resolucion: 'aceptar_condicion' },
+    ];
+    const render = filas => act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={filas} area="preparacion_tienda" />));
+    await render(revisiones);
+    await click('Modificar pedido');
+    const lista = container.querySelector('[data-desplazable]');
+    expect(lista.tabIndex).toBe(0);
+    expect([...lista.querySelectorAll('.tienda-respuesta-producto strong')].map(el => el.textContent)).toEqual([
+        'Pieza con detalle 1', 'Crema agotada', 'Pieza con detalle 2', 'Pieza con detalle 3',
+    ]);
+    expect(container.textContent).toContain('Confirme, retire o sustituya las piezas pendientes');
+    expect(container.textContent).not.toContain('Solicitar agregado');
+    await click('Retirar piezas');
+    expect(container.textContent).toContain('Solicitar retiro');
+
+    await render(revisiones.map(p => ({ ...p, resolucion: p.resolucion || 'retirar' })));
+    await click('Agregar piezas');
+    expect(container.textContent).toContain('Solicitar agregado');
+});
+it('CEDIS mantiene el PDF del anexo en Movimientos y bloquea otro agregado hasta resolver las piezas', async () => {
+    const fecha = '2026-11-25T15:00:00Z';
+    const pedido = {
+        id: 1,
+        documentos: [{ id: 21, tipo: 'anexo_piezas', url: '/anexo.pdf', mime_type: 'application/pdf' }],
+        solicitud_preparacion: {
+            modalidad_entrega: 'tienda', area_revision: 'control_pedidos',
+            revision_disponibilidad: { estado: 'excepciones_pendientes', respondida_at: fecha },
+            anexo_sin_remision: [{ entrada: 'documento', documento_id: 21, estado: 'con_detalle', respondida_at: fecha }],
+        },
+    };
+    const piezas = [
+        { id: 1, descripcion_producto: 'Frasco con detalle', estado_fisico: 'regular', cantidad_solicitada: 1 },
+        { id: 2, descripcion_producto: 'Crema agotada', estado_fisico: 'sin_existencia', cantidad_solicitada: 1 },
+    ];
+    const render = revisiones => act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={revisiones} area="control_pedidos" />));
+    await render(piezas);
+    const resultado = container.querySelector('[aria-label="Productos de la respuesta"]');
+    expect([...resultado.querySelectorAll('.tienda-respuesta-producto strong')].map(el => el.textContent)).toEqual(['Frasco con detalle', 'Crema agotada']);
+    expect(resultado.querySelector('[src="/anexo.pdf"]')).toBeNull();
+    expect(container.querySelector('details.tienda-respuesta-movimientos [src="/anexo.pdf"]')).toBeTruthy();
+
+    await click('Modificar pedido');
+    expect(container.textContent).toContain('Confirme, retire o sustituya las piezas pendientes');
+    expect(container.textContent).not.toContain('Solicitar agregado');
+    await click('Retirar piezas');
+    expect(container.textContent).toContain('Solicitar retiro');
+
+    await render(piezas.map((p, i) => ({ ...p, resolucion: i ? 'retirar' : 'aceptar_condicion' })));
+    await click('Agregar piezas');
+    expect(container.textContent).toContain('Solicitar agregado');
+});
 it('conserva la nota al plegar modificar pedido', async () => {
     const pedido = { id: 1, solicitud_preparacion: { revision_disponibilidad: { estado: 'sin_excepciones', aceptacion_vigente: true } } };
     await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="preparacion_tienda" />));

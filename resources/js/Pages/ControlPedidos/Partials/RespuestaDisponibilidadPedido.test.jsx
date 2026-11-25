@@ -13,8 +13,8 @@ const cambio = (extra = {}) => ({ clave: 'c1', descripcion: 'Anexo A', sku: 'A',
 const tonos = () => [...container.querySelectorAll('.tienda-respuesta-fila')].map(f => f.getAttribute('data-tono'));
 
 it('cada pieza toma su tono por estado y por decisión de Ventas', async () => {
-    await render({ filas: [pieza(), pieza({ id: 2, estado_fisico: 'sin_existencia' }), pieza({ id: 3, estado_fisico: 'regular' }), pieza({ id: 4, estado_fisico: 'bueno', resolucion: { accion: 'retirar' } })] });
-    expect(tonos()).toEqual(['exito', 'peligro', 'aviso', 'peligro']);
+    await render({ filas: [pieza({ id: 2, estado_fisico: 'sin_existencia' }), pieza({ id: 3, estado_fisico: 'regular' }), pieza({ id: 4, estado_fisico: 'bueno', resolucion: { accion: 'retirar' } }), pieza({ id: 5, estado_fisico: 'regular', resolucion: { accion: 'confirmar' } })] });
+    expect(tonos()).toEqual(['peligro', 'aviso', 'peligro', 'exito']);
 });
 it('una fila de cambio pendiente es amarilla y muestra su estado en texto', async () => {
     await render({ filas: [pieza()], cambios: { actuales: [cambio()], anteriores: [] } });
@@ -39,4 +39,16 @@ it('con solo filas de cambio la tabla se pinta', async () => {
 it('muestra el aviso de reapertura', async () => {
     await render({ filas: [pieza()], avisoReapertura: 'Consulta reabierta por Ana.' });
     expect(container.textContent).toContain('Consulta reabierta por Ana.');
+});
+it('las piezas y anexos en Todo OK se muestran como minis junto al estado, no como filas', async () => {
+    await render({ estado: 'sin_excepciones', filas: [pieza({ descripcion: 'Perfume OK' }), pieza({ id: 2, descripcion: 'Con detalle', estado_fisico: 'regular' })],
+        cambios: { actuales: [cambio({ clave: 'ok', descripcion: 'Piezas en captura', tono: 'exito', etiqueta: 'Todo OK' }), cambio({ clave: 'pend' })], anteriores: [] } });
+    const minis = [...container.querySelectorAll('.tienda-respuesta-oks .consulta-cambio')];
+    expect(minis.map(m => m.textContent)).toEqual([expect.stringContaining('Perfume OK'), expect.stringContaining('Piezas en captura')]);
+    minis.forEach(m => expect(m.textContent).toContain('Todo OK'));
+    expect(container.querySelectorAll('.tienda-respuesta-fila')).toHaveLength(2);
+});
+it('sin piezas en Todo OK no hay bloque de minis', async () => {
+    await render({ filas: [pieza({ estado_fisico: 'regular' })] });
+    expect(container.querySelector('.tienda-respuesta-oks')).toBeNull();
 });

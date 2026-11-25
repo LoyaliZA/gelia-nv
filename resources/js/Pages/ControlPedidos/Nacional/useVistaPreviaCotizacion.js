@@ -5,7 +5,7 @@ const ESPERA_MS = 400;
 
 /**
  * Pide al servidor el desglose de la cotización con el seguro calculado igual que al guardar.
- * `lineas`: [{ uuid_operativo, costo_envio }]. Sin un flete positivo por caja no consulta.
+ * `lineas`: [{ uuid_operativo, costo_envio }]. Consulta con las cajas del pesaje y sus costos de envío.
  */
 export default function useVistaPreviaCotizacion({ pedidoId, paqueteriaId, zonaId, lineas, aplicaSeguro, activo }) {
     const [datos, setDatos] = useState(null);
@@ -15,7 +15,7 @@ export default function useVistaPreviaCotizacion({ pedidoId, paqueteriaId, zonaI
 
     useEffect(() => {
         const actual = ++turno.current;
-        const completo = activo && lineas.length > 0 && lineas.every((linea) => linea.costo_envio > 0);
+        const completo = activo && lineas.length > 0;
         if (!completo) {
             setDatos(null);
             setCargando(false);

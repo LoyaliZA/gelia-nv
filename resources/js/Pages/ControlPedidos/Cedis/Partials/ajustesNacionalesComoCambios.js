@@ -22,26 +22,34 @@ export function ajustesPendientesNacional(pedido = {}) {
     return ajustes.filter((ajuste) => fechaDe(ajuste) > corte);
 }
 
-export function solicitudNacionalConCambios(pedido = {}) {
+export function solicitudNacionalConCambios(pedido = {}, { incluirHistorial = false } = {}) {
     const solicitud = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
-    if (!pedido.consulta_actualizacion_pendiente) return solicitud;
+    if (!pedido.consulta_actualizacion_pendiente && !incluirHistorial) return solicitud;
     const documentos = pedido.documentos || [];
     const anexos = [];
     const retiros = [];
-    for (const ajuste of ajustesPendientesNacional(pedido)) {
+    const pendientes = pedido.consulta_actualizacion_pendiente ? ajustesPendientesNacional(pedido) : [];
+    const anteriores = incluirHistorial ? (solicitud.ajustes_nacionales || [])
+        .filter(ajuste => ajuste?.tipo === 'sustitucion' && !pendientes.includes(ajuste)) : [];
+    for (const ajuste of [...pendientes, ...anteriores]) {
         const ids = new Set((ajuste.documento_ids || []).map(Number));
         const docs = documentos.filter((doc) => ids.has(Number(doc.id)) && doc.activo !== false);
         const base = { linea_id: ajuste.solicitud_id, solicitud_id: ajuste.solicitud_id, solicitado_at: ajuste.registrado_at, pendiente_revision: true };
-        if (ajuste.tipo === 'retiro' || ajuste.tipo === 'sustitucion') {
-            retiros.push({ ...base, pendiente_revision: false, piezas_solicitadas: ajuste.piezas || [], documentos_piezas: ajuste.tipo === 'retiro' ? docs : [] });
+        if (ajuste.tipo === 'retiro') {
+            retiros.push({ ...base, pendiente_revision: false, piezas_solicitadas: ajuste.piezas || [], documentos_piezas: docs });
         }
         if (ajuste.tipo === 'anexo' || ajuste.tipo === 'sustitucion') {
             const alternativa = (ajuste.alternativas || [])[0];
-            const sustituye = ajuste.tipo === 'sustitucion' ? (ajuste.piezas || [])[0]?.revision_id : undefined;
+            const originales = ajuste.tipo === 'sustitucion' ? (ajuste.piezas || []) : [];
+            const historico = anteriores.includes(ajuste);
+            const cambio = { ...base, pendiente_revision: !historico, movimiento_historico: historico,
+                sustituye_revision_id: originales[0]?.revision_id, piezas_originales: originales };
             if (docs.length) {
-                anexos.push({ ...base, documento_id: docs[0].id, documentos: docs, entrada: 'documento', sustituye_revision_id: sustituye });
+                anexos.push({ ...cambio, documento_id: docs[0].id, documentos: docs, entrada: 'documento', descripcion: alternativa?.descripcion, sku: alternativa?.sku, cantidad: alternativa?.cantidad });
             } else if (alternativa) {
-                anexos.push({ ...base, entrada: 'catalogo', sku: alternativa.sku, descripcion: alternativa.descripcion, cantidad: alternativa.cantidad, documentos: [], sustituye_revision_id: sustituye });
+                anexos.push({ ...cambio, entrada: 'catalogo', sku: alternativa.sku, descripcion: alternativa.descripcion, cantidad: alternativa.cantidad, documentos: [] });
+            } else if (originales.length && historico) {
+                anexos.push({ ...cambio, entrada: 'documento', descripcion: 'Alternativa en captura' });
             }
         }
     }

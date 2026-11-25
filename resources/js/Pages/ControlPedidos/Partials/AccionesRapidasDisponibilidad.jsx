@@ -7,7 +7,7 @@ import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
 const etiquetas = { aceptar_condicion: 'Estado confirmado con el cliente', retirar: 'Retiro registrado', sustituir: 'Sustitución solicitada' };
 
-export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null, ejecutor = null }) {
+export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, descripcionVisible = pieza.descripcion_producto || pieza.descripcion, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null, ejecutor = null }) {
     const menuRef = useRef(null);
     useEffect(() => {
         const cerrar = e => { if (menuRef.current && !menuRef.current.contains(e.target)) menuRef.current.open = false; };
@@ -49,9 +49,9 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, almacen
     };
     if (pieza.resolucion) return <p role="status" className="gelia-pedidos-atributo text-xs font-semibold theme-text-main m-0">{etiquetas[pieza.resolucion] || 'Decisión registrada'}</p>;
     if (soloLectura) return null;
-    return <div className={`grid gap-3 min-w-0 ${compacta ? 'tienda-acciones-compactas' : 'mt-3'}`} aria-label={`Acciones rápidas de ${pieza.descripcion_producto || pieza.descripcion}`}>
+    return <div className={`grid gap-3 min-w-0 ${compacta ? 'tienda-acciones-compactas' : 'mt-3'}`} aria-label={`Acciones rápidas de ${descripcionVisible}`}>
         {!accion ? compacta ? <details ref={menuRef} className="tienda-respuesta-menu">
-            <summary className={GELIA_BTN_OUTLINE} aria-label={`Acciones de ${pieza.descripcion_producto || pieza.descripcion}`}><MoreHorizontal size={20} aria-hidden /></summary>
+            <summary className={GELIA_BTN_OUTLINE} aria-label={`Acciones de ${descripcionVisible}`}><MoreHorizontal size={20} aria-hidden /></summary>
             <div className="tienda-respuesta-menu-lista">
                 {pieza.estado_fisico !== 'sin_existencia' && <button type="button" onClick={() => elegir('confirmar')}><CheckCircle2 size={16} aria-hidden />Confirmar estado</button>}
                 <button type="button" onClick={() => elegir('retirar')}><PackageMinus size={16} aria-hidden />Retirar</button>

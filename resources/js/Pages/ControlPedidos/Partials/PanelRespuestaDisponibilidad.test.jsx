@@ -30,12 +30,34 @@ const agregarPieza = async (cantidad = 1) => {
  await fotosModal(modal, cantidad);
  await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === `Agregar al pedido (${cantidad})`).click());
 };
+const agregarSinExistencias = async () => {
+ await click('Agregar productos con detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Sin existencias').click());
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
+ await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (1)').click());
+};
+const abrirSinExistencias = modal => act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Sin existencias').click());
 const detalle = async (texto = 'Caja rota', indice = 0) => act(() => {
  const textarea=container.querySelectorAll('textarea')[indice];
  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(textarea,texto);
  textarea.dispatchEvent(new Event('input',{bubbles:true}));
 });
 
+it('numera las piezas con detalle de una nueva consulta a continuación de las ya respondidas', async () => {
+ const revision = { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'segunda-consulta' };
+ const pieza = id => ({ id, sku: '', descripcion: `Pieza con detalle ${id === 13 ? 8 : 2}`, cantidad: 1, estado_fisico: 'regular', detalle: '', documentos: [{ url: `/p${id}.png` }] });
+ const pedido = { id: 4, excepciones: [pieza(11), pieza(12), pieza(13)], solicitud_preparacion: { anexo_sin_remision: [
+  { entrada: 'catalogo', sku: 'A', descripcion: 'Aroma', cantidad: 1, pendiente_revision: true, linea_id: 'linea-a', unidades: [{ unidad_id: 'anexo:linea-a:sku:A', resultado: 'incidencia', revision_ids: [11, 12, 13] }] },
+  { entrada: 'catalogo', sku: 'B', descripcion: 'Crema', cantidad: 1, pendiente_revision: true, linea_id: 'linea-b' },
+ ] } };
+ await montar({ origen: 'Tienda', pedido, revision });
+ expect(container.textContent).not.toContain('Ya respondidas');
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(3);
+ await agregarPieza(1);
+ expect(container.textContent).toContain('Pieza con detalle 4');
+ expect(container.textContent).not.toMatch(/Pieza con detalle 1(?!\d)[^·]*\n?.*Pieza con detalle 1(?!\d)/s);
+});
 it('reconcilia la identidad tras guardar sin perder foto, texto ni duplicar la pieza al recuperarla', async () => {
  const revision = { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'misma-consulta' };
  const original = { id: 4, documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
@@ -87,14 +109,22 @@ it('incorpora piezas repetidas de una captura, quita una selección y envía cad
  expect(envioFinal().get('excepciones[2][descripcion]')).toBeNull();
 });
 
-it('las piezas de un cambio ya respondido pasan al historial y no abruman al empacador', async () => {
+it('un avance guardado sin enviar sigue como borrador y no pasa a Ya respondidas', async () => {
  await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: { id: 4, documentos: [],
   excepciones: [{ id: 12, sku: 'A', descripcion: 'Pieza ya respondida', cantidad: 1, estado_fisico: 'regular', detalle: 'Tapa', documentos: [] }],
   solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'catalogo', sku: 'A', descripcion: 'Pieza ya respondida', cantidad: 1, linea_id: 'l1', pendiente_revision: true,
    unidades: [{ unidad_id: 'anexo:l1:sku:A', resultado: 'incidencia', revision_ids: [12] }] }] } } });
+ expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(1);
+ expect(container.querySelector('.gelia-cedis-archivo')).toBeNull();
+ expect(container.textContent).toContain('Pieza ya respondida');
+});
+it('las piezas de una línea ya enviada pasan al historial', async () => {
+ await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: { id: 4, documentos: [],
+  excepciones: [{ id: 12, sku: 'A', descripcion: 'Pieza enviada', cantidad: 1, estado_fisico: 'regular', detalle: 'Tapa', documentos: [] }],
+  solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'catalogo', sku: 'A', descripcion: 'Pieza enviada', cantidad: 1, linea_id: 'l1', pendiente_revision: false, estado: 'con_detalle',
+   unidades: [{ unidad_id: 'anexo:l1:sku:A', resultado: 'incidencia', revision_ids: [12] }] }, { entrada: 'catalogo', sku: 'B', descripcion: 'Otra', cantidad: 1, linea_id: 'l2', pendiente_revision: true }] } } });
  expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(0);
  expect(container.querySelector('.gelia-cedis-archivo summary').textContent).toBe('Ya respondidas · 1');
- expect(container.querySelector('.gelia-cedis-archivo').textContent).toContain('Pieza ya respondida');
 });
 
 it('Tienda no intenta guardar de nuevo una unidad de una respuesta ya enviada y el envío final no se bloquea', async () => {
@@ -110,8 +140,9 @@ it('Tienda no intenta guardar de nuevo una unidad de una respuesta ya enviada y 
  await click('Enviar respuesta');
  const unidades = onEnviar.mock.calls.filter(c => c[0].get('persistir_unidad') === '1').map(c => c[0].get('cambios_revisados[0][unidad_id]'));
  expect(unidades.some(id => String(id).includes('viejo'))).toBe(false);
- expect(envioFinal()).toBeTruthy();
- expect(container.textContent).not.toContain('ya pertenece a una respuesta enviada');
+ expect(envioFinal().has('excepciones[0][origen_unidad_id]')).toBe(false);
+ expect(envioFinal().get('cambios_revisados[0][unidad_id]')).toBe('anexo:nuevo:sku:N');
+ expect(envioFinal().has('cambios_revisados[1][unidad_id]')).toBe(false);
 });
 
 it('responde dos ciclos del mismo pedido sin desmontar ni reutilizar la captura anterior', async () => {
@@ -131,6 +162,31 @@ it('responde dos ciclos del mismo pedido sin desmontar ni reutilizar la captura 
     expect(onEnviar.mock.lastCall[0].get('actualizacion_id')).toBe('nueva');
 });
 
+it('CEDIS reemplaza la captura enviada por el resumen de Tienda y conserva la evidencia vigente', async () => {
+    const solicitud = { modalidad_entrega: 'tienda', area_revision: 'control_pedidos' };
+    await montar({ pedido: { id: 4, solicitud_preparacion: solicitud } });
+    await estado(0); await foto(); await click('Enviar respuesta');
+    expect(container.textContent).toContain('Respuesta enviada');
+    expect(container.querySelector('[aria-label="Respuesta de disponibilidad"]').textContent).toContain('Todo OK');
+    expect(container.querySelector('input[aria-label="Adjuntar: Captura del pedido"]')).toBeNull();
+
+    const revision = { respuesta_id: 'enviada', estado: 'excepciones_pendientes', evidencia_actual_ids: [90], respondida_por_nombre: 'Paola' };
+    const documentos = [
+        { id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' },
+        { id: 91, tipo: 'evidencia_condicion', relacion_tipo: 'revision_producto', relacion_id: 12, url: '/detalle.png' },
+        { id: 92, tipo: 'anexo_piezas', url: '/anexo.pdf' },
+    ];
+    await montar({ pedido: { id: 4, solicitud_preparacion: solicitud, documentos, pesaje_respondido_por: { name: 'Auxiliar anterior' } }, revision,
+        piezas: [{ id: 12, descripcion: 'Frasco con detalle', cantidad: 1, condicion: 'detalle' }] });
+    const resultado = container.querySelector('[aria-label="Respuesta de disponibilidad"]');
+    expect(resultado.textContent).toContain('Respondió Paola');
+    expect(resultado.textContent).toContain('Frasco con detalle');
+    expect(resultado.textContent).toContain('Captura del pedido');
+    expect(resultado.querySelector('[src="/conjunto.png"]')).toBeTruthy();
+    expect(resultado.querySelector('[src="/anexo.pdf"]')).toBeNull();
+    expect(container.textContent).toContain('Espere el cierre de la consulta');
+    expect(container.textContent).not.toContain('Enviar respuesta');
+});
 it('una revisión recibida conserva comentario y archivos pendientes', async () => {
     const pedido = { id: 4, documentos: [] };
     await montar({ pedido });
@@ -183,8 +239,8 @@ it('recupera atributos, detalle y fotos de una unidad de Tienda y envía sin rec
     documentos: [{ id: 90, tipo: 'evidencia_condicion', relacion_tipo: 'revision_general', url: '/conjunto.png' }],
     solicitud_preparacion: { anexo_sin_remision: [{ solicitud_id: 's', entrada: 'catalogo', descripcion: 'Pieza recuperada', pendiente_revision: true,
      unidades: [{ unidad_id: 'anexo:s:sku:', resultado: 'incidencia', revision_ids: [12] }] }] } } });
-  expect(container.querySelector('.gelia-cedis-archivo summary').textContent).toBe('Ya respondidas · 1');
-  expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(0);
+  expect(container.querySelector('.gelia-cedis-archivo')).toBeNull();
+  expect(container.querySelectorAll('.gelia-cedis-producto')).toHaveLength(1);
   await click('Enviar respuesta');
   expect(envioFinal().get('excepciones[0][unica_pieza]')).toBe('1');
   expect(envioFinal().get('excepciones[0][detalle]')).toBe('Tapa rota');
@@ -222,21 +278,23 @@ it('exige estado y captura y responde el conjunto sin transcribir piezas correct
  expect(onEnviar.mock.lastCall[0].get('confirmacion_explicita')).toBe('1');
  expect([...onEnviar.mock.lastCall[0].keys()].some(k => k.startsWith('excepciones'))).toBe(false);
 });
-it('inicia una unidad con los tres interruptores apagados, sin cantidad ni resultado y contraída', async () => {
+it('inicia una unidad con los dos interruptores de detalle apagados, sin cantidad ni resultado y contraída', async () => {
  await montar();await estado(1);await agregarPieza();
- expect(container.querySelectorAll('[role=switch]')).toHaveLength(3);
+ expect(container.querySelectorAll('[role=switch]')).toHaveLength(2);
+ expect(container.querySelector('[role=switch][aria-label="Sin existencias"]')).toBeNull();
  expect([...container.querySelectorAll('[role=switch]')].every(b=>b.getAttribute('aria-checked')==='false')).toBe(true);
  expect(container.querySelector('input[type=number],select')).toBeNull();
  expect(container.querySelector('details').open).toBe(false);
  expect(container.querySelector('[aria-label="Agregar evidencia del producto 1"]').disabled).toBe(false);
 });
 it('envía faltante sin detalle o foto de producto y conserva la captura general', async () => {
- await montar();await estado(1);await agregarPieza();await interruptor('Sin existencias');
+ await montar();await estado(1);await agregarSinExistencias();
  expect(container.querySelector('textarea')).toBeNull();
+ expect(container.querySelector('[role=switch]')).toBeNull();
  expect(container.querySelector('[aria-label="Agregar evidencia del producto 1"]').disabled).toBe(true);
  await foto();await click('Enviar respuesta');
  const form=onEnviar.mock.lastCall[0];
- expect(form.get('excepciones[0][descripcion]')).toBe('Pieza con detalle 1');
+ expect(form.get('excepciones[0][sku]')).toBe('SKU-7');
  expect(form.get('excepciones[0][cantidad]')).toBe('1');
  expect(form.get('excepciones[0][detalle]')).toBe('Sin existencias');
  expect(form.get('excepciones[0][evidencias][]')).toBeNull();
@@ -253,6 +311,7 @@ it('cada lectura repetida del diálogo crea una pieza sin existencias independie
  axios.get.mockResolvedValue({data:{data:[{id:7,sku:'SKU-7',descripcion:'Perfume escaneado'}]}});
  await montar();await estado(1);await click('Agregar productos con detalle');
  const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await abrirSinExistencias(modal);
  const escanear=()=>act(async()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Escanear producto').click());
  await escanear();await escanear();
  await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Agregar al pedido (2)').click());
@@ -285,26 +344,10 @@ it('la cámara acciona el input de captura, admite fotos sucesivas sin tope', as
  expect(container.querySelector('[aria-label="Agregar evidencia del producto 1"]').disabled).toBe(false);
  expect(container.textContent).not.toContain('hasta 5 fotos');
 });
-it('sin existencias borra detalle, fotos y atributos, que vuelven apagados al desactivarlo', async () => {
- await montar();await estado(1);await agregarPieza();await detalle();await foto('Fotos del producto');await interruptor('Única pieza');await interruptor('Mejor ejemplar');
- await interruptor('Sin existencias');
- expect(container.querySelector('[aria-label="Adjuntar: Fotos del producto"]')).toBeNull();
- expect(container.querySelector('[aria-label="Única pieza"]').getAttribute('aria-checked')).toBe('false');
- expect(container.querySelector('[aria-label="Mejor ejemplar"]').disabled).toBe(true);
- await interruptor('Sin existencias');
- expect(container.querySelector('textarea').value).toBe('');
- expect(container.querySelector('[aria-label="Única pieza"]').disabled).toBe(false);
- expect(container.querySelectorAll('.gelia-pedidos-evidencia')).toHaveLength(0);
-});
-
-it.each(['Única pieza','Mejor ejemplar'])('permite reportar %s con foto sin observación escrita ni cantidad capturada', async atributo => {
- await montar();await estado(1);await agregarPieza();await interruptor(atributo);
- expect(container.textContent).toContain('Observaciones (opcional)');
- await foto('Fotos del producto');await foto();await click('Enviar respuesta');
- expect(onEnviar).toHaveBeenCalledOnce();
- const form=onEnviar.mock.lastCall[0];
- expect(form.get('excepciones[0][detalle]')).toBe('');
- expect(form.get('excepciones[0][cantidad]')).toBe('1');
+it('una pieza con detalle no ofrece Sin existencias: es una contradicción', async () => {
+ await montar();await estado(1);await agregarPieza();
+ expect(container.querySelector('[role=switch][aria-label="Sin existencias"]')).toBeNull();
+ expect([...container.querySelectorAll('[role=switch]')].map(b => b.getAttribute('aria-label'))).toEqual(['Única pieza', 'Mejor ejemplar']);
 });
 it('una pieza sin estado no se envía aunque tenga fotos, y el comentario es opcional', async () => {
  await montar();await estado(1);await agregarPieza();await foto('Fotos del producto');await foto();await click('Enviar respuesta');
@@ -330,6 +373,7 @@ it('Tienda responde una actualización con faltantes manuales usando la misma ca
  expect(container.textContent).toContain('Actualización de consulta · Tienda');
  await click('Registrar detalle');
  const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await abrirSinExistencias(modal);
  await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Sin catálogo').click());
  const input=modal.querySelector('input[maxlength="255"]');
  await act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Pieza sin catálogo');input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -374,6 +418,7 @@ it('persiste la incidencia de una captura cuando el detalle queda completo', asy
  }});
  await click('Registrar detalle');
  const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await abrirSinExistencias(modal);
  await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Sin catálogo').click());
  const input=modal.querySelector('input[maxlength="255"]');
  await act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Pieza de la captura');input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -429,6 +474,7 @@ it('cancelar la selección rápida conserva el pedido sin piezas agregadas ni re
  await montar({onDirtyChange,revision:{estado:'sin_excepciones',actualizacion_pendiente:true},pedido:{solicitud_preparacion:{anexo_sin_remision:[{entrada:'documento'}]}}});
  await click('Registrar detalle');
  const modal=document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await abrirSinExistencias(modal);
  await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Elegir perfume').click());
  expect(onDirtyChange).toHaveBeenLastCalledWith(true);
  await act(()=>[...modal.querySelectorAll('button')].find(b=>b.textContent==='Cancelar').click());
@@ -533,7 +579,7 @@ it('la primera respuesta con detalle usa el diálogo de fotos y no la búsqueda 
  expect(container.textContent).not.toContain('Buscar o escanear producto');
  expect(container.textContent).not.toContain('Capturar sin catálogo');
 });
-it('una pieza buscada en el diálogo entra como Sin existencias, sin foto ni comentario', async () => {
+it('una pieza buscada en el diálogo entra como Sin existencias, sin interruptores, foto ni comentario', async () => {
  await montar({ origen: 'Tienda', revision: { estado: 'sin_excepciones', actualizacion_pendiente: true, actualizacion_id: 'consulta' }, pedido: {
   documentos: [{ id: 21, url: '/anexo.png', mime_type: 'image/png' }],
   solicitud_preparacion: { anexo_sin_remision: [{ entrada: 'documento', linea_id: 'linea-unica', documento_id: 21,
@@ -541,11 +587,12 @@ it('una pieza buscada en el diálogo entra como Sin existencias, sin foto ni com
  } });
  await click('Registrar detalle');
  const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ await abrirSinExistencias(modal);
  await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Elegir perfume').click());
  expect(modal.querySelector('[aria-label^="Agregar comentario a"]')).toBeNull();
  await act(() => [...modal.querySelectorAll('button')].find(b => b.textContent === 'Agregar al pedido (1)').click());
  const fila = container.querySelector('.gelia-cedis-producto');
- expect(fila.querySelector('[role=switch][aria-label="Sin existencias"]').getAttribute('aria-checked')).toBe('true');
+ expect(fila.querySelector('[role=switch]')).toBeNull();
  expect(fila.textContent).toContain('Sin existencias');
 });
 
@@ -576,4 +623,11 @@ it('la fila ofrece el lápiz bajo el bote para abrir el comentario y las fotos',
  await act(() => lapiz.click());
  expect(container.querySelector('details').open).toBe(true);
  expect(container.querySelector('.gelia-cedis-acciones [aria-expanded="true"]')).not.toBeNull();
+});
+it('la búsqueda de Sin existencias está oculta hasta pulsar su botón', async () => {
+ await montar();await estado(1);await click('Agregar productos con detalle');
+ const modal = document.querySelector('[aria-label="Registrar detalle de productos"]');
+ expect(modal.querySelector('[aria-label="Registrar sin existencias"]')).toBeNull();
+ await abrirSinExistencias(modal);
+ expect(modal.querySelector('[aria-label="Registrar sin existencias"]')).not.toBeNull();
 });

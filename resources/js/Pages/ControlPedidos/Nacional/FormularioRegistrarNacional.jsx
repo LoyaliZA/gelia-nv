@@ -96,7 +96,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const fase = actual?.estatus?.fase_ciclo;
     const yaSalio = ['ENVIADO', 'ENTREGADO', 'EN_RUTA', 'CANCELADO'].includes(fase)
         || (actual?.cajas || []).some((caja) => caja.estatus_recoleccion === 'recolectada' || caja.recolectada_at);
-    const puedeCambiarPaqueteria = cerrada && !yaSalio && !cambio;
+    const puedeCambiarPaqueteria = cerrada && !yaSalio && !cambio && elegida?.nombre === 'PAQ. PENDIENTE';
     const puedePedirSucursal = cerrada && conPago && !yaSalio && !cambio && sucursales.length > 0;
     const guiaInvalidada = actual?.invalidacion_guia || solicitud.invalidacion_guia;
     const nombreSucursal = sucursalRecoleccionNacional(actual, sucursales);
@@ -459,7 +459,7 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                         }}
                     >
                         <option value="">Elegir</option>
-                        {opciones.filter((item) => String(item.id) !== String(actual?.catalogo_paqueteria_id)).map((item) => (
+                        {opciones.map((item) => (
                             <option key={item.id} value={String(item.id)}>{item.nombre}</option>
                         ))}
                     </select>

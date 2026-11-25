@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Camera, Images, Package, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
+import { Camera, Images, Package, PackageX, Pencil, Plus, ScanLine, Trash2, X } from 'lucide-react';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
 import usePedidoDialog from './usePedidoDialog';
@@ -12,6 +12,7 @@ import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_M
 export default function ModalSeleccionProductosDetalle({ almacenId, origen, onClose, onAgregar }) {
     const [piezas, setPiezas] = useState([]);
     const [manual, setManual] = useState(false);
+    const [sinExistencias, setSinExistencias] = useState(false);
     const [descripcion, setDescripcion] = useState('');
     const [error, setError] = useState('');
     const [conComentario, setConComentario] = useState({});
@@ -72,11 +73,11 @@ export default function ModalSeleccionProductosDetalle({ almacenId, origen, onCl
                     <div className="flex flex-wrap gap-2">
                         <button type="button" className={THEME_BTN_PRIMARY} onClick={() => control.current?.tomarFoto()}><Camera size={16} aria-hidden />Tomar foto</button>
                         <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => control.current?.abrirGaleria()}><Images size={16} aria-hidden />Galería</button>
+                        <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => setSinExistencias(v => !v)} aria-expanded={sinExistencias}><PackageX size={16} aria-hidden />Sin existencias</button>
                     </div>
                     <GaleriaEvidenciasPedido compacto capturaExterna controlRef={control} soloImagenes label="Fotos del producto" archivos={[]} previews={[]} onChange={agregarFotos} />
                 </div>
-                <div className="grid gap-2 consulta-seleccion-detalle-sin-existencias">
-                    <p className="text-sm font-semibold theme-text-main m-0">Sin existencias</p>
+                {sinExistencias && <div className="grid gap-2 consulta-seleccion-detalle-sin-existencias" role="group" aria-label="Registrar sin existencias">
                 <div className="gelia-preparacion-selector"><label className={THEME_LABEL} htmlFor="detalle-rapido-producto"><ScanLine size={16} aria-hidden />Buscar o escanear producto sin existencias</label>
                     <SelectorProducto zIndexEscaner="calc(var(--gelia-z-toast) + 4)" inputId="detalle-rapido-producto" almacenId={almacenId} incluirSinInventario value="" onChange={(_, producto) => agregar(producto)} onEscanear={escaneo.encolar} />
                 </div>
@@ -84,7 +85,7 @@ export default function ModalSeleccionProductosDetalle({ almacenId, origen, onCl
                 {escaneo.fallos.map((f, i) => <p key={i} className="text-xs theme-text-peligro m-0" role="alert">{f.codigo}: {f.mensaje}</p>)}
                 <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} onClick={() => setManual(v => !v)} aria-expanded={manual}><Plus size={16} aria-hidden />Sin catálogo</button>
                 {manual && <div className="consulta-seleccion-detalle-manual"><label className={THEME_LABEL} htmlFor="detalle-rapido-descripcion">Nombre de la pieza<input id="detalle-rapido-descripcion" className={`${THEME_INPUT} w-full`} maxLength={255} value={descripcion} onChange={e => setDescripcion(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarManual(); } }} /></label><button type="button" className={GELIA_BTN_OUTLINE} onClick={agregarManual}><Plus size={16} aria-hidden />Agregar pieza</button></div>}
-                </div>
+                </div>}
                 {piezas.length > 0 && <ul className="consulta-seleccion-detalle-lista" aria-label="Piezas seleccionadas">{piezas.map((p, i) => <li key={p.uid}>
                     {p.previews[0] ? <img className="consulta-seleccion-detalle-miniatura" src={p.previews[0].url} alt={`Foto de la pieza ${i + 1}`} width={44} height={44} /> : <Package size={17} aria-hidden />}<div><strong>{p.porFoto ? `Foto ${i + 1}` : p.descripcion}</strong><span>{p.porFoto ? 'Pieza con detalle' : `${p.sku || 'Sin SKU'} · Sin existencias`}</span></div>
                     <div className="gelia-cedis-acciones">
@@ -92,7 +93,7 @@ export default function ModalSeleccionProductosDetalle({ almacenId, origen, onCl
                         {p.condicion !== 'faltante' && <button type="button" className={`${GELIA_BTN_OUTLINE} gelia-cedis-quitar`} data-activo={p.detalle ? 'true' : undefined} aria-expanded={Boolean(conComentario[i] || p.detalle)} aria-label={`Agregar comentario a ${p.descripcion}`} title="Comentario" onClick={() => setConComentario(actual => ({ ...actual, [i]: !actual[i] }))}><Pencil size={16} aria-hidden /></button>}
                     </div>
                     <div className="consulta-seleccion-detalle-pieza-extra">
-                        <InterruptoresPieza valor={p} sinExistencias={!p.porFoto} etiqueta={`Estado de ${p.descripcion}`} onChange={cambios => cambiarPieza(i, cambios)} />
+                        {p.porFoto && <InterruptoresPieza valor={p} sinExistencias={false} etiqueta={`Estado de ${p.descripcion}`} onChange={cambios => cambiarPieza(i, cambios)} />}
                         {p.condicion !== 'faltante' && (conComentario[i] || p.detalle) && <label className={THEME_LABEL}>Comentario<textarea className={`${THEME_TEXTAREA} w-full`} rows={2} maxLength={500} value={p.detalle} onChange={e => cambiarPieza(i, { detalle: e.target.value })} /></label>}
                     </div>
                 </li>)}</ul>}

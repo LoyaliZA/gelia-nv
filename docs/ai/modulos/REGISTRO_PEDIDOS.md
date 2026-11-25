@@ -29,12 +29,14 @@
 
 ## Cómo probar
 - Seleccionar los casos de registro/concurrencia en [PRUEBAS](../PRUEBAS.md); verificar abrir vacío, recargar borrador y conflicto conservando captura.
+- En el formulario compartido, editar el folio con uno activo de otro pedido. El rechazo del servidor resalta el borde rojo del campo y muestra el aviso con el pedido que lo usa. Al editar el folio se quita la marca y el próximo guardado valida el valor nuevo.
 
 ## Puntos blandos
 - [verificado] «Legado» sigue importado y ejecutado; no es un archivo huérfano: `resources/js/Pages/ControlPedidos/Partials/ModalFormPedido.jsx:38`.
 - [verificado] El identificador histórico `folio_remision` no autoriza editar el número de pedido desde Auditoría: `app/Services/ControlPedidos/GestionarRemisionPedidoBmaService.php:86`.
 - [verificado] El borrador nacional guarda líneas opcionales por SKU o evidencia con UUID y cantidad. Conserva el PDF general por separado. `GuardarMercanciaNacional` guarda las líneas, sus adjuntos y la revisión de la captura en el mismo guardado del borrador.
 - [verificado] Después del cierre y con cobertura de mercancía, Ventas puede solicitar recolección en sucursal antes de la salida. `CambiarNacionalATienda` conserva modalidad y cargos previos. La confirmación externa de cancelación de una guía es un hecho separado.
-- [verificado] Tras el cierre, la cotización nacional prerellena la dirección principal verificada, muestra nombre de quien recibe y domicilio, y permite alta adicional. `ContinuacionEnvioNacional.jsx`; `CambiarPaqueteriaNacional`.
+- [verificado] Tras el cierre, la cotización nacional prerellena la dirección principal verificada, muestra nombre de quien recibe y domicilio, y permite alta adicional. La paquetería comercial del alta queda fija (texto de solo lectura); el selector posterior «Seleccionar paquetería» solo aparece con PAQ. PENDIENTE y lista las comerciales, incluida DHL. `FormularioRegistrarNacional.jsx`; `ContinuacionEnvioNacional.jsx`; `CambiarPaqueteriaNacional`.
 - [verificado] El alta nacional ofrece PAQ. PENDIENTE y comerciales activas con logística, incluso si `requiere_peso` es falso. Ambos recorridos consultan peso en CEDIS: `FormularioRegistrarNacional` y `SolicitarPesajePedidoBmaService`.
-- Última verificación: 2026-11-24, destino nacional a domicilio y prerellenado de dirección.
+- La cotización nacional muestra **No. de caja** como conteo y **Envío (MXN)** para el flete real, por caja cuando hay varias. La vista previa y la cobertura incluyen mercancía, envío, reexpedición y seguro. Ventas puede corregir el envío desde «Revisar cotización» mientras el pago esté pendiente; el estado de las exhibiciones se conserva. `ContinuacionEnvioNacional.jsx`, `VistaPreviaCotizacionNacional`.
+- Última verificación: 2026-11-25, aviso de folio repetido y captura de envío nacional en el árbol de trabajo, HEAD `cec7b3c5`.

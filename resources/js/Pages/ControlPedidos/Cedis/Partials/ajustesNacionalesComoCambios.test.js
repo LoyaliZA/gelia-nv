@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { cambiosDisponibilidad } from '../../Partials/cambiosDisponibilidad';
+import { cambiosDisponibilidad, particionarCambiosConsulta } from '../../Partials/cambiosDisponibilidad';
 import { solicitudNacionalConCambios } from './ajustesNacionalesComoCambios';
 
 const pedido = {
@@ -24,9 +24,9 @@ it('traduce los ajustes pendientes a cambios por revisar como los de Tienda', ()
     const anexos = cambios.filter((c) => c.tipo === 'anexo');
     expect(anexos).toHaveLength(3);
     expect(anexos.every((c) => c.pendiente)).toBe(true);
-    expect(anexos.find((c) => c.sku === 'Z9')).toBeTruthy();
+    expect(anexos.find((c) => c.sku === 'Z9')).toMatchObject({ descripcion: 'Nuevo', retiradas: [{ revision_id: 4, sku: 'Y1', descripcion: 'Viejo' }] });
     const retiros = cambios.filter((c) => c.tipo === 'retiro');
-    expect(retiros.length).toBeGreaterThanOrEqual(2);
+    expect(retiros.map(c => c.solicitud_id)).toEqual(['r']);
     expect(retiros.every((c) => c.pendiente === false)).toBe(true);
 });
 
@@ -40,4 +40,13 @@ it('un ajuste sin fecha solo cuenta si sus documentos son posteriores a la últi
 it('sin actualización pendiente no agrega cambios', () => {
     const solicitud = solicitudNacionalConCambios({ ...pedido, consulta_actualizacion_pendiente: false });
     expect(solicitud.anexo_sin_remision).toBeUndefined();
+});
+
+it('conserva ambas piezas de la sustitución nacional en el historial tras el repesaje', () => {
+    const respondido = { ...pedido, consulta_actualizacion_pendiente: false, pesaje_respondido_at: '2026-11-24T14:00:00Z' };
+    const solicitud = solicitudNacionalConCambios(respondido, { incluirHistorial: true });
+    const cambios = cambiosDisponibilidad(solicitud, pedido.documentos);
+    expect(particionarCambiosConsulta(cambios, solicitud, 'revision')).toMatchObject({ actuales: [], anteriores: [
+        { pendiente: false, descripcion: 'Nuevo', retiradas: [{ revision_id: 4, descripcion: 'Viejo' }] },
+    ] });
 });

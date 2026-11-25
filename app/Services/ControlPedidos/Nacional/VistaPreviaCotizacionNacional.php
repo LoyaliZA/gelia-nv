@@ -32,7 +32,7 @@ class VistaPreviaCotizacionNacional
         }
 
         $conCobertura = $this->cobertura->tieneCobertura($paqueteria->nombre);
-        $seguro = $conCobertura && $aplicaSeguro && $flete > 0
+        $seguro = $conCobertura && $aplicaSeguro
             ? round(array_sum($this->seguro->porLinea($pedido, $paqueteria, $lineas, true)), 2)
             : 0.0;
         $guia = round($flete + $reexpedicion, 2);

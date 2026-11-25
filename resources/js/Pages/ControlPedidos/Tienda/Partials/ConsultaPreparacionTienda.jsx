@@ -72,6 +72,8 @@ export default function ConsultaPreparacionTienda({ tarea, auth, documentos = []
         : !pedido.consulta_cerrada ? 'Ventas está confirmando las piezas con el cliente. Espere el cierre de la consulta.'
             : esperaConfirmacion ? 'Espere a que Ventas confirme la modalidad y envíe la confirmación del pedido.'
                 : !vigente ? 'La respuesta debe actualizarse antes de confirmar el apartado.' : null;
+    const sustituidas = new Set((pedido.anexo_sin_remision || []).map(anexo => Number(anexo.sustituye_revision_id)).filter(Boolean));
+    const verDocumentos = (documentos, indice = 0) => setVista({ documentos, indice });
 
     return <section className={`gelia-preparacion gelia-preparacion--consulta${actualizacion ? ' gelia-preparacion--actualizacion' : ''}`} aria-label="Preparación en tienda">
         {!inicial && !actualizacion && <header className="gelia-preparacion-contexto">
@@ -86,8 +88,9 @@ export default function ConsultaPreparacionTienda({ tarea, auth, documentos = []
             pedido={{ ...pedido, cliente: { nombre: pedido.cliente_nombre }, almacen: tarea.almacen, documentos: pedido.documentos || referencias, solicitud_preparacion: pedido }}
             documentos={referencias} evidenciasGuardadas={fotosGuardadas} onDirtyChange={setCapturaDirty}
             onEnviar={form => enviar(route('control_pedidos.tienda.disponibilidad', tarea.id), form)} /> : <div className="grid gap-4 p-3 md:p-4">
-            {!actualizacion && tarea.respuesta && <RespuestaPreparacionTienda mostrarSeguimientoEntrega={false} tarea={tarea} onVerDocumentos={(documentos, indice = 0) => setVista({ documentos, indice })} />}
-            <AjustesSolicitadosTienda tarea={tarea} auth={auth} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={setAjustesDirty} confirmarConjunto={!confirmado} />
+            {!actualizacion && tarea.respuesta && <RespuestaPreparacionTienda mostrarSeguimientoEntrega={false} tarea={tarea} onVerDocumentos={verDocumentos}
+                accionesDePieza={pieza => sustituidas.has(Number(pieza.revision_id)) ? <span className="gelia-pedidos-atributo tienda-respuesta-sustitucion">Sustitución solicitada</span> : null} />}
+            <AjustesSolicitadosTienda tarea={tarea} auth={auth} ocupado={ocupado} onEnviar={onEnviar} onDirtyChange={setAjustesDirty} onVer={verDocumentos} confirmarConjunto={!confirmado} />
             {!confirmado && espera && <aside className="gelia-preparacion-instrucciones" role="status"><h4>{ajustes ? 'Actualización pendiente' : 'Respuesta enviada'}</h4><p>{espera}</p></aside>}
             {horariosActivos && !confirmado && cobertura.tipo === 'apartado' && <VigenciaApartadoTienda venceAt={vence} />}
             {puedeSeparar && <section className="registrar-tienda-panel grid gap-3" aria-label="Confirmación del apartado">

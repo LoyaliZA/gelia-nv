@@ -115,10 +115,16 @@ function ResultadoDisponibilidad({ area, pedido, revisiones, onVer, accionesDePi
         documentos: documentos.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
     }));
     const cambios = filasDeCambios(solicitudCambios, pedido.documentos || [], { revisionIdsEnTabla: new Set(filas.map(f => Number(f.id))) });
+    if (area === 'control_pedidos' && solicitudCambios.modalidad_entrega === 'tienda') {
+        // En esta consulta la tabla representa las piezas reportadas por CEDIS.
+        const movimientos = cambios.actuales.filter(c => c.tipo !== 'anexo' || c.etiqueta !== 'Todo OK');
+        cambios.actuales = cambios.actuales.filter(c => !movimientos.includes(c));
+        cambios.anteriores = [...movimientos, ...cambios.anteriores];
+    }
     return <RespuestaDisponibilidadPedido
-        cambios={cambios} avisoReapertura={avisoReapertura}
+        cambios={cambios} avisoReapertura={avisoReapertura} desplazarPiezas
         titulo={revision.actualizacion_pendiente ? 'Respuesta anterior de disponibilidad' : 'Respuesta de disponibilidad'} origen={area === 'preparacion_tienda' ? 'Tienda' : 'CEDIS'} ariaLabel={area === 'preparacion_tienda' ? 'Resultado de la revisión en tienda' : 'Resultado de la consulta en CEDIS'} mostrarCaptura={false}
-        responsable={pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || revision.respondida_por_nombre || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
+        responsable={revision.respondida_por_nombre || pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name || (pedido.historial || []).find(h => Number(h.usuario?.id) === Number(revision.respondida_por_id))?.usuario?.name}
         fecha={revision.respondida_at} estado={revision.estado} aceptacionVigente={revision.aceptacion_vigente !== false}
         filas={filas} generales={generales} anteriores={anteriores} cantidad={piezas.length ? piezas.reduce((s,p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
         onVer={onVer} accionesDePieza={accionesDePieza}
@@ -224,14 +230,20 @@ export default function SeguimientoSolicitudTienda({
         try { await axios.post(`/control-pedidos/${pedidoId}/reabrir-consulta`, {}, { headers: cabeceras() }); const { data } = await axios.get(`/control-pedidos/${pedidoId}/disponibilidad-tienda`); aplicar(data); setCerradaLocal(false); onConsultaReabierta?.(); setAviso('Consulta reabierta. Se notificó a quien revisó el pedido.'); }
         catch (e) { setAviso(mensajeDe(e, 'No se pudo reabrir la consulta.')); } finally { setReabriendo(false); }
     };
-    const accionesDePieza = pieza => {
+    const accionesDePieza = (pieza, descripcionVisible) => {
         const idRevision = pieza.revision_id || (pieza.descripcion_producto ? pieza.id : null);
         const coincidencias = filas.filter(r => pieza.sku ? r.sku === pieza.sku : r.descripcion_producto === (pieza.descripcion || pieza.descripcion_producto));
         if (!adaptador.capacidades.sustituir) return null;
         const revision = idRevision ? filas.find(r => Number(r.id) === Number(idRevision)) : coincidencias.length === 1 ? coincidencias[0] : null;
-        return revision ? <AccionesRapidasDisponibilidad key={revision.id} compacta pedidoId={pedidoId} pieza={revision} almacenId={adaptador.almacenId || visto?.almacen_id || visto?.tarea_preparacion?.almacen?.id} soloLectura={soloLectura || cerrada} onActualizar={aplicar} onVer={(documentos, indice) => setVista({ documentos, indice })} /> : null;
+        return revision ? <AccionesRapidasDisponibilidad key={revision.id} compacta pedidoId={pedidoId} pieza={revision} descripcionVisible={descripcionVisible} almacenId={adaptador.almacenId || visto?.almacen_id || visto?.tarea_preparacion?.almacen?.id} soloLectura={soloLectura || cerrada} onActualizar={aplicar} onVer={(documentos, indice) => setVista({ documentos, indice })} /> : null;
     };
     const faltante = filas.some(p => p.estado_fisico === 'sin_existencia' && !p.resolucion);
+    const consultaCedis = area === 'control_pedidos' && solicitud.modalidad_entrega === 'tienda';
+    const enCurso = consultaCedis ? revisionesDelCicloEnCurso(solicitud) : new Set();
+    const bloqueoAnexo = (area === 'preparacion_tienda' || consultaCedis) && solicitud.modalidad_entrega === 'tienda'
+        && filas.some(p => !enCurso.has(Number(p.id)) && ['regular', 'malo', 'danado', 'sin_existencia'].includes(p.estado_fisico) && !p.resolucion && !p.retirada_at)
+        ? 'Confirme, retire o sustituya las piezas pendientes antes de agregar más.'
+        : '';
 
     const [aviso, setAviso] = useState('');
     const [vista, setVista] = useState(null);
@@ -249,9 +261,8 @@ export default function SeguimientoSolicitudTienda({
     const estado = solicitud?.revision_disponibilidad?.estado;
     const ajustePendiente = anexosPendientesRevision(solicitud);
     const puedeConfirmar = !ajustePendiente && !soloLectura && emitida && !cerrada && Boolean(visto?.puede_cerrar_consulta) && !faltante;
-    const causaCierre = (area === 'preparacion_tienda' && ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : null)
-        || visto?.motivo_bloqueo_cierre
-        || (ajustePendiente ? 'Hay un anexo pendiente de respuesta. Puede seguir anexando o retirando piezas.' : '');
+    const esperaAnexo = ajustePendiente ? 'Hay un anexo pendiente de respuesta.' : '';
+    const causaCierre = bloqueoAnexo || (area === 'preparacion_tienda' && esperaAnexo) || visto?.motivo_bloqueo_cierre || esperaAnexo;
 
     if (!pedidoId) return null;
     if (municipalTrasConversion?.solicitud_preparacion?.modalidad_entrega === 'municipal') {
@@ -288,6 +299,7 @@ export default function SeguimientoSolicitudTienda({
             {cerrada && <ConfirmacionSolicitud pedido={visto} pedidoId={pedidoId} cerrada faltante={faltante} soloLectura={soloLectura} onReabrir={reabrir} />}
             <RespuestaPreparacionTienda
                 tarea={tareaVisible}
+                desplazarPiezas
                 mostrarCaptura={false}
                 accionesDePieza={accionesDePieza}
                 onVerDocumentos={(documentos, indice) => setVista({ documentos, indice })}
@@ -308,6 +320,7 @@ export default function SeguimientoSolicitudTienda({
                     pedido={visto}
                     solicitud={solicitud}
                     adaptador={adaptador}
+                    bloqueoAnexo={bloqueoAnexo}
                     onSolicitud={(siguiente) => { setSolicitud(siguiente); onSolicitud?.(siguiente); }}
                     onAviso={setAviso}
                     onVer={(documentos, indice) => setVista({ documentos, indice })}

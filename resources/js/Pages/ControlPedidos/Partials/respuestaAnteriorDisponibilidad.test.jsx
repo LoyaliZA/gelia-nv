@@ -6,6 +6,7 @@ import ConsultaSolicitudTienda from './ConsultaSolicitudTienda';
 import SeguimientoSolicitudMunicipal from '../Municipal/SeguimientoSolicitudMunicipal';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import RespuestaPreparacionTienda from './RespuestaPreparacionTienda';
+import PanelRespuestaDisponibilidad from './PanelRespuestaDisponibilidad';
 vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 let root, container;
 beforeEach(() => { globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
@@ -46,6 +47,22 @@ it('Municipal: una pieza guardada por persistir_unidad no se mezcla con la respu
     await act(() => root.render(<SeguimientoSolicitudMunicipal pedido={pedido} />));
     expect(container.textContent).toContain('Pieza de la respuesta anterior');
     expect(container.textContent).not.toContain('Pieza revisada a medias');
+});
+
+it.each(['Tienda', 'CEDIS'])('Municipal en %s muestra la pieza original junto al SKU de reemplazo', async origen => {
+    const pedido = base();
+    const solicitud = pedido.solicitud_preparacion;
+    solicitud.modalidad_entrega = 'municipal';
+    solicitud.consulta_municipal = { area: origen === 'Tienda' ? 'tienda' : 'cedis' };
+    pedido.revisiones_producto[0].descripcion_producto = 'Pieza con detalle 5';
+    solicitud.acciones_disponibilidad = { 11: { revision_id: 11, accion: 'sustituir', descripcion: 'Pieza con detalle 5' } };
+    solicitud.anexo_sin_remision[0].sustituye_revision_id = 11;
+
+    await act(() => root.render(<PanelRespuestaDisponibilidad pedido={pedido} revision={solicitud.revision_disponibilidad} origen={origen} />));
+
+    const sustitucion = container.querySelector('[data-sustitucion]');
+    expect(sustitucion.textContent).toContain('Pieza a sustituirPieza con detalle 1');
+    expect(sustitucion.textContent).toContain('Reemplazo solicitadoParcial B · B-2 · 1 pza(s)');
 });
 
 it('la respuesta de la tarea de Tienda tampoco publica las piezas ni fotos pendientes', async () => {
@@ -122,7 +139,8 @@ it('varias piezas guardadas conservan pendientes, evidencias y fecha anterior al
  s.anexo_sin_remision.forEach(a => { a.pendiente_revision = false; a.respondida_at = '2026-11-03T10:00:00Z'; });
  s.revision_disponibilidad = { ...s.revision_disponibilidad, actualizacion_pendiente: false, respondida_at: '2026-11-03T10:00:00Z' };
  await render(enviada);
- expect(estadosCambios()).toEqual(['Con piezas reportadas', 'Todo OK', 'Con piezas reportadas', 'Todo OK']);
+ expect(estadosCambios()).toEqual(['Con piezas reportadas', 'Con piezas reportadas']);
+ expect([...container.querySelectorAll('.tienda-respuesta-oks .consulta-cambio-estado')].map(e => e.textContent)).toEqual(['Todo OK', 'Todo OK']);
  expect(container.querySelector('img[src="/foto-borrador.png"]')).not.toBeNull();
  expect(container.textContent).toContain('Faltante todavía no enviado');
 });

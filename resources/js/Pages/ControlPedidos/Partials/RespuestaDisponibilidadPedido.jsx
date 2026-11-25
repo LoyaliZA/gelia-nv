@@ -3,9 +3,22 @@ import { AlertTriangle, CheckCircle2, ClipboardCheck, Eye, Image, Package, Layer
 import { GELIA_ICON_BOX, GELIA_BTN_OUTLINE } from '../../../utils/geliaTheme';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
-import { tonoDePieza } from './cambiosDisponibilidad';
+import { esFilaRespuestaCorrecta, numerarPiezasConDetalle, tonoDePieza } from './cambiosDisponibilidad';
 
 const TONO_ICONO = { exito: CheckCircle2, peligro: AlertTriangle, aviso: AlertTriangle };
+
+/** Mini de lo que salió bien: mismo molde que las tarjetas de movimientos, para que Ventas lo vea de un vistazo. */
+function MiniOk({ mini, onVer }) {
+    const docs = mini.documentos || [];
+    return <article className="consulta-cambio" data-tipo="anexo" data-origen="ok">
+        {docs.length > 0 && <MiniaturaDocumento documento={docs[0]} onVer={() => onVer?.(docs, 0)} className="consulta-cambio-miniatura" />}
+        <div className="consulta-cambio-cuerpo">
+            <header className="consulta-cambio-titulo"><CheckCircle2 size={16} aria-hidden /><strong>{mini.descripcion}</strong></header>
+            <p className="consulta-cambio-identidad">{[mini.sku, mini.cantidad ? `${mini.cantidad} pza(s)` : ''].filter(Boolean).join(' · ') || 'Sin SKU'}</p>
+            <p className="consulta-cambio-estado">Todo OK</p>
+        </div>
+    </article>;
+}
 
 /** Fila de un cambio pedido (anexo, retiro o decisión): mismo molde que una pieza, con su estado en texto. */
 function FilaCambio({ cambio, onVer }) {
@@ -23,8 +36,16 @@ function FilaCambio({ cambio, onVer }) {
 const ESTADOS = { bueno: 'Bueno', regular: 'Con detalle', malo: 'Malo', danado: 'Dañado', sin_existencia: 'Sin existencias' };
 
 /** Presentación común. Los identificadores y decisiones siguen perteneciendo a su revisión. */
-export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de disponibilidad', ariaLabel = titulo, responsable, fecha, estado, origen, filas = [], generales = [], anteriores = [], cantidad, labelCantidad = 'Piezas afectadas', columnaCantidad = 'Revisadas', aceptacionVigente = true, mostrarCaptura = true, onVer, accionesDePieza, cambios = null, avisoReapertura = '', children }) {
-    const cambiosActuales = cambios?.actuales || [];
+export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de disponibilidad', ariaLabel = titulo, responsable, fecha, estado, origen, filas: filasRecibidas = [], generales = [], anteriores = [], cantidad, labelCantidad = 'Piezas afectadas', columnaCantidad = 'Revisadas', aceptacionVigente = true, mostrarCaptura = true, desplazarPiezas = false, onVer, accionesDePieza, cambios = null, avisoReapertura = '', children }) {
+    const okFilas = filasRecibidas.filter(esFilaRespuestaCorrecta);
+    const filas = numerarPiezasConDetalle(filasRecibidas.filter(fila => !esFilaRespuestaCorrecta(fila)));
+    const desplazable = desplazarPiezas && filas.some(f => ['regular', 'malo', 'danado', 'sin_existencia'].includes(f.estado_fisico));
+    const okCambios = (cambios?.actuales || []).filter(c => c.tipo === 'anexo' && c.etiqueta === 'Todo OK');
+    const cambiosActuales = (cambios?.actuales || []).filter(c => !okCambios.includes(c));
+    const minisOk = [
+        ...okFilas.map(f => ({ clave: `p-${f.clave || f.id}`, descripcion: f.descripcion, sku: f.sku, cantidad: f.cantidad, documentos: f.documentos || [] })),
+        ...okCambios.map(c => ({ clave: c.clave, descripcion: c.descripcion, sku: c.sku, cantidad: c.cantidad, documentos: c.documentos || [] })),
+    ];
     const cambiosAnteriores = cambios?.anteriores || [];
     const incidencias = estado === 'excepciones_pendientes';
     const etiqueta = incidencias ? 'Con detalles o faltantes' : estado === 'sin_excepciones' ? 'Todo OK' : 'Revisión registrada';
@@ -33,7 +54,7 @@ export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de d
             <span className={GELIA_ICON_BOX}><ClipboardCheck size={22} aria-hidden /></span>
             <div className="min-w-0"><div className="tienda-respuesta-titulo"><h3>{titulo}</h3>{origen && <span className="gelia-pedidos-atributo">{origen}</span>}</div><p><UserRound size={14} aria-hidden /><span className="min-w-0">{responsable ? `Respondió ${responsable}` : estado ? 'Respuesta registrada' : 'Pendiente de respuesta'}{fecha ? ` · ${formatearFechaNegocio(fecha)}` : ''}</span></p></div>
         </header>
-        {(filas.length > 0 || cambiosActuales.length > 0) && <div className="tienda-respuesta-lista" role="table" aria-label="Productos de la respuesta">
+        {(filas.length > 0 || cambiosActuales.length > 0) && <div className="tienda-respuesta-lista" data-desplazable={desplazable || undefined} tabIndex={desplazable ? 0 : undefined} role="table" aria-label="Productos de la respuesta">
             <div className="tienda-respuesta-columnas" role="row"><span role="columnheader"><Package size={15} aria-hidden />Producto</span><span role="columnheader"><ClipboardCheck size={15} aria-hidden />{columnaCantidad}</span><span role="columnheader"><CheckCircle2 size={15} aria-hidden />Resultado</span><span role="columnheader"><Image size={15} aria-hidden />Foto</span><span role="columnheader">Acciones</span></div>
             {filas.map((fila, indice) => {
                 const fotos = fila.documentos || [];
@@ -48,7 +69,7 @@ export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de d
                         {observacion.trim() && observacion.trim().toLowerCase() !== estadoFila.toLowerCase() && <p className="tienda-respuesta-observacion">{observacion}</p>}
                     </div>
                     <div role="cell" data-label="Foto" className="tienda-respuesta-fotos">{fotos.length > 0 ? <button type="button" className={`${GELIA_BTN_OUTLINE} tienda-respuesta-ver-fotos`} onClick={() => onVer?.(fotos, 0)} aria-label={`Ver fotos de ${fila.descripcion}: ${fotos.length}`}><Eye size={16} aria-hidden /><span>{fotos.length} {fotos.length === 1 ? 'foto' : 'fotos'}</span></button> : <span className="text-xs theme-text-muted">Sin foto</span>}</div>
-                    <div role="cell" data-label="Acciones" className="tienda-respuesta-acciones">{accionesDePieza?.(fila.original || fila) || <span className="text-xs theme-text-muted">—</span>}</div>
+                    <div role="cell" data-label="Acciones" className="tienda-respuesta-acciones">{accionesDePieza?.(fila.original || fila, fila.descripcion) || <span className="text-xs theme-text-muted">—</span>}</div>
                 </div>;
             })}
             {cambiosActuales.map(cambio => <FilaCambio key={cambio.clave} cambio={cambio} onVer={onVer} />)}
@@ -57,6 +78,7 @@ export default function RespuestaDisponibilidadPedido({ titulo = 'Respuesta de d
         {cambiosAnteriores.length > 0 && <details className="tienda-respuesta-movimientos"><summary>Movimientos ({cambiosAnteriores.length})</summary><div className="tienda-respuesta-lista" role="table" aria-label="Movimientos anteriores">{cambiosAnteriores.map(cambio => <FilaCambio key={cambio.clave} cambio={cambio} onVer={onVer} />)}</div></details>}
         <footer className="tienda-respuesta-resumen">
             {estado && <span className={`gelia-estado-vivo gelia-estado-vivo--compacto ${incidencias ? 'gelia-estado-vivo--aviso' : 'gelia-estado-vivo--exito'}`}>{etiqueta}</span>}
+            {minisOk.length > 0 && <div className="tienda-respuesta-oks consulta-cambios-minis" aria-label="Piezas con Todo OK">{minisOk.map(mini => <MiniOk key={mini.clave} mini={mini} onVer={onVer} />)}</div>}
             {!aceptacionVigente && <span className="gelia-pedidos-atributo">Ajuste pendiente</span>}
             {cantidad !== null && cantidad !== undefined && <span className="tienda-respuesta-conteo"><Layers size={18} aria-hidden />{labelCantidad}: <strong>{cantidad}</strong></span>}
             {mostrarCaptura && generales.length > 0 && <div className="tienda-respuesta-captura"><Image size={18} aria-hidden /><span>Captura del pedido</span><div className="flex flex-wrap gap-2">{generales.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => onVer?.(generales, i)} className="tienda-respuesta-miniatura" />)}</div></div>}

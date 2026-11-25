@@ -87,7 +87,8 @@ export function EtiquetasPieza({ fila }) {
     </span>;
 }
 
-export function PiezaExcepcionCedis({ fila, indice, repeticion, manual, disabled, onChange, onQuitar, onVer }) {
+/** `soloFotos`: el flujo por fotos. Una pieza con detalle existe, y una sin existencias entra como tal desde el catálogo: ninguna alterna el estado. */
+export function PiezaExcepcionCedis({ fila, indice, repeticion, manual, disabled, onChange, onQuitar, onVer, soloFotos = false }) {
     const [expandida, setExpandida] = useState(Boolean(fila.detalle && fila.condicion !== 'faltante') || manual && !fila.sku && !fila.porFoto);
     const capturaRef = useRef(null);
     const sinExistencias = fila.condicion === 'faltante';
@@ -102,7 +103,7 @@ export function PiezaExcepcionCedis({ fila, indice, repeticion, manual, disabled
                 <span className="gelia-cedis-producto-identidad">{repeticion && <span className="gelia-cedis-unidad">{repeticion}</span>}<strong title={`${fila.sku} — ${fila.descripcion}`}>{fila.sku ? `${fila.sku} — ` : ''}{fila.descripcion || 'Pieza por identificar'}</strong></span>
                 <EtiquetasPieza fila={fila} />
             </div>
-            <InterruptoresPieza valor={fila} disabled={disabled} etiqueta={`Estados del producto ${indice + 1}`} onChange={onChange} />
+            {!(soloFotos && sinExistencias) && <InterruptoresPieza valor={fila} sinExistencias={!soloFotos} disabled={disabled} etiqueta={`Estados del producto ${indice + 1}`} onChange={onChange} />}
             {!sinExistencias && <details open={expandida} onToggle={e => setExpandida(e.currentTarget.open)} className="min-w-0 gelia-cedis-detalle">
                 <summary hidden>Comentario y fotos</summary>
                 <div className="grid gap-3">
@@ -154,7 +155,7 @@ export default function CapturaExcepcionesConsulta({
         <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={disabled} onClick={onCapturarManual}><Plus size={16} aria-hidden />Capturar sin catálogo</button>
         </>}
         <p className="text-xs theme-text-muted m-0">Abre una unidad para registrar sus detalles.</p>
-        {excepciones.map((fila, i) => archivadas.has(fila.clave) ? null : <PiezaExcepcionCedis key={fila.clave} fila={fila} indice={i} repeticion={repeticionDe(excepciones, fila)} manual={manual} disabled={disabled} onChange={cambios => onChange?.(i, cambios)} onQuitar={() => onQuitar?.(i)} onVer={onVer} />)}
+        {excepciones.map((fila, i) => archivadas.has(fila.clave) ? null : <PiezaExcepcionCedis key={fila.clave} soloFotos={!onAgregar} fila={fila} indice={i} repeticion={repeticionDe(excepciones, fila)} manual={manual} disabled={disabled} onChange={cambios => onChange?.(i, cambios)} onQuitar={() => onQuitar?.(i)} onVer={onVer} />)}
         {archivadas.size > 0 && <details className="gelia-cedis-archivo">
             <summary className="text-xs theme-text-muted cursor-pointer">Ya respondidas · {archivadas.size}</summary>
             <ul className="grid gap-1 m-0 mt-2 pl-0 list-none">

@@ -1547,7 +1547,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_guardar_una_captura_deja_pendiente_a_la_hermana_sin_retiro_fisico(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
             'solicitud_id' => (string) Str::uuid(),
@@ -1584,32 +1584,29 @@ class SolicitudRegistrarTiendaTest extends TestCase
     {
         $pedido = $this->consultaConExcepcion();
         $pieza = $pedido->revisionesProducto()->firstOrFail();
+        // Ventas pide una alternativa por documento: línea sin solicitud_id ni unidades materializadas.
+        $this->post('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', [
+            'revision_id' => $pieza->id, 'accion' => 'sustituir', 'entrada' => 'documento',
+            'solicitud_id' => (string) Str::uuid(), 'evidencia' => UploadedFile::fake()->image('alternativa.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
             'solicitud_id' => (string) Str::uuid(),
             'evidencias' => [UploadedFile::fake()->createWithContent('a.pdf', 'captura-a')],
         ], ['Accept' => 'application/json'])->assertOk();
         $pedido->refresh();
-        $anexo = $pedido->solicitud_preparacion_json['anexo_sin_remision'][0];
+        $anexo = $pedido->solicitud_preparacion_json['anexo_sin_remision'][1];
         $actualizacionId = $pedido->solicitud_preparacion_json['revision_disponibilidad']['actualizacion_id'];
         $url = '/control-pedidos/cedis/'.$pedido->id.'/disponibilidad';
         // El anexo documental ya revisado conserva su respuesta y su evidencia.
         $this->post($url, ['persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId, 'cambios_revisados' => [[
-            'tipo' => 'anexo', 'indice' => 0, 'unidad_id' => 'anexo:'.$anexo['solicitud_id'].':doc:'.$anexo['documento_id'],
+            'tipo' => 'anexo', 'indice' => 1, 'unidad_id' => 'anexo:'.$anexo['solicitud_id'].':doc:'.$anexo['documento_id'],
             'documento_id' => $anexo['documento_id'], 'resultado' => 'correcto']]], ['Accept' => 'application/json'])->assertOk();
-        // Ventas pide una alternativa por documento: línea sin solicitud_id ni unidades materializadas.
-        $this->post('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', [
-            'revision_id' => $pieza->id, 'accion' => 'sustituir', 'entrada' => 'documento',
-            'solicitud_id' => (string) Str::uuid(), 'evidencia' => UploadedFile::fake()->image('alternativa.jpg'),
-        ], ['Accept' => 'application/json'])->assertOk();
-        $pedido->refresh();
-        $json = $pedido->solicitud_preparacion_json;
-        $nueva = $json['anexo_sin_remision'][1];
-        $actualizacionId = $json['revision_disponibilidad']['actualizacion_id'];
+        $nueva = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0];
         // Identidad que calcula el formulario cuando la línea aún no trae solicitud_id/unidades.
         $idFormulario = 'anexo:doc:'.$nueva['documento_id'];
         $this->post($url, ['persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId, 'cambios_revisados' => [[
-            'tipo' => 'anexo', 'indice' => 1, 'unidad_id' => $idFormulario, 'documento_id' => $nueva['documento_id'], 'resultado' => 'correcto']]],
+            'tipo' => 'anexo', 'indice' => 0, 'unidad_id' => $idFormulario, 'documento_id' => $nueva['documento_id'], 'resultado' => 'correcto']]],
             ['Accept' => 'application/json'])->assertOk();
         $json = $pedido->fresh()->solicitud_preparacion_json;
         $this->assertSame('correcto', $json['anexo_sin_remision'][1]['unidades'][0]['resultado']);
@@ -1619,7 +1616,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_persistir_unidad_no_escribe_la_hermana_por_indice(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
             'solicitud_id' => (string) Str::uuid(),
@@ -1668,7 +1665,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_una_captura_todo_ok_y_otra_con_detalle_no_cruzan_solicitudes_del_mismo_sku(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
             'solicitud_id' => (string) Str::uuid(),
@@ -1721,7 +1718,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
                 'descripcion' => 'Frasco golpeado',
                 'sku' => 'SKU-DET',
                 'cantidad' => 1,
-                'condicion' => 'detalle',
+                'condicion' => 'detalle', 'mejor_ejemplar' => true,
                 'detalle' => 'Golpe en tapa',
                 'origen_unidad_id' => $idCapturaDetalle,
                 'evidencias' => [UploadedFile::fake()->image('defecto-captura.jpg')],
@@ -1751,7 +1748,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_el_pedido_sigue_en_el_listado_de_ventas_tras_enviar_la_consulta_y_recibir_respuesta_y_anexos(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $listar = fn (string $tab) => collect(app(\App\Services\ControlPedidos\ListarPedidosBmaService::class)
             ->ejecutar($this->usuario, ['tab' => $tab])->items())->pluck('id')->all();
         $this->assertContains($pedido->id, $listar('TODAS'), 'Tras la respuesta debe seguir en Todas.');
@@ -1765,7 +1762,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_el_avance_parcial_no_toca_la_respuesta_anterior_y_el_envio_final_solo_exige_lo_vigente(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $anterior = $pedido->fresh()->solicitud_preparacion_json['revision_disponibilidad'];
         $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
@@ -1782,7 +1779,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->post($url, [
             'persistir_unidad' => 1, 'actualizacion_id' => $actualizacionId,
             'cambios_revisados' => [['tipo' => 'anexo', 'unidad_id' => $idA, 'documento_id' => $docs[0]['id'], 'resultado' => 'incidencia']],
-            'excepciones' => [['descripcion' => 'Pieza parcial', 'sku' => 'SKU-P', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Tapa floja', 'origen_unidad_id' => $idA, 'evidencias' => [UploadedFile::fake()->image('p.jpg')]]],
+            'excepciones' => [['descripcion' => 'Pieza parcial', 'sku' => 'SKU-P', 'cantidad' => 1, 'condicion' => 'detalle', 'mejor_ejemplar' => true, 'detalle' => 'Tapa floja', 'origen_unidad_id' => $idA, 'evidencias' => [UploadedFile::fake()->image('p.jpg')]]],
         ], ['Accept' => 'application/json'])->assertOk();
 
         $fresco = $pedido->fresh();
@@ -1856,6 +1853,90 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->assertNull($pedido->fresh()->consulta_cerrada_at);
     }
 
+    public function test_un_anexo_nuevo_se_suma_a_la_sustitucion_pendiente_sin_reemplazarla(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'excepciones_pendientes'];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $pieza = $pedido->revisionesProducto()->create(['descripcion_producto' => 'Pieza sin existencias', 'cantidad_solicitada' => 1, 'estado_fisico' => 'sin_existencia', 'orden' => 1]);
+        $this->actingAs($this->usuario)->post('/control-pedidos/'.$pedido->id.'/disponibilidad-tienda', [
+            'revision_id' => $pieza->id, 'accion' => 'sustituir', 'entrada' => 'documento', 'solicitud_id' => (string) Str::uuid(),
+            'evidencia' => UploadedFile::fake()->image('alternativa.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+        $antes = $pedido->fresh()->solicitud_preparacion_json;
+
+        $this->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
+            'entrada' => 'documento', 'solicitud_id' => (string) Str::uuid(), 'evidencia' => UploadedFile::fake()->image('anexo.jpg'),
+        ], ['Accept' => 'application/json'])->assertOk();
+
+        $despues = $pedido->fresh()->solicitud_preparacion_json;
+        $this->assertCount(2, $despues['anexo_sin_remision']);
+        $this->assertSame($pieza->id, $despues['anexo_sin_remision'][0]['sustituye_revision_id']);
+        $this->assertTrue($despues['anexo_sin_remision'][0]['pendiente_revision']);
+        $this->assertSame($antes['revision_disponibilidad']['actualizacion_id'] ?? null, $despues['revision_disponibilidad']['actualizacion_id'] ?? null, 'la consulta abierta conserva su identidad');
+        $this->getJson('/control-pedidos/tienda/tareas/'.$tarea->id)->assertOk()->assertJsonCount(2, 'tarea.pedido.anexos_pendientes');
+    }
+
+    public function test_preparacion_tienda_bloquea_anexo_hasta_resolver_las_piezas_publicadas(): void
+    {
+        Storage::fake('public');
+        Notification::fake();
+        $this->permitirRevision();
+        $tarea = $this->solicitarTienda();
+        $tarea->update(['estado' => 'RESPONDIDA', 'asignada_a_id' => $this->usuario->id]);
+        $pedido = $tarea->pedido;
+        $json = $pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad'] = ['estado' => 'excepciones_pendientes'];
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        $detalle = $pedido->revisionesProducto()->create(['descripcion_producto' => 'Detalle', 'cantidad_solicitada' => 1, 'estado_fisico' => 'regular', 'orden' => 1]);
+        $faltante = $pedido->revisionesProducto()->create(['descripcion_producto' => 'Faltante', 'cantidad_solicitada' => 1, 'estado_fisico' => 'sin_existencia', 'orden' => 2]);
+
+        $this->actingAs($this->usuario);
+        $url = '/control-pedidos/'.$pedido->id;
+        $solicitar = fn () => $this->post($url.'/anexo-tienda', [
+            'entrada' => 'documento', 'solicitud_id' => (string) Str::uuid(),
+            'evidencia' => UploadedFile::fake()->image('anexo.jpg'),
+        ], ['Accept' => 'application/json']);
+        $documentos = $pedido->documentos()->count();
+        $solicitar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->postJson($url.'/disponibilidad-tienda', ['revision_id' => $detalle->id, 'accion' => 'confirmar', 'solicitud_id' => (string) Str::uuid()])->assertOk();
+        $solicitar()->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertSame($documentos, $pedido->documentos()->count());
+
+        $this->postJson($url.'/disponibilidad-tienda', ['revision_id' => $faltante->id, 'accion' => 'retirar', 'solicitud_id' => (string) Str::uuid()])->assertOk();
+        $solicitar()->assertOk()->assertJsonCount(1, 'solicitud_preparacion.anexo_sin_remision');
+    }
+
+    public function test_consulta_cedis_bloquea_anexos_hasta_resolver_las_piezas_publicadas(): void
+    {
+        $pedido = $this->consultaConExcepcion('detalle');
+        $this->assertSame($this->usuario->name, $pedido->solicitud_preparacion_json['revision_disponibilidad']['respondida_por_nombre']);
+        $detalle = $pedido->revisionesProducto()->firstOrFail();
+        $faltante = $pedido->revisionesProducto()->create([
+            'descripcion_producto' => 'Faltante', 'cantidad_solicitada' => 1, 'estado_fisico' => 'sin_existencia', 'orden' => 2,
+        ]);
+        $url = '/control-pedidos/'.$pedido->id;
+        $documento = fn () => ['entrada' => 'documento', 'evidencia' => UploadedFile::fake()->create('anexo.pdf', 10, 'application/pdf')];
+        $catalogo = fn () => [
+            'entrada' => 'catalogo', 'piezas' => [['sku' => 'SKU-NUEVO', 'descripcion' => 'Pieza adicional', 'cantidad' => 1]],
+            'evidencia' => UploadedFile::fake()->image('soporte.jpg'),
+        ];
+
+        $this->post($url.'/anexo-tienda', $documento(), ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->postJson($url.'/disponibilidad-tienda', ['revision_id' => $detalle->id, 'accion' => 'confirmar', 'solicitud_id' => (string) Str::uuid()])->assertOk();
+        $this->post($url.'/anexo-tienda', $catalogo(), ['Accept' => 'application/json'])->assertUnprocessable()->assertJsonValidationErrors('anexo');
+        $this->assertSame(0, $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS)->count());
+
+        $this->postJson($url.'/disponibilidad-tienda', ['revision_id' => $faltante->id, 'accion' => 'retirar', 'solicitud_id' => (string) Str::uuid()])->assertOk();
+        $this->post($url.'/anexo-tienda', $documento(), ['Accept' => 'application/json'])->assertOk()->assertJsonCount(1, 'solicitud_preparacion.anexo_sin_remision');
+    }
+
     private function responderActualizacion(PedidoBma $pedido): void
     {
         $pedido->refresh();
@@ -1868,7 +1949,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
             'evidencias' => [UploadedFile::fake()->image('actualizacion-conjunto.jpg')]], ['Accept' => 'application/json'])->assertOk();
     }
 
-    private function consultaConExcepcion(string $condicion = 'faltante'): PedidoBma
+    private function consultaConExcepcion(?string $condicion = 'faltante'): PedidoBma
     {
         Storage::fake('public');
         Notification::fake();
@@ -1877,7 +1958,8 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $this->documento($pedido);
         $this->actingAs($this->usuario)->postJson('/control-pedidos/'.$pedido->id.'/solicitud-tienda', $this->solicitud($pedido, 'control_pedidos'))->assertOk();
         $this->post('/control-pedidos/cedis/'.$pedido->id.'/disponibilidad', [
-            'confirmacion_explicita' => 0, 'excepciones' => [['descripcion' => 'Aroma de prueba', 'sku' => 'SKU-ANTERIOR', 'cantidad' => 1, 'condicion' => $condicion, 'detalle' => 'Resultado para revisar con cliente', 'evidencias' => $condicion === 'detalle' ? [UploadedFile::fake()->image('defecto.jpg')] : []]],
+            'confirmacion_explicita' => $condicion === null ? 1 : 0,
+            'excepciones' => $condicion === null ? [] : [['descripcion' => 'Aroma de prueba', 'sku' => 'SKU-ANTERIOR', 'cantidad' => 1, 'condicion' => $condicion, 'mejor_ejemplar' => $condicion === 'detalle', 'detalle' => 'Resultado para revisar con cliente', 'evidencias' => $condicion === 'detalle' ? [UploadedFile::fake()->image('defecto.jpg')] : []]],
             'evidencias' => [UploadedFile::fake()->image('respuesta.jpg')],
         ], ['Accept' => 'application/json'])->assertOk();
 
@@ -1943,7 +2025,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_anexo_avanzado_reintentado_no_duplica_documentos_y_devuelve_solicitud_guardada(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $clave = (string) Str::uuid();
         $url = '/control-pedidos/'.$pedido->id.'/anexo-tienda';
         $datos = ['entrada' => 'documento', 'solicitud_id' => $clave, 'evidencia' => UploadedFile::fake()->image('anexo.jpg')];
@@ -1956,7 +2038,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
 
     public function test_anexos_consecutivos_devuelven_version_de_consulta_creciente_para_que_una_lectura_previa_no_los_pise(): void
     {
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $url = '/control-pedidos/'.$pedido->id.'/anexo-tienda';
         $versiones = [];
         foreach (['documento', 'catalogo', 'documento'] as $entrada) {
@@ -1976,7 +2058,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
     public function test_anexo_y_retiro_admiten_varios_archivos_hasta_50_mb_por_consulta(): void
     {
         config(['control_pedidos.ajuste_tienda_adjuntos_max_bytes' => 4096]);
-        $pedido = $this->consultaConExcepcion();
+        $pedido = $this->consultaConExcepcion(null);
         $ajeno = User::factory()->create();
         $this->actingAs($ajeno)->post('/control-pedidos/'.$pedido->id.'/anexo-tienda', [
             'entrada' => 'documento',
@@ -2448,7 +2530,7 @@ class SolicitudRegistrarTiendaTest extends TestCase
         $alias = 'anexo:doc:'.$doc->id;
         $datos = ['actualizacion_id' => $json['revision_disponibilidad']['actualizacion_id'],
             'cambios_revisados' => [['tipo' => 'anexo', 'indice' => 0, 'documento_id' => $doc->id, 'unidad_id' => $alias, 'resultado' => 'incidencia']],
-            'excepciones' => [['descripcion' => 'Legada', 'sku' => '', 'cantidad' => 1, 'condicion' => 'detalle', 'detalle' => 'Defecto conservado', 'origen_unidad_id' => $alias, 'evidencias' => [UploadedFile::fake()->image('defecto.jpg')]]]];
+            'excepciones' => [['descripcion' => 'Legada', 'sku' => '', 'cantidad' => 1, 'condicion' => 'detalle', 'mejor_ejemplar' => true, 'detalle' => 'Defecto conservado', 'origen_unidad_id' => $alias, 'evidencias' => [UploadedFile::fake()->image('defecto.jpg')]]]];
         $this->post($url.'/disponibilidad', $datos + ['persistir_unidad' => 1], ['Accept' => 'application/json'])->assertOk();
         $canonica = $pedido->fresh()->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades'][0]['unidad_id'];
         $this->assertNotSame($alias, $canonica);

@@ -3,11 +3,13 @@
 namespace App\Http\Requests\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoModalidadPreparacionPedido;
+use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\ControlPedidos\PedidoBmaReferencia;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 abstract class PedidoBmaRequestBase extends FormRequest
 {
@@ -73,6 +75,32 @@ abstract class PedidoBmaRequestBase extends FormRequest
             '0', 'false', 'off', 'no' => 0,
             default => $valor,
         };
+    }
+
+    /** El número de pedido no puede repetir el de otro pedido activo, en cualquier modalidad (edición y autoguardado). */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            $folio = trim((string) $this->input('folio_remision', ''));
+            if ($folio === '' || $validator->errors()->has('folio_remision')) {
+                return;
+            }
+            $actual = $this->route('pedidoBma');
+            if (! $actual instanceof PedidoBma && $this->filled('pedido_id')) {
+                $actual = PedidoBma::query()->find($this->input('pedido_id'));
+            }
+            // Un duplicado heredado no bloquea el guardado mientras el número no cambie.
+            if ($actual instanceof PedidoBma && mb_strtolower(trim((string) $actual->folio_remision)) === mb_strtolower($folio)) {
+                return;
+            }
+            $existente = PedidoBma::query()
+                ->when($actual instanceof PedidoBma, fn ($q) => $q->where('id', '!=', $actual->id))
+                ->where('folio_remision', $folio)
+                ->first(['id', 'folio']);
+            if ($existente) {
+                $validator->errors()->add('folio_remision', "El número de pedido {$folio} ya está registrado en el pedido {$existente->folio}.");
+            }
+        });
     }
 
     protected function reglasComunes(): array

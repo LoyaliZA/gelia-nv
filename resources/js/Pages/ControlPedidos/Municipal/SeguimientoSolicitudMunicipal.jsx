@@ -106,8 +106,8 @@ export default function SeguimientoSolicitudMunicipal({ pedido, onCerrar, onReab
                     anteriores={anteriores}
                     cantidad={piezas.length ? piezas.reduce((s, p) => s + Number(p.cantidad_solicitada || 0), 0) : null}
                     onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })}
-                    accionesDePieza={pieza => !adaptador.capacidades.sustituir || pieza?.resolucion || !['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico) ? null : (
-                        <AccionesRapidasDisponibilidad compacta pieza={pieza} pedidoId={pedido.id} almacenId={adaptador.almacenId} onActualizar={onPedidoActualizado} onOcupado={marcarOcupado} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
+                    accionesDePieza={(pieza, descripcionVisible) => !adaptador.capacidades.sustituir || pieza?.resolucion || !['regular', 'malo', 'danado', 'sin_existencia'].includes(pieza?.estado_fisico) ? null : (
+                        <AccionesRapidasDisponibilidad compacta pieza={pieza} descripcionVisible={descripcionVisible} pedidoId={pedido.id} almacenId={adaptador.almacenId} onActualizar={onPedidoActualizado} onOcupado={marcarOcupado} onVer={(docs, indice) => setDocPreview({ documentos: docs, indice })} />
                     )}
                 />
             )}

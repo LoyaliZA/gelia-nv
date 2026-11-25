@@ -129,7 +129,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         return data;
     };
 
-    const ejecutarPieza = async (pieza, { accion, entrada, producto, archivo, solicitudId }) => {
+    const ejecutarPieza = async (pieza, descripcionVisible, { accion, entrada, producto, archivo, solicitudId }) => {
         const cabeceras = { Accept: 'application/json' };
         if (accion === 'confirmar') {
             const { data } = await axios.post(`/control-pedidos/${pedido.id}/confirmar-pieza-nacional`, { revision_id: pieza.id }, { headers: cabeceras });
@@ -142,7 +142,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         form.append('base_captura', String(pedido.base_captura ?? ''));
         form.append('piezas[0][revision_id]', String(pieza.id));
         form.append('piezas[0][sku]', pieza.sku || '');
-        form.append('piezas[0][descripcion]', pieza.descripcion_producto || pieza.descripcion || '');
+        form.append('piezas[0][descripcion]', descripcionVisible || pieza.descripcion_producto || pieza.descripcion || '');
         form.append('piezas[0][cantidad]', String(Math.max(1, Number(pieza.cantidad_solicitada) || Number(pieza.cantidad_encontrada) || 1)));
         form.append('motivo', accion === 'retirar' ? 'Retiro confirmado con el cliente' : 'Sustitución solicitada por el cliente');
         if (accion === 'sustituir') {
@@ -202,15 +202,16 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                     cantidad={filas.length ? filas.reduce((total, fila) => total + numero(fila.cantidad || 0), 0) : null}
                     labelCantidad="Unidades encontradas"
                     onVer={onVer}
-                    accionesDePieza={(pieza) => (!puedeAjustar || !ESTADOS_CON_DETALLE.includes(pieza?.estado_fisico) ? null : (
+                    accionesDePieza={(pieza, descripcionVisible) => (!puedeAjustar || !ESTADOS_CON_DETALLE.includes(pieza?.estado_fisico) ? null : (
                         <AccionesRapidasDisponibilidad
                             compacta
                             pieza={pieza}
+                            descripcionVisible={descripcionVisible}
                             pedidoId={pedido.id}
                             almacenId={adaptador.almacenId}
                             onActualizar={onPedidoActualizado}
                             onVer={onVer}
-                            ejecutor={(datos) => ejecutarPieza(pieza, datos)}
+                            ejecutor={(datos) => ejecutarPieza(pieza, descripcionVisible, datos)}
                         />
                     ))}
                 >
