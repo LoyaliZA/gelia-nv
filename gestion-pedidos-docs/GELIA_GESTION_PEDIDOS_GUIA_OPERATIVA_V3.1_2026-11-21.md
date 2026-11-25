@@ -162,12 +162,14 @@ Si al guardar el formulario compartido GELIA detecta un folio que usa otro pedid
 2. **Vendedora → CEDIS.** Solicita disponibilidad con destino municipal; CEDIS responde cantidades, detalles y fotografías. Vendedora resuelve faltantes, anexos y aceptación comercial con el cliente; no remite todavía una compra discutida.
 3. **Vendedora.** Identifica **terminal, carátula, datos de quien recoge, INE y condición PAGADO/POR COBRAR**; confirma si flete se conoce en ese momento o se obtendrá al llegar a terminal (Jaguar). El estado de pago ante terminal no prueba el pago del cliente.
 4. **Cliente/Vendedora → Auxiliar.** Reporta comprobantes y remisión a emitir, o crédito que Wizerp autorice. Auxiliar verifica ingreso/alcance de mercancía y conceptos conocidos; no inventa costo desconocido.
-5. **CEDIS.** Empaca con referencias y carátula (elige con identificación o sin ella); realiza traslado hacia PDV en la rutina documentada. **Ese movimiento interno no es salida a terminal ni entrega al cliente.**
+5. **CEDIS.** Empaca con referencias y carátula (elige con identificación o sin ella); en el mismo registro de evidencia indica caja o bolsa por bulto. Realiza traslado hacia PDV en la rutina documentada. **Ese movimiento interno no es salida a terminal ni entrega al cliente.**
 6. **PDV / gerencia PDV.** Recibe/organiza paquetes, registra salida municipal cuando el repartidor recoge para llevar a terminal; este evento delimita ciertos cambios de modalidad.
 7. **Repartidor → terminal.** Entrega y conserva fotografía/comprobante del evento; comparte costo final si la terminal lo determina después.
 8. **Vendedora.** Comunica ficha/recogida; si el transporte se cobra después, ejecutar M-F02/P-01. No llamar `entregado al cliente` a la mera foto de terminal.
 
 **Resultado válido:** mercancía enviada a terminal con comprobante y condición de cobro explícita, o una espera identificada; el cliente debe poder conocer cómo recoger.
+
+Si el flujo usa **Empaque y salida municipal** sobre un cumplimiento agrupado, el auxiliar registra cuántas cajas y bolsas preparó. GELIA calcula el total de bultos y conserva la evidencia y la confirmación de despacho en sus acciones existentes. Comisiones recibe ese desglose y el de los bultos individuales. Los empaques históricos que solo tienen un total siguen en revisión.
 
 ### M-F02. Terminal con costo conocido después: Jaguar
 
@@ -581,6 +583,8 @@ Cada cambio indica fecha, regla sustituida, decisión humana y casos afectados. 
 | 24-nov-2026 | Registrar detalle (Tienda, Municipal y Nacional comparten componente): el diálogo permite elegir por pieza Única pieza, Mejor ejemplar o Sin existencias, un comentario opcional y su foto (tomar o galería); la fila de cada pieza muestra siempre los tres interruptores y deja el comentario y las fotos en un desplegable que conserva lo escrito. | Los interruptores quedaban dentro de la pieza plegada y el diálogo solo elegía el producto. | Usuario: agilizar el registro de detalle. | CEDIS y Tienda al responder consultas y actualizaciones. |
 | 24-nov-2026 | La bandeja de CEDIS se actualiza sola cuando Ventas manda otra consulta del mismo pedido, incluso después de abrir y cerrar un modal (antes había que recargar). Los tres interruptores de una pieza (Única pieza, Mejor ejemplar, Sin existencias) van siempre en una sola fila. | El estado «pausado» de la bandeja usaba un valor atrasado tras cerrar un modal y descartaba las actualizaciones siguientes. | Usuario: re-consulta de un mismo pedido sin recargar CEDIS. | CEDIS (y Auditar, con el mismo ajuste); Tienda y Municipal comparten los interruptores. |
 | 24-nov-2026 | Pesaje nacional de CEDIS: una pieza con detalle cuya foto sigue vigente (Evidencia vigente) ya no se rechaza con «Adjunta una foto de cada producto con detalle»; basta la foto guardada o una nueva. En una nueva consulta o anexo, las piezas con detalle de la consulta anterior pasan a «Consulta anterior», un resumen plegado de solo lectura que se conserva en la respuesta; solo se editan las piezas del ciclo en curso. | La validación del modal solo contaba fotos nuevas, y la captura listaba todas las piezas previas como editables. | Usuario: pedido 5545 (PBMA-2026-00043), evidencias vigentes marcadas como error y consulta anterior editable por accidente. | N-F01, QA-N01 |
+| 25-nov-2026 | El empaque con evidencia individual registra caja o bolsa. El cumplimiento agrupado municipal captura cajas y bolsas y conserva el total calculado. | Evidencia individual sin tipo y captura agrupada con solo total. | Ola 1 de Comisiones de Empaque. Conservar evidencias, remisiones y recorridos legados. | M-F01 y cumplimiento agrupado municipal. CEDIS: una caja y una bolsa con sus fotos. Tienda: dos cajas y una bolsa suman tres bultos. |
+
 
 
 **Fin de la guía operativa maestra V3.1.**

@@ -25,6 +25,9 @@
 - [Consultas](CONSULTAS_DISPONIBILIDAD.md), [Auditoría](AUDITORIA_PAGOS.md), [Guías](DELEGADO_GUIAS.md), Traspasos y PDV.
 - [verificado] Fase posterior al empaque distingue guía de cliente, sin rastreo y traslado interno: `app/Support/ControlPedidos/MaquinaEstadosPedidoBma.php:204`.
 
+- [verificado] El formulario de evidencia individual registra caja o bolsa por bulto. La custodia documental de Tienda sigue capturando solo bolsas. Los registros anteriores pueden quedar sin tipo.
+- [verificado] El cumplimiento agrupado municipal conserva cajas, bolsas, total, fecha y responsable de empaque en el mismo paso.
+
 ## Cómo probar
 - [PRUEBAS](../PRUEBAS.md): grupo con miembro bloqueado, bulto sin evidencia, recolección parcial y usuario CEDIS sin Bitácora.
 
@@ -33,4 +36,4 @@
 - [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
 - [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
 
-- Última verificación: 2026-11-24, sin commit, árbol de trabajo; pesaje nacional: catálogo global, sin almacén ni inventario.
+- Última verificación: 2026-11-25, árbol de trabajo sobre bd084501; captura de empaque individual y cumplimiento agrupado.

@@ -143,6 +143,7 @@ class EmpaqueBultosCedisTest extends TestCase
 
         $pedido = $pedido->fresh(['bultosEmpaque']);
         $this->assertSame(1, $pedido->bultosEmpaque->count());
+        $this->assertNull($pedido->bultosEmpaque->first()->tipo_bulto);
         $this->assertNotNull($pedido->empacado_at);
     }
 
@@ -178,6 +179,7 @@ class EmpaqueBultosCedisTest extends TestCase
             $pedido = $pedido->fresh(['bultosEmpaque.documentos']);
             $this->assertNotNull($pedido->empacado_at);
             $this->assertCount(1, $pedido->bultosEmpaque);
+            $this->assertSame('bolsa', $pedido->bultosEmpaque->first()->tipo_bulto);
             $documentos = $pedido->bultosEmpaque->first()->documentos;
             $this->assertCount(1, $documentos);
             $this->assertSame(PedidoBmaDocumento::TIPO_EVIDENCIA_BULTO_EMPAQUE, $documentos->first()->tipo);

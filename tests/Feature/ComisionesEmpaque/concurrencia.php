@@ -1,6 +1,8 @@
 <?php
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
+use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteUnidadComisionEmpaque;
@@ -11,10 +13,14 @@ use App\Models\ComisionesEmpaque\RepartoParticipanteComisionEmpaque;
 use App\Models\ComisionesEmpaque\TarifaComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque;
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\User;
 use App\Services\ComisionesEmpaque\ConfirmarCorteComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\GestionarUnidadComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\RegistrarPagoComisionEmpaqueService;
+use App\Services\ComisionesEmpaque\SincronizarComisionesEmpaqueService;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +81,27 @@ exit(($fallos > 0 || ! $verificado) ? 1 : 0);
 function preparar(string $caso, string $marca): void
 {
     $user = User::factory()->create(['name' => $marca]);
+    if ($caso === 'sincronizar') {
+        ConfiguracionComisionEmpaque::actual()->update(['fecha_inicio' => '2026-01-01']);
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $estatus = CatalogoEstatusPedido::query()->where('fase_ciclo', CatalogoEstatusPedido::FASE_EN_CEDIS)->first()
+            ?? CatalogoEstatusPedido::query()->firstOrFail();
+        $pedido = PedidoBma::query()->create([
+            'folio' => $marca, 'fecha' => '2026-10-11', 'vendedor_id' => $user->id,
+            'catalogo_estatus_pedido_id' => $estatus->id, 'numero_cajas' => 1, 'total_mercancia' => 100,
+            'costo_envio' => 0, 'envio_por_cobrar' => true, 'empacado_at' => '2026-10-11 12:00:00',
+            'empacado_por_id' => $user->id,
+        ]);
+        PedidoBmaCaja::query()->create([
+            'pedido_bma_id' => $pedido->id, 'uuid_operativo' => (string) Illuminate\Support\Str::uuid(),
+            'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+            'orden' => 1, 'cantidad' => 1, 'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA,
+            'estatus_recoleccion' => PedidoBmaCaja::ESTATUS_PENDIENTE,
+        ]);
+        file_put_contents(sys_get_temp_dir().'/'.$marca, $user->id.'|'.$area->id);
+
+        return;
+    }
     $tienda = AreaComisionEmpaque::query()->create([
         'codigo' => $marca, 'nombre' => $marca, 'activo' => true, 'sistema' => false,
     ]);
@@ -139,16 +166,33 @@ function preparar(string $caso, string $marca): void
 
 function trabajador(string $caso, string $marca): int
 {
+    $hasta = microtime(true) + 10;
     while (file_get_contents(sys_get_temp_dir().'/'.$marca.'-go') !== 'go') {
+        if (microtime(true) >= $hasta) {
+            fwrite(STDERR, "No inició la carrera.\n");
+
+            return 1;
+        }
         usleep(20000);
     }
     $partes = explode('|', (string) file_get_contents(sys_get_temp_dir().'/'.$marca));
     $user = User::query()->findOrFail((int) $partes[0]);
     $tienda = AreaComisionEmpaque::query()->findOrFail((int) ($partes[1] ?? 0));
     try {
+        if ($caso === 'sincronizar') {
+            $sync = app(SincronizarComisionesEmpaqueService::class);
+            if ($GLOBALS['argv'][2] === '1') {
+                return $sync->ejecutar($user, [$tienda->id])->estado === 'ok' ? 0 : 1;
+            }
+
+            (new ProcesarCambiosComisionesEmpaque)->handle($sync);
+
+            return 0;
+        }
         if ($caso === 'capturar') {
             app(GestionarUnidadComisionEmpaqueService::class)->registrarManual([
                 'clave_idempotencia' => $marca,
+                'area_id' => $tienda->id,
                 'empacado_at' => '2026-10-11 12:00:00',
                 'cantidad' => 1,
                 'cliente_nombre' => $marca,
@@ -197,6 +241,12 @@ function trabajador(string $caso, string $marca): int
 
 function verificar(string $caso, string $marca): bool
 {
+    if ($caso === 'sincronizar') {
+        $unidades = UnidadComisionEmpaque::query()->where('folio_pedido', $marca)->get();
+
+        return $unidades->count() === 1 && $unidades->first()->situacion === UnidadComisionEmpaque::ELEGIBLE
+            && $unidades->first()->lineas()->count() === 1;
+    }
     if ($caso === 'capturar') {
         return UnidadComisionEmpaque::query()->where('clave_idempotencia', $marca)->count() === 1;
     }

@@ -100,8 +100,10 @@ function Sincronizacion({ fechaInicio, fechaFin, sincronizacion, puedeCargar, ca
     return <section className={geliaCardClass('space-y-4 p-4')}>
         <h2 className="m-0 text-base font-bold">Rango autorizado de sincronización</h2>
         {sincronizacion && <div className="text-sm theme-text-muted">
-            <p className="m-0">{momentoLegible(sincronizacion.finalizado_at)} · {sincronizacion.mensaje}</p>
-            {sincronizacion.estado === 'ok' && <p className="m-0">{sincronizacion.nuevas} nuevos · {sincronizacion.actualizadas} actualizados · {sincronizacion.diferencias} diferencias</p>}
+            {sincronizacion.mensaje && <p className="m-0">{sincronizacion.mensaje}</p>}
+            {sincronizacion.areas?.map((area) => <p key={area.id} className="m-0">
+                {area.nombre} · Última ejecución {area.ultima_at ? momentoLegible(area.ultima_at) : 'pendiente'} · Último éxito {area.ultima_exitosa_at ? momentoLegible(area.ultima_exitosa_at) : 'pendiente'}
+            </p>)}
         </div>}
         <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); form.transform((datos) => ({ ...datos, fecha_fin: datos.fecha_fin || null })); form.put(route('gestion_interna.comisiones_empaque.fecha_inicio'), { preserveScroll: true }); }}>
             <label><span className={THEME_LABEL}>Importar desde</span><input className={THEME_INPUT} required type="date" value={form.data.fecha_inicio} onChange={(e) => form.setData('fecha_inicio', e.target.value)} /></label>

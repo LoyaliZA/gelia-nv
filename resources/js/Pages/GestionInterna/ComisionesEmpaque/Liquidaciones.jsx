@@ -3,13 +3,18 @@ import { useEffect, useMemo, useState } from 'react';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 import { BOTON_FILTRO, ErroresFormulario, dinero, ir } from './compartido';
 
-export function Preparar({ areas, filtros, preview, puede }) {
+export function Preparar({ areas, filtros, preview: calculo, puede }) {
+    const [preview] = useState(calculo);
     const [area, setArea] = useState(filtros.area_id || areas[0]?.id || '');
     const [desde, setDesde] = useState(filtros.limite_desde || filtros.desde || '');
     const [hasta, setHasta] = useState(filtros.limite_hasta || filtros.hasta || '');
     const [tardias, setTardias] = useState(!!Number(filtros.incluir_tardias || 0));
     const calculoVigente = String(area) === String(filtros.area_id) && desde === filtros.limite_desde && hasta === filtros.limite_hasta && tardias === !!Number(filtros.incluir_tardias || 0);
     const form = useForm({});
+    const retorno = {
+        area_id: area, periodo_id: filtros.periodo_id, desde, hasta,
+        limite_desde: desde, limite_hasta: hasta, incluir_tardias: tardias ? 1 : 0, retorno_corte: 1,
+    };
 
     function ver(e) {
         e.preventDefault();
@@ -50,26 +55,34 @@ export function Preparar({ areas, filtros, preview, puede }) {
                 )}
             </div>
             <aside className={geliaCardClass('p-4 h-fit space-y-2 lg:sticky lg:top-4')}>
-                <h2 className="text-base font-black m-0">Resumen</h2>
+                <h2 className="text-base font-semibold m-0">Resumen del corte</h2>
                 {(!preview || !calculoVigente) && <p className="text-sm theme-text-muted m-0">Revise el cálculo para ver cantidades, reparto e importe.</p>}
                 {preview && calculoVigente && (
                     <>
-                        <p className="m-0 text-sm">Cajas: {preview.cajas}</p>
-                        <p className="m-0 text-sm">Cajas por revisar · {preview.cajas_pendientes ?? 0}</p>
-                        <p className="m-0 text-sm">Cajas excluidas · {preview.cajas_excluidas ?? 0}</p>
-                        <p className="m-0 text-sm font-bold">Fondo común · {dinero(preview.importe)}</p>
-                        {preview.tarifas?.map((t) => <p key={t} className="m-0 text-sm">{dinero(t)} por caja</p>)}
-                        {!!preview.pendientes && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => ir({ tab: 'acumulado', area_id: area, desde, hasta, vista: 'pendientes' })}>Revisar empaques pendientes</button>}
-                        {puede.configurar && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => ir({ tab: 'equipo', area_id: area })}>Revisar equipo y reparto</button>}
-                        {preview.tipos.map((t) => <p key={t.nombre} className="m-0 text-sm">{t.nombre}: {t.cantidad}</p>)}
-                        {preview.tramos.map((tramo) => (
-                            <div key={tramo.reparto_id} className="text-sm border-t theme-border pt-2">
-                                {(tramo.participantes || []).map((p) => <p key={p.participante_id} className="m-0">{p.nombre} {p.porcentaje}% · {dinero(p.importe)}</p>)}
-                            </div>
-                        ))}
-                        {preview.errores.map((error) => <p key={error} className="theme-text-peligro text-sm m-0" role="alert">{error}</p>)}
-                        {form.errors.corte && <p className="theme-text-peligro text-sm m-0" role="alert">{form.errors.corte}</p>}
-                        {puede.confirmar && preview.errores.length === 0 && preview.unidades.length > 0 && (
+                        <dl className="m-0 grid grid-cols-2 gap-2 text-sm">
+                            {[
+                                ['Cajas', preview.cajas], ['Por revisar', preview.cajas_pendientes ?? 0],
+                                ['Excluidas', preview.cajas_excluidas ?? 0], ['Fondo del corte', dinero(preview.importe)],
+                            ].map(([nombre, valor]) => <div key={nombre}><dt className="text-xs theme-text-muted">{nombre}</dt><dd className="m-0 font-semibold tabular-nums">{valor}</dd></div>)}
+                        </dl>
+                        <p className="m-0 text-xs theme-text-muted">{[...preview.tipos.map((tipo) => `${tipo.nombre} · ${tipo.cantidad}`), ...(preview.tarifas || []).map((t) => `${dinero(t)} por caja`)].join(' / ')}</p>
+                        {preview.tramos.length > 0 && <table className="w-full border-t theme-border text-left text-sm">
+                            <caption className="sr-only">Reparto del corte</caption>
+                            <thead><tr className="theme-text-muted"><th className="py-2 font-medium">Colaborador</th><th className="text-right font-medium">%</th><th className="text-right font-medium">Importe</th></tr></thead>
+                            {preview.tramos.map((tramo) => <tbody key={tramo.reparto_id}>
+                                {(tramo.participantes || []).map((p) => <tr key={p.participante_id} className="border-t theme-border">
+                                    <th scope="row" className="py-2 pr-1 font-medium">{p.nombre}</th><td className="pr-2 text-right tabular-nums">{p.porcentaje}%</td><td className="text-right tabular-nums">{dinero(p.importe)}</td>
+                                </tr>)}
+                            </tbody>)}
+                        </table>}
+                        {(preview.errores.length > 0 || form.errors.corte) && <section className="border-t theme-border pt-2" aria-label="Impedimentos para confirmar">
+                            {[...preview.errores, form.errors.corte].filter(Boolean).map((error) => <p key={error} className="theme-text-peligro text-sm m-0" role="alert">{error}</p>)}
+                        </section>}
+                        <div className="flex flex-wrap gap-2">
+                            {!!preview.pendientes && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => ir({ ...retorno, tab: 'acumulado', vista: 'pendientes' })}>Revisar empaques pendientes</button>}
+                            {puede.configurar && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => ir({ ...retorno, tab: 'equipo' })}>Revisar equipo y reparto</button>}
+                        </div>
+                        {puede.confirmar && !form.errors.corte && preview.errores.length === 0 && preview.unidades.length > 0 && (
                             <button type="button" className={THEME_BTN_PRIMARY} disabled={form.processing} onClick={() => { form.transform(() => ({ area_id: area, limite_desde: desde, limite_hasta: hasta, incluir_tardias: tardias, hash: preview.hash, ...(filtros.periodo_id ? { periodo_id: filtros.periodo_id } : {}) })); form.post(route('gestion_interna.comisiones_empaque.confirmar')); }}>Confirmar corte</button>
                         )}
                     </>
@@ -113,7 +126,7 @@ export function Cortes({ cortes, corte, puede }) {
                             <a className={THEME_BTN_SECONDARY} href={route('gestion_interna.comisiones_empaque.exportar.reparto', corte.id)}>Exportar reparto</a>
                         </div>
                     )}
-                    {(corte.unidades || []).map((u) => <p key={u.clave} className="text-sm m-0">{u.empacado_at} · {u.pedido} · {u.cantidad} · {dinero(u.importe)}{u.excepcion_resguardo ? ' · Excepción de resguardo' : ''}</p>)}
+                    {(corte.unidades || []).map((u) => <p key={u.clave} className="text-sm m-0">{u.empacado_at} · {u.pedido} · {u.cantidad} · {dinero(u.importe)}{u.excepcion_resguardo ? ' · Excepción de resguardo' : ''}{u.conciliacion && <span className="block text-xs theme-text-muted">{u.conciliacion.responsable} · {u.conciliacion.observaciones}{u.conciliacion.referencia && ` · ${u.conciliacion.referencia}`}</span>}</p>)}
                     {(corte.asignaciones || []).map((a) => <p key={a.id} className="text-sm m-0">{a.nombre} {a.porcentaje}% · reconocido {dinero(a.reconocido)} · pagado {dinero(a.pagado)} · pendiente {dinero(a.pendiente)}</p>)}
                     {(corte.ajustes || []).map((a, i) => <p key={i} className="text-sm theme-text-aviso m-0">Ajuste {dinero(a.importe)} {a.aplicar_en_saldo ? 'aplicado al saldo' : 'solo registrado'} · {a.motivo}</p>)}
                 </section>
@@ -144,7 +157,7 @@ export function Pagos({ saldos, puede, areaId }) {
             </label>
             {persona && (
                 <div className={geliaCardClass('p-4 space-y-3')}>
-                    <p className="m-0 text-sm">Pendiente actual: {dinero(persona.pendiente)} · Reconocido: {dinero(persona.reconocido)} · Pagado: {dinero(persona.pagado)}</p>
+                    <p className="m-0 text-sm">Saldo acumulado {areaId ? 'del área' : 'de las áreas consultadas'} · Por pagar {dinero(persona.pendiente)} · Confirmado {dinero(persona.reconocido)} · Pagado {dinero(persona.pagado)}</p>
                     {persona.asignaciones.map((a) => (
                         <label key={a.id} className="flex flex-wrap gap-2 items-center text-sm">
                             <input type="checkbox" checked={seleccion[a.id] != null} onChange={(e) => setSeleccion((prev) => {

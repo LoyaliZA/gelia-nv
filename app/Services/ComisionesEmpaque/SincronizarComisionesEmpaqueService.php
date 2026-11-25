@@ -6,7 +6,6 @@ use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
 use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\SincronizacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
-use App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\OperacionEmpaqueMiembro;
 use App\Models\ControlPedidos\PedidoBma;
@@ -14,11 +13,15 @@ use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaHistorialEstado;
 use App\Models\User;
+use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use App\Support\ComisionesEmpaque\FuentesComisionEmpaque;
 use App\Support\ComisionesEmpaque\HuellaFuenteComisionEmpaque;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Enumerable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Throwable;
 
 class SincronizarComisionesEmpaqueService
@@ -28,116 +31,186 @@ class SincronizarComisionesEmpaqueService
         private GestionarUnidadComisionEmpaqueService $gestionar,
     ) {}
 
-    public function ejecutar(?User $responsable, ?array $areasAutorizadas = null): SincronizacionComisionEmpaque
+    public function ejecutar(?User $responsable, ?array $areasAutorizadas = null, ?array $pedidos = null, ?array $intervalo = null, bool $automatica = false): SincronizacionComisionEmpaque
     {
-        $config = ConfiguracionComisionEmpaque::actual();
         $sync = SincronizacionComisionEmpaque::query()->create([
             'estado' => 'en_curso',
             'iniciado_at' => now(),
             'ejecutado_por_id' => $responsable?->id,
-            'area_ids' => $areasAutorizadas,
+            'area_ids' => $areasAutorizadas ?? AreaComisionEmpaque::query()->pluck('id')->all(),
+            'automatica' => $automatica,
         ]);
 
-        if ($config->fecha_inicio === null) {
+        try {
+            $config = ConfiguracionComisionEmpaque::actual();
+            if ($config->fecha_inicio === null) {
+                $sync->update([
+                    'estado' => 'omitida',
+                    'mensaje' => 'Defina el inicio de sincronización en Configuración.',
+                    'finalizado_at' => now(),
+                ]);
+
+                return $sync;
+            }
+
+            $inicio = DineroComisionEmpaque::inicioDia($config->fecha_inicio->toDateString(), $config->zona_horaria);
+            $fin = $config->fecha_fin ? DineroComisionEmpaque::finDia($config->fecha_fin->toDateString(), $config->zona_horaria) : null;
+            $areas = AreaComisionEmpaque::query()->whereIn('id', $sync->area_ids)->orderBy('id')->pluck('id', 'codigo');
+            $conteo = $this->conteo();
+            $ids = $pedidos !== null
+                ? collect($pedidos)->unique()->sort()
+                : $this->pedidosEnIntervalo($intervalo ? $inicio->max($intervalo[0]) : $inicio, $intervalo && $fin ? $fin->min($intervalo[1]) : ($intervalo[1] ?? $fin), $areas->all());
+            foreach ($ids as $id) {
+                $resultado = DB::transaction(function () use ($id, $areas, $inicio, $fin, $responsable) {
+                    AreaComisionEmpaque::query()->whereIn('id', $areas->values())->orderBy('id')->lockForUpdate()->get();
+
+                    return $this->sincronizarPedido((int) $id, $areas->all(), $inicio, $fin, $responsable);
+                }, 3);
+                $this->sumar($conteo, $resultado);
+            }
+
+            foreach ($conteo['areas_modificadas'] as $areaModificada) {
+                Cache::forever('comisiones-empaque:revision:'.$areaModificada, (string) Str::uuid());
+            }
             $sync->update([
-                'estado' => 'omitida',
-                'mensaje' => 'Defina el inicio de sincronización en Configuración.',
+                'estado' => 'ok',
+                'mensaje' => 'Sincronización terminada.',
+                'unidades_nuevas' => $conteo['nuevas'],
+                'unidades_actualizadas' => $conteo['actualizadas'],
+                'diferencias' => $conteo['diferencias'],
+                'detalle' => $conteo['detalle'],
                 'finalizado_at' => now(),
             ]);
-
-            return $sync;
-        }
-
-        try {
-            return $this->sincronizar($config, $sync, $responsable, $areasAutorizadas);
         } catch (Throwable $error) {
             report($error);
             $sync->update([
                 'estado' => 'error',
-                'mensaje' => 'La actualización quedó incompleta. Pulse Actualizar para reintentar.',
+                'mensaje' => 'La actualización quedó incompleta. Vuelva a intentar.',
                 'finalizado_at' => now(),
             ]);
-
-            return $sync->fresh();
         }
+
+        return $sync;
     }
 
-    private function sincronizar(ConfiguracionComisionEmpaque $config, SincronizacionComisionEmpaque $sync, ?User $responsable, ?array $areasAutorizadas): SincronizacionComisionEmpaque
+    public function pedidosEnIntervalo(Carbon $inicio, ?Carbon $fin, array $areas, ?array $ids = null): Enumerable
     {
-        $inicio = Carbon::parse($config->fecha_inicio)->startOfDay();
-        $fin = $config->fecha_fin ? Carbon::parse($config->fecha_fin)->endOfDay() : null;
-        $cedis = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
-        $tienda = AreaComisionEmpaque::query()->where('codigo', 'tienda')->firstOrFail();
-        $permiteCedis = $areasAutorizadas === null || in_array($cedis->id, $areasAutorizadas, true);
-        $permiteTienda = $areasAutorizadas === null || in_array($tienda->id, $areasAutorizadas, true);
-        $nuevas = 0;
-        $actualizadas = 0;
-        $diferencias = 0;
-        $detalle = [];
+        $fecha = fn ($q) => $q->where('empacado_at', '>=', $inicio)
+            ->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin));
+        $existentes = UnidadComisionEmpaque::query()->whereIn('area_id', $areas)
+            ->whereNotNull('pedido_bma_id')->tap($fecha)->select('pedido_bma_id as id');
+        $codigos = AreaComisionEmpaque::query()->whereIn('id', $areas)->pluck('codigo');
+        $cedis = $codigos->contains('cedis');
+        $tienda = $codigos->contains('tienda');
+        $municipio = 'solicitud_preparacion_json->modalidad_entrega';
+        $areaMunicipio = 'solicitud_preparacion_json->consulta_municipal->area';
+        $pedidos = PedidoBma::query()->select('id')->where(function ($pedidos) use ($cedis, $tienda, $fecha, $municipio, $areaMunicipio) {
+            $pedidos->whereRaw('1 = 0');
+            if ($cedis || $tienda) {
+                $pedidos->orWhere(function ($cabecera) use ($cedis, $tienda, $fecha, $municipio, $areaMunicipio) {
+                    $cabecera->whereNotNull('empacado_at')->where(fn ($q) => $q->where($fecha)->orWhereHas('bultosEmpaque', $fecha));
+                    if ($cedis && ! $tienda) {
+                        $cabecera->where(fn ($q) => $q->whereNull($municipio)->orWhere($municipio, '!=', 'municipal')
+                            ->orWhereNull($areaMunicipio)->orWhere($areaMunicipio, '!=', 'tienda'));
+                    }
+                    if ($tienda && ! $cedis) {
+                        $cabecera->where($municipio, 'municipal')->where($areaMunicipio, 'tienda');
+                    }
+                });
+            }
+            if ($tienda) {
+                $pedidos->orWhereHas('tareasPreparacion.cumplimientoFisico', $fecha);
+            }
+        });
 
-        // ponytail: cada actualización recorre el rango vigente, no todo el histórico.
-        // El siguiente paso, si el rango crece, es una marca de agua por updated_at.
-        PedidoBma::query()
-            ->when(! $permiteCedis && ! $permiteTienda, fn ($q) => $q->whereRaw('1 = 0'))
-            ->whereNotNull('empacado_at')
-            ->where(fn ($q) => $q->where(fn ($q) => $q->where('empacado_at', '>=', $inicio)->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin)))
-                ->orWhereHas('bultosEmpaque', fn ($q) => $q->where('empacado_at', '>=', $inicio)->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin))))
-            ->with(['cajas.remisionesActivas.pedido:id,numero_remision,folio_remision', 'bultosEmpaque.empacadoPor:id,name', 'cliente:id,nombre', 'paqueteria:id,nombre,categoria,modalidad_tarifa', 'tipoGuia:id,nombre', 'envioTienda:id,nombre', 'empacadoPor:id,name', 'estatus:id,fase_ciclo', 'miembroOperacionEmpaque.operacion:id,folio_operacion'])
-            ->orderBy('id')
-            ->chunkById(80, function ($pedidos) use ($cedis, $tienda, $permiteCedis, $permiteTienda, $inicio, $fin, $responsable, &$nuevas, &$actualizadas, &$diferencias, &$detalle) {
-                $ops = $this->contextoOperaciones($pedidos->pluck('id')->all());
-                foreach ($pedidos as $pedido) {
-                    $conteo = $this->sincronizarCedis($pedido, $permiteCedis ? $cedis->id : null, $permiteTienda ? $tienda->id : null, $ops, $inicio, $fin, $responsable);
-                    $nuevas += $conteo['nuevas'];
-                    $actualizadas += $conteo['actualizadas'];
-                    $diferencias += $conteo['diferencias'];
-                    foreach ($conteo['detalle'] as $linea) {
-                        if (count($detalle) < 40) {
-                            $detalle[] = $linea;
-                        }
+        return DB::query()->fromSub($pedidos->toBase()->union($existentes->toBase()), 'pedidos')
+            ->when($ids !== null, fn ($query) => $query->whereIntegerInRaw('id', $ids))
+            ->lazyById(100)->pluck('id');
+    }
+
+    private function sincronizarPedido(int $id, array $areas, Carbon $inicio, ?Carbon $fin, ?User $responsable): array
+    {
+        $conteo = $this->conteo();
+        $pedido = PedidoBma::query()->with([
+            'cajas.remisionesActivas.pedido:id,numero_remision,folio_remision',
+            'bultosEmpaque.empacadoPor:id,name', 'cliente:id,nombre', 'paqueteria:id,nombre,categoria,modalidad_tarifa',
+            'tipoGuia:id,nombre', 'envioTienda:id,nombre', 'anexosEnvio', 'caratulasComision', 'empacadoPor:id,name', 'estatus:id,fase_ciclo',
+            'tareasPreparacion.cumplimientoFisico.empacadoPor:id,name', 'tareasPreparacion.modalidad', 'tareasPreparacion.paqueteria',
+        ])->find($id);
+
+        $existentes = UnidadComisionEmpaque::query()->where('pedido_bma_id', $id)
+            ->whereIn('area_id', $areas)->orderBy('id')->lockForUpdate()->get();
+        $claves = [];
+        $propuestas = [];
+        if ($pedido) {
+            $municipal = HuellaFuenteComisionEmpaque::empaqueMunicipalEnTienda($pedido);
+            $area = $areas[$municipal ? 'tienda' : 'cedis'] ?? null;
+            if ($area && $pedido->empacado_at) {
+                $propuestas = $this->propuestasCedis($pedido, $area, $this->contextoOperaciones([$id])[$id] ?? null);
+                if ($municipal) {
+                    $propuestas = $this->propuestasMunicipalTienda($pedido, $area, $propuestas);
+                }
+            }
+            if (isset($areas['tienda'])) {
+                foreach ($pedido->tareasPreparacion as $tarea) {
+                    $cumplimiento = $tarea->cumplimientoFisico;
+                    if ($cumplimiento && $cumplimiento->empacado_at && $cumplimiento->bultos_salida > 0) {
+                        $cumplimiento->setRelation('tarea', $tarea->setRelation('pedido', $pedido));
+                        $propuestas[] = $this->propuestaTienda($cumplimiento, $areas['tienda']);
                     }
                 }
-            });
-
-        PedidoBmaCumplimientoFisico::query()
-            ->when(! $permiteTienda, fn ($q) => $q->whereRaw('1 = 0'))
-            ->whereNotNull('empacado_at')
-            ->where('empacado_at', '>=', $inicio)
-            ->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin))
-            ->with(['tarea.pedido.cliente:id,nombre', 'tarea.pedido.paqueteria:id,nombre,categoria,modalidad_tarifa', 'tarea.modalidad:id,nombre', 'tarea.paqueteria:id,nombre', 'tarea.pedido.empacadoPor:id,name', 'tarea.pedido.estatus:id,fase_ciclo', 'empacadoPor:id,name'])
-            ->orderBy('id')
-            ->chunkById(80, function ($filas) use ($tienda, $inicio, $responsable, &$nuevas, &$actualizadas, &$diferencias, &$detalle) {
-                foreach ($filas as $cumplimiento) {
-                    $conteo = $this->sincronizarTienda($cumplimiento, $tienda->id, $inicio, $responsable);
-                    $nuevas += $conteo['nuevas'];
-                    $actualizadas += $conteo['actualizadas'];
-                    $diferencias += $conteo['diferencias'];
-                    foreach ($conteo['detalle'] as $linea) {
-                        if (count($detalle) < 40) {
-                            $detalle[] = $linea;
-                        }
-                    }
-                }
-            });
-
-        if ($permiteTienda) {
-            $this->marcarCumplimientosAusentes($inicio, $fin, $responsable, $diferencias);
+            }
         }
-        $this->marcarFuentesAusentes($inicio, $fin, $responsable, $diferencias, $detalle, $areasAutorizadas);
-        $this->revisarCancelacionesManuales($responsable, $diferencias, $detalle, $areasAutorizadas);
-        $this->marcarExcepcionResguardo($areasAutorizadas);
+        foreach ($propuestas as $propuesta) {
+            if ($propuesta['empacado_at']->lt($inicio) || ($fin && $propuesta['empacado_at']->gt($fin))) {
+                continue;
+            }
+            $claves[] = $propuesta['clave_origen'];
+        }
+        foreach ($existentes as $unidad) {
+            $antes = $conteo['diferencias'];
+            if (in_array($unidad->origen_registro, ['manual', 'carga'], true)) {
+                $situacionPrevia = $unidad->situacion;
+                $this->gestionar->reconciliarCancelacionManual($unidad, $responsable);
+                $conteo['diferencias'] += (int) ($situacionPrevia !== $unidad->situacion);
+            } elseif (! in_array($unidad->clave_origen, $claves, true)
+                && $unidad->empacado_at->gte($inicio) && (! $fin || $unidad->empacado_at->lte($fin))) {
+                $this->marcarAusente($unidad, $responsable, $conteo);
+            }
+            if ($antes !== $conteo['diferencias']) {
+                $conteo['areas_modificadas'][] = $unidad->area_id;
+            }
+        }
+        foreach ($propuestas as $propuesta) {
+            if (! in_array($propuesta['clave_origen'], $claves, true)) {
+                continue;
+            }
+            $resultado = $this->guardar($propuesta, $responsable, $pedido, $claves);
+            $this->sumar($conteo, [
+                'nuevas' => (int) $resultado['nueva'],
+                'actualizadas' => (int) $resultado['actualizada'],
+                'diferencias' => (int) $resultado['diferencia'],
+                'detalle' => $resultado['mensaje'] ? [$resultado['mensaje']] : [],
+                'areas_modificadas' => $resultado['nueva'] || $resultado['actualizada'] ? [$propuesta['area_id']] : [],
+            ]);
+        }
+        $this->marcarExcepcionResguardo(array_values($areas), $id);
 
-        $sync->update([
-            'estado' => 'ok',
-            'mensaje' => 'Sincronización terminada.',
-            'unidades_nuevas' => $nuevas,
-            'unidades_actualizadas' => $actualizadas,
-            'diferencias' => $diferencias,
-            'detalle' => $detalle,
-            'finalizado_at' => now(),
-        ]);
+        return $conteo;
+    }
 
-        return $sync->fresh();
+    private function conteo(): array
+    {
+        return ['nuevas' => 0, 'actualizadas' => 0, 'diferencias' => 0, 'detalle' => [], 'areas_modificadas' => []];
+    }
+
+    private function sumar(array &$conteo, array $resultado): void
+    {
+        foreach (['nuevas', 'actualizadas', 'diferencias'] as $campo) {
+            $conteo[$campo] += $resultado[$campo];
+        }
+        $conteo['areas_modificadas'] = array_unique(array_merge($conteo['areas_modificadas'], $resultado['areas_modificadas']));
+        $conteo['detalle'] = array_slice(array_merge($conteo['detalle'], $resultado['detalle']), 0, 40);
     }
 
     /**
@@ -175,45 +248,6 @@ class SincronizarComisionesEmpaqueService
         }
 
         return $porPedido;
-    }
-
-    /** @return array{nuevas: int, actualizadas: int, diferencias: int, detalle: list<string>} */
-    private function sincronizarCedis(PedidoBma $pedido, ?int $areaId, ?int $tiendaId, array $ops, Carbon $inicio, ?Carbon $fin, ?User $responsable): array
-    {
-        $op = $ops[(int) $pedido->id] ?? null;
-        $municipalTienda = HuellaFuenteComisionEmpaque::empaqueMunicipalEnTienda($pedido);
-        $areaOrigen = $municipalTienda ? $tiendaId : $areaId;
-        $propuestas = $areaOrigen ? $this->propuestasCedis($pedido, $areaOrigen, $op) : [];
-        if ($municipalTienda && $tiendaId) {
-            $propuestas = $this->propuestasMunicipalTienda($pedido, $tiendaId, $propuestas);
-        }
-        $claves = [];
-        $conteo = ['nuevas' => 0, 'actualizadas' => 0, 'diferencias' => 0, 'detalle' => []];
-
-        foreach ($propuestas as $propuesta) {
-            $claves[] = $propuesta['clave_origen'];
-            if ($propuesta['empacado_at']->lt($inicio) || ($fin && $propuesta['empacado_at']->gt($fin))) {
-                continue;
-            }
-            $resultado = $this->guardar($propuesta, $inicio, $responsable, $pedido);
-            $conteo['nuevas'] += $resultado['nueva'] ? 1 : 0;
-            $conteo['actualizadas'] += $resultado['actualizada'] ? 1 : 0;
-            $conteo['diferencias'] += $resultado['diferencia'] ? 1 : 0;
-            if ($resultado['mensaje']) {
-                $conteo['detalle'][] = $resultado['mensaje'];
-            }
-        }
-
-        if ($areaId) {
-            $this->ausentesDelPedido($pedido->id, FuentesComisionEmpaque::CEDIS_CAJA, $claves, $responsable, $conteo);
-            $this->ausentesDelPedido($pedido->id, FuentesComisionEmpaque::CEDIS_BULTO, $claves, $responsable, $conteo);
-            $this->ausentesDelPedido($pedido->id, FuentesComisionEmpaque::CEDIS_CABECERA, $claves, $responsable, $conteo);
-        }
-        if ($tiendaId) {
-            $this->ausentesDelPedido($pedido->id, FuentesComisionEmpaque::TIENDA_MUNICIPAL, $claves, $responsable, $conteo);
-        }
-
-        return $conteo;
     }
 
     private function propuestasMunicipalTienda(PedidoBma $pedido, int $areaId, array $propuestas): array
@@ -286,6 +320,7 @@ class SincronizarComisionesEmpaqueService
                     'cantidad_origen' => 1,
                     'situacion_inicial' => $solape ? UnidadComisionEmpaque::SOLAPE_REVISION : null,
                     'linea' => null,
+                    'desglose' => $bulto->tipo_bulto,
                     'empacado_at' => $bulto->empacado_at ?: $base['empacado_at'],
                     'empacador_user_id' => $bulto->empacado_por_id ?: $base['empacador_user_id'],
                     'empacador_nombre' => $bulto->empacado_por_id ? $bulto->empacadoPor?->name : $base['empacador_nombre'],
@@ -308,18 +343,13 @@ class SincronizarComisionesEmpaqueService
         ])];
     }
 
-    /** @return array{nuevas: int, actualizadas: int, diferencias: int, detalle: list<string>} */
-    private function sincronizarTienda(PedidoBmaCumplimientoFisico $cumplimiento, int $areaId, Carbon $inicio, ?User $responsable): array
+    private function propuestaTienda(PedidoBmaCumplimientoFisico $cumplimiento, int $areaId): array
     {
-        $pedido = $cumplimiento->tarea?->pedido;
-        if (! $pedido || (int) $cumplimiento->bultos_salida < 1) {
-            return ['nuevas' => 0, 'actualizadas' => 0, 'diferencias' => 0, 'detalle' => ['Cumplimiento '.$cumplimiento->id.' sin pedido o sin bultos de salida.']];
-        }
-
+        $pedido = $cumplimiento->tarea->pedido;
         $solape = $pedido->empacado_at && ! $pedido->es_resguardo
             && ! HuellaFuenteComisionEmpaque::empaqueMunicipalEnTienda($pedido)
             && ($pedido->cajas()->activas()->exists() || $pedido->bultosEmpaque()->exists() || $pedido->numero_cajas > 0);
-        $propuesta = array_merge($this->basePedido($pedido, $areaId, FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO), [
+        return array_merge($this->basePedido($pedido, $areaId, FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO), [
             'clave_origen' => FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO.':'.$cumplimiento->id,
             'procedencia' => FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO,
             'origen_tipo' => 'pedido_bma_cumplimiento_fisico',
@@ -330,6 +360,7 @@ class SincronizarComisionesEmpaqueService
             'cantidad_origen' => (int) $cumplimiento->bultos_salida,
             'situacion_inicial' => $solape ? UnidadComisionEmpaque::SOLAPE_REVISION : null,
             'linea' => null,
+            'desglose' => HuellaFuenteComisionEmpaque::desgloseAgrupado($cumplimiento),
             'logistica' => array_replace($this->logistica($pedido), HuellaFuenteComisionEmpaque::datosComerciales($pedido, cumplimiento: $cumplimiento), [
                 'paqueteria' => $cumplimiento->tarea?->paqueteria?->nombre ?: $pedido->paqueteria?->nombre,
                 'estado_envio' => $cumplimiento->despachada_at ? 'Enviado' : 'Pendiente de despacho',
@@ -337,15 +368,6 @@ class SincronizarComisionesEmpaqueService
                 'bultos_salida' => (int) $cumplimiento->bultos_salida,
             ]),
         ]);
-
-        $resultado = $this->guardar($propuesta, $inicio, $responsable, $pedido);
-
-        return [
-            'nuevas' => $resultado['nueva'] ? 1 : 0,
-            'actualizadas' => $resultado['actualizada'] ? 1 : 0,
-            'diferencias' => $resultado['diferencia'] ? 1 : 0,
-            'detalle' => $resultado['mensaje'] ? [$resultado['mensaje']] : [],
-        ];
     }
 
     /** @return array<string, mixed> */
@@ -392,29 +414,58 @@ class SincronizarComisionesEmpaqueService
      * @param  array<string, mixed>  $propuesta
      * @return array{nueva: bool, actualizada: bool, diferencia: bool, mensaje: ?string}
      */
-    private function guardar(array $propuesta, Carbon $inicio, ?User $responsable, PedidoBma $pedido): array
+    private function guardar(array $propuesta, ?User $responsable, PedidoBma $pedido, array $claves): array
     {
         $huella = HuellaFuenteComisionEmpaque::de(
             $propuesta['cantidad_origen'],
             $propuesta['empacado_at'],
             $pedido->cancelado_at,
-            $propuesta['linea']['catalogo_tipo_caja_id'] ?? null
+            $propuesta['linea']['catalogo_tipo_caja_id'] ?? null,
+            $propuesta['desglose'] ?? null,
         );
 
-        return DB::transaction(function () use ($propuesta, $inicio, $responsable, $pedido, $huella) {
-            AreaComisionEmpaque::query()->whereKey($propuesta['area_id'])->lockForUpdate()->firstOrFail();
+        $desglose = $propuesta['desglose'] ?? null;
+        $propuesta['logistica']['desglose_fuente'] = $desglose;
+        $propuesta['lineas_fuente'] = $this->lineasFuente($desglose, $propuesta['linea']);
 
-            return $this->guardarConBloqueo($propuesta, $inicio, $responsable, $pedido, $huella);
-        });
+        return $this->guardarConBloqueo($propuesta, $responsable, $pedido, $huella, $claves);
     }
 
-    private function guardarConBloqueo(array $propuesta, Carbon $inicio, ?User $responsable, PedidoBma $pedido, string $huella): array
+    private function lineasFuente(string|array|null $desglose, ?array $linea): array
+    {
+        if ($desglose === null) {
+            return $linea ? [$linea] : [];
+        }
+
+        $cantidades = is_array($desglose) ? $desglose : [
+            'cajas' => (int) ($desglose === 'caja'), 'bolsas' => (int) ($desglose === 'bolsa'),
+        ];
+
+        return collect($cantidades)->filter(fn ($cantidad) => $cantidad > 0)
+            ->map(fn ($cantidad, $tipo) => ['catalogo_tipo_caja_id' => null, 'cantidad' => $cantidad, 'es_bolsa' => $tipo === 'bolsas'])
+            ->values()->all();
+    }
+
+    private function guardarConBloqueo(array $propuesta, ?User $responsable, PedidoBma $pedido, string $huella, array $claves): array
     {
         $unidad = UnidadComisionEmpaque::query()->where('clave_origen', $propuesta['clave_origen'])->lockForUpdate()->first();
         $reempaque = PedidoBmaHistorialEstado::query()
             ->where('pedido_bma_id', $pedido->id)
             ->where('accion', AccionesHistorialPedidoBma::REVERTIR_EMPAQUE)
             ->exists();
+
+        $mismaFuenteEnCorte = UnidadComisionEmpaque::fuenteYaEnCorte($propuesta['origen_tipo'], $propuesta['origen_id'], $unidad?->id);
+        $propuesta['logistica']['fuente_en_otro_corte'] = $mismaFuenteEnCorte;
+        $otraRepresentacion = UnidadComisionEmpaque::query()->where('pedido_bma_id', $pedido->id)
+            ->where('origen_registro', 'sincronizado')->whereNotIn('clave_origen', $claves)
+            ->where(fn ($q) => $q->whereNotNull('corte_id')->orWhere('ancla_decision', 'aceptar')
+                ->orWhere(fn ($abierta) => $abierta->where('area_id', '!=', $propuesta['area_id'])
+                    ->whereNotIn('situacion', [UnidadComisionEmpaque::REVERTIDA_REVISION, UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA])))
+            ->when($pedido->es_resguardo, fn ($q) => $q->where('area_id', $propuesta['area_id']))
+            ->exists();
+        if ($otraRepresentacion || $mismaFuenteEnCorte) {
+            $propuesta['situacion_inicial'] = UnidadComisionEmpaque::SOLAPE_REVISION;
+        }
 
         if (! $unidad) {
             $folios = collect($propuesta['logistica']['remisiones'])->pluck('folio')->filter()->unique();
@@ -446,14 +497,7 @@ class SincronizarComisionesEmpaqueService
                 'operacion_folio' => $propuesta['operacion_folio'],
                 'es_complemento' => $propuesta['es_complemento'],
             ]);
-            if (! empty($propuesta['linea'])) {
-                UnidadLineaComisionEmpaque::query()->create([
-                    'unidad_id' => $unidad->id,
-                    'catalogo_tipo_caja_id' => $propuesta['linea']['catalogo_tipo_caja_id'],
-                    'cantidad' => $propuesta['linea']['cantidad'],
-                    'es_bolsa' => false,
-                ]);
-            }
+            $unidad->lineas()->createMany($propuesta['lineas_fuente']);
             if ($cubiertas->isNotEmpty()) {
                 $this->valorar->abrirIncidencia($unidad, 'constancia_parcial', $responsable, 'Una remisión de la caja ya está registrada como pagada fuera. Revise qué trabajo corresponde al fondo.', ['folios' => $cubiertas->values()->all()]);
             }
@@ -466,7 +510,7 @@ class SincronizarComisionesEmpaqueService
         }
 
         if ($unidad->corte_id) {
-            $diferencia = $unidad->huella !== $huella
+            $diferencia = (int) $unidad->pedido_bma_id !== (int) $pedido->id || $unidad->huella !== $huella
                 || ($unidad->logistica['huella_comercial'] ?? $propuesta['logistica']['huella_comercial']) !== $propuesta['logistica']['huella_comercial'];
             $mensaje = $diferencia ? 'La fuente cambió después del corte. Revise si corresponde un ajuste.' : null;
             if ($mensaje) {
@@ -474,27 +518,32 @@ class SincronizarComisionesEmpaqueService
                     'huella' => $huella.':'.$propuesta['logistica']['huella_comercial'],
                 ]);
             }
-            $this->aplicarCancelacion($unidad, $pedido, $responsable);
+            if ((int) $unidad->pedido_bma_id === (int) $pedido->id) {
+                $this->aplicarCancelacion($unidad, $pedido, $responsable);
+            }
 
             return ['nueva' => false, 'actualizada' => false, 'diferencia' => $diferencia, 'mensaje' => $mensaje];
         }
 
-        return $this->actualizarAbierta($unidad, $propuesta, $huella, $reempaque, $pedido, $responsable);
+        return $this->actualizarAbierta($unidad, $propuesta, $huella, $pedido, $responsable);
     }
 
     /** @param  array<string, mixed>  $propuesta
      * @return array{nueva: bool, actualizada: bool, diferencia: bool, mensaje: ?string}
      */
-    private function actualizarAbierta(UnidadComisionEmpaque $unidad, array $propuesta, string $huella, bool $reempaque, PedidoBma $pedido, ?User $responsable): array
+    private function actualizarAbierta(UnidadComisionEmpaque $unidad, array $propuesta, string $huella, PedidoBma $pedido, ?User $responsable): array
     {
         $antes = $unidad->only(['situacion', 'logistica', 'huella', 'importe_centavos', 'empacador_user_id', 'empacador_nombre', 'cliente_nombre']);
         $huellaPrevia = (string) $unidad->huella;
         $anclaPrevia = $unidad->ancla_decision;
         $fuentePrevia = $unidad->logistica['huella_comercial'] ?? null;
         $cambioComercial = $fuentePrevia !== null && $fuentePrevia !== $propuesta['logistica']['huella_comercial'];
-        $material = $huellaPrevia !== '' && $huellaPrevia !== $huella;
+        $cambioPedido = (int) $unidad->pedido_bma_id !== (int) $pedido->id;
+        $material = $cambioPedido || ($huellaPrevia !== '' && $huellaPrevia !== $huella);
+        $desgloseCambio = ($unidad->logistica['desglose_fuente'] ?? null) != ($propuesta['desglose'] ?? null);
         $cantidadCambio = (int) $unidad->cantidad_origen !== (int) $propuesta['cantidad_origen'];
         $unidad->fill([
+            'pedido_bma_id' => $pedido->id,
             'empacado_at' => $propuesta['empacado_at'],
             'empacador_user_id' => $propuesta['empacador_user_id'],
             'empacador_nombre' => $propuesta['empacador_nombre'],
@@ -513,27 +562,27 @@ class SincronizarComisionesEmpaqueService
             $unidad->situacion = UnidadComisionEmpaque::EXCLUIDA;
         } elseif ($propuesta['situacion_inicial'] === UnidadComisionEmpaque::SOLAPE_REVISION
             && in_array($unidad->situacion, [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::PENDIENTE_CLASIFICACION, UnidadComisionEmpaque::PENDIENTE_CONCILIACION], true)
-            && ! $this->valorar->anclaCubre($unidad, ['aceptar'])) {
+            && (($propuesta['logistica']['fuente_en_otro_corte'] ?? false) || ! $this->valorar->anclaCubre($unidad, ['aceptar']))) {
             $unidad->situacion = UnidadComisionEmpaque::SOLAPE_REVISION;
         }
 
-        if (! $cubierta && ($reempaque || $material) && $unidad->situacion === UnidadComisionEmpaque::REVERTIDA_REVISION) {
+        if (! $cubierta && $unidad->situacion === UnidadComisionEmpaque::REVERTIDA_REVISION) {
             $unidad->situacion = UnidadComisionEmpaque::REEMPAQUE_REVISION;
             $unidad->diferencia = 'El empaque volvió después de una reversión. Revise si es corrección o trabajo distinto.';
         }
 
-        if ($cantidadCambio) {
+        if ($cantidadCambio || $desgloseCambio || $cambioPedido) {
+            $previas = $unidad->lineas()->orderBy('id')->get(['catalogo_tipo_caja_id', 'cantidad', 'es_bolsa'])->toArray();
             $unidad->lineas()->delete();
-            $unidad->diferencia = $anclaPrevia
-                ? 'Cambió la cantidad. La decisión «'.$anclaPrevia.'» queda registrada y hace falta una revisión nueva.'
-                : 'Cambió la cantidad de origen. Vuelva a clasificar el desglose.';
-            $unidad->situacion = $propuesta['situacion_inicial'] ?: UnidadComisionEmpaque::PENDIENTE_CLASIFICACION;
-            if (! empty($propuesta['linea'])) {
-                UnidadLineaComisionEmpaque::query()->create([
-                    'unidad_id' => $unidad->id,
-                    'catalogo_tipo_caja_id' => $propuesta['linea']['catalogo_tipo_caja_id'],
-                    'cantidad' => $propuesta['linea']['cantidad'],
-                    'es_bolsa' => false,
+            $unidad->lineas()->createMany($propuesta['lineas_fuente']);
+            if ($previas !== []) {
+                $unidad->logistica = array_replace($unidad->logistica, ['revisar_desglose' => true]);
+                $unidad->diferencia = $anclaPrevia
+                    ? 'Cambió el desglose de origen. Se conserva la decisión «'.$anclaPrevia.'» como antecedente.'
+                    : 'Cambió el desglose de origen. Compruebe la clasificación antes de liquidar.';
+                $this->valorar->abrirIncidencia($unidad, 'cambio_desglose', $responsable, $unidad->diferencia, [
+                    'huella' => $huella,
+                    'lineas_previas' => $previas,
                 ]);
             }
         }
@@ -611,127 +660,22 @@ class SincronizarComisionesEmpaqueService
         $this->valorar->abrirIncidencia($unidad, 'cancelacion', $responsable, 'Pedido cancelado. Falta la decisión de conservar o excluir la comisión.', $datos);
     }
 
-    /** @param  list<string>  $claves */
-    private function ausentesDelPedido(int $pedidoId, string $procedencia, array $claves, ?User $responsable, array &$conteo): void
+    private function marcarAusente(UnidadComisionEmpaque $unidad, ?User $responsable, array &$conteo): void
     {
-        $ausentes = UnidadComisionEmpaque::query()
-            ->where('pedido_bma_id', $pedidoId)
-            ->where('procedencia', $procedencia)
-            ->where('origen_registro', 'sincronizado')
-            ->when($claves !== [], fn ($q) => $q->whereNotIn('clave_origen', $claves))
-            ->get();
-
-        foreach ($ausentes as $unidad) {
-            if ($this->conservarDecisionAnteAusencia($unidad)) {
-                continue;
-            }
-            if ($unidad->corte_id) {
-                $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, 'La fuente ya no está activa y la unidad pertenece a un corte.', [
-                    'huella' => $unidad->huella,
-                ]);
-                $conteo['diferencias']++;
-                continue;
-            }
-            $ya = $unidad->situacion === UnidadComisionEmpaque::REVERTIDA_REVISION;
-            $unidad->situacion = UnidadComisionEmpaque::REVERTIDA_REVISION;
-            $unidad->diferencia = 'La caja, el bulto o la cabecera ya no está en la fuente.';
-            $unidad->importe_centavos = null;
-            $unidad->save();
-            $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, $unidad->diferencia, ['huella' => $unidad->huella]);
-            if (! $ya) {
-                $conteo['diferencias']++;
-            }
+        if ($this->conservarDecisionAnteAusencia($unidad)) {
+            return;
         }
-    }
-
-    /** @param  list<string>  $detalle */
-    private function marcarFuentesAusentes(Carbon $inicio, ?Carbon $fin, ?User $responsable, int &$diferencias, array &$detalle, ?array $areasAutorizadas): void
-    {
-        UnidadComisionEmpaque::query()
-            ->when($areasAutorizadas !== null, fn ($q) => $q->whereIn('area_id', $areasAutorizadas))
-            ->where('origen_registro', 'sincronizado')
-            ->where('empacado_at', '>=', $inicio)
-            ->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin))
-            ->whereNotNull('pedido_bma_id')
-            ->whereIn('procedencia', [FuentesComisionEmpaque::CEDIS_CAJA, FuentesComisionEmpaque::CEDIS_BULTO, FuentesComisionEmpaque::CEDIS_CABECERA, FuentesComisionEmpaque::TIENDA_MUNICIPAL])
-            ->orderBy('id')
-            ->chunkById(100, function ($unidades) use ($responsable, &$diferencias, &$detalle) {
-                $pedidos = PedidoBma::query()->whereIn('id', $unidades->pluck('pedido_bma_id'))->get()->keyBy('id');
-                foreach ($unidades as $unidad) {
-                    $pedido = $pedidos->get($unidad->pedido_bma_id);
-                    if ($pedido && $pedido->empacado_at !== null) {
-                        continue;
-                    }
-                    if ($this->conservarDecisionAnteAusencia($unidad)) {
-                        continue;
-                    }
-                    $ya = $unidad->situacion === UnidadComisionEmpaque::REVERTIDA_REVISION;
-                    if ($unidad->corte_id) {
-                        $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, 'Se revirtió el empaque de un pedido ya incluido en un corte.', [
-                            'huella' => $unidad->huella,
-                        ]);
-                    } else {
-                        $unidad->situacion = UnidadComisionEmpaque::REVERTIDA_REVISION;
-                        $unidad->diferencia = 'El pedido ya no tiene fecha de empaque.';
-                        $unidad->save();
-                        $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, $unidad->diferencia, ['huella' => $unidad->huella]);
-                    }
-                    if ($ya) {
-                        continue;
-                    }
-                    $diferencias++;
-                    if (count($detalle) < 40) {
-                        $detalle[] = 'Reversión de empaque en '.$unidad->clave_origen;
-                    }
-                }
-            });
-    }
-
-    private function marcarCumplimientosAusentes(Carbon $inicio, ?Carbon $fin, ?User $responsable, int &$diferencias): void
-    {
-        UnidadComisionEmpaque::query()
-            ->where('procedencia', FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO)
-            ->where('empacado_at', '>=', $inicio)
-            ->when($fin, fn ($q) => $q->where('empacado_at', '<=', $fin))
-            ->chunkById(100, function ($unidades) use ($responsable, &$diferencias) {
-                $vigentes = PedidoBmaCumplimientoFisico::query()
-                    ->whereIn('id', $unidades->pluck('origen_id'))
-                    ->whereNotNull('empacado_at')->where('bultos_salida', '>', 0)->pluck('id')->flip();
-                foreach ($unidades as $unidad) {
-                    if ($vigentes->has($unidad->origen_id) || $this->conservarDecisionAnteAusencia($unidad)) {
-                        continue;
-                    }
-                    if (! $unidad->corte_id && $unidad->situacion !== UnidadComisionEmpaque::REVERTIDA_REVISION) {
-                        $unidad->update(['situacion' => UnidadComisionEmpaque::REVERTIDA_REVISION, 'importe_centavos' => null, 'cantidad_comisionable' => null]);
-                        $diferencias++;
-                    }
-                    $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, 'El cumplimiento de Tienda ya no tiene un empaque vigente.', ['huella' => $unidad->huella]);
-                }
-            });
-    }
-
-    /** @param  list<string>  $detalle */
-    private function revisarCancelacionesManuales(?User $responsable, int &$diferencias, array &$detalle, ?array $areasAutorizadas): void
-    {
-        UnidadComisionEmpaque::query()
-            ->when($areasAutorizadas !== null, fn ($q) => $q->whereIn('area_id', $areasAutorizadas))
-            ->where('origen_registro', 'manual')
-            ->whereNotNull('pedido_bma_id')
-            ->orderBy('id')
-            ->chunkById(100, function ($unidades) use ($responsable, &$diferencias, &$detalle) {
-                foreach ($unidades as $unidad) {
-                    $antes = $unidad->situacion;
-                    $this->gestionar->reconciliarCancelacionManual($unidad, $responsable);
-                    $unidad->refresh();
-                    if ($unidad->situacion === $antes) {
-                        continue;
-                    }
-                    $diferencias++;
-                    if (count($detalle) < 40) {
-                        $detalle[] = 'Cancelación de registro manual en '.$unidad->clave_origen;
-                    }
-                }
-            });
+        $mensaje = 'La fuente dejó de estar activa o quedó fuera del rango autorizado.';
+        if (! $unidad->corte_id && $unidad->situacion !== UnidadComisionEmpaque::REVERTIDA_REVISION) {
+            $unidad->update([
+                'situacion' => UnidadComisionEmpaque::REVERTIDA_REVISION,
+                'importe_centavos' => null,
+                'cantidad_comisionable' => null,
+                'diferencia' => $mensaje,
+            ]);
+            $conteo['diferencias']++;
+        }
+        $this->valorar->abrirIncidencia($unidad, 'reversion', $responsable, $mensaje, ['huella' => $unidad->huella]);
     }
 
     private function conservarDecisionAnteAusencia(UnidadComisionEmpaque $unidad): bool
@@ -749,10 +693,10 @@ class SincronizarComisionesEmpaqueService
         return true;
     }
 
-    private function marcarExcepcionResguardo(?array $areasAutorizadas): void
+    private function marcarExcepcionResguardo(array $areasAutorizadas, int $pedidoId): void
     {
         $pedidoIds = UnidadComisionEmpaque::query()
-            ->whereNotNull('pedido_bma_id')
+            ->where('pedido_bma_id', $pedidoId)
             ->select('pedido_bma_id')
             ->groupBy('pedido_bma_id')
             ->havingRaw('count(distinct procedencia) > 1')

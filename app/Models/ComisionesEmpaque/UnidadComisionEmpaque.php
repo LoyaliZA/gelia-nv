@@ -118,6 +118,28 @@ class UnidadComisionEmpaque extends Model
             : null;
     }
 
+    public static function fuenteYaEnCorte(?string $tipo, ?int $origenId, ?int $excepto = null): bool
+    {
+        return $origenId !== null && static::query()->whereNotNull('corte_id')
+            ->where('origen_registro', 'sincronizado')->where('origen_tipo', $tipo)->where('origen_id', $origenId)
+            ->when($excepto, fn ($q) => $q->whereKeyNot($excepto))->exists();
+    }
+
+    public function auditorias(): HasMany
+    {
+        return $this->hasMany(AuditoriaComisionEmpaque::class, 'entidad_id')->where('entidad', 'unidad');
+    }
+
+    public function versionRevision(): string
+    {
+        $auditoria = $this->getAttributes()['auditorias_max_id'] ?? $this->auditorias()->max('id');
+
+        return hash('sha256', json_encode([
+            $auditoria, $this->area_id, $this->huella, $this->logistica['huella_comercial'] ?? null,
+            $this->situacion, $this->corte_id, $this->posible_duplicado, $this->duplicados_relacionados,
+        ]));
+    }
+
     public function area(): BelongsTo
     {
         return $this->belongsTo(AreaComisionEmpaque::class, 'area_id');

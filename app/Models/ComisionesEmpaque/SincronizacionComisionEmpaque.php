@@ -10,11 +10,12 @@ class SincronizacionComisionEmpaque extends Model
 
     protected $fillable = [
         'estado', 'mensaje', 'diferencias', 'unidades_nuevas', 'unidades_actualizadas', 'detalle', 'area_ids',
-        'ejecutado_por_id', 'iniciado_at', 'finalizado_at',
+        'automatica', 'ejecutado_por_id', 'iniciado_at', 'finalizado_at',
     ];
 
     protected $casts = [
         'detalle' => 'array',
+        'automatica' => 'boolean',
         'area_ids' => 'array',
         'iniciado_at' => 'datetime',
         'finalizado_at' => 'datetime',

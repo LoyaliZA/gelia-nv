@@ -1056,10 +1056,15 @@ class PedidoBmaTiendaController extends Controller
     ): RedirectResponse {
         $datos = $request->validate([
             'bultos' => ['required', 'integer', 'min:1', 'max:99'],
+            'cajas' => ['required_with:bolsas', 'integer', 'min:0', 'max:99'],
+            'bolsas' => ['required_with:cajas', 'integer', 'min:0', 'max:99'],
             'version' => ['nullable', 'integer', 'min:1'],
         ]);
         try {
-            $service->ejecutar($tarea, Auth::user(), (int) $datos['bultos'], $datos['version'] ?? null);
+            $service->ejecutar($tarea, Auth::user(), (int) $datos['bultos'], $datos['version'] ?? null,
+                $request->has('cajas') ? $request->integer('cajas') : null,
+                $request->has('bolsas') ? $request->integer('bolsas') : null,
+            );
         } catch (ValidationException $e) {
             return redirect()->back()->with('error', collect($e->errors())->flatten()->first() ?: $e->getMessage());
         }

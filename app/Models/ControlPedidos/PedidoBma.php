@@ -327,6 +327,11 @@ class PedidoBma extends Model
         return $this->belongsTo(CatalogoTipoOperacionEnvio::class, 'tipo_operacion_envio_id');
     }
 
+    public function caratulasComision(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCaratula::class, 'pedido_bma_id')->orderByDesc('version')->orderByDesc('id');
+    }
+
     public function anexosEnvio(): HasMany
     {
         return $this->hasMany(PedidoBmaAnexoEnvio::class, 'pedido_bma_id')->orderByDesc('created_at');

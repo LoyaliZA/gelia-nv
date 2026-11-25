@@ -2,6 +2,7 @@
 
 namespace App\Services\ComisionesEmpaque;
 
+use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\PagoComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
@@ -17,12 +18,13 @@ class ExportarComisionesEmpaqueService
 
     public function acumulado(Request $request, ?User $usuario): StreamedResponse
     {
+        $zona = ConfiguracionComisionEmpaque::actual()->zona_horaria;
         $filas = $this->consultar->filtrar($request, $usuario)
             ->with(['area:id,nombre', 'lineas.tipo:id,nombre', 'corte:id,folio'])
             ->orderBy('empacado_at')
             ->get()
-            ->map(function (UnidadComisionEmpaque $u) {
-                $fila = $this->consultar->fila($u);
+            ->map(function (UnidadComisionEmpaque $u) use ($zona) {
+                $fila = $this->consultar->fila($u, $zona);
 
                 return [
                     'Fecha de empaque' => $fila['empacado_at'],
@@ -77,7 +79,10 @@ class ExportarComisionesEmpaqueService
             'Desde' => $request->input('desde'),
             'Hasta' => $request->input('hasta'),
             'Cajas registradas' => $fila['cajas'],
-            'Cajas válidas' => $fila['validas'],
+            'Bolsas' => $fila['bolsas'],
+            'Bultos sin clasificar' => $fila['sin_desglose'],
+            'Cajas comisionables' => $fila['validas'],
+            'Cajas pagadas fuera' => $fila['pagadas_fuera'],
             'Cajas pendientes' => $fila['pendientes'],
             'Cajas excluidas' => $fila['excluidas'],
             'Pedidos distintos' => $fila['pedidos'],

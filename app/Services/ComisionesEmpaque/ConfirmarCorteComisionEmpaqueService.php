@@ -2,7 +2,9 @@
 
 namespace App\Services\ComisionesEmpaque;
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
+use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AuditoriaComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
@@ -23,6 +25,7 @@ class ConfirmarCorteComisionEmpaqueService
     public function __construct(
         private RepartirCentavosComisionEmpaque $repartir,
         private ComprobarFuenteCorteComisionEmpaque $fuentes,
+        private SincronizarComisionesEmpaqueService $sincronizar,
     ) {}
 
     /** @return array<string, mixed> */
@@ -131,6 +134,9 @@ class ConfirmarCorteComisionEmpaqueService
             'hasta' => $hasta->toIso8601String(),
             'tardias' => $incluirTardias,
             'unidades' => $incluidas->map(fn (UnidadComisionEmpaque $u) => [$u->id, (int) $u->importe_centavos, (int) $u->cantidad_comisionable, $u->huella, $u->logistica['huella_comercial'] ?? null, $u->conciliacion])->values()->all(),
+            'unidades_en_revision' => (clone $sinCorte)->where('situacion', '!=', UnidadComisionEmpaque::ELEGIBLE)
+                ->orderBy('id')->get(['id', 'situacion', 'huella', 'logistica', 'conciliacion'])
+                ->map(fn (UnidadComisionEmpaque $u) => [$u->id, $u->situacion, $u->huella, $u->logistica['huella_comercial'] ?? null, $u->conciliacion])->all(),
             'asignaciones' => $asignaciones,
             'repartos' => collect($tramos)->map(fn ($tramo) => $tramo['lineas'])->all(),
         ];
@@ -190,8 +196,25 @@ class ConfirmarCorteComisionEmpaqueService
 
     public function confirmar(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias, string $hash, User $responsable, ?int $borradorId = null): CorteComisionEmpaque
     {
-        return DB::transaction(function () use ($areaId, $desde, $hasta, $incluirTardias, $hash, $responsable, $borradorId) {
+        $config = ConfiguracionComisionEmpaque::actual();
+        $desdeCobertura = $desde;
+        $cambiosConocidos = null;
+        if ($config->fecha_inicio) {
+            if ($incluirTardias) {
+                $desdeCobertura = DineroComisionEmpaque::inicioDia($config->fecha_inicio->toDateString(), $config->zona_horaria)->min($desde);
+            }
+            $cambiosConocidos = DB::table('comisiones_empaque_cambios_fuente')->pluck('id')->all();
+            $cobertura = $this->sincronizar->ejecutar($responsable, [$areaId], intervalo: [$desdeCobertura, $hasta]);
+            if ($cobertura->estado !== 'ok') {
+                throw ValidationException::withMessages(['corte' => 'La actualización del intervalo quedó incompleta. Vuelva a preparar el corte.']);
+            }
+        }
+
+        return DB::transaction(function () use ($areaId, $desde, $hasta, $incluirTardias, $hash, $responsable, $borradorId, $desdeCobertura, $cambiosConocidos) {
             AreaComisionEmpaque::query()->whereKey($areaId)->lockForUpdate()->firstOrFail();
+            if ($cambiosConocidos !== null) {
+                $this->assertSinCambiosNuevos($areaId, $desdeCobertura, $hasta, $cambiosConocidos);
+            }
             $this->assertSinSolape($areaId, $desde, $hasta);
 
             $ids = $this->unidades($areaId, $desde, $hasta, $incluirTardias)->pluck('id')->sort()->values();
@@ -219,13 +242,13 @@ class ConfirmarCorteComisionEmpaqueService
             }
 
             $calculo = $this->calcular($areaId, $desde, $hasta, $incluirTardias);
-            if ($calculo['errores'] !== []) {
-                throw ValidationException::withMessages(['corte' => $calculo['errores'][0]]);
-            }
             if (! hash_equals($calculo['hash'], $hash)) {
                 throw ValidationException::withMessages([
-                    'corte' => 'Los datos cambiaron desde la vista previa. Revise el cálculo actualizado y confirme de nuevo.',
+                    'corte' => 'La cobertura del corte cambió desde la vista previa. Revise el cálculo actualizado y confirme de nuevo.',
                 ]);
+            }
+            if ($calculo['errores'] !== []) {
+                throw ValidationException::withMessages(['corte' => $calculo['errores'][0]]);
             }
             if ($bloqueadas->isEmpty()) {
                 throw ValidationException::withMessages(['corte' => 'No hay unidades elegibles en el intervalo.']);
@@ -283,6 +306,7 @@ class ConfirmarCorteComisionEmpaqueService
                         'cliente' => $unidad->cliente_nombre,
                         'empacador' => $unidad->empacador_nombre,
                         'logistica' => $unidad->logistica,
+                        'conciliacion' => $unidad->conciliacionVigente(),
                         'procedencia' => $unidad->procedencia,
                     ],
                 ]);
@@ -311,6 +335,21 @@ class ConfirmarCorteComisionEmpaqueService
 
             return $corte->fresh(['asignaciones.participante', 'unidades', 'area']);
         });
+    }
+
+    private function assertSinCambiosNuevos(int $areaId, Carbon $desde, Carbon $hasta, array $cambiosConocidos): void
+    {
+        $conocidos = array_fill_keys($cambiosConocidos, true);
+        foreach (DB::table('comisiones_empaque_cambios_fuente')->lazyById(250)->chunk(250) as $lote) {
+            $nuevos = $lote->reject(fn ($cambio) => isset($conocidos[$cambio->id]));
+            if ($nuevos->isEmpty()) {
+                continue;
+            }
+            $pedidos = ProcesarCambiosComisionesEmpaque::pedidos($nuevos);
+            if ($pedidos !== [] && $this->sincronizar->pedidosEnIntervalo($desde, $hasta, [$areaId], $pedidos)->isNotEmpty()) {
+                throw ValidationException::withMessages(['corte' => 'Llegaron cambios del origen durante la comprobación. Vuelva a preparar el corte.']);
+            }
+        }
     }
 
     private function unidades(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias)

@@ -1,8 +1,8 @@
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
-import { Eye, Plus, X } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Box, CircleMinus, Clock, Eye, FileCheck2, Plus, Wallet, X } from 'lucide-react';
 import { THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_SHELL, geliaCardClass } from '@/utils/geliaTheme';
 import { BOTON_FILTRO, ErroresFormulario, dinero, momentoLegible } from './compartido';
 
@@ -27,40 +27,45 @@ function logisticaTexto(logistica = {}) {
 }
 
 function estadoRevision(fila) {
-    if (fila.liquidacion === 'pagado_fuera' || fila.situacion === 'liquidada_fuera') return { texto: 'Pagado', tono: 'exito' };
-    if (['excluida', 'rechazada'].includes(fila.situacion)) return { texto: 'No se paga', tono: 'peligro' };
-    if (fila.situacion === 'en_corte') return { texto: 'En corte', tono: 'info' };
-    if (fila.situacion === 'elegible') return { texto: 'Revisado', tono: 'info' };
-    return { texto: fila.situacion_etiqueta || 'Pendiente', tono: 'aviso' };
+    if (fila.liquidacion === 'pagado_fuera' || fila.situacion === 'liquidada_fuera') return { texto: 'Pagado fuera', tono: 'exito', Icono: Wallet };
+    if (['excluida', 'rechazada'].includes(fila.situacion)) return { texto: 'Excluido', tono: 'peligro', Icono: CircleMinus };
+    if (fila.situacion === 'en_corte') return { texto: 'En corte', tono: 'info', Icono: FileCheck2 };
+    if (fila.situacion === 'elegible') return { texto: 'Validado', tono: 'exito', Icono: BadgeCheck };
+    if (fila.situacion === 'pendiente_clasificacion') return { texto: 'Clasificar', tono: 'aviso', Icono: Box };
+    if (fila.situacion === 'pendiente_conciliacion') return { texto: 'Conciliar', tono: 'aviso', Icono: Clock };
+    return { texto: 'Incidencia', tono: 'aviso', Icono: AlertTriangle };
 }
 
-export default function Fila({ fila, puede, tipos, motivos }) {
-    const [abierta, setAbierta] = useState(false);
+export default function Fila({ fila, puede, tipos, motivos, abierta, onAbrir, onCerrar, onSiguiente }) {
     const estado = estadoRevision(fila);
+    const Icono = estado.Icono;
     return <>
         <tr className="border-t theme-border align-top">
-            <td className="p-2 whitespace-nowrap">{fila.empacado_at}{fila.incorporacion_tardia && <span className="block text-xs theme-text-aviso">Incorporación tardía</span>}</td>
+            <td className="p-2 whitespace-nowrap">{momentoLegible(fila.empacado_at)}{fila.incorporacion_tardia && <span className="block text-xs theme-text-aviso">Incorporación tardía</span>}</td>
             <td className="p-2"><strong>{fila.cliente}</strong><span className="block text-xs theme-text-muted">{fila.remisiones?.join(', ') || fila.folio_remision || 'Sin remisión'}</span><span className="block text-xs theme-text-muted">{[fila.folio_pedido, fila.area].filter(Boolean).join(' · ')}</span></td>
             <td className="p-2">{fila.empacador}</td>
             <td className="p-2 tabular-nums">{fila.cajas ?? (fila.cantidad_origen ? `${fila.cantidad_origen} sin clasificar` : 'Sin cantidad')}{fila.bolsas > 0 && <span className="block text-xs theme-text-muted">{fila.bolsas} bolsas</span>}</td>
-            <td className="p-2 max-w-52"><span>{fila.motivo_comercial || 'Sin información suficiente'}</span><span className="block text-xs theme-text-muted">{[fila.logistica?.modalidad_envio, fila.logistica?.paqueteria].filter(Boolean).join(' · ')}</span></td>
-            <td className="p-2"><span className={`inline-flex rounded-lg border px-2 py-1 text-xs ${INSIGNIA[estado.tono]}`}>{estado.texto}</span></td>
+            <td className="p-2 max-w-52"><span>{fila.logistica?.paqueteria || 'Sin paquetería'}</span><span className="block text-xs theme-text-muted">{[fila.logistica?.modalidad_preparacion || fila.logistica?.modalidad_envio, fila.motivo_comercial_codigo !== 'sin_informacion' && fila.motivo_comercial].filter(Boolean).join(' · ')}</span></td>
+            <td className="p-2"><span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${INSIGNIA[estado.tono]}`} title={fila.situacion_etiqueta}><Icono className="size-3.5" aria-hidden="true" />{estado.texto}</span></td>
             <td className="p-2 text-right whitespace-nowrap tabular-nums">{fila.importe_comisionable != null ? dinero(fila.importe_comisionable) : fila.liquidacion === 'pagado_fuera' ? dinero(fila.importe) : '—'}</td>
-            <td className="p-2"><button type="button" className={BOTON_FILTRO} aria-haspopup="dialog" aria-expanded={abierta} onClick={() => setAbierta(true)}>
+            <td className="p-2"><button type="button" className={BOTON_FILTRO} aria-haspopup="dialog" aria-expanded={abierta} onClick={onAbrir}>
                 {estado.tono === 'aviso' && puede.clasificar ? 'Revisar' : 'Ver detalle'}
             </button></td>
         </tr>
-        {abierta && <RevisionEmpaque fila={fila} puede={puede} tipos={tipos} motivos={motivos} onCerrar={() => setAbierta(false)} />}
+        {abierta && <RevisionEmpaque fila={fila} puede={puede} tipos={tipos} motivos={motivos} onCerrar={onCerrar} onSiguiente={onSiguiente} />}
     </>;
 }
 
-function RevisionEmpaque({ fila, puede, tipos, motivos, onCerrar }) {
-    const [verPedido, setVerPedido] = useState(false);
+function RevisionEmpaque({ fila: ultimaFila, puede, tipos, motivos, onCerrar, onSiguiente }) {
+    const [verPedido, setVerPedido] = useState(Boolean(ultimaFila.evidencias_remision?.length));
     const [cambios, setCambios] = useState(false);
+    const filaRevision = useRef(ultimaFila);
+    if (!cambios) filaRevision.current = ultimaFila;
+    const fila = filaRevision.current;
     const editable = puede.clasificar && !fila.corte && fila.liquidacion !== 'pagado_fuera';
     const conciliar = editable && !['descartar', 'excluir'].includes(fila.ancla_decision)
-        && ['pendiente_conciliacion', 'pendiente_clasificacion', 'pendiente_tarifa', 'elegible', 'excluida'].includes(fila.situacion);
-    return <SolicitudDialog title="Revisión del empaque" onClose={onCerrar} dirty={cambios}>
+        && ['pendiente_conciliacion', 'pendiente_tarifa', 'elegible', 'excluida'].includes(fila.situacion);
+    return <SolicitudDialog title="Revisión del empaque" onClose={onCerrar} dirty={cambios} conservarContenidoAlCerrar mensajeDescartar="Los cambios de este empaque siguen sin guardar.">
         <div className={`${THEME_MODAL_SHELL} max-w-3xl`}>
             <header className="flex items-start justify-between gap-3 border-b theme-border p-4">
                 <div><h2 className="text-lg font-bold m-0">Revisión del empaque</h2><p className="text-sm theme-text-muted m-0">{fila.cliente}</p></div>
@@ -69,7 +74,7 @@ function RevisionEmpaque({ fila, puede, tipos, motivos, onCerrar }) {
             <div className="gelia-modal-body space-y-4 p-4">
                 <section className="space-y-2">
                     <h3 className="m-0 text-sm font-bold">Pedido y empaque</h3>
-                    <p className="text-sm m-0">{[fila.folio_pedido, fila.area, fila.empacado_at, fila.empacador].filter(Boolean).join(' · ')}</p>
+                    <p className="text-sm m-0">{[fila.folio_pedido, fila.area, momentoLegible(fila.empacado_at), fila.empacador].filter(Boolean).join(' · ')}</p>
                     <p className="text-sm m-0">Remisiones {fila.remisiones?.join(', ') || fila.folio_remision || 'sin folio registrado'}</p>
                     <p className="text-sm theme-text-muted m-0">{fila.tipos?.join(', ') || 'Sin desglose físico'} · {logisticaTexto(fila.logistica)}</p>
                     {fila.logistica?.estado_envio && <p className="text-sm m-0">{fila.logistica.estado_envio}</p>}
@@ -82,11 +87,11 @@ function RevisionEmpaque({ fila, puede, tipos, motivos, onCerrar }) {
                     {fila.excepcion_resguardo && <p className="text-sm theme-text-aviso m-0">Empaque relacionado con la excepción de resguardo.</p>}
                     {fila.diferencia && <p className="text-sm theme-text-aviso m-0">{fila.diferencia}</p>}
                 </section>
-                {editable && <Clasificar fila={fila} tipos={tipos} />}
+                {editable && !conciliar && <Clasificar key={fila.version_revision || fila.situacion} fila={fila} tipos={tipos} onCambios={setCambios} />}
                 <section className="space-y-2 border-t theme-border pt-3">
                     <h3 className="m-0 text-sm font-bold">Conciliación comercial</h3>
-                    <p className="m-0 text-sm">{fila.motivo_comercial}</p>
-                    {conciliar && Object.keys(motivos).length > 0 && <Conciliar key={`${fila.huella}-${fila.fuente}`} fila={fila} motivos={motivos} onCambios={setCambios} />}
+                    <p className="m-0 text-sm">{fila.logistica?.revision_comercial || fila.motivo_comercial}</p>
+                    {conciliar && Object.keys(motivos).length > 0 && <Conciliar key={fila.version_revision || `${fila.huella}-${fila.fuente}`} fila={fila} motivos={motivos} onCambios={setCambios} onSiguiente={onSiguiente} />}
                 </section>
                 {(fila.conciliacion || fila.conciliacion_previa || fila.incidencias?.length > 0) && <section className="space-y-1 border-t theme-border pt-3">
                     <h3 className="m-0 text-sm font-bold">Historial de revisión</h3>
@@ -100,11 +105,19 @@ function RevisionEmpaque({ fila, puede, tipos, motivos, onCerrar }) {
     </SolicitudDialog>;
 }
 
-function Conciliar({ fila, motivos, onCambios }) {
-    const form = useForm({ decision: '', motivo_comercial: fila.motivo_comercial_codigo || '', observaciones: '', referencia: '', huella: fila.huella, fuente: fila.fuente });
+function Conciliar({ fila, motivos, onCambios, onSiguiente }) {
+    const form = useForm({ decision: '', motivo_comercial: fila.motivo_comercial_codigo || '', observaciones: '', referencia: '', huella: fila.huella, fuente: fila.fuente, version_revision: fila.version_revision });
+    const guardar = (siguiente) => form.post(route('gestion_interna.comisiones_empaque.conciliar', fila.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            form.reset();
+            onCambios(false);
+            if (siguiente) onSiguiente();
+        },
+    });
     return <form className="grid gap-3 sm:grid-cols-2" onChange={() => onCambios(true)} onSubmit={(e) => {
         e.preventDefault();
-        form.post(route('gestion_interna.comisiones_empaque.conciliar', fila.id), { preserveScroll: true, onSuccess: () => { form.reset(); onCambios(false); } });
+        guardar(e.nativeEvent.submitter?.value === 'siguiente');
     }}>
         <label><span className={THEME_LABEL}>Decisión</span><select className={THEME_INPUT} required value={form.data.decision} onChange={(e) => form.setData('decision', e.target.value)}>
             <option value="">Elegir decisión</option><option value="validar">Validar empaque</option><option value="excluir">Excluir de comisión</option><option value="pendiente">Mantener pendiente</option>
@@ -116,7 +129,10 @@ function Conciliar({ fila, motivos, onCambios }) {
         <label className="sm:col-span-2"><span className={THEME_LABEL}>Evidencia o referencia (opcional)</span><input className={THEME_INPUT} maxLength={500} value={form.data.referencia} onChange={(e) => form.setData('referencia', e.target.value)} /></label>
         {form.data.decision === 'excluir' && <p className="m-0 text-sm theme-text-muted sm:col-span-2">Este empaque quedará fuera del fondo y seguirá visible en el historial.</p>}
         <ErroresFormulario form={form} />
-        <button className={THEME_BTN_PRIMARY} disabled={form.processing}>Guardar conciliación</button>
+        <div className="flex flex-wrap gap-2 sm:col-span-2">
+            <button className={THEME_BTN_PRIMARY} disabled={form.processing}>Guardar conciliación</button>
+            {onSiguiente && ['validar', 'excluir'].includes(form.data.decision) && <button className={BOTON_FILTRO} type="submit" value="siguiente" disabled={form.processing}>Guardar y revisar siguiente</button>}
+        </div>
     </form>;
 }
 
@@ -170,20 +186,28 @@ function PedidoInformativo({ unidadId }) {
     </section>;
 }
 
-function Clasificar({ fila, tipos }) {
+function Clasificar({ fila, tipos, onCambios }) {
     const form = useForm({
+        version_revision: fila.version_revision,
         lineas: fila.lineas?.length ? fila.lineas : [{ cantidad: fila.cantidad_origen || 1, es_bolsa: false, catalogo_tipo_caja_id: '' }],
         decision: 'conservar',
         motivo: '',
-        revision: fila.posible_duplicado ? 'trabajo_distinto' : (fila.referencia === 'insuficiente' ? 'aceptar_sin_referencia' : fila.cantidad_origen === 0 ? 'descartar' : 'aceptar'),
+        revision: fila.posible_duplicado ? 'trabajo_distinto' : (fila.referencia === 'insuficiente' ? 'aceptar_sin_referencia' : fila.cantidad_origen === 0 || fila.logistica?.fuente_en_otro_corte ? 'descartar' : 'aceptar'),
     });
     const suma = form.data.lineas.reduce((n, l) => n + Number(l.cantidad || 0), 0);
+    const enviar = (accion, transformar) => {
+        form.transform((datos) => ({ ...transformar(datos), version_revision: datos.version_revision }));
+        form.post(route(`gestion_interna.comisiones_empaque.${accion}`, fila.id), {
+            preserveScroll: true,
+            onSuccess: () => onCambios(false),
+        });
+    };
 
     return (
-        <div className="space-y-3">
+        <div className="space-y-3" onChange={() => onCambios(true)}>
             <ErroresFormulario form={form} />
             {(fila.situacion === 'pendiente_revision' || fila.situacion === 'posible_duplicado') && (
-                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); form.post(route('gestion_interna.comisiones_empaque.revisar', fila.id)); }}>
+                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); enviar('revisar', (data) => ({ decision: data.revision, motivo: data.motivo })); }}>
                     {fila.posible_duplicado && (
                         <div className="w-full">
                             <p className="theme-text-aviso m-0">Hay una coincidencia. La aceptación normal queda bloqueada hasta reconocer un trabajo distinto, con motivo, o rechazar el registro. Un conflicto es el mismo día. Un antecedente es otra fecha y no demuestra por sí solo que sea otro trabajo.</p>
@@ -208,11 +232,11 @@ function Clasificar({ fila, tipos }) {
                     <label className="flex-1"><span className={THEME_LABEL}>Motivo</span>
                         <input className={THEME_INPUT} value={form.data.motivo} onChange={(e) => form.setData('motivo', e.target.value)} required />
                     </label>
-                    <button className={THEME_BTN_PRIMARY} type="button" disabled={form.processing} onClick={() => { form.transform((data) => ({ decision: data.revision, motivo: data.motivo })); form.post(route('gestion_interna.comisiones_empaque.revisar', fila.id)); }}>Guardar revisión</button>
+                    <button className={THEME_BTN_PRIMARY} type="button" disabled={form.processing} onClick={() => { enviar('revisar', (data) => ({ decision: data.revision, motivo: data.motivo })); }}>Guardar revisión</button>
                 </form>
             )}
             {fila.situacion === 'pendiente_clasificacion' && fila.cantidad_origen > 0 && (
-                <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); form.transform((data) => ({ lineas: data.lineas.map((l) => ({ ...l, catalogo_tipo_caja_id: l.catalogo_tipo_caja_id || null, es_bolsa: !!l.es_bolsa })) })); form.post(route('gestion_interna.comisiones_empaque.clasificar', fila.id)); }}>
+                <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); enviar('clasificar', (data) => ({ lineas: data.lineas.map((l) => ({ ...l, catalogo_tipo_caja_id: l.catalogo_tipo_caja_id || null, es_bolsa: !!l.es_bolsa })) })); }}>
                     <p className="m-0 text-sm">El desglose debe sumar {fila.cantidad_origen} piezas. Ahora suma {suma}.</p>
 
                     {form.data.lineas.map((linea, i) => (
@@ -240,13 +264,13 @@ function Clasificar({ fila, tipos }) {
                         </div>
                     ))}
                         <div className="flex flex-wrap gap-2">
-                        <button type="button" className="inline-flex items-center gap-2 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" onClick={() => form.setData('lineas', [...form.data.lineas, { cantidad: 1, es_bolsa: false, catalogo_tipo_caja_id: '' }])}><Plus className="size-4" aria-hidden="true" />Agregar tipo de caja</button>
+                        <button type="button" className="inline-flex items-center gap-2 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" onClick={() => { onCambios(true); form.setData('lineas', [...form.data.lineas, { cantidad: 1, es_bolsa: false, catalogo_tipo_caja_id: '' }]); }}><Plus className="size-4" aria-hidden="true" />Agregar tipo de caja</button>
                         <button className={THEME_BTN_PRIMARY} disabled={form.processing}>Guardar desglose</button>
                     </div>
                 </form>
             )}
             {fila.situacion === 'pendiente_decision' && (
-                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); form.transform((data) => ({ decision: data.decision, motivo: data.motivo })); form.post(route('gestion_interna.comisiones_empaque.decision', fila.id)); }}>
+                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); enviar('decision', (data) => ({ decision: data.decision, motivo: data.motivo })); }}>
                     <select className={THEME_INPUT} aria-label="Decisión de cancelación" value={form.data.decision} onChange={(e) => form.setData('decision', e.target.value)}>
                         <option value="conservar">Conservar comisión</option>
                         <option value="excluir">Excluir comisión</option>
@@ -256,9 +280,9 @@ function Clasificar({ fila, tipos }) {
                 </form>
             )}
             {['reempaque_revision', 'solape_revision', 'revertida_revision'].includes(fila.situacion) && (
-                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); form.transform((data) => ({ decision: data.revision, motivo: data.motivo })); form.post(route('gestion_interna.comisiones_empaque.resolver', fila.id)); }}>
+                <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); enviar('resolver', (data) => ({ decision: data.revision, motivo: data.motivo })); }}>
                     <select className={THEME_INPUT} aria-label="Resolución" value={form.data.revision} onChange={(e) => form.setData('revision', e.target.value)}>
-                        {fila.cantidad_origen > 0 && <option value="aceptar">Aceptar para revisión comercial</option>}
+                        {fila.cantidad_origen > 0 && !fila.logistica?.fuente_en_otro_corte && <option value="aceptar">Aceptar para revisión comercial</option>}
                         <option value="descartar">Descartar</option>
                     </select>
                     <input className={THEME_INPUT} aria-label="Motivo de la revisión" placeholder="Motivo" value={form.data.motivo} onChange={(e) => form.setData('motivo', e.target.value)} required />

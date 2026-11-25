@@ -19,7 +19,7 @@ class ComprobarFuenteCorteComisionEmpaque
 {
     public function diferencia(UnidadComisionEmpaque $unidad): ?string
     {
-        if ($unidad->origen_registro === 'manual') {
+        if (in_array($unidad->origen_registro, ['manual', 'carga'], true)) {
             if (! $unidad->pedido_bma_id) {
                 return null;
             }
@@ -41,6 +41,9 @@ class ComprobarFuenteCorteComisionEmpaque
             return null;
         }
 
+        if (UnidadComisionEmpaque::fuenteYaEnCorte($unidad->origen_tipo, $unidad->origen_id, $unidad->id)) {
+            return 'El mismo empaque ya pertenece a otro corte. Revise si corresponde un ajuste.';
+        }
         $viva = $this->fuenteViva($unidad);
         if (! $viva || $unidad->huella !== $viva['huella']) {
             return 'La fuente de '.$unidad->clave_origen.' cambió o dejó de estar activa. Pulse Actualizar y revise el empaque.';
@@ -67,6 +70,7 @@ class ComprobarFuenteCorteComisionEmpaque
         $caja = null;
         $cumplimiento = null;
         $tipo = null;
+        $desglose = null;
         switch ($procedencia) {
             case FuentesComisionEmpaque::CEDIS_CAJA:
                 $caja = PedidoBmaCaja::query()->with(['pedido', 'remisionesActivas.pedido:id,numero_remision,folio_remision'])->find($unidad->origen_id);
@@ -83,6 +87,7 @@ class ComprobarFuenteCorteComisionEmpaque
                 $pedido = $bulto?->pedido;
                 $fecha = $pedido?->empacado_at ? ($bulto->empacado_at ?: $pedido->empacado_at) : null;
                 $cantidad = 1;
+                $desglose = $bulto?->tipo_bulto;
                 if ($pedido?->cajas()->activas()->exists()) {
                     return null;
                 }
@@ -100,11 +105,12 @@ class ComprobarFuenteCorteComisionEmpaque
                 $pedido = $cumplimiento?->tarea?->pedido;
                 $fecha = $cumplimiento?->empacado_at;
                 $cantidad = (int) $cumplimiento?->bultos_salida;
+                $desglose = $cumplimiento ? HuellaFuenteComisionEmpaque::desgloseAgrupado($cumplimiento) : null;
                 break;
             default:
                 return null;
         }
-        if (! $pedido || ! $fecha || $cantidad < 1) {
+        if (! $pedido || (int) $pedido->id !== (int) $unidad->pedido_bma_id || ! $fecha || $cantidad < 1) {
             return null;
         }
         if ($procedencia !== FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO
@@ -122,7 +128,7 @@ class ComprobarFuenteCorteComisionEmpaque
         }
 
         return [
-            'huella' => HuellaFuenteComisionEmpaque::de($cantidad, $fecha, $pedido->cancelado_at, $tipo),
+            'huella' => HuellaFuenteComisionEmpaque::de($cantidad, $fecha, $pedido->cancelado_at, $tipo, $desglose),
             'comercial' => HuellaFuenteComisionEmpaque::datosComerciales($pedido, $caja, $cumplimiento)['huella_comercial'],
         ];
     }

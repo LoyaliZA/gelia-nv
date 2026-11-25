@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import React, { act, useRef, useState } from 'react';
+import axios from 'axios';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import BuscarUsuario from '../Pages/GestionInterna/ComisionesEmpaque/BuscarUsuario';
@@ -7,11 +8,11 @@ import ComisionesEmpaque, { Preparar, Pagos, Acumulado } from '../Pages/GestionI
 import Equipo from '../Pages/GestionInterna/ComisionesEmpaque/Equipo';
 import Periodos from '../Pages/GestionInterna/ComisionesEmpaque/Periodos';
 
-const { guardar, navegar } = vi.hoisted(() => ({ guardar: vi.fn(), navegar: vi.fn() }));
+const { guardar, navegar, recargar } = vi.hoisted(() => ({ guardar: vi.fn(), navegar: vi.fn(), recargar: vi.fn() }));
 vi.mock('../Layouts/AppLayout', () => ({ default: ({ children }) => children }));
 vi.mock('@inertiajs/react', () => ({
     Head: () => null, usePage: () => ({ props: {} }),
-    router: { get: navegar },
+    router: { get: navegar, reload: recargar },
     useForm: (inicial) => {
         const base = useRef(inicial);
         const transformar = useRef((data) => data);
@@ -32,7 +33,7 @@ beforeEach(() => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    guardar.mockClear(); navegar.mockClear();
+    guardar.mockClear(); navegar.mockClear(); recargar.mockClear();
 });
 afterEach(async () => {
     await act(() => root.unmount());
@@ -150,4 +151,34 @@ it('conserva el área y el rango seleccionados al abrir Liquidaciones o Producti
     expect(navegar.mock.calls[0][1]).toMatchObject({ ...contexto, tab: 'periodos' });
     await act(() => boton('Productividad').click());
     expect(navegar.mock.calls[1][1]).toMatchObject({ ...contexto, tab: 'productividad' });
+});
+
+
+it('difiere datos nuevos mientras hay una captura y refresca solo el reporte al cerrarla', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(axios, 'get').mockResolvedValue({ data: { estado: 'ok', revision: 'nueva' } });
+        await render(<ComisionesEmpaque tab="acumulado" puede={{ capturar: true }}
+            areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, vista: 'pendientes', buscar: 'REC' }}
+            sincronizacion={{ estado: 'ok', revision: 'anterior' }} />);
+        await act(() => boton('Registrar empaque').click());
+        const cliente = [...container.querySelectorAll('form label')].find((etiqueta) => etiqueta.textContent.trim() === 'Cliente' && etiqueta.querySelector('input[required]')).querySelector('input');
+        await escribir(cliente, 'Captura en curso');
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(container.textContent).toContain('Hay datos nuevos');
+        expect(cliente.value).toBe('Captura en curso');
+        expect(recargar).not.toHaveBeenCalled();
+        expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('sincronizacion.estado'), expect.objectContaining({ params: { area_id: 1 } }));
+
+        await act(() => boton('Ocultar captura').click());
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(recargar).toHaveBeenCalledWith(expect.objectContaining({
+            only: ['acumulado', 'totales', 'resumen', 'sincronizacion'], preserveState: true, preserveScroll: true,
+        }));
+        expect(container.querySelector('[data-busqueda-live]').value).toBe('REC');
+        expect(container.querySelector('[aria-label="Por revisar"]').getAttribute('aria-pressed')).toBe('true');
+    } finally {
+        vi.useRealTimers();
+    }
 });

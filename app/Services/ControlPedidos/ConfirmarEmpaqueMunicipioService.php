@@ -23,6 +23,8 @@ class ConfirmarEmpaqueMunicipioService
         User $usuario,
         int $bultos,
         ?int $versionEsperada = null,
+        ?int $cajas = null,
+        ?int $bolsas = null,
     ): PedidoBmaCumplimientoFisico {
         InstruccionEntrega::assertEjecutable($tarea);
         if (! $usuario->can('control_pedidos.tienda.empacar_municipio')) {
@@ -43,7 +45,11 @@ class ConfirmarEmpaqueMunicipioService
             ]);
         }
 
-        return DB::transaction(function () use ($tarea, $usuario, $bultos, $versionEsperada) {
+        if (($cajas !== null || $bolsas !== null) && ($cajas === null || $bolsas === null || min($cajas, $bolsas) < 0 || $cajas + $bolsas !== $bultos)) {
+            throw ValidationException::withMessages(['bultos' => 'La suma de cajas y bolsas debe coincidir con el total de bultos.']);
+        }
+
+        return DB::transaction(function () use ($tarea, $usuario, $bultos, $versionEsperada, $cajas, $bolsas) {
             $tarea = InstruccionEntrega::bloquearParaEjecutar($tarea);
             $tarea->loadMissing(['documentos', 'productos', 'paqueteria', 'modalidad', 'pedido']);
             try {
@@ -82,6 +88,8 @@ class ConfirmarEmpaqueMunicipioService
             $cumplimiento->update([
                 'estado' => PedidoBmaCumplimientoFisico::ESTADO_EMPACADA,
                 'bultos_salida' => $bultos,
+                'cajas_empaque' => $cajas,
+                'bolsas_empaque' => $bolsas,
                 'empacado_at' => now(),
                 'empacado_por_id' => $usuario->id,
                 'version' => $cumplimiento->version + 1,
@@ -93,7 +101,7 @@ class ConfirmarEmpaqueMunicipioService
                 $usuario,
                 'empaque:'.$tarea->id,
                 'Empaque municipal registrado.',
-                ['bultos' => $bultos, 'empacador_id' => $usuario->id]
+                ['bultos' => $bultos, 'cajas' => $cajas, 'bolsas' => $bolsas, 'empacador_id' => $usuario->id]
             );
 
             return $cumplimiento->fresh();

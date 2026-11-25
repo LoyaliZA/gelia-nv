@@ -63,7 +63,7 @@ class ValorarUnidadComisionEmpaque
             return $unidad;
         }
 
-        if ($unidad->origen_registro === 'manual'
+        if (in_array($unidad->origen_registro, ['manual', 'carga'], true)
             && $unidad->ancla_decision === 'excluir'
             && $unidad->pedido_bma_id
             && $unidad->ancla_huella) {
@@ -94,6 +94,12 @@ class ValorarUnidadComisionEmpaque
             $unidad->importe_centavos = null;
             $unidad->cantidad_comisionable = null;
             $unidad->save();
+
+            return $unidad;
+        }
+
+        if (($unidad->logistica['revisar_desglose'] ?? false) && ! in_array($unidad->situacion, self::CONGELADAS, true)) {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::PENDIENTE_CLASIFICACION, 'cantidad_comisionable' => null, 'importe_centavos' => null]);
 
             return $unidad;
         }
@@ -172,6 +178,7 @@ class ValorarUnidadComisionEmpaque
         if ($cubre) {
             $unidad->incorporacion_tardia = true;
             $unidad->save();
+            $this->abrirIncidencia($unidad, 'incorporacion_tardia', null, 'Este empaque se incorporó después de cerrar su intervalo. Inclúyalo en la revisión de incorporaciones tardías del siguiente corte.', ['huella' => $unidad->huella]);
         }
     }
 

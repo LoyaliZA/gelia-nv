@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\ComisionesEmpaque;
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Models\Almacen;
 use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
@@ -20,6 +21,7 @@ use App\Models\ControlPedidos\OperacionEmpaqueMiembro;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaBultoEmpaque;
 use App\Models\ControlPedidos\PedidoBmaCaja;
+use App\Models\ControlPedidos\PedidoBmaCaratula;
 use App\Models\ControlPedidos\PedidoBmaCumplimientoFisico;
 use App\Models\ControlPedidos\PedidoBmaHistorialEstado;
 use App\Models\ControlPedidos\PedidoBmaTareaPreparacion;
@@ -1291,6 +1293,7 @@ class ComisionesEmpaqueTest extends TestCase
             'decision' => 'validar', 'motivo_comercial' => 'caja_pagada',
             'observaciones' => 'Caja pagada con respaldo comercial', 'referencia' => 'REC-001',
             'huella' => $unidad->huella, 'fuente' => $unidad->logistica['huella_comercial'],
+            'version_revision' => $unidad->versionRevision(),
         ];
         $this->actingAs($this->usuario)->post($url, $datos)->assertSessionHasNoErrors();
         $this->assertSame(UnidadComisionEmpaque::ELEGIBLE, $unidad->refresh()->situacion);
@@ -1305,10 +1308,11 @@ class ComisionesEmpaqueTest extends TestCase
         $this->assertSame('REC-001', $unidad->conciliacion['referencia']);
         $this->assertNull($unidad->conciliacionVigente());
         $this->assertTrue($unidad->incidencias()->where('tipo', 'cambio_comercial')->exists());
-        $this->post($url, $datos)->assertSessionHasErrors('conciliacion');
+        $this->post($url, $datos)->assertSessionHasErrors('unidad');
 
         $this->post($url, array_replace($datos, [
             'decision' => 'excluir', 'motivo_comercial' => 'captura_incorrecta', 'fuente' => $unidad->logistica['huella_comercial'],
+            'version_revision' => $unidad->versionRevision(),
         ]))->assertSessionHasNoErrors();
         $sync->ejecutar($this->usuario);
         $this->assertSame(UnidadComisionEmpaque::EXCLUIDA, $unidad->refresh()->situacion);
@@ -1368,6 +1372,226 @@ class ComisionesEmpaqueTest extends TestCase
         $this->assertSame(UnidadComisionEmpaque::REVERTIDA_REVISION, $unidad->refresh()->situacion);
         $this->assertNull($unidad->importe_centavos);
         $this->assertSame(1, $reportar->productividad($filtros, $this->usuario)[0]['pendientes']);
+    }
+
+    public function test_worker_independiente_incorpora_nacional_y_municipal_y_recupera_borrados(): void
+    {
+        $nacional = $this->pedido(['empacado_at' => '2026-10-11 10:00:00', 'empacado_por_id' => $this->usuario->id]);
+        $this->caja($nacional, 2);
+        $municipal = $this->pedido();
+        $cumplimiento = $this->cumplimiento($municipal, 3);
+        $sync = app(SincronizarComisionesEmpaqueService::class);
+        $job = new ProcesarCambiosComisionesEmpaque;
+        $this->assertDatabaseCount('comisiones_empaque_unidades', 0);
+
+        $job->handle($sync);
+        $this->assertDatabaseHas('comisiones_empaque_unidades', ['pedido_bma_id' => $nacional->id, 'procedencia' => 'cedis_caja', 'cantidad_comisionable' => 2]);
+        $this->assertDatabaseHas('comisiones_empaque_unidades', ['pedido_bma_id' => $municipal->id, 'procedencia' => 'tienda_cumplimiento', 'cantidad_origen' => 3]);
+        $this->assertDatabaseCount('comisiones_empaque_cambios_fuente', 0);
+
+        $sync->ejecutar($this->usuario);
+        $cumplimiento->delete();
+        $job->handle($sync);
+        $this->assertDatabaseCount('comisiones_empaque_unidades', 2);
+        $this->assertDatabaseHas('comisiones_empaque_unidades', ['pedido_bma_id' => $municipal->id, 'situacion' => UnidadComisionEmpaque::REVERTIDA_REVISION]);
+        $this->assertDatabaseHas('comisiones_empaque_unidades', ['pedido_bma_id' => $nacional->id, 'situacion' => UnidadComisionEmpaque::ELEGIBLE]);
+    }
+
+    public function test_aparicion_de_caja_invalida_la_vista_previa_y_persiste_su_incorporacion(): void
+    {
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $participante = ParticipanteComisionEmpaque::query()->create(['nombre' => $this->usuario->name, 'user_id' => $this->usuario->id, 'activo' => true]);
+        $this->reparto($area->id, '2026-10-01', [[$participante->id, '100.00']]);
+        $primero = $this->pedido(['empacado_at' => '2026-10-11 10:00:00']);
+        $this->caja($primero, 1);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+
+        $cortes = app(ConfirmarCorteComisionEmpaqueService::class);
+        $desde = Carbon::parse('2026-10-10')->startOfDay();
+        $hasta = Carbon::parse('2026-10-12')->endOfDay();
+        $preliminar = $cortes->calcular($area->id, $desde, $hasta, false);
+        $nuevo = $this->pedido(['empacado_at' => '2026-10-12 10:00:00']);
+        $this->caja($nuevo, 2);
+        try {
+            $cortes->confirmar($area->id, $desde, $hasta, false, $preliminar['hash'], $this->usuario);
+            $this->fail('La vista previa anterior ya no cubre todos los empaques.');
+        } catch (ValidationException $error) {
+            $this->assertStringContainsString('cambió', $error->errors()['corte'][0]);
+        }
+
+        $this->assertDatabaseHas('comisiones_empaque_unidades', ['pedido_bma_id' => $nuevo->id, 'cantidad_comisionable' => 2]);
+        $this->assertDatabaseCount('comisiones_empaque_corte_unidades', 0);
+    }
+
+    public function test_carga_aceptada_entra_al_corte_y_un_formulario_anterior_se_rechaza(): void
+    {
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $participante = ParticipanteComisionEmpaque::query()->create(['nombre' => $this->usuario->name, 'user_id' => $this->usuario->id, 'activo' => true]);
+        $this->reparto($area->id, '2026-10-01', [[$participante->id, '100.00']]);
+        $gestionar = app(GestionarUnidadComisionEmpaqueService::class);
+        $historico = $gestionar->registrarFila([
+            'clave_idempotencia' => 'carga-con-recibo',
+            'area_id' => $area->id,
+            'empacado_at' => '2026-10-11 11:00:00',
+            'cantidad' => 2,
+            'cliente_nombre' => 'Cliente histórico',
+            'folio_remision' => 'HIST-OLA-1',
+            'origen_registro' => 'carga',
+        ], $this->usuario);
+        $historico = $gestionar->revisarManual($historico, 'aceptar', 'Verifiqué el recibo.', $this->usuario);
+        $version = $historico->versionRevision();
+        $lineas = [['catalogo_tipo_caja_id' => null, 'cantidad' => 2, 'es_bolsa' => false]];
+        $gestionar->clasificar($historico, $lineas, $this->usuario, $version);
+
+        try {
+            $gestionar->clasificar($historico->fresh(), $lineas, $this->usuario, $version);
+            $this->fail('La clasificación anterior ya no es vigente.');
+        } catch (ValidationException $error) {
+            $this->assertStringContainsString('Otra revisión', $error->errors()['unidad'][0]);
+        }
+
+        $corte = $this->confirmar($area->id, '2026-10-10', '2026-10-12');
+        $this->assertSame($corte->id, $historico->fresh()->corte_id);
+        $this->assertSame(2000, $corte->total_centavos);
+    }
+
+    public function test_revision_y_estado_solo_incluyen_areas_autorizadas(): void
+    {
+        $cedis = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $tienda = AreaComisionEmpaque::query()->where('codigo', 'tienda')->firstOrFail();
+        UsuarioAreaComisionEmpaque::query()->create(['user_id' => $this->usuario->id, 'area_id' => $cedis->id]);
+        $this->usuario->givePermissionTo('gestion_interna.comisiones_empaque.ver');
+        $pedido = $this->pedido(['empacado_at' => '2026-10-11 10:00:00']);
+        $this->caja($pedido, 1);
+        $sync = app(SincronizarComisionesEmpaqueService::class);
+        $sync->ejecutar($this->usuario, [$tienda->id]);
+        $ruta = route('gestion_interna.comisiones_empaque.sincronizacion.estado');
+
+        $this->actingAs($this->usuario)->getJson($ruta.'?area_id='.$tienda->id)->assertForbidden();
+        $this->getJson($ruta)->assertOk()->assertJsonCount(1, 'areas')->assertJsonPath('listo', false)->assertJsonPath('areas.0.id', $cedis->id);
+        $sync->ejecutar($this->usuario, [$cedis->id]);
+        $this->getJson($ruta)->assertOk()->assertJsonPath('listo', true)->assertJsonPath('automatizacion_reciente', false);
+    }
+
+    public function test_el_desglose_fisico_importa_cajas_y_bolsas_y_reabre_si_cambia_sin_variar_el_total(): void
+    {
+        $pedido = $this->pedido(['empacado_at' => '2026-10-11 10:00:00']);
+        foreach (['caja', 'bolsa', null] as $orden => $tipo) {
+            PedidoBmaBultoEmpaque::query()->create([
+                'pedido_bma_id' => $pedido->id, 'numero' => $orden + 1, 'tipo_bulto' => $tipo,
+                'empacado_por_id' => $this->usuario->id, 'empacado_at' => $pedido->empacado_at,
+            ]);
+        }
+        $municipal = $this->pedido();
+        $cumplimiento = $this->cumplimiento($municipal, 3);
+        $cumplimiento->update(['cajas_empaque' => 2, 'bolsas_empaque' => 1]);
+        $job = new ProcesarCambiosComisionesEmpaque;
+        $sync = app(SincronizarComisionesEmpaqueService::class);
+        $job->handle($sync);
+        $bultos = UnidadComisionEmpaque::query()->where('pedido_bma_id', $pedido->id)->orderBy('origen_id')->get();
+        $this->assertSame([UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::PENDIENTE_CLASIFICACION], $bultos->pluck('situacion')->all());
+        $this->assertTrue($bultos[1]->lineas()->sole()->es_bolsa);
+        $unidad = UnidadComisionEmpaque::query()->where('pedido_bma_id', $municipal->id)->sole();
+        $this->assertSame(2, $unidad->cantidad_comisionable);
+        $this->assertNull(app(ComprobarFuenteCorteComisionEmpaque::class)->diferencia($unidad));
+
+        $cumplimiento->update(['cajas_empaque' => 1, 'bolsas_empaque' => 2]);
+        $this->assertNotNull(app(ComprobarFuenteCorteComisionEmpaque::class)->diferencia($unidad));
+        $job->handle($sync);
+        $sync->ejecutar($this->usuario);
+        $unidad->refresh();
+        $this->assertSame(UnidadComisionEmpaque::PENDIENTE_CLASIFICACION, $unidad->situacion);
+        $this->assertNull($unidad->importe_centavos);
+        $this->assertSame(3, $unidad->cantidad_origen);
+        $this->assertSame(2, $unidad->incidencias()->where('tipo', 'cambio_desglose')->sole()->datos['lineas_previas'][0]['cantidad']);
+    }
+
+    public function test_caratula_vigente_por_cobrar_resuelve_y_revocarla_reabre_sin_inferir_pago(): void
+    {
+        $pedido = $this->pedido(['empacado_at' => '2026-10-11 10:00:00', 'envio_por_cobrar' => false, 'costo_envio' => 250]);
+        $this->caja($pedido, 1);
+        $caratula = PedidoBmaCaratula::query()->create([
+            'pedido_bma_id' => $pedido->id, 'destinatario_nombre' => 'Destinatario de prueba',
+            'destinatario_telefono' => '5550000000', 'municipio_destino' => 'Municipio de prueba',
+            'catalogo_paqueteria_id' => DB::table('catalogo_paqueterias_pedido')->value('id'),
+            'modalidad_cobro' => PedidoBmaCaratula::COBRO_POR_COBRAR,
+            'ruta_pdf' => 'pruebas/caratula.pdf', 'estado' => PedidoBmaCaratula::ESTADO_GENERADA,
+        ]);
+        $job = new ProcesarCambiosComisionesEmpaque;
+        $sync = app(SincronizarComisionesEmpaqueService::class);
+        $job->handle($sync);
+        $unidad = UnidadComisionEmpaque::query()->sole();
+        $this->assertSame(UnidadComisionEmpaque::ELEGIBLE, $unidad->situacion);
+        $original = $unidad->logistica['huella_comercial'];
+
+        $caratula->update(['estado' => PedidoBmaCaratula::ESTADO_COLOCADA, 'destinatario_nombre' => 'Otra presentación']);
+        $job->handle($sync);
+        $this->assertSame($original, $unidad->fresh()->logistica['huella_comercial']);
+
+        $caratula->update(['modalidad_cobro' => PedidoBmaCaratula::COBRO_PAGADO]);
+        $job->handle($sync);
+        $this->assertSame(UnidadComisionEmpaque::PENDIENTE_CONCILIACION, $unidad->refresh()->situacion);
+        $this->assertNull($unidad->importe_centavos);
+        $this->assertStringContainsString('desglosa el transporte', $unidad->logistica['revision_comercial']);
+
+        $caratula->update(['estado' => PedidoBmaCaratula::ESTADO_INVALIDADA]);
+        $job->handle($sync);
+        $this->assertSame([], $unidad->refresh()->logistica['evidencia_comercial']['caratulas']);
+    }
+
+    public function test_cambio_de_area_despues_del_corte_abre_solape_y_conserva_el_importe_original(): void
+    {
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $participante = ParticipanteComisionEmpaque::query()->create(['nombre' => $this->usuario->name, 'user_id' => $this->usuario->id, 'activo' => true]);
+        $this->reparto($area->id, '2026-10-01', [[$participante->id, '100.00']]);
+        $pedido = $this->pedido(['empacado_at' => '2026-10-11 10:00:00']);
+        $this->caja($pedido, 1);
+        $job = new ProcesarCambiosComisionesEmpaque;
+        $sync = app(SincronizarComisionesEmpaqueService::class);
+        $job->handle($sync);
+        $corte = $this->confirmar($area->id, '2026-10-10', '2026-10-12');
+
+        $pedido->update(['solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal', 'consulta_municipal' => ['area' => 'tienda']]]);
+        $job->handle($sync);
+        $unidades = UnidadComisionEmpaque::query()->where('pedido_bma_id', $pedido->id)->get();
+        $this->assertCount(2, $unidades);
+        $this->assertSame($corte->id, $unidades->firstWhere('procedencia', 'cedis_caja')->corte_id);
+        $trasladada = $unidades->firstWhere('procedencia', 'tienda_municipal');
+        $this->assertSame(UnidadComisionEmpaque::SOLAPE_REVISION, $trasladada->situacion);
+        $this->assertSame(1000, $corte->fresh()->total_centavos);
+        $this->expectException(ValidationException::class);
+        app(GestionarUnidadComisionEmpaqueService::class)->resolverRevision($trasladada, 'aceptar', 'Cambió el área.', $this->usuario);
+    }
+
+    public function test_fondo_y_productividad_excluyen_importes_potenciales_y_capturas_invalidas(): void
+    {
+        $this->usuario->givePermissionTo('gestion_interna.comisiones_empaque.ver_todas');
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $pedido = $this->pedido(['empacado_at' => '2026-10-11 10:00:00', 'empacado_por_id' => $this->usuario->id]);
+        $this->caja($pedido, 1);
+        $bolsa = $this->pedido(['empacado_at' => '2026-10-11 11:00:00']);
+        PedidoBmaBultoEmpaque::query()->create([
+            'pedido_bma_id' => $bolsa->id, 'numero' => 1, 'tipo_bulto' => 'bolsa',
+            'empacado_por_id' => $this->usuario->id, 'empacado_at' => $bolsa->empacado_at,
+        ]);
+        app(SincronizarComisionesEmpaqueService::class)->ejecutar($this->usuario);
+
+        foreach ([UnidadComisionEmpaque::RECHAZADA, UnidadComisionEmpaque::POSIBLE_DUPLICADO] as $situacion) {
+            $unidad = app(GestionarUnidadComisionEmpaqueService::class)->registrarFila([
+                'clave_idempotencia' => 'captura-'.$situacion, 'area_id' => $area->id,
+                'empacado_at' => '2026-10-11 12:00:00', 'cantidad' => 5,
+                'cliente_nombre' => 'Captura por revisar', 'folio_remision' => 'RM-'.$situacion,
+            ], $this->usuario);
+            $unidad->update(['situacion' => $situacion, 'cantidad_comisionable' => 5, 'importe_centavos' => 5000]);
+        }
+        $consultar = app(ConsultarComisionesEmpaqueService::class);
+        $filtro = new Request(['area_id' => $area->id]);
+        $this->assertSame('10.00', $consultar->totales($consultar->filtrar($filtro, $this->usuario))['importe']);
+        $reporte = $consultar->productividad($filtro, $this->usuario);
+        $this->assertCount(1, $reporte);
+        $this->assertSame(1, $reporte[0]['cajas']);
+        $this->assertSame(1, $reporte[0]['bolsas']);
+        $this->assertEquals(100, $reporte[0]['porcentaje']);
     }
 
     private function pedido(array $overrides = []): PedidoBma

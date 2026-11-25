@@ -37,9 +37,20 @@ export default function Equipo({ equipo, areaId, puede, acumulado = '0.00', hist
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold m-0">Equipo y reparto permanente</h2><p className="text-sm theme-text-muted mt-1 mb-0">{equipo?.area} · Se conserva en todas las operaciones y periodos del área.</p></div>{puede.configurar && !editando && <button type="button" className={THEME_BTN_PRIMARY} onClick={editar}>{lineas.length ? 'Ajustar equipo y porcentajes' : 'Configurar equipo'}</button>}</div>
         <p className="text-sm theme-text-muted m-0 max-w-3xl">Las cajas generan un fondo común. La encargada asigna qué porcentaje del 100% recibe cada persona, independientemente de quién empacó cada caja.</p>
         <div className="flex flex-wrap justify-between gap-3 border-y theme-border py-3"><strong>Fondo común abierto: {dinero(acumulado)}</strong><span className="text-sm theme-text-muted">Los cortes confirmados conservan sus importes.</span></div>
+        {lineas.length > 0 && <div className="flex h-2 overflow-hidden rounded-full theme-element" role="img" aria-label={`Distribución asignada: ${(total / 100).toFixed(2)}%`}>
+            {lineas.map((linea, i) => <span key={i} className={`h-full shrink-0 border-r theme-border ${linea.encargado ? 'bg-[var(--color-primario)]' : 'bg-[var(--color-info)]'}`} style={{ width: `${Math.max(0, Math.min(Number(linea.porcentaje) || 0, 100))}%` }} />)}
+        </div>}
+        {!editando && lineas.length > 0 && <table className="w-full text-sm">
+            <thead><tr className="text-left theme-text-muted"><th>Colaborador</th><th className="text-right">Participación</th><th className="text-right">Estimación</th></tr></thead>
+            <tbody>{lineas.map((linea) => <tr key={linea.user_id} className="border-t theme-border">
+                <th scope="row" className="py-2 text-left font-medium">{linea.nombre}{linea.encargado && <span className="block text-xs theme-text-info">Encargado del equipo</span>}</th>
+                <td className="text-right tabular-nums">{linea.porcentaje}%</td>
+                <td className="text-right tabular-nums">{dinero(Number(acumulado) * Number(linea.porcentaje || 0) / 100)}</td>
+            </tr>)}</tbody>
+        </table>}
         <form onSubmit={guardar} className="space-y-4">
             {!lineas.length && <p className="text-sm theme-text-muted">Agregue las cuentas de los colaboradores y asigne sus porcentajes. El reparto debe sumar 100%.</p>}
-            <div className="space-y-3">{lineas.map((l, i) => <div key={i} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_120px_125px_110px_auto] items-end border-b theme-border pb-3">
+            {editando && <div className="space-y-3">{lineas.map((l, i) => <div key={i} className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_120px_125px_110px_auto] items-end border-b theme-border pb-3">
                 {editando ? <BuscarUsuario value={l.user_id} nombre={l.nombre} etiqueta={`Colaborador ${i + 1}`} onChange={(user_id, nombre) => cambiar(i, { user_id, nombre })} /> : <div><span className="text-sm font-semibold">{l.nombre}</span><p className="text-xs theme-text-muted m-0">{l.encargado ? 'Encargado del equipo' : 'Colaborador'}</p></div>}
                 {editando ? <label><span className={THEME_LABEL}>Porcentaje del fondo</span><input className={THEME_INPUT} required type="number" inputMode="decimal" min="0.01" max="100" step="0.01" value={l.porcentaje} onChange={(e) => cambiar(i, { porcentaje: e.target.value })} /></label> : <span className="text-sm tabular-nums">{l.porcentaje}%</span>}
                 <div><span className="text-xs theme-text-muted">Estimación actual</span><p className="m-0 tabular-nums">{dinero(Number(acumulado) * Number(l.porcentaje || 0) / 100)}</p></div>
@@ -47,7 +58,7 @@ export default function Equipo({ equipo, areaId, puede, acumulado = '0.00', hist
                     <input type="checkbox" checked={!!l.encargado} onChange={(e) => form.setData('lineas', form.data.lineas.map((linea, j) => ({ ...linea, encargado: j === i && e.target.checked })))} /> Encargado
                 </label>}
                 {editando && <button type="button" className={THEME_BTN_SECONDARY} disabled={lineas.length === 1 || form.processing} onClick={() => form.setData('lineas', form.data.lineas.filter((_, j) => j !== i))}>Retirar<span className="sr-only"> {l.nombre || `colaborador ${i + 1}`}</span></button>}
-            </div>)}</div>
+            </div>)}</div>}
             <div className="flex justify-between flex-wrap items-center gap-3"><p className={`text-sm m-0 ${total === 10000 ? 'theme-text-main' : 'theme-text-aviso'}`} role="status">Asignado {(total / 100).toFixed(2)}% · {total > 10000 ? `Excedido ${((total - 10000) / 100).toFixed(2)}%` : `Disponible ${((10000 - total) / 100).toFixed(2)}%`}</p>{editando && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => form.setData('lineas', [...form.data.lineas, { user_id: '', nombre: '', porcentaje: '' }])}>Agregar colaborador</button>}</div>
             {errorTotal && total !== 10000 && <p role="alert" className="m-0 text-sm theme-text-peligro">Ajuste las participaciones hasta sumar 100%.</p>}
             {editando && <><label className="block"><span className={THEME_LABEL}>Motivo del cambio</span><input className={THEME_INPUT} required minLength={5} maxLength={2000} value={form.data.motivo} onChange={(e) => form.setData('motivo', e.target.value)} placeholder="Por ejemplo: salida de un colaborador…" /></label>

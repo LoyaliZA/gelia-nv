@@ -12,7 +12,6 @@ use App\Models\ComisionesEmpaque\PagoComisionEmpaque;
 use App\Models\ComisionesEmpaque\ParticipanteComisionEmpaque;
 use App\Models\ComisionesEmpaque\PeriodoComisionEmpaque;
 use App\Models\ComisionesEmpaque\RepartoComisionEmpaque;
-use App\Models\ComisionesEmpaque\SincronizacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\TarifaComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\UsuarioAreaComisionEmpaque;
@@ -54,13 +53,13 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.ver');
         $tab = $request->string('tab')->toString() ?: 'acumulado';
         $usuario = $request->user();
+        if ($tab === 'liquidaciones') {
+            $tab = 'periodos';
+        }
         if ($request->input('area_id') === 'todas') {
             $request->merge(['area_id' => null]);
         }
         $areas = $this->alcance->areas($usuario);
-        if (in_array($tab, ['preparar', 'periodos', 'equipo'], true) && ! $request->has('area_id') && $areas->isNotEmpty()) {
-            $request->merge(['area_id' => $areas->first()->id]);
-        }
         if ($request->filled('area_id')) {
             $this->assertArea($usuario, (int) $request->input('area_id'));
         }
@@ -70,10 +69,12 @@ class ComisionesEmpaqueController extends Controller
             abort_unless($this->alcance->permite($usuario, (int) $periodoSeleccionado->area_id), 403);
             if ($request->filled('area_id')) {
                 abort_unless((int) $periodoSeleccionado->area_id === (int) $request->input('area_id'), 403);
+            } else {
+                $request->merge(['area_id' => $periodoSeleccionado->area_id]);
             }
         }
-        if ($tab === 'liquidaciones') {
-            $tab = 'periodos';
+        if (in_array($tab, ['preparar', 'periodos', 'equipo'], true) && ! $request->filled('area_id') && $areas->isNotEmpty()) {
+            $request->merge(['area_id' => $areas->first()->id]);
         }
         abort_if(in_array($tab, ['configuracion', 'ajustes'], true) && ! $usuario->can('gestion_interna.comisiones_empaque.configurar'), 403);
         $config = ConfiguracionComisionEmpaque::actual();
@@ -83,16 +84,7 @@ class ComisionesEmpaqueController extends Controller
                 'hasta' => $periodoSeleccionado->hasta->copy()->subSecond()->timezone($config->zona_horaria)->toDateString(),
             ]);
         }
-        $alcanceSync = $this->alcance->ids($usuario);
-        $areasConsulta = $request->filled('area_id') ? [$request->integer('area_id')] : $alcanceSync;
-        $sync = SincronizacionComisionEmpaque::query()
-            ->when($areasConsulta !== null, fn ($q) => $q->where(function ($q) use ($areasConsulta) {
-                $q->whereNull('area_ids');
-                foreach ($areasConsulta as $areaId) {
-                    $q->orWhereJsonContains('area_ids', $areaId);
-                }
-            }))
-            ->latest('id')->first();
+        $sync = $this->consultar->estadoSincronizacion($usuario, $request->integer('area_id') ?: null);
 
         $props = [
             'tab' => $tab,
@@ -113,21 +105,13 @@ class ComisionesEmpaqueController extends Controller
             'fecha_inicio' => optional($config->fecha_inicio)->toDateString(),
             'fecha_fin' => optional($config->fecha_fin)->toDateString(),
             'zona_horaria' => $config->zona_horaria,
-            'sincronizacion' => $sync ? [
-                'estado' => $sync->estado,
-                'mensaje' => $sync->mensaje,
-                'finalizado_at' => optional($sync->finalizado_at)->timezone($config->zona_horaria)->format('Y-m-d H:i'),
-                'nuevas' => $sync->unidades_nuevas,
-                'actualizadas' => $sync->unidades_actualizadas,
-                'diferencias' => $sync->diferencias,
-                'detalle' => $alcanceSync === null ? ($sync->detalle ?: []) : [],
-            ] : null,
-            'resumen' => $this->consultar->resumen($usuario, $request),
+            'sincronizacion' => $sync,
+            'resumen' => fn () => $this->consultar->resumen($usuario, $request, $sync),
             'fuentes' => FuentesComisionEmpaque::resumen(),
             'situaciones' => UnidadComisionEmpaque::ETIQUETAS,
             'motivos_comerciales' => UnidadComisionEmpaque::MOTIVOS_COMERCIALES,
             'tipos_caja' => CatalogoTipoCajaPedido::query()->orderBy('nombre')->get(['id', 'nombre', 'activo']),
-            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista', 'empacador_id', 'empacador_nombre', 'seccion']),
+            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'buscar', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista', 'empacador_id', 'empacador_nombre', 'seccion', 'retorno_corte']),
             'sin_areas' => $this->alcance->ids($usuario) === [],
             'captura_nombre' => $usuario->name,
             'paqueterias' => CatalogoPaqueteriaPedido::query()->orderBy('nombre')->get(['id', 'nombre', 'sin_logistica']),
@@ -139,9 +123,12 @@ class ComisionesEmpaqueController extends Controller
         }
 
         if (in_array($tab, ['acumulado', 'preparar'], true)) {
-            [$pagina, $totales] = $this->consultar->unidades($request, $usuario);
-            $props['acumulado'] = $pagina;
-            $props['totales'] = $totales;
+            $datosEmpaques = null;
+            $empaques = function () use ($request, $usuario, &$datosEmpaques) {
+                return $datosEmpaques ??= $this->consultar->unidades($request, $usuario);
+            };
+            $props['acumulado'] = fn () => $empaques()[0];
+            $props['totales'] = fn () => $empaques()[1];
         }
 
         if ($tab === 'preparar' && $request->filled('area_id') && $request->filled('limite_desde') && $request->filled('limite_hasta')) {
@@ -175,7 +162,7 @@ class ComisionesEmpaqueController extends Controller
         }
 
         if ($tab === 'productividad') {
-            $props['productividad'] = $this->consultar->productividad($request, $usuario);
+            $props['productividad'] = fn () => $this->consultar->productividad($request, $usuario);
         }
 
         if ($tab === 'pagos') {
@@ -257,12 +244,27 @@ class ComisionesEmpaqueController extends Controller
         return Inertia::render('GestionInterna/ComisionesEmpaque/Index', $props);
     }
 
+    public function estadoSincronizacion(Request $request): JsonResponse
+    {
+        $area = $request->integer('area_id') ?: null;
+        if ($area) {
+            $this->assertArea($request->user(), $area);
+        }
+
+        return response()->json($this->consultar->estadoSincronizacion($request->user(), $area))
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function sincronizar(Request $request, SincronizarComisionesEmpaqueService $service): RedirectResponse
     {
         Gate::authorize('gestion_interna.comisiones_empaque.ver');
         $areas = $this->alcance->ids($request->user());
         abort_if($areas === [], 403);
-        $sync = $service->ejecutar($request->user(), $areas);
+        $area = $request->integer('area_id') ?: null;
+        if ($area) {
+            $this->assertArea($request->user(), $area);
+        }
+        $sync = $service->ejecutar($request->user(), $area ? [$area] : $areas);
 
         return back()->with($sync->estado === 'ok' ? 'success' : 'warning', $sync->mensaje);
     }
@@ -324,10 +326,11 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
         $this->assertArea($request->user(), (int) $unidad->area_id);
         $datos = $request->validate([
+            'version_revision' => ['required', 'string', 'size:64'],
             'decision' => ['required', 'in:aceptar,rechazar,trabajo_distinto,aceptar_sin_referencia'],
             'motivo' => ['required', 'string', 'max:2000'],
         ]);
-        $service->revisarManual($unidad, $datos['decision'], $datos['motivo'], $request->user());
+        $service->revisarManual($unidad, $datos['decision'], $datos['motivo'], $request->user(), $datos['version_revision'] ?? null);
 
         $mensaje = match ($datos['decision']) {
             'aceptar' => 'Registro aceptado. La tarifa del área se aplica a las cajas registradas.',
@@ -436,12 +439,13 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
         $this->assertArea($request->user(), (int) $unidad->area_id);
         $datos = $request->validate([
+            'version_revision' => ['required', 'string', 'size:64'],
             'lineas' => ['required', 'array', 'min:1'],
             'lineas.*.cantidad' => ['required', 'integer', 'min:1'],
             'lineas.*.es_bolsa' => ['required', 'boolean'],
             'lineas.*.catalogo_tipo_caja_id' => ['nullable', 'integer'],
         ]);
-        $service->clasificar($unidad, $datos['lineas'], $request->user());
+        $service->clasificar($unidad, $datos['lineas'], $request->user(), $datos['version_revision'] ?? null);
 
         return back()->with('success', 'Desglose guardado.');
     }
@@ -451,6 +455,7 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
         $this->assertArea($request->user(), (int) $unidad->area_id);
         $datos = $request->validate([
+            'version_revision' => ['required', 'string', 'size:64'],
             'decision' => ['required', 'in:validar,excluir,pendiente'],
             'motivo_comercial' => ['required', \Illuminate\Validation\Rule::in(array_keys(UnidadComisionEmpaque::MOTIVOS_COMERCIALES))],
             'observaciones' => ['required', 'string', 'max:2000'],
@@ -468,10 +473,11 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
         $this->assertArea($request->user(), (int) $unidad->area_id);
         $datos = $request->validate([
+            'version_revision' => ['required', 'string', 'size:64'],
             'decision' => ['required', 'in:conservar,excluir'],
             'motivo' => ['required', 'string', 'max:2000'],
         ]);
-        $service->decidirCancelacion($unidad, $datos['decision'], $datos['motivo'], $request->user());
+        $service->decidirCancelacion($unidad, $datos['decision'], $datos['motivo'], $request->user(), $datos['version_revision'] ?? null);
 
         return back()->with('success', 'Decisión de cancelación registrada.');
     }
@@ -481,10 +487,11 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
         $this->assertArea($request->user(), (int) $unidad->area_id);
         $datos = $request->validate([
+            'version_revision' => ['required', 'string', 'size:64'],
             'decision' => ['required', 'in:aceptar,descartar'],
             'motivo' => ['required', 'string', 'max:2000'],
         ]);
-        $service->resolverRevision($unidad, $datos['decision'], $datos['motivo'], $request->user());
+        $service->resolverRevision($unidad, $datos['decision'], $datos['motivo'], $request->user(), $datos['version_revision'] ?? null);
 
         return back()->with('success', 'Revisión registrada.');
     }
@@ -934,6 +941,7 @@ class ComisionesEmpaqueController extends Controller
                 'cantidad' => $u->cantidad_comisionable,
                 'importe' => DineroComisionEmpaque::texto((int) $u->importe_centavos),
                 'desglose' => $u->desglose,
+                'conciliacion' => $u->referencia['conciliacion'] ?? null,
                 'excepcion_resguardo' => $u->excepcion_resguardo,
                 'empacado_at' => optional($u->empacado_at)->timezone(config('app.timezone'))->format('Y-m-d H:i'),
             ]),

@@ -54,6 +54,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
 
     Route::middleware(['can:gestion_interna.comisiones_empaque.ver'])->prefix('comisiones-empaque')->name('comisiones_empaque.')->group(function () {
         Route::get('/', [ComisionesEmpaqueController::class, 'index'])->name('index');
+        Route::get('/sincronizacion/estado', [ComisionesEmpaqueController::class, 'estadoSincronizacion'])->name('sincronizacion.estado');
         Route::post('/sincronizar', [ComisionesEmpaqueController::class, 'sincronizar'])->name('sincronizar');
         Route::post('/manual', [ComisionesEmpaqueController::class, 'manual'])->name('manual');
         Route::post('/carga/revisar', [ComisionesEmpaqueController::class, 'revisarCarga'])->name('carga.revisar');

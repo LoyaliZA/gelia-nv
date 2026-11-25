@@ -1,6 +1,6 @@
-import { useForm } from '@inertiajs/react';
-import { useRef, useState } from 'react';
-import { Download, Search, SlidersHorizontal, X } from 'lucide-react';
+import { router, useForm } from '@inertiajs/react';
+import { useEffect, useRef, useState } from 'react';
+import { BadgeCheck, Box, CircleMinus, ClipboardList, Download, Hourglass, Search, SlidersHorizontal, Wallet, X } from 'lucide-react';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 import { BOTON_FILTRO, ErroresFormulario, dinero, ir } from './compartido';
@@ -9,30 +9,81 @@ import BuscarUsuario from './BuscarUsuario';
 
 export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado, totales, puede, tipos, capturaNombre, sinAreas, paqueterias = [], cargaRevision = null, motivos = {} }) {
     const [local, setLocal] = useState(filtros);
+    const [revisionId, setRevisionId] = useState(null);
     const [capturar, setCapturar] = useState(false);
     const [cargar, setCargar] = useState(Boolean(cargaRevision));
     const filas = acumulado?.data || [];
+    const indiceActual = filas.findIndex((fila) => fila.id === revisionId);
+    const siguiente = filas.slice(indiceActual + 1).find((fila) =>
+        ['pendiente_revision', 'posible_duplicado', 'pendiente_clasificacion', 'pendiente_conciliacion', 'pendiente_decision', 'reempaque_revision', 'solape_revision', 'revertida_revision'].includes(fila.situacion));
+
     const cambiarVista = (vista) => ir({ ...filtros, tab: 'acumulado', vista: vista || undefined, situacion: undefined, page: undefined });
     const vistas = [['', 'Todos'], ['revisados', 'Válidos'], ['pendientes', 'Por revisar'], ['excluidos', 'Excluidos']];
+    const buscar = (cambios) => router.get(route('gestion_interna.comisiones_empaque.index'), {
+        ...cambios, tab: 'acumulado', page: undefined,
+    }, { preserveState: true, preserveScroll: true, replace: true, only: ['acumulado', 'totales', 'resumen', 'filtros'] });
+    const termino = (local.buscar || '').trim();
+    useEffect(() => {
+        if (termino === (filtros.buscar || '')) return undefined;
+        const espera = window.setTimeout(() => buscar({ ...filtros, buscar: termino || undefined }), 350);
+        return () => window.clearTimeout(espera);
+    // La escritura en otros filtros solo se aplica al enviar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [termino, filtros.buscar]);
+
     const indicadores = [
-        ['Cajas registradas', resumen?.cajas_registradas ?? 0],
-        ['Cajas comisionables', resumen?.cajas_elegibles ?? 0],
-        ['Cajas por revisar', resumen?.cajas_pendientes ?? 0],
-        ['Cajas excluidas', resumen?.cajas_excluidas ?? 0],
-        ['Comisión válida', dinero(resumen?.importe_valido || '0.00')],
-        ['Por liquidar', dinero(resumen?.importe_por_cortar || '0.00')],
+        ['Empaques', resumen?.total_registros ?? 0, ClipboardList, 'theme-text-muted'],
+        ['Cajas identificadas', resumen?.cajas_registradas ?? 0, Box, 'theme-text-info'],
+        ['Comisionables', resumen?.cajas_elegibles ?? 0, BadgeCheck, 'theme-text-exito'],
+        ['Cajas por revisar', resumen?.cajas_pendientes ?? 0, Hourglass, 'theme-text-aviso'],
+        ['Cajas excluidas', resumen?.cajas_excluidas ?? 0, CircleMinus, 'theme-text-muted'],
+        ['Fondo abierto', dinero(resumen?.importe_por_cortar || '0.00'), Wallet, 'theme-text-primario'],
     ];
-    const filtrado = ['cliente', 'remision', 'pedido', 'empacador', 'empacador_id', 'desde', 'hasta', 'vista', 'situacion'].some((campo) => filtros[campo] !== undefined && filtros[campo] !== null && filtros[campo] !== '');
+    const filtrado = ['buscar', 'cliente', 'remision', 'pedido', 'empacador', 'empacador_id', 'desde', 'hasta', 'vista', 'situacion'].some((campo) => filtros[campo] !== undefined && filtros[campo] !== null && filtros[campo] !== '');
     return <div className="min-w-0 space-y-3">
-        <section className={geliaCardClass('p-3 sm:p-4')} aria-label="Resumen de empaques">
+        <section className="space-y-2 border-b theme-border pb-2" aria-label="Resumen de empaques">
             <dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 xl:grid-cols-6">
-                {indicadores.map(([nombre, valor]) => <div className="min-w-0 py-1" key={nombre}>
-                    <dt className="text-xs font-medium theme-text-muted">{nombre}</dt>
-                    <dd className="m-0 text-xl font-bold tabular-nums">{valor}</dd>
+                {indicadores.map(([nombre, valor, Icono, color]) => <div className="min-w-0 py-1" key={nombre}>
+                    <dt className="flex items-center gap-1.5 text-xs font-medium theme-text-muted"><Icono className={`size-4 shrink-0 ${color}`} aria-hidden="true" />{nombre}</dt>
+                    <dd className={`m-0 text-lg font-bold tabular-nums ${color === 'theme-text-primario' ? color : 'theme-text-main'}`}>{valor}</dd>
                 </div>)}
             </dl>
-            {!!resumen?.pendientes_sin_desglose && <p className="m-0 border-t theme-border pt-2 text-sm theme-text-muted">{resumen.pendientes_sin_desglose} bultos o piezas aún sin clasificar.</p>}
+            <p className="m-0 flex flex-wrap gap-x-4 gap-y-1 text-xs theme-text-muted">
+                <span>Bolsas · {resumen?.bolsas_registradas ?? 0}</span>
+                <span>Bultos sin clasificar · {resumen?.pendientes_sin_desglose ?? 0}</span>
+                <span>Registros sin cantidad · {resumen?.registros_sin_cantidad ?? 0}</span>
+                <span>Comisión generada · {dinero(resumen?.importe_valido || '0.00')}</span>
+                <span>Constancias pagadas fuera · {resumen?.constancias_pagadas_fuera ?? 0}</span>
+            </p>
         </section>
+        <form className="relative flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); buscar({ ...local, buscar: termino || undefined }); }}>
+            <label className="min-w-0 flex-[1_1_15rem] sm:max-w-md">
+                <span className={THEME_LABEL}>Buscar empaques</span>
+                <span className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 theme-text-muted" aria-hidden="true" />
+                    <input className={`${THEME_INPUT} !pl-9`} data-busqueda-live value={local.buscar || ''} onChange={(e) => setLocal({ ...local, buscar: e.target.value })} placeholder="Cliente, remisión, pedido o empacador" />
+                </span>
+            </label>
+            <button type="button" className={BOTON_FILTRO} onClick={() => {
+                const limpio = { area_id: filtros.area_id, periodo_id: filtros.periodo_id, vista: filtros.vista };
+                setLocal(limpio);
+                buscar(limpio);
+            }}><X className="size-4" aria-hidden="true" />Limpiar filtros</button>
+            <details>
+                <summary className={`${BOTON_FILTRO} w-fit list-none [&::-webkit-details-marker]:hidden`}><SlidersHorizontal className="size-4" aria-hidden="true" />Más filtros</summary>
+                <div className="absolute inset-x-0 top-full z-10 mt-1 grid gap-2 rounded-lg border theme-border theme-element p-3 sm:max-w-lg sm:grid-cols-3">
+                    {[
+                        ['cliente', 'Cliente', 'text'], ['remision', 'Remisión', 'text'], ['pedido', 'Pedido', 'text'], ['empacador', 'Empacador', 'text'],
+                        ['desde', 'Empaque desde', 'date'], ['hasta', 'Empaque hasta', 'date'],
+                    ].map(([k, label, type]) => <label key={k}><span className={THEME_LABEL}>{label}</span>
+                        <input className={THEME_INPUT} type={type} value={local[k] || ''} disabled={!!filtros.periodo_id && ['desde', 'hasta'].includes(k)} onChange={(e) => setLocal({ ...local, [k]: e.target.value })} />
+                    </label>)}
+                    <label><span className={THEME_LABEL}>Situación</span><select className={THEME_INPUT} value={local.situacion || ''} onChange={(e) => setLocal({ ...local, situacion: e.target.value })}>
+                        <option value="">Todas</option>{Object.entries(situaciones).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+                    </select></label>
+                    <button className={BOTON_FILTRO} type="submit">Aplicar filtros</button>
+                </div>
+            </details>
+        </form>
         <div className="flex flex-wrap items-start justify-between gap-2">
             <nav aria-label="Bandejas de empaques" className="flex flex-wrap items-center gap-1">
                 {vistas.map(([valor, nombre]) => {
@@ -54,15 +105,13 @@ export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado
                 </details>}
             </div>
         </div>
-        <form className={`${geliaCardClass('p-4 md:p-5')} flex flex-wrap items-end gap-3`} onSubmit={(e) => { e.preventDefault(); ir({ ...local, tab: 'acumulado' }); }}><label className="flex-1 min-w-48 max-w-md"><span className={THEME_LABEL}>Buscar cliente</span><input className={THEME_INPUT} value={local.cliente || ''} onChange={(e) => setLocal({ ...local, cliente: e.target.value })} placeholder="Nombre del cliente…" /></label><label className="min-w-40"><span className={THEME_LABEL}>Remisión</span><input className={THEME_INPUT} value={local.remision || ''} onChange={(e) => setLocal({ ...local, remision: e.target.value })} placeholder="Folio…" /></label><button className={BOTON_FILTRO}><Search className="size-4" aria-hidden="true" />Buscar</button><button type="button" className={BOTON_FILTRO} onClick={() => ir({ tab: 'acumulado', area_id: filtros.area_id, periodo_id: filtros.periodo_id, desde: undefined, hasta: undefined })}><X className="size-4" aria-hidden="true" />Limpiar filtros</button>
-            <details className="basis-full"><summary className={`${BOTON_FILTRO} w-fit list-none [&::-webkit-details-marker]:hidden`}><SlidersHorizontal className="size-4" aria-hidden="true" />Más filtros</summary><div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 py-3">{[['desde', 'Empaque desde', 'date'], ['hasta', 'Empaque hasta', 'date'], ['pedido', 'Pedido', 'text'], ['empacador', 'Persona que empacó', 'text']].map(([k, label, type]) => <label key={k}><span className={THEME_LABEL}>{label}</span><input className={THEME_INPUT} type={type} value={local[k] || ''} disabled={!!filtros.periodo_id && ['desde', 'hasta'].includes(k)} onChange={(e) => setLocal({ ...local, [k]: e.target.value })} /></label>)}<label><span className={THEME_LABEL}>Situación</span><select className={THEME_INPUT} value={local.situacion || ''} onChange={(e) => setLocal({ ...local, situacion: e.target.value })}><option value="">Todas</option>{Object.entries(situaciones).map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}</select></label></div></details>
-        </form>
         {capturar && <Manual areas={areas} paqueterias={paqueterias} capturaNombre={capturaNombre} />}
         {cargar && <Carga revision={cargaRevision} />}
-        <div className={geliaCardClass('p-3 md:p-4')}><div className="overflow-x-auto"><table className="w-full text-sm min-w-[780px]"><thead><tr className="text-left theme-text-muted">{['Fecha', 'Cliente y remisiones', 'Empacador', 'Cajas', 'Envío', 'Validación', 'Comisión', 'Acción'].map((h) => <th key={h} className={`py-3 px-2 font-medium ${h === 'Comisión' ? 'text-right' : ''}`}>{h}</th>)}</tr></thead><tbody>{!filas.length && <tr><td colSpan={8} className="p-6 theme-text-muted">{sinAreas ? 'No tiene áreas asignadas.' : filtrado ? 'No hay coincidencias. Cambie la bandeja o limpie los filtros.' : resumen?.listo ? 'No hay empaques en el área. Pulse Actualizar para consultar novedades.' : 'Actualice para consultar los empaques de Gestión de Pedidos.'}</td></tr>}{filas.map((fila) => <Fila key={fila.id} fila={fila} puede={puede} tipos={tipos} motivos={motivos} />)}</tbody></table></div>
-            <div className="flex flex-wrap justify-between items-center gap-3 border-t theme-border pt-4 mt-3"><p className="text-sm theme-text-muted m-0">{totales?.registros ?? 0} {totales?.registros === 1 ? 'registro' : 'registros'} en este resultado</p></div>
+        <div className={geliaCardClass('!rounded-xl p-3 md:p-4')}><div className="overflow-x-auto"><table className="w-full text-sm min-w-[780px]"><thead><tr className="text-left theme-text-muted">{['Fecha', 'Cliente y remisiones', 'Empacador', 'Cajas', 'Envío', 'Validación', 'Comisión', 'Acción'].map((h) => <th key={h} className={`py-3 px-2 font-medium ${h === 'Comisión' ? 'text-right' : ''}`}>{h}</th>)}</tr></thead><tbody>{!filas.length && <tr><td colSpan={8} className="p-6 theme-text-muted">{sinAreas ? 'No tiene áreas asignadas.' : filtrado ? 'No hay coincidencias. Cambie la bandeja o limpie los filtros.' : resumen?.listo ? 'No hay empaques en el área para este periodo.' : 'Todavía no hay empaques en este periodo.'}</td></tr>}{filas.map((fila) => <Fila key={fila.id} fila={fila} puede={puede} tipos={tipos} motivos={motivos} abierta={revisionId === fila.id} onAbrir={() => setRevisionId(fila.id)} onCerrar={() => setRevisionId(null)} onSiguiente={siguiente ? () => setRevisionId(siguiente.id) : undefined} />)}</tbody></table></div>
+            {acumulado?.total > 0
+                ? <GeliaPaginacion embedded paginator={acumulado} onIrAPagina={(page) => ir({ tab: 'acumulado', ...filtros, page })} />
+                : <p className="m-0 border-t theme-border px-2 py-3 text-sm theme-text-muted">{totales?.registros ?? 0} registros</p>}
         </div>
-        <GeliaPaginacion paginator={acumulado} onIrAPagina={(page) => ir({ tab: 'acumulado', ...filtros, page })} />
     </div>;
 }
 

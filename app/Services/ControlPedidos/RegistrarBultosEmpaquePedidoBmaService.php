@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaBultoEmpaque;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Support\ControlPedidos\CustodiaDocumentalTienda;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,6 +28,7 @@ class RegistrarBultosEmpaquePedidoBmaService
             throw new \RuntimeException('El pedido ya tiene bultos de empaque registrados.');
         }
 
+        $soloBolsa = CustodiaDocumentalTienda::aplica($pedido);
         $ordenDoc = (int) $pedido->documentos()->max('orden') + 1;
         $ahora = now();
 
@@ -42,13 +44,19 @@ class RegistrarBultosEmpaquePedidoBmaService
                 throw new \InvalidArgumentException('Cada empaque debe incluir foto del pedido.');
             }
 
-            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! $usarRemisionPdf && ! \App\Support\ControlPedidos\CustodiaDocumentalTienda::aplica($pedido)) {
+            if ((! $fotoTicket instanceof UploadedFile || ! $fotoTicket->isValid()) && ! $usarRemisionPdf && ! $soloBolsa) {
                 throw new \InvalidArgumentException('Cada empaque debe incluir foto de la remisión.');
+            }
+
+            $tipo = $soloBolsa ? 'bolsa' : ($fila['tipo_bulto'] ?? null);
+            if ($tipo !== null && ! in_array($tipo, ['caja', 'bolsa'], true)) {
+                throw new \InvalidArgumentException('Indique si cada bulto es caja o bolsa.');
             }
 
             $bulto = PedidoBmaBultoEmpaque::query()->create([
                 'pedido_bma_id' => $pedido->id,
                 'numero' => $idx + 1,
+                'tipo_bulto' => $tipo,
                 'empacado_por_id' => $usuarioId,
                 'empacado_at' => $ahora,
             ]);
