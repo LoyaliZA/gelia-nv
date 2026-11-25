@@ -4,7 +4,7 @@ import {
     Clock, Package, Eye, Truck, AlertTriangle, CheckCircle2, User,
 } from 'lucide-react';
 import { geliaCardClass } from '../../../../utils/geliaTheme';
-import { BTN_PRIMARY, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
+import { BTN_PRIMARY, BTN_SECONDARY, formatearFechaNegocio } from '../../Partials/pedidosBmaStyles';
 import AvisoOperativoPedido from '../../Partials/AvisoOperativoPedido';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import {
@@ -15,6 +15,28 @@ import {
     accionPrincipalTienda,
     novedadTienda,
 } from './tiendaUi';
+
+export function AccionesEmpaqueMunicipal({ t, onVer, onEmpacar, apilado = false }) {
+    if (t.tipo_fila !== 'empaque_municipal') return null;
+    const caja = apilado ? 'flex flex-col gap-2' : 'inline-flex items-center justify-end gap-1.5';
+    const ancho = apilado ? 'w-full' : '';
+    return (
+        <div className={caja}>
+            {onVer && (
+                <button type="button" className={`${BTN_SECONDARY} ${ancho} inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 min-h-[36px] ${apilado ? 'min-h-[44px] py-3' : ''}`}
+                    onClick={() => onVer(t)}>
+                    <Eye className={apilado ? 'w-4 h-4' : 'w-3.5 h-3.5'} aria-hidden="true" /> Ver
+                </button>
+            )}
+            {t.estado === 'PENDIENTE' && onEmpacar && (
+                <button type="button" className={`${BTN_PRIMARY} ${ancho} inline-flex items-center justify-center gap-1.5 text-xs px-3 py-2 min-h-[36px] ${apilado ? 'min-h-[44px] py-3' : ''}`}
+                    onClick={() => onEmpacar(t)}>
+                    <Package className={apilado ? 'w-4 h-4' : 'w-3.5 h-3.5'} aria-hidden="true" /> Marcar empacado
+                </button>
+            )}
+        </div>
+    );
+}
 
 export function TarjetaTareaVacia({ hayFiltrosActivos, onLimpiarFiltros }) {
     return (
@@ -36,7 +58,7 @@ export function TarjetaTareaVacia({ hayFiltrosActivos, onLimpiarFiltros }) {
     );
 }
 
-export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }) {
+export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir, onVer, onEmpacar }) {
     const venc = fmtVencimiento(t.fecha_limite);
     const badge = claseBadgeEstadoTienda(t.estado, t.estado_label);
     const aviso = avisoParaTarea(t, venc);
@@ -47,6 +69,9 @@ export function TarjetaTarea({ tarea: t, puedeTomar, compacto = false, onAbrir }
         || Boolean(venc?.urgente);
 
     const ctaPrincipal = () => {
+        if (t.tipo_fila === 'empaque_municipal') {
+            return <AccionesEmpaqueMunicipal t={t} onVer={onVer || onAbrir} onEmpacar={onEmpacar} apilado />;
+        }
         if (onAbrir) {
             const accion = accionPrincipalTienda(t, puedeTomar);
             return <button type="button" className={`${BTN_PRIMARY} w-full inline-flex items-center justify-center gap-2 py-3 min-h-[44px]`}

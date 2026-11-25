@@ -9,6 +9,7 @@
 - [verificado] Consulta aprobada, confirmación de Ventas y separación física son hechos distintos: `app/Services/ControlPedidos/ConfirmarPedidoTiendaService.php:17`.
 - [verificado] Con Pago al recoger guardado, Ventas confirma una sola vez; reintentar no avisa ni renueva vigencia: `app/Services/ControlPedidos/ConfirmarPedidoTiendaService.php:29`.
 - [verificado] Pago al recoger se cobra/remisiona en PDV sin exhibición GELIA; su seguimiento posterior en GELIA es opcional y viene apagado: `gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md:230`.
+- [verificado] Municipales de PDV por empacar se mezclan en Pendientes; el folio y Ver abren el detalle; empacados pasan a Atendidos sin CEDIS ni custodia: `FilasConsultaMunicipalTienda.php`.
 
 ## Reglas que no se rompen
 - [verificado] Bloquear pedido y luego instrucción dentro de transacción; rechazar sustituida/liberada/cancelada o más de una abierta: `app/Support/ControlPedidos/InstruccionEntrega.php:50`.
@@ -31,4 +32,4 @@
 - [verificado] Horarios pueden estar pausados: confirmar fuera de jornada conserva fecha previa sin generar vigencia: `app/Support/ControlPedidos/PlazoApartadoTienda.php:40`.
 - [verificado] Documento, visor, escaneo y galería deben mantenerse; no restaurar «Decisión del cliente»: `gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md:13` y `:40`.
 
-- Última verificación: 2026-11-18, `develop` @ `c63dd84722c4bf6a318d233177d560aaa2b44f3d`; lectura estática.
+- Última verificación: 2026-11-24, sin commit, árbol de trabajo (filas municipales de empaque).

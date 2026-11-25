@@ -281,7 +281,7 @@ class PedidoBmaAuditoriaController extends Controller
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Pedido aprobado y enviado a Registro General.');
+        return redirect()->back()->with('success', 'Pedido aprobado y enviado a CEDIS.');
     }
 
     public function rechazar(

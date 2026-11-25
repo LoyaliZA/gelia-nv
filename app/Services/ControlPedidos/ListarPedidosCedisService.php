@@ -56,6 +56,7 @@ class ListarPedidosCedisService
 
             $pedido->setAttribute('piezas_adicionales', \App\Support\ControlPedidos\Municipal\PresentadorPiezasAdicionales::para($pedido, $usuario));
             $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
+            $pedido->setAttribute('caratula_municipal', \App\Support\ControlPedidos\Municipal\PresentadorCaratulaMunicipalCedis::para($pedido));
 
             return BitacoraCedis::presentar($pedido, $usuario);
         };
@@ -201,6 +202,12 @@ class ListarPedidosCedisService
                         $tiendaCedis->where('solicitud_preparacion_json->modalidad_entrega', 'tienda')
                             ->where('solicitud_preparacion_json->area_revision', 'control_pedidos')
                             ->whereNotNull('solicitud_preparacion_json->revision_disponibilidad->estado');
+                    })->orWhere(function (Builder $nacional) {
+                        // Nacional: permanece en CEDIS desde la consulta hasta que Ventas cierra.
+                        $nacional->where('solicitud_preparacion_json->modalidad_entrega', 'nacional')
+                            ->whereNotNull('pesaje_solicitado_at')
+                            ->whereNull('consulta_cerrada_at')
+                            ->whereNull('empacado_at');
                     });
                 })
         );
@@ -291,6 +298,8 @@ class ListarPedidosCedisService
 
     private function excluirPreparacionTienda(Builder $query): Builder
     {
+        \App\Support\ControlPedidos\AlcanceConsultaMunicipal::excluirEmpaqueTienda($query);
+
         return $query->whereDoesntHave('tareaPreparacionVigente');
     }
 

@@ -3,8 +3,29 @@ import RespuestaDisponibilidadPedido from './RespuestaDisponibilidadPedido';
 import { ClipboardCheck } from 'lucide-react';
 import { formatearFechaNegocio } from './pedidosBmaStyles';
 import { esPdf, MiniaturaDocumento } from './ModalVistaPreviaDocumento';
+import { esFilaRespuestaCorrecta, numerarPiezasConDetalle } from './cambiosDisponibilidad';
 
-export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza, mostrarSeguimientoEntrega = true, mostrarCaptura = true }) {
+function excepcionesSinProducto(respuesta) {
+    const skusEnTabla = new Set((respuesta.productos || []).map(pieza => String(pieza.sku || '')));
+    const excepciones = Array.isArray(respuesta.excepciones) ? respuesta.excepciones : [];
+    return excepciones.filter(pieza => !pieza.sku || !skusEnTabla.has(String(pieza.sku)));
+}
+
+function filasDeRespuesta(respuesta, excepciones) {
+    return [
+        ...(respuesta.productos || []).map(p => ({ ...p, clave: `producto-${p.id}`, documentos: (respuesta.documentos || []).filter(d => Number(d.producto_id) === Number(p.id) && d.url), original: p })),
+        ...excepciones.map(p => ({ ...p, clave: `revision-${p.id}`, revision_id: p.id, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: p.documentos || [], original: { ...p, revision_id: p.id } })),
+    ];
+}
+
+export function revisionesVisiblesTienda(respuesta) {
+    if (!respuesta?.revision?.estado) return new Map();
+    const filas = filasDeRespuesta(respuesta, excepcionesSinProducto(respuesta));
+    const numeradas = numerarPiezasConDetalle(filas.filter(fila => !esFilaRespuestaCorrecta(fila)));
+    return new Map(numeradas.filter(fila => fila.revision_id).map(fila => [Number(fila.revision_id), fila]));
+}
+
+export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, accionesDePieza, mostrarSeguimientoEntrega = true, mostrarCaptura = true, desplazarPiezas = false }) {
     const respuesta = tarea?.respuesta;
     const documentos = respuesta?.documentos || [];
     const mostrarSeguimiento = mostrarSeguimientoEntrega && (!respuesta?.documental || respuesta?.seguimiento_entrega_pdv_habilitado === true);
@@ -28,15 +49,10 @@ export default function RespuestaPreparacionTienda({ tarea, onVerDocumentos, acc
         : (tarea.modalidad?.codigo === 'RECOGE_TIENDA' || respuesta.revision?.estado
             ? 'Respuesta de disponibilidad'
             : (!respuesta.respondida ? 'Resultado de la revisión en tienda' : 'Resultado de preparación'));
-    const excepciones = Array.isArray(respuesta.excepciones) ? respuesta.excepciones : [];
-    const skusEnTabla = new Set((respuesta.productos || []).map((producto) => String(producto.sku || '')));
-    const excepcionesSueltas = excepciones.filter((pieza) => !skusEnTabla.has(String(pieza.sku || '')) || !pieza.sku);
+    const excepcionesSueltas = excepcionesSinProducto(respuesta);
     if (respuesta.revision?.estado) {
-        const filas = [
-            ...(respuesta.productos || []).map(p => ({ ...p, clave: `producto-${p.id}`, documentos: fotosDe(p.id), original: p })),
-            ...excepcionesSueltas.map(p => ({ ...p, clave: `revision-${p.id}`, cantidad: p.estado_fisico === 'sin_existencia' ? 0 : p.cantidad, observacion: p.detalle, documentos: p.documentos || [], original: { ...p, revision_id: p.id } })),
-        ];
-        return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false} mostrarCaptura={mostrarCaptura}
+        const filas = filasDeRespuesta(respuesta, excepcionesSueltas);
+        return <RespuestaDisponibilidadPedido titulo={titulo} origen="Tienda" ariaLabel="Respuesta de preparación" responsable={respuesta.responsable} fecha={respuesta.respondida_at} estado={respuesta.revision.estado} aceptacionVigente={respuesta.revision.aceptacion_vigente !== false} mostrarCaptura={mostrarCaptura} desplazarPiezas={desplazarPiezas}
             filas={filas} generales={generales.filter(d => !d.anterior)} anteriores={generales.filter(d => d.anterior)} cantidad={respuesta.productos?.length || respuesta.piezas_afectadas ? respuesta.cantidad : null}
             labelCantidad={respuesta.piezas_afectadas ? 'Piezas afectadas' : 'Total preparado'} columnaCantidad={respuesta.apartado_confirmado ? 'Preparadas' : 'Revisadas'} onVer={ver} accionesDePieza={accionesDePieza}>
             {respuesta.documental && respuesta.apartado_confirmado && <p>Pedido completo separado conforme a la consulta aprobada.</p>}

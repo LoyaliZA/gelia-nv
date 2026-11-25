@@ -9,8 +9,8 @@ function Badge({ tipo, cantidad, icon: Icono, etiqueta }) {
     return <span className="consulta-cambio-badge" data-tipo={tipo} aria-label={etiqueta}><Icono size={14} aria-hidden /><span aria-hidden>{cantidad}</span></span>;
 }
 
-export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], onVer, interactivo = false, vista = 'ventas', respuestas = {}, onResponder, onIncidencia, disabled = false, puedeVerDocumentos = true }) {
-    const cambios = cambiosDisponibilidad(solicitud, documentos);
+export default function ResumenCambiosDisponibilidad({ solicitud = {}, documentos = [], revisionesVisibles, onVer, interactivo = false, vista = 'ventas', respuestas = {}, onResponder, onIncidencia, disabled = false, puedeVerDocumentos = true }) {
+    const cambios = cambiosDisponibilidad(solicitud, documentos, revisionesVisibles);
     if (!cambios.length && !solicitud.reapertura_disponibilidad) return null;
     const anexos = cambios.filter(c => c.tipo !== 'retiro');
     const retiros = cambios.filter(c => c.tipo === 'retiro');
@@ -22,19 +22,33 @@ export default function ResumenCambiosDisponibilidad({ solicitud = {}, documento
         const estado = respuestas[cambio.clave] || cambio.resultado || (retiro ? 'informe' : 'pendiente');
         const revisar = interactivo && cambio.pendiente && !confirmacion && !cambio.persistida && !retiro;
         const docs = (cambio.documentos || []).slice(0, 1);
-        return <article key={cambio.clave} className="consulta-cambio" data-tipo={retiro ? 'retiro' : confirmacion ? 'confirmacion' : 'anexo'} data-cambio={cambio.clave} data-indice={cambio.indice} data-clase={cambio.clase || ''}>
-            {puedeVerDocumentos && docs.map((d, i) => <MiniaturaDocumento key={d.id || i} documento={d} onVer={() => onVer?.(cambio.documentos, i)} className="consulta-cambio-miniatura" />)}
+        const sustitucion = Boolean(cambio.retiradas?.length);
+        const identidad = (pieza, sinNombre) => [pieza.descripcion || sinNombre, pieza.sku, pieza.cantidad ? `${pieza.cantidad} pza(s)` : null].filter(Boolean).join(' · ');
+        const foto = (documentos, indice = 0) => puedeVerDocumentos && onVer && documentos[indice]?.url && <MiniaturaDocumento documento={documentos[indice]} onVer={() => onVer(documentos, indice)} className="consulta-cambio-miniatura" />;
+        return <article key={cambio.clave} className="consulta-cambio" data-tipo={retiro ? 'retiro' : confirmacion ? 'confirmacion' : 'anexo'} data-sustitucion={sustitucion || undefined} data-cambio={cambio.clave} data-indice={cambio.indice} data-clase={cambio.clase || ''}>
+            {!sustitucion && puedeVerDocumentos && docs.map((d, i) => <MiniaturaDocumento key={d.id || i} documento={d} onVer={() => onVer?.(cambio.documentos, i)} className="consulta-cambio-miniatura" />)}
             <div className="consulta-cambio-cuerpo">
                 <header className="consulta-cambio-titulo">
-                    {retiro ? <PackageMinus size={16} aria-hidden /> : confirmacion ? <CheckCircle2 size={16} aria-hidden /> : cambio.retirada ? <ArrowRightLeft size={16} aria-hidden /> : <PackagePlus size={16} aria-hidden />}
-                    <strong>{retiro ? 'Retiro solicitado' : confirmacion ? 'Estado confirmado' : cambio.retirada ? 'Nueva pieza solicitada' : 'Anexo solicitado'}</strong>
+                    {retiro ? <PackageMinus size={16} aria-hidden /> : confirmacion ? <CheckCircle2 size={16} aria-hidden /> : sustitucion ? <ArrowRightLeft size={16} aria-hidden /> : <PackagePlus size={16} aria-hidden />}
+                    <strong>{retiro ? 'Retiro solicitado' : confirmacion ? 'Estado confirmado' : sustitucion ? 'Sustitución solicitada' : 'Anexo solicitado'}</strong>
                 </header>
-                <p className="consulta-cambio-identidad">{cambio.descripcion || (retiro ? 'Piezas retiradas' : 'Piezas en captura')}{cambio.sku ? ` · ${cambio.sku}` : ''}{cambio.cantidad ? ` · ${cambio.cantidad} pza(s)` : ''}</p>
+                {sustitucion ? <dl className="consulta-sustitucion-piezas">
+                    <div>
+                        <dt>{cambio.retiradas.length > 1 ? 'Piezas a sustituir' : 'Pieza a sustituir'}</dt>
+                        {cambio.retiradas.map((pieza, indice) => <dd key={pieza.revision_id || indice}>
+                            {foto(pieza.documentos || [])}<span>{identidad(pieza, 'Identificación no disponible')}</span>
+                        </dd>)}
+                    </div>
+                    <div>
+                        <dt>Reemplazo solicitado</dt>
+                        <dd>{foto(docs)}<span>{identidad(cambio, 'Pieza en captura')}</span></dd>
+                    </div>
+                </dl> : <p className="consulta-cambio-identidad">{identidad(cambio, retiro ? 'Piezas retiradas' : 'Piezas en captura')}</p>}
                 {revisar ? <div className="consulta-cambio-acciones">
                     <button type="button" className={GELIA_BTN_OUTLINE} aria-pressed={estado === 'correcto'} disabled={disabled} onClick={() => onResponder?.(cambio, 'correcto')}><CheckCircle2 size={16} aria-hidden />Todo OK</button>
                     <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'detalle')}><AlertTriangle size={16} aria-hidden />{cambio.esDocumento ? 'Registrar detalle' : 'Con detalle'}</button>
                     {!cambio.esDocumento && <button type="button" className={GELIA_BTN_OUTLINE} disabled={disabled} onClick={() => onIncidencia?.(cambio, 'faltante')}><PackageX size={16} aria-hidden />Sin existencias</button>}
-                </div> : <p className="consulta-cambio-estado">{retiro ? 'Informe de retiro' : vista === 'ventas' && cambio.avance_pendiente ? 'Pendiente de revisión' : estado === 'incidencia' || cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' || cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respondida_at ? 'Respuesta registrada' : 'Pendiente de revisión'}</p>}
+                </div> : <p className="consulta-cambio-estado">{retiro ? 'Informe de retiro' : cambio.movimiento_historico ? 'Respuesta registrada' : vista === 'ventas' && cambio.avance_pendiente ? 'Pendiente de revisión' : estado === 'incidencia' || cambio.respuesta_cambio === 'incidencia' ? 'Con piezas reportadas' : estado === 'correcto' || cambio.respuesta_cambio === 'correcto' ? 'Todo OK' : cambio.respondida_at ? 'Respuesta registrada' : 'Pendiente de revisión'}</p>}
             </div>
         </article>;
     };

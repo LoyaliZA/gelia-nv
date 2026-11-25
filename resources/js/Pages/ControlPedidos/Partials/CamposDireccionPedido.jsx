@@ -76,6 +76,7 @@ export default function CamposDireccionPedido({
     onGuardar = null,
     onDescartar = null,
     puedeEditar = true,
+    etiquetaDestinatario = 'Destinatario',
 }) {
     const set = (campo, valor) => onChange({ ...valores, [campo]: valor });
     const irregular = Boolean(valores.domicilio_irregular);
@@ -99,7 +100,7 @@ export default function CamposDireccionPedido({
             </label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label className={SECCION}>Destinatario</label>
+                    <label className={SECCION}>{etiquetaDestinatario}</label>
                     <input type="text" value={valores.nombre_destinatario} disabled={disabled || !puedeEditar} onChange={(e) => set('nombre_destinatario', e.target.value)} className={`${THEME_INPUT} w-full py-3`} />
                 </div>
                 <div>

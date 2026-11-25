@@ -40,7 +40,7 @@ class RegistrarAjusteConsultaNacional
             }
 
             $tipo = (string) ($datos['tipo'] ?? '');
-            if ($tipo === 'anexo' && ($pedido->numero_remision || $pedido->pago_validado_at || isset($pedido->solicitud_preparacion_json['pago_solo_mercancia_nacional']))) {
+            if (in_array($tipo, ['anexo', 'sustitucion'], true) && ($pedido->numero_remision || $pedido->pago_validado_at || isset($pedido->solicitud_preparacion_json['pago_solo_mercancia_nacional']))) {
                 if (! CapturaNacional::es($pedido)) {
                     throw new \InvalidArgumentException('Este ajuste solo aplica a un envío nacional de la captura actual.');
                 }
@@ -57,6 +57,7 @@ class RegistrarAjusteConsultaNacional
             $motivo = match ($tipo) {
                 'anexo' => PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS,
                 'retiro' => PedidoBma::MOTIVO_REPESAJE_QUITA_PIEZAS,
+                'sustitucion' => PedidoBma::MOTIVO_REPESAJE_ANEXO_PIEZAS,
                 default => throw new \InvalidArgumentException('Indique si el ajuste anexa o retira piezas.'),
             };
             if (! $pedido->puedeSolicitarRepesaje() || $pedido->consultaCerrada()) {
@@ -66,9 +67,13 @@ class RegistrarAjusteConsultaNacional
             if (! $pedido->tieneSoporteSolicitud()) {
                 throw new \InvalidArgumentException('Adjunte el documento del pedido antes de modificar la consulta.');
             }
-            $vigentes = $this->aplicarRetiro($pedido, $tipo === 'retiro' ? $piezas : []);
+            $vigentes = $this->aplicarRetiro($pedido, in_array($tipo, ['retiro', 'sustitucion'], true) ? $piezas : []);
+            $alternativas = $tipo === 'sustitucion' ? $this->alternativas($datos) : [];
             $guardados = $this->guardarArchivos($pedido, $archivos, $tipo);
-            if ($guardados === [] && ! ($tipo === 'retiro' && $piezas !== [])) {
+            if ($tipo === 'sustitucion' && ($piezas === [] || ($alternativas === [] && $guardados === []))) {
+                throw new \InvalidArgumentException('Indique la pieza a sustituir y su alternativa por SKU o captura.');
+            }
+            if ($guardados === [] && ! ($tipo === 'retiro' && $piezas !== []) && ! ($tipo === 'sustitucion' && $alternativas !== [])) {
                 throw new \InvalidArgumentException('Adjunte el soporte del ajuste.');
             }
 
@@ -76,14 +81,18 @@ class RegistrarAjusteConsultaNacional
             $ajustes = is_array($json['ajustes_nacionales'] ?? null) ? array_values($json['ajustes_nacionales']) : [];
             $ajustes[] = [
                 'solicitud_id' => $solicitudId,
+                'registrado_at' => now()->toIso8601String(),
                 'tipo' => $tipo,
                 'motivo' => trim((string) ($datos['motivo'] ?? $datos['condicion'] ?? '')),
                 'piezas' => $piezas,
                 'documento_ids' => array_map(fn (PedidoBmaDocumento $documento) => $documento->id, $guardados),
             ];
-            if ($tipo === 'anexo') {
+            if ($tipo === 'sustitucion') {
+                $ajustes[array_key_last($ajustes)]['alternativas'] = $alternativas;
+            }
+            if (in_array($tipo, ['anexo', 'sustitucion'], true)) {
                 $i = array_key_last($ajustes);
-                foreach ($piezas as $pieza) {
+                foreach ($tipo === 'anexo' ? $piezas : ($alternativas ?: [['sku' => '', 'descripcion' => 'Alternativa en captura', 'cantidad' => max(1, (int) array_sum(array_column($piezas, 'cantidad')))]]) as $pieza) {
                     $id = (string) Str::uuid();
                     $ajustes[$i]['pieza_ids'][] = $id;
                     $vigentes[] = $pieza + [
@@ -207,7 +216,7 @@ class RegistrarAjusteConsultaNacional
             }
             $orden++;
             $documentos[] = $pedido->documentos()->create([
-                'tipo' => $tipo === 'anexo' ? PedidoBmaDocumento::TIPO_ANEXO_PIEZAS : PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
+                'tipo' => in_array($tipo, ['anexo', 'sustitucion'], true) ? PedidoBmaDocumento::TIPO_ANEXO_PIEZAS : PedidoBmaDocumento::TIPO_EVIDENCIA_CONDICION,
                 'ruta_archivo' => $ruta,
                 'nombre_original' => $archivo->getClientOriginalName(),
                 'mime_type' => $archivo->getMimeType(),
@@ -217,6 +226,22 @@ class RegistrarAjusteConsultaNacional
         }
 
         return $documentos;
+    }
+
+    /** @return list<array{sku: string, descripcion: string, cantidad: int}> */
+    private function alternativas(array $datos): array
+    {
+        $alt = $datos['alternativa'] ?? null;
+        if (! is_array($alt)) {
+            return [];
+        }
+        $sku = trim((string) ($alt['sku'] ?? ''));
+        $descripcion = trim((string) ($alt['descripcion'] ?? ''));
+        if ($sku === '' && $descripcion === '') {
+            return [];
+        }
+
+        return [['sku' => $sku, 'descripcion' => $descripcion, 'cantidad' => max(1, (int) ($alt['cantidad'] ?? 1))]];
     }
 
     /**

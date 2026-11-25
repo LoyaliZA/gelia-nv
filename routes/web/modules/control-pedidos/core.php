@@ -29,6 +29,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::delete('/municipal/{pedidoBma}/remisiones-pagadas/{origen}', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'desvincular'])->name('municipal.remisiones.desvincular');
     Route::post('/municipal/{pedidoBma}/remisiones-pagadas/{origen}/integrar-local', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'integrarLocal'])->name('municipal.remisiones.integrar_local');
     Route::post('/municipal/{pedidoBma}/remisiones-pagadas/{origen}/integrar-cedis', [\App\Http\Controllers\ControlPedidos\Municipal\SolicitudMunicipalController::class, 'integrarCedis'])->name('municipal.remisiones.integrar_cedis');
+    Route::post('/municipal/{pedidoBma}/empacar-tienda', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'empacarTienda'])->name('municipal.empacar_tienda');
     Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
@@ -83,8 +84,10 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/solicitar-pesaje', [PedidoBmaController::class, 'solicitarPesaje'])->name('solicitar_pesaje');
         Route::get('/{pedidoBma}/consulta-nacional', [PedidoBmaController::class, 'consultaNacional'])->name('consulta_nacional.show');
         Route::post('/{pedidoBma}/ajuste-nacional', [PedidoBmaController::class, 'ajusteNacional'])->name('ajuste_nacional');
+        Route::post('/{pedidoBma}/confirmar-pieza-nacional', [PedidoBmaController::class, 'confirmarPiezaNacional'])->name('confirmar_pieza_nacional');
         Route::post('/{pedidoBma}/anexo-extraordinario', [PedidoBmaController::class, 'anexoExtraordinario'])->name('anexo_extraordinario');
         Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
+        Route::post('/{pedidoBma}/cotizacion-nacional/vista-previa', [PedidoBmaController::class, 'vistaPreviaCotizacionNacional'])->name('vista_previa_cotizacion_nacional');
         Route::post('/{pedidoBma}/custodia-nacional', [PedidoBmaController::class, 'custodiaNacional'])->name('custodia_nacional');
         Route::post('/{pedidoBma}/remision-caja', [PedidoBmaController::class, 'remisionCajaNacional'])->name('remision_caja_nacional');
         Route::post('/{pedidoBma}/cambio-tienda-nacional', [PedidoBmaController::class, 'cambioTiendaNacional'])->name('cambio_tienda_nacional');

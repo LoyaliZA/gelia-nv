@@ -18,23 +18,7 @@ class ConsultaMunicipalController extends Controller
     public function tienda(Request $request): Response
     {
         abort_unless($request->user()?->can('control_pedidos.municipal.responder_consulta'), 403);
-        $pedidos = PedidoBma::query()
-            ->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
-            ->where('solicitud_preparacion_json->consulta_municipal->area', 'tienda')
-            ->whereIn('solicitud_preparacion_json->consulta_municipal->estado', [ConsultaMunicipal::PENDIENTE, ConsultaMunicipal::EXCEPCIONES])
-            ->tap(fn ($query) => \App\Support\ControlPedidos\AlcanceConsultaMunicipal::aplicarTienda($query, $request->user()))
-            ->with(['cliente:id,nombre,numero_cliente', 'paqueteria:id,nombre'])
-            ->orderByDesc('id')
-            ->limit(50)
-            ->get()
-            ->map(fn (PedidoBma $pedido) => [
-                'id' => $pedido->id,
-                'folio' => $pedido->folio,
-                'cliente' => $pedido->cliente?->nombre,
-                'terminal_destino' => $pedido->paqueteria?->nombre,
-                'etiqueta' => EtiquetaConsultaMunicipal::de($pedido),
-                'almacen_id' => ConsultaMunicipal::seguimiento($pedido)['almacen_id'] ?? null,
-            ]);
+        $pedidos = \App\Support\ControlPedidos\AlcanceConsultaMunicipal::pendientesTienda($request->user());
 
         return Inertia::render('ControlPedidos/Municipal/ConsultasTienda', [
             'pedidos' => $pedidos,
@@ -60,5 +44,13 @@ class ConsultaMunicipalController extends Controller
         $resultado = $servicio->ejecutar($pedidoBma, $usuario, $datos, is_array($archivos) ? $archivos : []);
 
         return response()->json($resultado);
+    }
+
+    public function empacarTienda(Request $request, PedidoBma $pedidoBma, \App\Services\ControlPedidos\Municipal\MarcarEmpacadoMunicipalTiendaService $servicio): JsonResponse
+    {
+        abort_unless($request->user()?->can('control_pedidos.municipal.responder_consulta'), 403);
+        $servicio->ejecutar($pedidoBma, $request->user());
+
+        return response()->json(['ok' => true]);
     }
 }

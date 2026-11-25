@@ -56,8 +56,9 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
         }
 
         if ($this->has('telefono_destinatario')) {
-            $tel = preg_replace('/[^\d+\-\s()]/', '', (string) ($sanitizados['telefono_destinatario'] ?? $this->input('telefono_destinatario'))) ?? '';
-            $sanitizados['telefono_destinatario'] = trim($tel);
+            $sanitizados['telefono_destinatario'] = self::normalizarTelefono(
+                (string) ($sanitizados['telefono_destinatario'] ?? $this->input('telefono_destinatario'))
+            );
         }
 
         if ($this->has('anexa_remision')) {
@@ -71,6 +72,35 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
         $this->merge($sanitizados);
     }
 
+    /**
+     * Teléfono mexicano de 10 dígitos. Acepta lada +52 y separadores; con letras u otros símbolos
+     * devuelve el texto tal cual para que la regla lo rechace en lugar de limpiarlo en silencio.
+     */
+    private static function normalizarTelefono(string $valor): ?string
+    {
+        $valor = trim($valor);
+        if ($valor === '') {
+            return null;
+        }
+        if (preg_match('/[^\d+\-\s().]/u', $valor)) {
+            return $valor;
+        }
+        $digitos = preg_replace('/\D+/', '', $valor) ?? '';
+        if (strlen($digitos) === 12 && str_starts_with($digitos, '52')) {
+            $digitos = substr($digitos, 2);
+        }
+
+        return $digitos;
+    }
+
+    public function messages(): array
+    {
+        return [
+            'telefono_destinatario.regex' => 'Escriba un teléfono de 10 dígitos, por ejemplo 55 1234 5678.',
+            'codigo_postal.regex' => 'Escriba un código postal de 5 dígitos.',
+        ];
+    }
+
     public function rules(): array
     {
         $irregular = $this->boolean('domicilio_irregular');
@@ -79,7 +109,7 @@ class StoreDireccionPublicaDesdeEnlaceRequest extends FormRequest
             'token' => ['required', 'string', 'min:8', 'max:64', 'regex:/^[A-Za-z0-9]+$/'],
             'nombres_destinatario' => ['required', 'string', 'max:120', 'regex:/^[\p{L}\p{M}\s\'\.\-]+$/u'],
             'apellidos_destinatario' => ['required', 'string', 'max:120', 'regex:/^[\p{L}\p{M}\s\'\.\-]+$/u'],
-            'telefono_destinatario' => ['nullable', 'string', 'max:30', 'regex:/^[\d+\-\s()]+$/'],
+            'telefono_destinatario' => ['nullable', 'string', 'regex:/^\d{10}$/'],
             'etiqueta_opcion' => ['required', Rule::in(self::ETIQUETAS)],
             'etiqueta_personalizada' => [
                 Rule::requiredIf(fn () => $this->input('etiqueta_opcion') === 'Otro'),

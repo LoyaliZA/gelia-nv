@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import AjustesSolicitadosTienda from './AjustesSolicitadosTienda';
+import RespuestaPreparacionTienda from '../../Partials/RespuestaPreparacionTienda';
 const post = vi.hoisted(() => vi.fn());
 vi.mock('@inertiajs/react', () => ({ router: { post } }));
 vi.mock('../../../../Components/Almacenes/SelectorProducto', () => ({ default: () => <span>Buscar producto</span> }));
@@ -20,6 +21,45 @@ it('permite atender el retiro solicitado después de responder el apartado', asy
 it('sin ajustes no ofrece acciones y nunca abre una nueva respuesta general', async () => {
     await render({ ...tarea, pedido: { retiros: [], anexos_pendientes: [] } });
     expect(container.querySelector('button')).toBeNull();
+});
+it('usa el número visible de la misma revisión en los retiros y confirmaciones guardados', async () => {
+    const confirmada = { revision_id: 82, descripcion: 'Pieza con detalle 4', cantidad: 1 };
+    const retirada = { revision_id: 83, descripcion: 'Pieza con detalle 5', cantidad: 1 };
+    const fotoOriginal = { id: 91, nombre_original: 'original.png', url: '/original.png' };
+    const fotoReemplazo = { id: 92, nombre_original: 'reemplazo.png', url: '/reemplazo.png' };
+    const revision = { estado: 'excepciones_pendientes', respondida_at: '2026-11-25T15:00:00Z' };
+    const excepciones = [
+        { id: 81, descripcion: 'Pieza con detalle 3', estado_fisico: 'regular' },
+        { id: 90, descripcion: 'Producto agotado', estado_fisico: 'sin_existencia' },
+        { id: 82, descripcion: confirmada.descripcion, estado_fisico: 'regular' },
+        { id: 83, descripcion: retirada.descripcion, estado_fisico: 'regular' },
+        { id: 84, descripcion: 'Pieza con detalle 6', estado_fisico: 'regular', cantidad: 1, documentos: [fotoOriginal] },
+    ];
+    const consultada = { ...tarea, respuesta: { revision, excepciones }, pedido: {
+        area_revision: 'preparacion_tienda', revision_disponibilidad: revision,
+        acciones_disponibilidad: { 82: { ...confirmada, accion: 'confirmar', fecha: '2026-11-25T14:00:00Z' },
+            84: { revision_id: 84, accion: 'sustituir', descripcion: 'Pieza con detalle 6', cantidad: 1 } },
+        retiro_piezas: [{ solicitado_at: '2026-11-25T16:00:00Z', piezas_solicitadas: [retirada] }],
+        anexo_sin_remision: [{ sustituye_revision_id: 84, descripcion: 'Alternativa en documento', documentos: [fotoReemplazo],
+            respondida_at: '2026-11-25T15:00:00Z', solicitado_at: '2026-11-25T14:00:00Z', pendiente_revision: false }],
+    } };
+
+    const onVer = vi.fn();
+    await act(() => root.render(<><RespuestaPreparacionTienda tarea={consultada} /><AjustesSolicitadosTienda tarea={consultada} onVer={onVer} /></>));
+
+    const filas = [...container.querySelectorAll('[role="row"] .tienda-respuesta-producto strong')];
+    expect(filas.map(fila => fila.textContent)).toEqual([
+        'Pieza con detalle 1', 'Producto agotado', 'Pieza con detalle 2', 'Pieza con detalle 3', 'Pieza con detalle 4',
+    ]);
+    expect(container.querySelector('[data-tipo="retiro"] .consulta-cambio-identidad').textContent).toBe('Pieza con detalle 3 · 1 pza(s)');
+    expect(container.querySelector('details [data-tipo="confirmacion"] .consulta-cambio-identidad').textContent).toBe('Pieza con detalle 2 · 1 pza(s)');
+    const sustitucion = container.querySelector('details [data-sustitucion]');
+    expect(sustitucion.textContent).toContain('Pieza a sustituirPieza con detalle 4 · 1 pza(s)');
+    expect(sustitucion.textContent).toContain('Reemplazo solicitadoAlternativa en documento');
+    await act(() => sustitucion.querySelector('[aria-label="Ver original.png"]').click());
+    expect(onVer).toHaveBeenLastCalledWith([fotoOriginal], 0);
+    await act(() => sustitucion.querySelector('[aria-label="Ver reemplazo.png"]').click());
+    expect(onVer).toHaveBeenLastCalledWith([fotoReemplazo], 0);
 });
 it('una tarea sustituida o un auxiliar sin facultad no puede responder ajustes', async () => {
     await render({ ...tarea, estado: 'SUSTITUIDA' });

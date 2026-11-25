@@ -27,7 +27,7 @@ import InputMoneda from './InputMoneda';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
 import ModalMotivoRechazo from './ModalMotivoRechazo';
 import { archivosImagenDesdeClipboard, documentoDesdeArchivoLocal } from './archivosDesdeClipboard';
-import { importeNetoRestante } from './persistenciaFormularioPedido';
+import { importeNetoRestante, deltaPendienteExhibicion, costoEnvioParaResumenVivo } from './persistenciaFormularioPedido';
 
 const formaRequiereBanco = (forma, formasPago = []) => {
     const found = formasPago.find((f) => f.codigo === forma);
@@ -241,9 +241,17 @@ export default function SeccionPagosExhibicion({
             .filter((p) => p.activo_para_cobertura !== false)
             .reduce((a, p) => a + Number(p.monto || 0), 0);
         const saf = saldoAFavorAplicado ?? base?.saldo_a_favor_aplicado ?? base?.saldos_aplicados ?? 0;
+        const envioVivo = costoEnvioParaResumenVivo({
+            omiteEnvio,
+            costoEnvio,
+            totalMercancia,
+            costoSeguro,
+            aplicaSeguro,
+            resumen: base,
+        });
         const totalACubrir = calcularTotalACubrirPedido({
             totalMercancia: totalMercancia ?? 0,
-            costoEnvio: omiteEnvio ? 0 : (costoEnvio ?? 0),
+            costoEnvio: envioVivo,
             costoReexpedicion: omiteEnvio ? 0 : rexAplicado,
             omiteEnvio: Boolean(omiteEnvio),
             aplicaSeguro: Boolean(aplicaSeguro),
@@ -543,14 +551,23 @@ export default function SeccionPagosExhibicion({
 
     if (ocultarSiVacio && !puedeRegistrar && pagos.length === 0) return null;
 
-    const badgeCob = resumen?.cobertura ? badgeCoberturaPago(resumen.cobertura) : null;
-    const badgeRev = resumen?.revision ? badgeRevisionPagoPedido(resumen.revision) : null;
+    const pagoEnEdicion = editandoId ? pagos.find((p) => p.id === editandoId) : null;
+    const montoYaContado = pagoEnEdicion && pagoEnEdicion.activo_para_cobertura !== false
+        ? Number(pagoEnEdicion.monto || 0)
+        : 0;
+    const resumenVista = pagoEnEdicion
+        ? mezclarResumenVivo(resumen, pagos.map((p) => (
+            p.id === editandoId ? { ...p, monto: form.data.monto === '' ? 0 : form.data.monto } : p
+        )))
+        : resumen;
+    const badgeCob = resumenVista?.cobertura ? badgeCoberturaPago(resumenVista.cobertura) : null;
+    const badgeRev = resumenVista?.revision ? badgeRevisionPagoPedido(resumenVista.revision) : null;
     const mostrarFormulario = puedeRegistrar && (dividido || pagos.length === 0 || editandoId);
     const modoUnicoConPago = !dividido && pagos.length === 1 && !editandoId;
-    const totalACubrir = resumen?.total_a_cubrir ?? resumen?.total_final;
-    const totalPagado = resumen?.total_pagado ?? resumen?.total_recibido;
-    const pendiente = Number(resumen?.pendiente || 0);
-    const excedenteGenerado = Number(resumen?.excedente_generado ?? resumen?.excedente ?? 0);
+    const totalACubrir = resumenVista?.total_a_cubrir ?? resumenVista?.total_final;
+    const totalPagado = resumenVista?.total_pagado ?? resumenVista?.total_recibido;
+    const pendiente = Number(resumenVista?.pendiente || 0);
+    const excedenteGenerado = Number(resumenVista?.excedente_generado ?? resumenVista?.excedente ?? 0);
 
     return (
         <div className="space-y-3" onPaste={mostrarFormulario ? pegarComprobante : undefined}>
@@ -773,7 +790,7 @@ export default function SeccionPagosExhibicion({
                     Para agregar otra fuente, active «Dividir el pago…». Use Editar para corregir la existente.
                 </p>
             )}
-            {resumen && !ocultarResumen && (
+            {resumenVista && !ocultarResumen && (
                 <div className="grid grid-cols-2 gap-2 p-3 rounded-xl border theme-border theme-element text-xs font-bold">
                     <div className="theme-text-muted col-span-2">
                         Total exigible del pedido:{' '}
@@ -781,7 +798,7 @@ export default function SeccionPagosExhibicion({
                     </div>
                     <div className="theme-text-muted col-span-2">
                         Saldo a favor aplicado:{' '}
-                        <strong className="theme-text-main">{formatearMoneda(resumen.saldo_a_favor_aplicado ?? resumen.saldos_aplicados ?? 0)}</strong>
+                        <strong className="theme-text-main">{formatearMoneda(resumenVista.saldo_a_favor_aplicado ?? resumenVista.saldos_aplicados ?? 0)}</strong>
                     </div>
                     <div className="theme-text-muted col-span-2">
                         Pagos válidos acumulados:{' '}
@@ -838,8 +855,8 @@ export default function SeccionPagosExhibicion({
                             <button
                                 type="button"
                                 className={`${BTN_SECONDARY} text-xs min-h-[44px] outline-none`}
-                                disabled={!resumen || cargando || capturaBloqueada || importeNetoRestante(resumen) <= 0}
-                                onClick={() => form.setData('monto', importeNetoRestante(resumen))}
+                                disabled={!resumen || cargando || capturaBloqueada || importeNetoRestante(resumen, montoYaContado) <= 0}
+                                onClick={() => form.setData('monto', importeNetoRestante(resumen, montoYaContado))}
                             >
                                 {etiquetaCubrir}
                             </button>
@@ -851,9 +868,10 @@ export default function SeccionPagosExhibicion({
                             <p className="text-[10px] theme-text-muted font-bold mt-1 m-0">
                                 {(() => {
                                     const tol = Number(resumen.tolerancia_aplicada ?? resumen.tolerancia ?? 0.44);
-                                    const pend = Number(resumen.pendiente || 0);
-                                    const monto = Number(form.data.monto || 0);
-                                    const delta = Math.round((pend - monto) * 100) / 100;
+                                    const delta = deltaPendienteExhibicion(resumen, {
+                                        montoPropuesto: form.data.monto,
+                                        montoYaContado,
+                                    });
                                     if (Math.abs(delta) <= tol) return 'Este pago cubre el pendiente. No genera excedente.';
                                     if (delta > tol) return `Quedaría pendiente ${formatearMoneda(delta)}.`;
                                     return `Excedente de este pago: ${formatearMoneda(Math.abs(delta))}.`;

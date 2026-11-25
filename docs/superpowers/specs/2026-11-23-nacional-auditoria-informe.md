@@ -127,3 +127,40 @@ Ver NAC-004 y NAC-011. La prueba municipal `MunicipalOrdinarioM01Test::test_reso
 3. **L3 — Paqueterías con logística** (NAC-007, 008, 009, 015). Decidir con negocio si el flete es manual, normalizar banderas del catálogo y mostrar reexpedición separada. Aceptación: cotización DHL/Estafeta/FedEx coherente con la prueba `NacionalLogisticaCobroTest`.
 4. **L4 — Diseño, estados y móvil** (NAC-005, 006, 012, 016, 017). Botones secundarios con afordancia y estado deshabilitado explicado, colapsar la vista previa del PDF en móvil, probar en teléfono real y evaluar dividir `ModalResponderPesaje`. Aceptación: revisión en 375 y 1280 px según `GUIA_EVIDENCIA_VISUAL.md`.
 5. **L5 — Recorrido E2E con datos de prueba** — ejecutado el 23-nov para el caso simple (ver Resumen); queda repetirlo con varias cajas, piezas identificadas, complementos y bifurcaciones. Alta → pesaje → cierre → pago → guía → salida y las bifurcaciones, para detectar los endpoints que no concluyen. Primero crear cliente y PDF de prueba; ideal con cuentas por rol.
+
+## Última vuelta QA (23-nov, tarde) — recorrido QA-N01 completo en navegador
+
+Pedido `AUD-NAC-003` (PBMA-2026-00060, id 61, DHL, mercancía $2,500, caja #202 de 3.8 kg reales / 11 kg cobrados por peso volumétrico del catálogo). Recorrido: Ventas (alta + envío de consulta) → CEDIS (responder pesaje) → Ventas (cerrar consulta, dirección, cotización, pago con comprobante, enviar) → Auxiliar (validar pago, remisión `RM-AUD-003` con PDF, aprobar) → Delegado (guía `AUDGUIA003` + PDF) → CEDIS (empacar, marcar enviado). Todas las peticiones 200 salvo la guarda esperada (`PUT enviar` sin pago → 422 con mensaje claro). Estado final en BD: fase `ENVIADO`, caja `recolectada` con la guía. Consola sin errores. **QA-N01: PASS con cuenta superadmin** (la separación por rol sigue sin acreditarse).
+
+### Corregido en esta vuelta (compilado; verificado en navegador salvo lo marcado)
+
+| ID | Sev | Hallazgo | Corrección |
+| --- | --- | --- | --- |
+| NAC-027 | Alta | El Delegado no veía cajas, medidas, pesos, flete ni seguro (V3.1 N-F01 paso 11). | Bloque «Cajas y cobertura» en su detalle; `cajas` añadido a `ListarPedidosDelegadoService`. |
+| NAC-028 | Media | Aviso «Faltan $2,830.00» seguía visible con el pago ya «Cubierto» (estado obsoleto; NAC-017). | Se limpia al interactuar con la sección de pagos; el aviso de error se desplaza a la vista. |
+| NAC-029 | Media | Botones secundarios sin aspecto de botón (NAC-006): «Ver PDF del pedido», «+ Producto», «Buscar y agregar», «Tomar evidencias», «Cerrar», etc. | Estilo de botón (borde, fondo, hover, deshabilitado) para `.theme-btn-secondary` en `.gelia-pedidos-dialog`; títulos que explican por qué «Buscar y agregar» está deshabilitado. Verificado a 1280 y 375 px. |
+| NAC-030 | Media | «Capturar»/«Ver» del Delegado eran texto verde. | Botón primario (Capturar) y de contorno (Ver). |
+| NAC-031 | Media | «Ampliar» se partía en «Ampli/ar»; el folio del encabezado de revisión se partía en dos líneas; «Archivo cargado» se partía letra por letra. | `whitespace-nowrap`, columna de folio `fit-content(14rem)`, fila con `flex-wrap`. |
+| NAC-032 | Media | Tras enviar la consulta el pie seguía mostrando «Guardar borrador»/«Borrador guardado» (NAC-016). | El botón de borrador se oculta cuando la consulta nacional ya se envió. |
+| NAC-033 | Media | Aprobación del Auxiliar decía «enviar a Registro General» (el pedido pasa a CEDIS). | Copy en modal, aviso y bitácora: «enviado a CEDIS». |
+| NAC-034 | Media | Tarjeta de CEDIS: «Destino: Por confirmar» con domicilio ya capturado (NAC-016). | Muestra municipio y estado del domicilio vigente (nacional). |
+| NAC-035 | Media | Cotización: campos a ancho completo, «Agregar dirección» lejos de su campo, desplegable cerrado como paso principal, botón principal sin jerarquía, sin desglose (NAC-015/009). | Abierta por defecto hasta cotizar, rejilla de 2 columnas, «Agregar dirección» bajo su campo, «Guardar cotización» primario, flete con unidad y marcador, desglose Mercancía/Flete/Reexpedición/Seguro tras cotizar. |
+| NAC-036 | Baja | «Actualizar paquetería» (verde, primario) activo sin elegir paquetería. | Botón de contorno, deshabilitado hasta elegir. |
+
+Pruebas: Vitest `Nacional`+`Cedis`+`Delegado`+`Auditar` 93/93; `Partials` 341/343 (las 2 rojas son NAC-022, anteriores y pendientes de decisión); 2 pruebas nuevas (desglose y destino nacional) en verde. PHPUnit dirigido 84 verdes / 1 roja en `ReponerVencidoResguardoPdvTest` (Punto de venta, ajena a este cambio).
+
+### Pendiente — propuestas y decisiones (no tocadas)
+
+- **Validación del alta (Media):** al enviar con datos faltantes, Paquetería solo se marca en rojo, sin texto (color como único aviso; el importe ni se marca). Mensaje general solo para el documento. Añadir texto de error por campo.
+- **Aprobación del Auxiliar sin identificar la modalidad (Media):** la fila dice «TIPO: ENVÍO» y «DHL»; no distingue nacional/municipal. Añadir chip de modalidad.
+- **Edición durante la auditoría (Media):** con el pedido en «Pendiente de auditoría» el editor sigue ofreciendo «Revisar cotización», «Actualizar paquetería» y editar el pago. Definir si debe quedar solo lectura (riesgo de cambios mientras el Auxiliar valida).
+- **Insignia de exhibición obsoleta (Media):** «Pendiente de revisión» junto a «Pagado y validado» en la revisión del Auxiliar.
+- **Tarjeta de CEDIS tras «Marcar enviado» (Baja):** la insignia queda en «Empacado» hasta refrescar, aunque el pedido ya es `ENVIADO`.
+- **«Revisión física CEDIS» con 0 piezas muestra «Bueno» (Baja):** engañoso; debería decir «Sin piezas identificadas».
+- **Delegado (Baja/Media):** nueve botones «Copiar» de texto completo (pasar a icono con tooltip); «Datos para paquetería: Dir. 7716» ilumina un dato sin sentido; «Folio remisión» muestra el folio Wizerp, no el número de remisión del Auxiliar; el título «ACTUALIZAR GUÍAS» en cabecera grande e itálica rompe la consistencia con «Gestión de pedidos»/«Revisión de pedidos» y gasta ~190 px.
+- **Búsqueda en Delegado (Baja):** al buscar un folio que está en otra pestaña dice «Ningún pedido coincide» sin indicar en qué pestaña está.
+- **Formato de importes (Baja):** «Faltan $2830.00» (servidor) vs «$2,830.00» (interfaz).
+- **Móvil (Media):** a 375 px el encabezado del editor (título + descripción + insignia) ocupa ~25 % de la altura; compactar. En el pesaje, la vista previa del PDF ocupa la primera pantalla (y «Ver» duplica «Ver PDF del pedido»).
+- **Nota de compra (pregunta de negocio):** la tarjeta de CEDIS muestra «No incluir nota de compra (dropshipping)» en un pedido nacional normal: confirmar si es el valor por defecto deseado.
+- **Peso volumétrico (pregunta de negocio):** 3.8 kg reales en caja #202 cobran 11 kg (catálogo de cajas). V3.1 §6 N-F01 paso 4 pide no inventar regla volumétrica por el ejemplo 3.8→4; confirmar que esta regla de catálogo es la vigente.
+- **No verificado (sigue):** varias cajas/seguro por caja, `PAQ. PENDIENTE`, complemento previo a remisión, cambio de dirección/paquetería con guía, Nacional→Tienda, cancelación, crédito bloqueado, teléfono real, separación por roles.

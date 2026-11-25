@@ -274,6 +274,7 @@ export default function FormularioRegistrarTienda({
     onActualizar = null,
     intencion = 'alta',
     reservaConversion = null,
+    modalidadInicial = '',
 }) {
     const conversion = intencion === 'conversion';
     const conversionId = useId();
@@ -330,7 +331,9 @@ export default function FormularioRegistrarTienda({
     const [coincidencias, setCoincidencias] = useState([]);
     const [departamentoId, setDepartamentoId] = useState(departamentoInicial);
     const [folio, setFolio] = useState(pedido?.folio_remision || '');
-    const [modalidad, setModalidad] = useState(modalidadDe(solicitud));
+    const modalidadDeAlta = !pedidoInicial && !conversion
+        && OPCIONES_MODALIDAD.some(([valor]) => valor === modalidadInicial) ? modalidadInicial : '';
+    const [modalidad, setModalidad] = useState(() => modalidadDe(solicitud) || modalidadDeAlta);
     const [area, setArea] = useState(areaInicial);
     const [caso, setCaso] = useState(casoInicial);
     const [almacenId, setAlmacenId] = useState(almacenInicial);
@@ -380,7 +383,7 @@ export default function FormularioRegistrarTienda({
     const pedidoIdRef = useRef(pedido?.id || null);
     const baseRef = useRef(base);
     const datosRef = useRef({});
-    const deseadaRef = useRef(modalidadDe(solicitud));
+    const deseadaRef = useRef(modalidadDe(solicitud) || modalidadDeAlta);
     const colaRef = useRef(Promise.resolve());
     const suspenderRef = useRef(false);
     const cicloRef = useRef(0);
@@ -388,6 +391,7 @@ export default function FormularioRegistrarTienda({
     const [aviso, setAviso] = useState('');
     const [conflicto, setConflicto] = useState('');
     const [errorCampo, setErrorCampo] = useState('');
+    const [errorFolio, setErrorFolio] = useState('');
     const [guardando, setGuardando] = useState(false);
     const [operandoMunicipal, setOperandoMunicipal] = useState(false);
     const [enviando, setEnviando] = useState(false);
@@ -571,11 +575,15 @@ export default function FormularioRegistrarTienda({
         setEstadoGuardado('guardando');
         const ciclo = cicloRef.current;
         const huellaEnviada = huellaActual();
+        let folioEnviado;
         try {
-            const respuesta = await axios.post('/control-pedidos/autoguardar', cuerpo || payload(), {
+            const captura = cuerpo || payload();
+            folioEnviado = captura instanceof FormData ? captura.get('folio_remision') : captura.folio_remision;
+            const respuesta = await axios.post('/control-pedidos/autoguardar', captura, {
                 headers: cabeceras(),
             });
             if (ciclo !== cicloRef.current) return null;
+            setErrorFolio('');
             aplicarRespuesta(respuesta.data);
             huellaRef.current = huellaEnviada;
             setEstadoGuardado(huellaActual() === huellaEnviada ? 'guardado' : 'pendiente');
@@ -585,9 +593,13 @@ export default function FormularioRegistrarTienda({
             if (ciclo !== cicloRef.current) return null;
             const estado = error.response?.status;
             const datos = error.response?.data;
+            const [mensajeFolio] = datos?.errors?.folio_remision || [];
             if (estado === 409) {
                 setConflicto(datos?.message || 'Otra persona guardó este pedido.');
                 setEstadoGuardado('conflicto');
+            } else if (estado === 422 && mensajeFolio) {
+                if (String(folioEnviado ?? '') === String(datosRef.current.folio)) setErrorFolio(mensajeFolio);
+                setEstadoGuardado('error');
             } else {
                 setErrorCampo(mensajeDe(error, 'No se pudo guardar el borrador.'));
                 setEstadoGuardado('error');
@@ -1145,6 +1157,11 @@ export default function FormularioRegistrarTienda({
                             </div>
                         </div>
                     )}
+                    {errorFolio && (
+                        <p id={`${conversionId}-error-folio`} className="mb-4 text-sm theme-text-main m-0 break-words" role="alert">
+                            {errorFolio}
+                        </p>
+                    )}
                     {errorCampo && (
                         <p className="mb-4 text-sm theme-text-main m-0 break-words" role="alert">
                             {errorCampo}
@@ -1263,7 +1280,12 @@ export default function FormularioRegistrarTienda({
                                         disabled={conversion || municipal?.bloqueado || municipal?.guardando}
                                         className={campo}
                                         value={folio}
-                                        onChange={(evento) => setFolio(evento.target.value)}
+                                        aria-invalid={Boolean(errorFolio)}
+                                        aria-describedby={errorFolio ? `${conversionId}-error-folio` : undefined}
+                                        onChange={(evento) => {
+                                            setFolio(evento.target.value);
+                                            setErrorFolio('');
+                                        }}
                                         autoComplete="off"
                                         placeholder="Folio de Wizerp"
                                     />
@@ -1664,12 +1686,15 @@ export default function FormularioRegistrarTienda({
                         )}
                     </div>
                     <div className="registrar-tienda-pie-acciones">
-                        <BotonBorrador
-                            guardando={guardando || nacional?.enviando}
-                            confirmado={borradorConfirmado && !nacionalSucia}
-                            deshabilitado={revisionSolicitada || enviando || estadoArchivo === 'cargando'}
-                            onClick={nacional?.guardarBorrador || (() => guardar())}
-                        />
+                        {/* Una vez enviada la consulta ya no es un borrador: ocultarlo evita «Borrador guardado» obsoleto. */}
+                        {!revisionSolicitada && !nacional?.enviada && (
+                            <BotonBorrador
+                                guardando={guardando || nacional?.enviando}
+                                confirmado={borradorConfirmado && !nacionalSucia}
+                                deshabilitado={enviando || estadoArchivo === 'cargando'}
+                                onClick={nacional?.guardarBorrador || (() => guardar())}
+                            />
+                        )}
                         {modalidad === 'tienda' && !revisionSolicitada && (
                             <button
                                 type="button"
@@ -1738,6 +1763,7 @@ export default function FormularioRegistrarTienda({
                 bloqueado={estadoArchivo === 'cargando' || guardando}
                 importePendiente={canonMonto(totalMercancia) !== null && !mismoMonto(totalMercancia, confirmados.total_mercancia)}
                 puedeAgregarDireccion={Boolean(superAdmin || (auth?.user?.permissions || []).includes('clientes.direcciones.crear'))}
+                puedeGenerarEnlace={Boolean(superAdmin || (auth?.user?.permissions || []).includes('clientes.direcciones.generar_enlace'))}
                 campoImporteMercancia={(
                     <div className="min-w-0">
                         <label className={THEME_LABEL} htmlFor="importe-mercancia-nacional">Importe de mercancía</label>

@@ -1,7 +1,9 @@
 import { esRegistroMunicipal } from '../../Municipal/terminalMunicipal';
+import { etiquetaMarcarEnviado } from './etiquetaEnvioCedis';
 import IntegracionFisicaConjunto from '../../Municipal/IntegracionFisicaConjunto';
 import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
 import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
+import SeccionCaratulaMunicipalCedis, { AccionImprimirCaratula } from './SeccionCaratulaMunicipalCedis';
 import { esCapturaTienda } from '../../Partials/flujoCapturaPedido';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
 import { esTransferenciaDocumental } from '../../Partials/SeguimientoTransferenciaTienda';
@@ -201,7 +203,7 @@ export default function ModalDetalleCedis({
         && idsSeleccionados.length === cajasPendientes.length
         && cajasPendientes.every((c) => idsSeleccionados.includes(Number(c.id)));
     const etiquetaBotonEnviar = cajasOrdenadas.length === 0 || (cajasPendientes.length > 0 && seleccionCompletaPendientes)
-        ? 'Marcar enviado'
+        ? etiquetaMarcarEnviado(pedido)
         : 'Marcar recolectadas';
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
@@ -498,6 +500,7 @@ export default function ModalDetalleCedis({
                         {municipal && <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
                             <h3 className="gelia-pedidos-seccion-titulo mb-3">Destino del pedido</h3>
                             <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino="terminal" />
+                            <SeccionCaratulaMunicipalCedis pedido={pedido} onVer={setDocPreview} />
                         </section>}
                         {!municipal && (esTienda ? (
                         <section id="cedis-destino" tabIndex={-1} className={`${SECCION_WRAP} gelia-pedidos-seccion`}>
@@ -522,6 +525,7 @@ export default function ModalDetalleCedis({
                                     pedido.cliente?.numero_cliente,
                                     (pedido.direccion_vigente || pedido.direccionVigente)?.numero_direccion,
                                 )}
+                                etiquetaDestinatario="Nombre de quien recibe"
                             />
                         </section>
                         ))}
@@ -1132,7 +1136,14 @@ export default function ModalDetalleCedis({
                 </div>
             </div>
 
-            <ModalVistaPreviaDocumento abierto={Boolean(docPreview)} documento={docPreview} onClose={() => setDocPreview(null)} />
+            <ModalVistaPreviaDocumento
+                abierto={Boolean(docPreview)}
+                documento={docPreview}
+                onClose={() => setDocPreview(null)}
+                accionesDocumento={docPreview?.tipo === 'caratula_municipal'
+                    ? (documento) => <AccionImprimirCaratula documento={documento} />
+                    : null}
+            />
             <ModalMarcarEmpacadoBultos
                 abierto={modalEmpacarBultos}
                 pedido={pedido}

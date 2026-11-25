@@ -62,6 +62,28 @@
     line-height: 1.4;
 }
 
+/* Los botones secundarios de los diálogos deben verse como botones (borde y fondo), no como texto. */
+.gelia-pedidos-dialog .theme-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: 1px solid var(--theme-element-border);
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    cursor: pointer;
+}
+
+.gelia-pedidos-dialog .theme-btn-secondary:hover:not(:disabled) {
+    background: var(--theme-element-bg);
+    border-color: var(--color-primario);
+}
+
+.gelia-pedidos-dialog .theme-btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
 .gelia-pedidos-bma :is(h1, h2, h3),
 .gelia-pedidos-dialog :is(h1, h2, h3) {
     text-wrap: balance;
@@ -363,11 +385,31 @@
 }
 
 .gelia-pedidos-seccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
     margin: 0;
     color: var(--theme-text-main);
     font-size: 0.9375rem;
-    font-weight: 650;
+    font-weight: 600;
     line-height: 1.4;
+}
+
+.gelia-pedidos-seccion-icono {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+    color: var(--color-primario);
+    flex-shrink: 0;
+}
+
+.gelia-pedidos-seccion-icono svg {
+    width: 1rem;
+    height: 1rem;
 }
 
 .gelia-pedidos-navegacion {
@@ -479,8 +521,47 @@
     margin: 0.25rem 0 0;
     color: var(--theme-text-main);
     font-size: 0.9375rem;
-    font-weight: 650;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
+}
+
+.gelia-pedidos-hecho {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+    min-width: 0;
+}
+
+.gelia-pedidos-hecho-barra {
+    width: 0.25rem;
+    border-radius: 999px;
+    background: var(--color-primario);
+    flex-shrink: 0;
+}
+
+.gelia-pedidos-hecho dt,
+.gelia-pedidos-dato dt {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.gelia-pedidos-datos {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 0;
+}
+
+.gelia-pedidos-dato {
+    min-width: 0;
+}
+
+.gelia-pedidos-dato-icono {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    color: var(--color-primario);
 }
 
 .gelia-pedidos-campo {
@@ -498,6 +579,34 @@
     font-size: 0.875rem;
     font-weight: 550;
     overflow-wrap: anywhere;
+}
+
+.gelia-pedidos-dato dt {
+    color: var(--theme-text-muted);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.gelia-pedidos-dato dd {
+    margin: 0.25rem 0 0;
+    color: var(--theme-text-main);
+    font-size: 0.875rem;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.gelia-pedidos-modalidad {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 1.75rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
+    border-radius: var(--theme-radius-input);
+    background: color-mix(in srgb, var(--color-primario) 10%, var(--theme-surface-solid));
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
 }
 
 .gelia-pedidos-revision {
@@ -595,7 +704,12 @@
     }
 
     .gelia-pedidos-resumen {
+        grid-template-columns: 1fr;
         gap: 0.75rem;
+    }
+
+    .gelia-pedidos-datos {
+        grid-template-columns: 1fr;
     }
 
     .gelia-pedidos-seccion {
@@ -762,20 +876,20 @@
     }
 }
 
-/* Detalle de vendedores: cabecera horizontal para dar altura a la consulta. */
+/* Detalle de vendedores: identidad compacta en un bloque. */
 .gelia-pedidos-detalle-cabecera {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 44px;
     align-items: start;
-    gap: 0.75rem 1rem;
-    padding: 1rem 1.25rem;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 1rem;
     flex-shrink: 0;
 }
 
 .gelia-pedidos-detalle-cliente,
 .gelia-pedidos-detalle-estados,
 .gelia-pedidos-detalle-rechazo {
-    grid-column: 1 / -1;
+    grid-column: 1;
     overflow-wrap: anywhere;
 }
 
@@ -783,24 +897,16 @@
     grid-column: 2;
     grid-row: 1;
     width: 44px;
+    height: 44px;
 }
 
-@media (width >= 1024px) {
+@media (width >= 768px) {
     .gelia-pedidos-detalle-cabecera {
-        grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.2fr) minmax(0, 1fr) 44px;
-        align-items: center;
-        gap: 0.5rem 1.5rem;
-        padding: 1rem 1.5rem;
+        padding: 0.75rem 1.25rem;
     }
 
-    .gelia-pedidos-detalle-cliente,
-    .gelia-pedidos-detalle-estados {
-        grid-column: auto;
-    }
-
-    .gelia-pedidos-detalle-cerrar {
-        grid-column: 4;
-        align-self: start;
+    .gelia-pedidos-datos {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
 
@@ -943,7 +1049,7 @@
 
 @media (width >= 640px) {
     .gelia-pedidos-revision-cabecera {
-        grid-template-columns: 9rem minmax(0, 1fr) 44px;
+        grid-template-columns: fit-content(14rem) minmax(0, 1fr) 44px;
         grid-template-areas:
             '. cliente cerrar'
             'folio operacion operacion';
@@ -1742,7 +1848,7 @@
 
 .gelia-pedidos-cedis .gelia-pedidos-estados:empty { display: none; }
 
-/* Las dos vistas nacionales conservan montada toda la captura. */
+/* Las dos vistas nacionales conservan montada toda la captura, en una columna. */
 .gelia-pesaje-nacional-vistas {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
@@ -1752,9 +1858,6 @@
 .gelia-pesaje-nacional-seccion[hidden] { display: none !important; }
 #pesaje-nacional-seccion-2,
 .gelia-pesaje-nacional-comparacion { grid-column: 1 / -1; }
-@media (min-width: 1024px) {
-    .gelia-pesaje-nacional-vistas { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-}
 
 /* Solo Cajas y evidencias del pesaje nacional ordinario. */
 .gelia-pesaje-nacional .gelia-pesaje-caja {

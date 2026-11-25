@@ -155,3 +155,54 @@ it('los ajustes de piezas viven en un desplegable «Modificar pedido» y no ocup
     expect(abrir.getAttribute('aria-expanded')).toBe('true');
     expect(document.querySelector('[hidden]')).toBeNull();
 });
+
+const conDetalle = {
+    revision_registro: 4,
+    numero_cajas: 1,
+    peso_real_kg: '8.0000',
+    peso_cobrado_guia_kg: '11.0000',
+    base_captura: 'a'.repeat(64),
+    revisiones_producto: [
+        { id: 1, sku: 'SKU-A', descripcion_producto: 'Aroma con detalle', cantidad_solicitada: 1, cantidad_encontrada: 1, estado_fisico: 'regular' },
+        { id: 2, sku: 'SKU-B', descripcion_producto: 'Aroma agotado', cantidad_solicitada: 1, cantidad_encontrada: 0, estado_fisico: 'sin_existencia' },
+    ],
+    cajas: [{ id: 5, tipo_caja: 'CAJA #202', largo: '46.00', ancho: '32.00', alto: '35.00', peso_real_kg: '8.0000', peso_cobrado_kg: '11.0000' }],
+    documentos: [{ id: 70, tipo: 'evidencia_condicion', relacion_tipo: 'envio_caja', relacion_id: 5, activo: true, url: '/x.jpg', mime_type: 'image/jpeg', nombre_original: 'x.jpg' },
+        { id: 71, tipo: 'evidencia_condicion', relacion_tipo: 'envio_caja', relacion_id: 5, activo: false, url: '/vieja.jpg', mime_type: 'image/jpeg', nombre_original: 'vieja.jpg' }],
+};
+
+it('ofrece acciones rápidas por pieza con detalle o sin existencias, sin Confirmar en faltantes', async () => {
+    await render(vi.fn(), conDetalle);
+    const detalle = document.querySelector('button[aria-label="Acciones de Aroma con detalle"]');
+    const faltante = document.querySelector('button[aria-label="Acciones de Aroma agotado"]');
+    const textos = () => [...document.querySelectorAll('[role="menuitem"]')].map(b => b.textContent);
+    await act(() => detalle.click());
+    expect(textos()).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+    await act(() => detalle.click());
+    await act(() => faltante.click());
+    expect(textos()).toEqual(['Retirar', 'Sustituir']);
+});
+
+it('registra el retiro rápido como ajuste nacional de retiro con la pieza exacta', async () => {
+    axios.post.mockResolvedValue({ data: { id: 9 } });
+    await render(vi.fn(), conDetalle);
+    await act(() => document.querySelector('button[aria-label="Acciones de Aroma con detalle"]').click());
+    const retirar = [...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent === 'Retirar');
+    await act(async () => { retirar.click(); });
+    const confirmar = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Confirmar retiro'));
+    await act(async () => { confirmar.click(); });
+    const [url, form] = axios.post.mock.calls[0];
+    expect(url).toBe('/control-pedidos/9/ajuste-nacional');
+    expect(form.get('tipo')).toBe('retiro');
+    expect(form.get('piezas[0][revision_id]')).toBe('1');
+    expect(form.get('revision_esperada')).toBe('4');
+});
+
+it('muestra tipo de caja, medidas y la evidencia vigente por envío', async () => {
+    await render(vi.fn(), conDetalle);
+    const resumen = document.querySelector('[aria-label="Envíos registrados por CEDIS"]');
+    expect(resumen.textContent).toContain('CAJA #202');
+    expect(resumen.textContent).toContain('46 × 32 × 35 cm');
+    expect(resumen.querySelector('img')).not.toBeNull();
+    expect(resumen.querySelectorAll('img')).toHaveLength(1);
+});

@@ -15,7 +15,9 @@ $bip = file_get_contents($root.'/resources/js/Components/Escanner/bipScanner.js'
 $request = file_get_contents($root.'/app/Http/Requests/ControlPedidos/ResponderPesajePedidoBmaRequest.php');
 $service = file_get_contents($root.'/app/Services/ControlPedidos/ResponderPesajePedidoBmaService.php');
 $docModel = file_get_contents($root.'/app/Models/ControlPedidos/PedidoBmaDocumento.php');
-$detalle = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/ModalDetallePedido.jsx');
+$detalleDir = $root.'/resources/js/Pages/ControlPedidos/Partials';
+$detalle = file_get_contents($detalleDir.'/ModalDetallePedido.jsx')
+    .file_get_contents($detalleDir.'/detalle-pedido/CuerpoDetalleNacional.jsx');
 $seccion = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Partials/SeccionRevisionFisicaPedido.jsx');
 $detalleCedis = file_get_contents($root.'/resources/js/Pages/ControlPedidos/Cedis/Partials/ModalDetalleCedis.jsx');
 

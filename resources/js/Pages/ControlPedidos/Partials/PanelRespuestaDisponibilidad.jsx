@@ -1,18 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle2, AlertTriangle, Camera, ChevronDown, ClipboardCheck, FileText, Package, Plus, Trash2, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, ChevronDown, ClipboardCheck, FileText, X } from 'lucide-react';
 import usePedidoDialog from './usePedidoDialog';
 import RutaPedidoTienda from './RutaPedidoTienda';
 import AlternativasDisponibilidadCedis from './AlternativasDisponibilidadCedis';
 import ResumenCambiosDisponibilidad from './ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from './ModalSeleccionProductosDetalle';
-import { anexosPendientesRevision, cambiosDisponibilidad, equivalenciasUnidades } from './cambiosDisponibilidad';
-import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
-import useEscaneoPreparacion from '../Tienda/Partials/useEscaneoPreparacion';
+import { anexosPendientesRevision, cambiosDisponibilidad, equivalenciasUnidades, esPiezaConDetalleNumerada, numerarPiezasConDetalle, revisionesVisiblesDeConsulta } from './cambiosDisponibilidad';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
+import RespuestaDisponibilidadPedido from './RespuestaDisponibilidadPedido';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from './ModalVistaPreviaDocumento';
-import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL, THEME_TEXTAREA } from '../../../utils/geliaTheme';
+import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '../../../utils/geliaTheme';
 import { presentacionPedidoCedis } from './presentacionPedidoCedis';
+import CapturaExcepcionesConsulta, {
+    EstadoPedidoConsulta, EtiquetasPieza, aplicarCambioExcepcion, excepcionDesdeElegido, liberarPreviews, mensajeValidacionExcepciones,
+} from './CapturaExcepcionesConsulta';
 
 function formDataDe({ confirmacion, excepciones, archivos }) {
     const form = new FormData();
@@ -29,7 +31,7 @@ function formDataDe({ confirmacion, excepciones, archivos }) {
     return form;
 }
 
-export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, evidenciasGuardadas = [], onDirtyChange, avisoActualizacion = '', puedeLeerDocumentos = true, onEnviar }) {
+export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto = true, onClose, pedido = {}, documentos = [], revision = null, piezas = [], puedeResponder = false, tomada = false, origen = 'CEDIS', mostrarCambios = true, revisionesVisibles, evidenciasGuardadas = [], onDirtyChange, avisoActualizacion = '', puedeLeerDocumentos = true, onEnviar }) {
     const solicitud = pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {};
     const actualizacion = anexosPendientesRevision(solicitud) || Boolean(revision?.actualizacion_pendiente);
     const cambios = cambiosDisponibilidad(solicitud, pedido.documentos || documentos);
@@ -48,6 +50,10 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     const [capturaRapida, setCapturaRapida] = useState(null);
     const [estado, setEstado] = useState('');
     const [excepciones, setExcepciones] = useState([]);
+    const idsCapturados = new Set(excepciones.map(pieza => Number(pieza.id)));
+    const anteriores = actualizacion ? (pedido.excepciones || []).filter(pieza =>
+        !idsCapturados.has(Number(pieza.id)) && esPiezaConDetalleNumerada(pieza)).length : 0;
+    const excepcionesNumeradas = numerarPiezasConDetalle(excepciones, anteriores);
     const [manual, setManual] = useState(false);
     const [archivos, setArchivos] = useState([]);
     const [previews, setPreviews] = useState(() => actualizacion || !puedeLeerDocumentos ? [] : [...evidenciasGuardadas.map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true })), ...(pedido.documentos || []).filter(d => d.tipo === 'evidencia_condicion' && d.url && d.activo !== false && (!d.relacion_tipo || d.relacion_tipo === 'revision_general')).map(d => ({ url: d.url, name: d.nombre_original, mime: d.mime_type, remoto: true }))]);
@@ -113,14 +119,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     previewsRef.current = previews;
     useEffect(() => () => previewsRef.current.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); }), []);
     const almacenId = pedido.almacen?.id || pedido.almacen_id;
-    const agregar = elegido => {
-        if (!elegido) return;
-        const fila = { descripcion: elegido.descripcion || '', sku: elegido.sku || '', clave: ++secuencia.current, cantidad: 1, origen_cambio: origenIncidencia?.clave, condicion: 'detalle', detalle: '', unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] };
-        setExcepciones(actual => [...actual, fila]);
-        if (origenIncidencia) setRespuestasCambios(actual => ({ ...actual, [origenIncidencia.clave]: 'incidencia' }));
-    };
-    const escaneo = useEscaneoPreparacion({ almacenId, permitirSinAlmacen: true, onProducto: agregar });
-    const guardando = ocupado || escaneo.pendientes > 0;
+    const guardando = ocupado;
     const respondida = enviada || Boolean(revision?.estado && !actualizacion);
     const tieneCaptura = Boolean(estado || excepciones.length || archivos.length || Object.keys(respuestasCambios).length || capturaRapida);
     useEffect(() => { onDirtyChange?.(guardando || (!respondida && tieneCaptura)); }, [guardando, respondida, tieneCaptura, onDirtyChange]);
@@ -157,6 +156,8 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         })), ...(pieza.archivos || []),
     ] })));
     const guardarUnidad = async (cambio, resultado, afectadas = []) => {
+        // El servidor rechaza guardar una unidad que ya pertenece a una respuesta enviada.
+        if (tienda && cambio.ya_atendida) return;
         const firma = tienda ? firmaDe(resultado, afectadas) : `${resultado}:${afectadas.map(pieza => `${pieza.descripcion}|${pieza.condicion}|${pieza.cantidad}`).join(';')}`;
         if (persistidasRef.current[cambio.clave] === firma || (cambio.persistida && cambio.resultado === resultado && afectadas.length === 0)) return;
         if (tienda) afectadas = await completarFotos(afectadas);
@@ -199,7 +200,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         const de = filas.filter(fila => fila.origen_cambio === clave);
         if (!de.length) return [];
         if (de.some(pieza => !String(pieza.descripcion || '').trim())) return [];
-        if (de.some(pieza => pieza.condicion === 'detalle' && !pieza.unica_pieza && !pieza.mejor_ejemplar && !String(pieza.detalle || '').trim())) return [];
+        if (de.some(pieza => pieza.condicion === 'detalle' && !tienda && !pieza.unica_pieza && !pieza.mejor_ejemplar)) return [];
         if (de.some(pieza => pieza.condicion === 'detalle' && !(tienda ? pieza.previews?.length : pieza.archivos?.length))) return [];
         return de;
     };
@@ -209,20 +210,13 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         if (cambio && completas.length) persistirUnidad(cambio, 'incidencia', completas);
     };
     const cambiar = (indice, cambiosPieza) => setExcepciones(actual => {
-        const siguiente = actual.map((fila, i) => {
-            if (i !== indice) return fila;
-            if (cambiosPieza.condicion === 'faltante') liberarPreviews(fila.previews);
-            return { ...fila, ...cambiosPieza, ...(cambiosPieza.condicion ? {
-                detalle: cambiosPieza.condicion === 'faltante' ? 'Sin existencias' : fila.detalle === 'Sin existencias' ? '' : fila.detalle,
-                ...(cambiosPieza.condicion === 'faltante' ? { archivos: [], previews: [], unica_pieza: false, mejor_ejemplar: false } : {}),
-            } : {}) };
-        });
+        const siguiente = actual.map((fila, i) => i !== indice ? fila : aplicarCambioExcepcion(fila, cambiosPieza));
         if (!tienda) persistirSiCompleta(siguiente[indice]?.origen_cambio, siguiente);
         return siguiente;
     });
     useEffect(() => {
         if (!tienda || !actualizacion) return;
-        for (const clave of new Set(excepciones.map(p => p.origen_cambio).filter(Boolean))) persistirSiCompleta(clave, excepciones);
+        for (const clave of new Set(excepcionesNumeradas.map(p => p.origen_cambio).filter(Boolean))) persistirSiCompleta(clave, excepcionesNumeradas);
     }, [excepciones]);
     const quitar = indice => {
         liberarPreviews(excepciones[indice]?.previews);
@@ -239,22 +233,23 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
     };
     const reportarCambio = (cambio, condicion) => {
         if (cambio.esDocumento) { setCapturaRapida({ origen: cambio }); return; }
-        const pieza = { descripcion: cambio.descripcion || '', sku: cambio.sku || '', cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
-            clave: ++secuencia.current, origen_cambio: cambio.clave, condicion, detalle: condicion === 'faltante' ? 'Sin existencias' : '',
-            unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [] };
+        const pieza = excepcionDesdeElegido(cambio, {
+            clave: ++secuencia.current, origen_cambio: cambio.clave, condicion,
+            cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
+        });
         setOrigenIncidencia(cambio);
         setRespuestasCambios(actual => ({ ...actual, [cambio.clave]: 'incidencia' }));
         setExcepciones(actual => actual.some(f => f.origen_cambio === cambio.clave) ? actual : [...actual, pieza]);
         if (condicion === 'faltante') persistirUnidad(cambio, 'incidencia', [pieza]);
     };
     const agregarSeleccionDetalle = (seleccionadas, origen) => {
-        setExcepciones(actual => [...actual, ...seleccionadas.map(pieza => ({
-            descripcion: pieza.descripcion, sku: pieza.sku || '', cantidad: 1,
-            clave: ++secuencia.current, origen_cambio: origen?.clave, condicion: 'detalle', detalle: '',
-            unica_pieza: false, mejor_ejemplar: false, archivos: [], previews: [],
-            abrir_detalle: seleccionadas.length === 1,
-        }))]);
-        if (seleccionadas.some(pieza => !pieza.sku)) setManual(true);
+        const nuevas = seleccionadas.map(pieza => excepcionDesdeElegido(pieza, {
+            clave: ++secuencia.current, origen_cambio: origen?.clave, abrir_detalle: seleccionadas.length === 1, porFoto: Boolean(pieza.porFoto),
+        }));
+        setExcepciones(actual => [...actual, ...nuevas]);
+        // Las piezas sin existencias ya están completas: se guardan sin esperar otro cambio.
+        if (!tienda && origen && nuevas.some(pieza => pieza.condicion === 'faltante')) persistirSiCompleta(origen.clave, [...excepciones, ...nuevas]);
+        if (seleccionadas.some(pieza => !pieza.sku && !pieza.porFoto)) setManual(true);
         if (origen) {
             setOrigenIncidencia(origen);
             setRespuestasCambios(actual => ({ ...actual, [origen.clave]: 'incidencia' }));
@@ -262,28 +257,41 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         setCapturaRapida(null);
         requestAnimationFrame(() => incidenciasRef.current?.scrollIntoView?.({ block: 'nearest' }));
     };
-    const capturarCodigo = valor => escaneo.encolar(valor);
+    // Solo lo ya enviado pasa al historial. Un avance guardado sin enviar es borrador y sigue a la vista,
+    // aunque se cierre la ventana y se reabra o se agreguen anexos con la consulta abierta.
+    const archivadas = useMemo(() => new Set(excepciones.filter(pieza => {
+        const origen = cambios.find(c => c.clave === pieza.origen_cambio);
+        return Boolean(origen?.persistida && origen.ya_atendida && origen.resultado === 'incidencia' && origen.clave !== origenIncidencia?.clave);
+    }).map(pieza => pieza.clave)), [excepciones, cambios, origenIncidencia]);
     const presentacion = presentacionPedidoCedis(pedido);
     const referencias = documentos.filter(d => d.url);
 
     const enviar = async () => {
         if (guardando || !editable) return;
         setError('');
-        const afectadas = actualizacion || estado === 'detalle' ? excepciones : [];
+        const enviables = tienda && actualizacion ? cambios.filter(c => !c.ya_atendida) : cambios;
+        const atendidas = new Set(tienda && actualizacion ? cambios.filter(c => c.ya_atendida).map(c => c.clave) : []);
+        const afectadas = actualizacion || estado === 'detalle'
+            ? excepcionesNumeradas.filter(pieza => !atendidas.has(pieza.origen_cambio))
+            : [];
         if (!actualizacion && !estado) return setError('Indica el estado del pedido.');
-        if (!actualizacion && estado === 'detalle' && !afectadas.length) return setError('Agrega las piezas con detalle o faltante.');
+        if (!actualizacion && estado === 'detalle') {
+            const mensaje = mensajeValidacionExcepciones(afectadas, { usaPreviews: tienda });
+            if (mensaje) return setError(mensaje);
+        }
         const pendientes = cambios.filter(c => c.pendiente && !respuestasCambios[c.clave] && !c.persistida);
         if (actualizacion && pendientes.length) return setError('Revise cada captura: marque Todo OK o registre las piezas con detalle.');
-        if (actualizacion && cambios.some(c => (respuestasCambios[c.clave] || c.resultado) === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave) && !(c.persistida && c.resultado === 'incidencia'))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
-        if (afectadas.some(p => !p.descripcion.trim())) return setError('Identifica el producto de cada unidad reportada.');
-        if (afectadas.some(p => p.condicion === 'detalle' && !p.unica_pieza && !p.mejor_ejemplar && !p.detalle.trim())) return setError('Describe el defecto de la unidad reportada.');
-        if (afectadas.some(p => p.condicion === 'detalle' && !(tienda ? p.previews?.length : p.archivos?.length))) return setError('Adjunta una foto de cada producto con detalle.');
+        if (actualizacion && enviables.some(c => (respuestasCambios[c.clave] || c.resultado) === 'incidencia' && !afectadas.some(f => f.origen_cambio === c.clave) && !(c.persistida && c.resultado === 'incidencia'))) return setError('Registre la pieza con detalle o marque Todo OK en su captura.');
+        if (actualizacion) {
+            const mensaje = mensajeValidacionExcepciones(afectadas, { usaPreviews: tienda });
+            if (afectadas.length && mensaje) return setError(mensaje);
+        }
         if (!archivos.length && (actualizacion ? !capturaAnterior.length : !evidenciasGuardadas.length)) return setError('Adjunta evidencia en Captura del pedido.');
         setOcupado(true);
         try {
             if (tienda && actualizacion) {
                 // Reintentar el último contenido local y esperar todos los avances antes del envío explícito.
-                for (const cambio of cambios) {
+                for (const cambio of enviables) {
                     const resultado = respuestasCambios[cambio.clave] || cambio.resultado;
                     if (resultado) persistirUnidad(cambio, resultado, afectadas.filter(p => p.origen_cambio === cambio.clave));
                 }
@@ -293,7 +301,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             const finales = tienda && actualizacion ? await completarFotos(afectadas) : afectadas;
             const form = formDataDe({ confirmacion: actualizacion ? finales.length === 0 : estado === 'correcto', excepciones: finales, archivos });
             if (!actualizacion) evidenciasGuardadas.forEach(d => form.append('evidencias_guardadas[]', String(d.id)));
-            if (actualizacion) cambios.filter(c => c.indice !== undefined && (respuestasCambios[c.clave] || c.resultado)).forEach((c, i) => {
+            if (actualizacion) enviables.filter(c => c.indice !== undefined && (respuestasCambios[c.clave] || c.resultado)).forEach((c, i) => {
                 form.append(`cambios_revisados[${i}][tipo]`, c.tipo);
                 form.append(`cambios_revisados[${i}][indice]`, String(c.indice ?? 0));
                 form.append(`cambios_revisados[${i}][unidad_id]`, c.unidad_id || c.clave);
@@ -309,7 +317,22 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
         } finally { setOcupado(false); }
     };
     if (modo === 'dialogo' && !abierto) return null;
-    const resultado = !puedeLeerDocumentos && cicloEnviado === ciclo && respondida ? excepciones : piezas.length && !actualizacion ? piezas : actualizacion || estado === 'detalle' ? excepciones : [];
+    const resultado = !puedeLeerDocumentos && cicloEnviado === ciclo && respondida ? excepcionesNumeradas : piezas.length && !actualizacion ? numerarPiezasConDetalle(piezas) : actualizacion || estado === 'detalle' ? excepcionesNumeradas : [];
+    const resumenCedis = respondida && origen === 'CEDIS' && solicitud.modalidad_entrega === 'tienda';
+    const documentosRespuesta = resumenCedis && puedeLeerDocumentos ? (pedido.documentos || documentos).filter(d =>
+        d.tipo === 'evidencia_condicion' && d.activo !== false && d.url) : [];
+    const capturas = documentosRespuesta.filter(d => (!d.relacion_tipo || d.relacion_tipo === 'revision_general')
+        && (!revision?.evidencia_actual_ids || revision.evidencia_actual_ids.includes(d.id)));
+    const documentoLocal = ({ url, name, mime }) => ({ url, nombre_original: name, mime_type: mime });
+    const evidenciaResumen = capturas.length ? capturas : resumenCedis ? previews.filter(p => puedeLeerDocumentos || !p.remoto).map(documentoLocal) : [];
+    const filasResumen = resumenCedis ? resultado.map(p => ({
+        ...p, cantidad: p.condicion === 'faltante' ? 0 : p.cantidad,
+        estado_fisico: p.condicion === 'faltante' ? 'sin_existencia' : p.estado_fisico || 'regular',
+        observacion: p.detalle,
+        documentos: p.previews
+            ? p.previews.filter(foto => puedeLeerDocumentos || !foto.remoto).map(documentoLocal)
+            : documentosRespuesta.filter(d => d.relacion_tipo === 'revision_producto' && Number(d.relacion_id) === Number(p.id)),
+    })) : [];
     const contenido = <section className="gelia-preparacion gelia-cedis-disponibilidad" aria-label={`Consulta de disponibilidad en ${origen}`}>
         {avisoActualizacion && <p role="status" className="gelia-cedis-alerta text-sm m-0">{avisoActualizacion}</p>}
         <header className="gelia-preparacion-contexto">
@@ -320,12 +343,25 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
 
                 </dl>
             </div>
-            {(origen === 'CEDIS' || presentacion.modalidad === 'municipal') && <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.modalidad === 'municipal' ? 'terminal' : 'sucursal'} />}
+            {(origen === 'CEDIS' || presentacion.modalidad === 'municipal') && <RutaPedidoTienda origen={presentacion.origen} destino={presentacion.destino} tipoDestino={presentacion.tipoDestino} />}
             <button className={GELIA_BTN_OUTLINE} type="button" disabled={!referencias.length || !puedeLeerDocumentos} onClick={() => setVista({ documentos: referencias, indice: 0 })}><FileText size={16} aria-hidden />Ver pedido{referencias.length > 1 ? ` (${referencias.length})` : ''}</button>
         </header>
+        {resumenCedis ? <div className="grid gap-4 p-3 md:p-4">
+            <RespuestaDisponibilidadPedido origen={origen}
+                responsable={revision?.respondida_por_nombre || pedido.pesaje_respondido_por?.name || pedido.pesajeRespondidoPor?.name}
+                fecha={revision?.respondida_at} estado={!actualizacion && revision?.estado
+                    ? revision.estado
+                    : filasResumen.length ? 'excepciones_pendientes' : 'sin_excepciones'}
+                filas={filasResumen} generales={evidenciaResumen}
+                onVer={(documentos, indice) => setVista({ documentos, indice })} />
+            {!pedido.consulta_cerrada && !pedido.consulta_cerrada_at && <aside className="gelia-preparacion-instrucciones" role="status">
+                <h4>Respuesta enviada</h4>
+                <p>Ventas está confirmando las piezas con el cliente. Espere el cierre de la consulta.</p>
+            </aside>}
+        </div> : <>
         <div className="gelia-preparacion-workspace" data-pedido-visible="false">
             <div className="gelia-preparacion-captura space-y-4">
-                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} vista="revision" interactivo={editable} puedeVerDocumentos={puedeLeerDocumentos}
+                {actualizacion ? <ResumenCambiosDisponibilidad solicitud={solicitud} documentos={pedido.documentos || documentos} vista="revision" interactivo={editable} puedeVerDocumentos={puedeLeerDocumentos} revisionesVisibles={revisionesVisibles || revisionesVisiblesDeConsulta(pedido, solicitud)}
                     respuestas={respuestasCambios} onResponder={responderCambio} onIncidencia={reportarCambio} disabled={guardando}
                     onVer={(documentos, indice) => setVista({ documentos, indice })} />
                     : mostrarCambios && <AlternativasDisponibilidadCedis pedido={pedido} puedeVerDocumentos={puedeLeerDocumentos} onVer={(documentos, indice) => setVista({ documentos, indice })} />}
@@ -339,29 +375,13 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
                         return <li key={p.id || i} className="gelia-cedis-panel"><details open={resultado.length <= 3 ? true : undefined}><summary className="gelia-cedis-producto-resumen"><span><strong>{p.descripcion}</strong><span className="block text-xs theme-text-muted">{p.sku}{Number(p.cantidad) > 1 ? ` · ${p.cantidad} pza(s)` : ''}</span><EtiquetasPieza fila={p} /></span><ChevronDown size={18} aria-hidden /></summary><p className="text-sm">{p.detalle}</p>{fotos.length > 0 && <GaleriaEvidenciasPedido compacto label="Fotos del defecto" previews={fotos} disabled onVer={(docs, indice) => setVista({ documentos: docs, indice })} />}</details></li>;
                     })}</ul>}
                 </div> : !editable ? <p className="text-sm theme-text-muted">Toma la revisión para responder.</p> : <>
-                    {!actualizacion && <fieldset className="gelia-cedis-panel grid gap-2 m-0">
-                        <legend className="text-sm font-semibold theme-text-main mb-2">Estado del pedido</legend>
-                        {[['correcto', 'Todo OK'], ['detalle', 'Con detalle o faltante']].map(([valor, texto]) => <label key={valor} className="gelia-cedis-opcion flex items-center gap-3 border theme-border rounded-xl p-3 text-sm theme-text-main" data-seleccionado={estado === valor}>
-                            <input type="radio" name="estado-disponibilidad-cedis" className="gelia-checkbox" checked={estado === valor} disabled={guardando} onChange={() => setEstado(valor)} />{texto}
-                        </label>)}
-                    </fieldset>}
-                    {(estado === 'detalle' || actualizacion && excepciones.length > 0) && <section ref={incidenciasRef} className="gelia-cedis-panel grid gap-3" aria-label="Productos con detalle o faltantes">
-                        <div className="registrar-tienda-seccion-titulo"><Package size={18} aria-hidden /><h3>{actualizacion ? 'Productos con detalle' : 'Productos con detalle o faltantes'}</h3><span className="text-xs theme-text-muted">{excepciones.length}</span></div>
-                        {origenIncidencia && <p className="consulta-incidencia-origen"><FileText size={16} aria-hidden />{origenIncidencia.esDocumento ? 'Piezas de la captura seleccionada' : origenIncidencia.descripcion}</p>}
-                        <p className="text-xs theme-text-muted m-0">Registra solo las piezas afectadas.</p>
-                        {actualizacion ? <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando} onClick={() => setCapturaRapida({ origen: origenIncidencia })}><Plus size={16} aria-hidden />Agregar productos con detalle</button> : <>
-                        <div>
-                            <label className={THEME_LABEL} htmlFor="cedis-buscar-producto">Buscar o escanear producto</label>
-                            <SelectorProducto inputId="cedis-buscar-producto" almacenId={almacenId} incluirSinInventario value="" onChange={(_, elegido) => { if (elegido) agregar(elegido); }} onEscanear={capturarCodigo} disabled={ocupado} />
-                            <p className="text-xs theme-text-muted mt-2 mb-0">Cada lectura o selección registra una unidad.</p>
-                        </div>
-                        {escaneo.ultimo && <p className="text-xs theme-text-muted m-0" role="status">{escaneo.ultimo}</p>}
-                        {escaneo.fallos.map((fallo, i) => <p key={i} role="alert" className="text-sm theme-text-peligro">{fallo.codigo}: {fallo.mensaje}</p>)}
-                        <button type="button" className={`${GELIA_BTN_OUTLINE} justify-self-start`} disabled={guardando} onClick={() => { setManual(true); agregar({ descripcion: '', sku: '' }); }}><Plus size={16} aria-hidden />Capturar sin catálogo</button>
-                        </>}
-                        <p className="text-xs theme-text-muted m-0">Abre una unidad para registrar sus detalles.</p>
-                        {excepciones.map((fila, i) => <PiezaExcepcionCedis key={fila.clave} fila={fila} indice={i} repeticion={repeticionDe(excepciones, fila)} manual={manual} disabled={guardando} onChange={cambios => cambiar(i, cambios)} onQuitar={() => quitar(i)} onVer={(docs, indice) => setVista({ documentos: docs, indice })} />)}
-                    </section>}
+                    {!actualizacion && <EstadoPedidoConsulta estado={estado} onChange={setEstado} disabled={guardando} />}
+                    {(estado === 'detalle' || actualizacion && excepciones.length > 0) && <CapturaExcepcionesConsulta
+                        actualizacion={actualizacion} excepciones={excepcionesNumeradas} archivadas={archivadas} origenIncidencia={origenIncidencia}
+                        incidenciasRef={incidenciasRef} manual={manual} disabled={guardando}
+                        onAgregarDetalle={() => setCapturaRapida({ origen: origenIncidencia })}
+                        onChange={cambiar} onQuitar={quitar} onVer={(docs, indice) => setVista({ documentos: docs, indice })}
+                    />}
 
                 </>}
                 {(actualizacion || estado || respondida) && <section className="gelia-cedis-panel" aria-label="Captura del pedido">{capturaAnterior.length > 0 && !respondida && <div className="grid gap-2 mb-3"><p className="text-sm font-semibold theme-text-main m-0">Captura vigente del pedido</p><div className="flex flex-wrap gap-2">{capturaAnterior.map((doc, i) => <MiniaturaDocumento key={doc.id || i} documento={doc} onVer={() => setVista({ documentos: capturaAnterior, indice: i })} />)}</div><p className="text-xs theme-text-muted m-0">Se conserva. Adjunta una nueva solo si el pedido completo cambió.</p></div>}<GaleriaEvidenciasPedido compacto accionesCamara id="cedis-evidencias-disponibilidad" label={capturaAnterior.length > 0 && !respondida ? 'Nueva captura (opcional)' : 'Captura del pedido'} obligatorio={!respondida && !capturaAnterior.length} maxArchivos={8} archivos={archivos} previews={previews} disabled={guardando || respondida} onChange={(files, vistas) => { setArchivos(files); setPreviews(vistas); }} onVer={(docs, indice) => setVista({ documentos: docs, indice })} /></section>}
@@ -372,6 +392,7 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             <div className="gelia-cedis-alerta min-w-0 text-sm" data-error={Boolean(error)} role={error ? 'alert' : 'status'}><AlertTriangle size={18} className="shrink-0" aria-hidden /><span>{error || (respondida ? 'Respuesta enviada a Ventas.' : 'Consulta de disponibilidad · sin confirmar apartado.')}</span></div>
             {editable && <button type="button" className={`${THEME_BTN_PRIMARY} shrink-0`} disabled={guardando} onClick={enviar}>{guardando ? 'Procesando…' : 'Enviar respuesta'}</button>}
         </footer>
+        </>}
         {capturaRapida && <ModalSeleccionProductosDetalle almacenId={almacenId} origen={capturaRapida.origen} onClose={() => setCapturaRapida(null)} onAgregar={agregarSeleccionDetalle} />}
         <ModalVistaPreviaDocumento abierto={Boolean(vista)} {...vista} onClose={() => setVista(null)} accionesDocumento={actualizacion && editable ? documento => {
             const cambio = cambios.find(c => c.pendiente && c.tipo !== 'retiro' && c.documentos.some(d => d.id === documento.id));
@@ -389,62 +410,4 @@ export default function PanelRespuestaDisponibilidad({ modo = 'seccion', abierto
             <div className="gelia-modal-body min-h-0 flex-1 overflow-y-auto">{contenido}</div>
         </div>
     </div>, document.body);
-}
-
-function liberarPreviews(previews = []) {
-    previews.forEach(p => { if (p.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); });
-}
-
-function repeticionDe(filas, fila) {
-    if (!fila.sku) return null;
-    const repetidas = filas.filter(f => f.sku === fila.sku);
-    return repetidas.length > 1 ? `${repetidas.indexOf(fila) + 1}/${repetidas.length}` : null;
-}
-
-function EtiquetasPieza({ fila }) {
-    const faltante = fila.condicion === 'faltante';
-    return <span className="gelia-cedis-etiquetas">
-        <span className="gelia-cedis-etiqueta" data-tipo={faltante ? 'faltante' : 'detalle'}>{faltante ? 'Sin existencias' : 'Con detalle'}</span>
-        {!faltante && fila.unica_pieza && <span className="gelia-cedis-etiqueta">Única pieza</span>}
-        {!faltante && fila.mejor_ejemplar && <span className="gelia-cedis-etiqueta">Mejor ejemplar</span>}
-        {!faltante && fila.previews?.length > 0 && <span className="gelia-cedis-etiqueta">{fila.previews.length}/5 fotos</span>}
-    </span>;
-}
-
-function PiezaExcepcionCedis({ fila, indice, repeticion, manual, disabled, onChange, onQuitar, onVer }) {
-    const [expandida, setExpandida] = useState(Boolean(fila.abrir_detalle) || manual && !fila.sku);
-    const capturaRef = useRef(null);
-    const sinExistencias = fila.condicion === 'faltante';
-    const limiteFotos = fila.previews.length >= 5;
-    return <article className="gelia-cedis-producto">
-        <button type="button" className="gelia-cedis-foto" disabled={disabled || sinExistencias || limiteFotos} aria-label={`Agregar evidencia del producto ${indice + 1}`} title={sinExistencias ? 'Sin existencias: no requiere foto' : limiteFotos ? 'Máximo de 5 fotos por producto' : 'Tomar foto del producto'} onClick={() => capturaRef.current?.tomarFoto()}>
-            {fila.previews[0] ? <img src={fila.previews[0].url} alt="Foto del defecto" /> : <Camera size={22} aria-hidden />}
-            <Plus size={14} className="gelia-cedis-foto-mas" aria-hidden />
-        </button>
-        <details open={expandida} onToggle={e => setExpandida(e.currentTarget.open)} className="min-w-0">
-            <summary className="gelia-cedis-producto-resumen">
-                <ChevronDown size={16} className="gelia-cedis-desplegar" aria-hidden />
-                <span className="min-w-0">
-                    <span className="gelia-cedis-producto-identidad">{repeticion && <span className="gelia-cedis-unidad">{repeticion}</span>}<strong title={`${fila.sku} — ${fila.descripcion}`}>{fila.sku ? `${fila.sku} — ` : ''}{fila.descripcion || 'Pieza por identificar'}</strong></span>
-                    <EtiquetasPieza fila={fila} />
-                </span>
-            </summary>
-            <div className="grid gap-3 pt-3">
-                {manual && !fila.sku && <label className={THEME_LABEL}>Pieza<input className={`${THEME_INPUT} w-full`} maxLength={255} value={fila.descripcion} disabled={disabled} onChange={e => onChange({ descripcion: e.target.value })} /></label>}
-                <div className="gelia-cedis-interruptores" aria-label={`Estados del producto ${indice + 1}`}>
-                    {[['unica_pieza', 'Única pieza'], ['mejor_ejemplar', 'Mejor ejemplar'], ['faltante', 'Sin existencias']].map(([campo, etiqueta]) => {
-                        const activo = campo === 'faltante' ? sinExistencias : Boolean(fila[campo]);
-                        return <button key={campo} type="button" role="switch" aria-checked={activo} aria-label={etiqueta} disabled={disabled || (sinExistencias && campo !== 'faltante')} onClick={() => onChange(campo === 'faltante' ? { condicion: activo ? 'detalle' : 'faltante' } : { [campo]: !activo })}>
-                            <span className="gelia-switch pointer-events-none shrink-0" data-active={activo ? 'true' : 'false'}><span className="gelia-switch-thumb" /></span><span>{etiqueta}</span>
-                        </button>;
-                    })}
-                </div>
-                {!sinExistencias && <>
-                    <label className={THEME_LABEL}>{fila.unica_pieza || fila.mejor_ejemplar ? 'Observaciones (opcional)' : 'Detalle del defecto'}<textarea className={`${THEME_TEXTAREA} w-full`} rows={2} maxLength={500} value={fila.detalle} disabled={disabled} onChange={e => onChange({ detalle: e.target.value })} /></label>
-                    <GaleriaEvidenciasPedido compacto capturaExterna controlRef={capturaRef} soloImagenes label="Fotos del producto" maxArchivos={5} archivos={fila.archivos} previews={fila.previews} disabled={disabled} onChange={(archivos, previews) => onChange({ archivos, previews })} onVer={onVer} />
-                </>}
-            </div>
-        </details>
-        <button type="button" className={`${GELIA_BTN_OUTLINE} gelia-cedis-quitar`} disabled={disabled} aria-label={`Quitar pieza ${indice + 1}`} title="Quitar de la lista" onClick={onQuitar}><Trash2 size={16} aria-hidden /></button>
-    </article>;
 }

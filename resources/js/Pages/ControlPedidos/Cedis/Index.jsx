@@ -80,9 +80,10 @@ export default function Index({
         }
     }, [flash?.success, flash?.error]);
 
-    useEffect(() => {
-        modalAbiertoRef.current = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto || disponibilidad.abierto;
-    }, [modalDetalle.abierto, modalPesaje.abierto, modalErrorDatos.abierto, modalApartado.abierto, modalBitacora.abierto, modalLiberar.abierto, disponibilidad.abierto]);
+    // Se calcula durante el render (no en un efecto): el hook de actualizaciones lee este valor al
+    // renderizar y con un ref atrasado quedaba «pausado» tras cerrar un modal y descartaba las consultas nuevas.
+    const modalAbierto = modalDetalle.abierto || modalPesaje.abierto || modalErrorDatos.abierto || modalApartado.abierto || modalBitacora.abierto || modalLiberar.abierto || disponibilidad.abierto;
+    modalAbiertoRef.current = modalAbierto;
 
     const leerDisponibilidad = async (id) => {
         const lectura = ++lecturaDisponibilidadRef.current;
@@ -130,7 +131,7 @@ export default function Index({
             return tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true });
         },
         // Con la consulta abierta la lectura solo fusiona datos operativos; la captura vive en el panel y no se pausa.
-        pausado: disponibilidad.abierto ? false : (modalAbiertoRef.current || cargando),
+        pausado: disponibilidad.abierto ? false : (modalAbierto || cargando),
     });
 
 

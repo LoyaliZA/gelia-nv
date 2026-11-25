@@ -1365,24 +1365,6 @@
 
 }
 
-.gelia-cedis-disponibilidad .gelia-cedis-producto details > div {
-    margin-left: calc(-2.75rem - var(--cedis-fila-gap));
-    margin-right: calc(-2.75rem - var(--cedis-fila-gap));
-    margin-top: 0.625rem;
-    border-top: 1px solid var(--theme-border);
-}
-
-.gelia-cedis-producto .gelia-cedis-etiquetas {
-    margin-left: -1.375rem;
-}
-
-.gelia-cedis-producto details:not([open]) .gelia-cedis-producto-identidad strong {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
 .gelia-cedis-disponibilidad .theme-field-with-icon .theme-input {
     padding-left: 2.75rem;
 }
@@ -1430,6 +1412,18 @@
     gap: 0.75rem;
 }
 
+.tienda-respuesta-lista[data-desplazable] {
+    max-block-size: min(26rem, 58dvh);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    scroll-padding-block: 0.875rem;
+}
+
+.tienda-respuesta-lista[data-desplazable]:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: -2px;
+}
+
 .tienda-respuesta-columnas {
     display: none;
 }
@@ -1443,6 +1437,29 @@
     border-radius: var(--theme-radius-input);
     background: var(--theme-element-bg);
     min-width: 0;
+}
+
+.tienda-respuesta-fila[data-tono] {
+    --tono-fila: var(--color-aviso);
+
+    border-color: color-mix(in srgb, var(--tono-fila) 40%, var(--theme-border));
+    border-left: 4px solid var(--tono-fila);
+    background: color-mix(in srgb, var(--tono-fila) 7%, var(--theme-element-bg));
+}
+
+.tienda-respuesta-fila[data-tono='exito'] { --tono-fila: var(--color-exito); }
+.tienda-respuesta-fila[data-tono='peligro'] { --tono-fila: var(--color-peligro); }
+
+.tienda-respuesta-oks {
+    flex-basis: 100%;
+    order: 3;
+}
+
+.tienda-respuesta-movimientos > summary {
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--theme-text-muted);
+    margin-bottom: 0.5rem;
 }
 
 .tienda-respuesta-producto {
@@ -1548,6 +1565,14 @@
     width: 100%;
 }
 
+@container (width < 52rem) {
+    .tienda-respuesta-acciones:has(.tienda-respuesta-sustitucion) {
+        grid-column: 1 / -1;
+        grid-row: 4;
+        justify-self: start;
+    }
+}
+
 .tienda-respuesta-resumen {
     display: flex;
     flex-wrap: wrap;
@@ -1588,29 +1613,26 @@
     margin: 0.5rem 0 0;
 }
 
-.tienda-respuesta-menu {
-    position: relative;
-}
-
-.tienda-respuesta-menu > summary {
-    list-style: none;
+.tienda-respuesta-menu > button {
     min-width: 2.75rem;
     min-height: 2.75rem;
     justify-content: center;
     cursor: pointer;
 }
 
-.tienda-respuesta-menu > summary::-webkit-details-marker {
-    display: none;
+.tienda-respuesta-menu-capa {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
 }
 
 .tienda-respuesta-menu-lista {
     position: absolute;
-    z-index: 40;
-    right: 0;
-    bottom: calc(100% + 0.375rem);
+    pointer-events: auto;
     display: grid;
-    min-width: 11rem;
+    width: max-content;
+    overflow-y: auto;
     padding: 0.375rem;
     border: 1px solid var(--theme-text-muted);
     border-radius: var(--theme-radius-input);
@@ -1618,7 +1640,7 @@
     box-shadow: var(--theme-shadow-card);
 }
 
-.tienda-respuesta-menu .tienda-respuesta-menu-lista > button {
+.tienda-respuesta-menu-lista > button {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -1630,7 +1652,7 @@
     font-size: 0.8125rem;
 }
 
-.tienda-respuesta-menu .tienda-respuesta-menu-lista > button:hover {
+.tienda-respuesta-menu-lista > button:is(:hover, :focus-visible) {
     background: var(--theme-element-bg);
 }
 
@@ -1880,6 +1902,12 @@
 
 }
 
+@container (max-width: 24rem) {
+    .tienda-ajustes-opciones fieldset {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 @container (min-width: 44rem) {
     .tienda-ajustes-opciones fieldset {
         grid-template-columns: minmax(0, 1fr);
@@ -1962,6 +1990,15 @@
 .consulta-cambio-titulo > svg { flex-shrink: 0; color: color-mix(in srgb, var(--consulta-tono) 75%, var(--theme-text-main)); }
 .consulta-cambio-titulo strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .consulta-cambio-identidad { margin: 0; font-size: 0.65rem; color: var(--theme-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.consulta-cambios-minis:has(.consulta-cambio[data-sustitucion]) { align-items: flex-start; }
+.consulta-cambios-minis .consulta-cambio[data-sustitucion] { max-width: min(100%, 22rem); }
+.consulta-cambio[data-sustitucion] .consulta-cambio-titulo { font-size: 0.875rem; }
+.consulta-cambio[data-sustitucion] .consulta-cambio-titulo strong { white-space: normal; }
+.consulta-sustitucion-piezas { display: grid; gap: 0.5rem; margin: 0.25rem 0; }
+.consulta-sustitucion-piezas > div { display: grid; gap: 0.25rem; min-width: 0; }
+.consulta-sustitucion-piezas dt { font-size: 0.75rem; font-weight: 600; color: var(--theme-text-muted); }
+.consulta-sustitucion-piezas dd { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.875rem; overflow-wrap: anywhere; }
+.consulta-sustitucion-piezas dd span { min-width: 0; }
 .consulta-cambio-miniatura { display: block; flex-shrink: 0; width: 3.25rem; height: 3.25rem; overflow: hidden; border: 1px solid color-mix(in srgb, var(--consulta-tono) 45%, var(--theme-border)); border-radius: 0.5rem; background: var(--theme-element-bg); cursor: zoom-in; }
 .consulta-cambio-miniatura img { width: 100%; height: 100%; object-fit: cover; }
 .consulta-cambio-acciones { display: flex; flex-wrap: wrap; gap: 0.5rem; }
@@ -2001,8 +2038,9 @@
 .consulta-seleccion-detalle-manual { display: flex; gap: 0.5rem; align-items: end; flex-wrap: wrap; }
 .consulta-seleccion-detalle-manual > label { flex: 1 1 12rem; min-width: 0; }
 .consulta-seleccion-detalle-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
-.consulta-seleccion-detalle-lista li { display: flex; gap: 0.6rem; align-items: center; border: 1px solid var(--theme-border); border-radius: 0.75rem; padding: 0.6rem; color: var(--theme-text-main); }
+.consulta-seleccion-detalle-lista li { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; border: 1px solid var(--theme-border); border-radius: 0.75rem; padding: 0.6rem; color: var(--theme-text-main); }
 .consulta-seleccion-detalle-lista li > svg, .consulta-seleccion-detalle-lista li > button { flex-shrink: 0; }
+.consulta-seleccion-detalle-pieza-extra { flex: 1 1 100%; display: grid; gap: 0.5rem; min-width: 0; }
 .consulta-seleccion-detalle-lista li > button { margin-inline-start: auto; min-height: 2.75rem; }
 .consulta-seleccion-detalle-lista strong { display: block; font-size: 0.75rem; overflow-wrap: anywhere; }
 .consulta-seleccion-detalle-lista span { font-size: 0.65rem; color: var(--theme-text-muted); }
@@ -2070,4 +2108,99 @@
 
 .gelia-preparacion-modal .gelia-preparacion-footer {
     bottom: 0;
+}
+
+/* Interruptores del caso de una pieza (Tienda, Municipal y Nacional): visibles sin abrir la pieza. */
+.gelia-interruptores-pieza {
+    container-type: inline-size;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.375rem;
+}
+
+.gelia-interruptores-pieza > button {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem 0.375rem 0.5rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.gelia-interruptores-pieza > button[aria-checked='true'] {
+    border-color: var(--color-primario);
+}
+
+.gelia-interruptores-pieza > button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.gelia-interruptores-pieza > button:focus-visible,
+.gelia-cedis-comentario-resumen:focus-visible {
+    outline: 2px solid var(--color-primario);
+    outline-offset: 2px;
+}
+
+.gelia-cedis-comentario-resumen {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-surface-solid);
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.gelia-cedis-comentario-resumen::-webkit-details-marker {
+    display: none;
+}
+
+.gelia-cedis-producto details[open] > .gelia-cedis-comentario-resumen .gelia-cedis-desplegar {
+    transform: rotate(180deg);
+}
+
+/* Columna de acciones de una pieza: quitar y, debajo, comentario y fotos. */
+.gelia-cedis-acciones {
+    display: grid;
+    gap: 0.5rem;
+    align-content: start;
+}
+
+.gelia-cedis-acciones > button[data-activo='true'] {
+    border-color: var(--color-primario);
+}
+
+.gelia-cedis-acciones > button[aria-expanded='true'] {
+    background: color-mix(in srgb, var(--color-primario) 14%, var(--theme-surface-solid));
+}
+
+.consulta-seleccion-detalle-lista li > .gelia-cedis-acciones { margin-inline-start: auto; }
+.consulta-seleccion-detalle-lista li > .gelia-cedis-acciones > button { margin-inline-start: 0; }
+
+/* Siempre una sola fila: en un contenedor estrecho el interruptor se apila sobre su texto. */
+@container (max-width: 28rem) {
+    .gelia-interruptores-pieza > button {
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.25rem;
+        padding: 0.375rem 0.25rem;
+        font-size: 0.6875rem;
+        line-height: 1.2;
+        text-align: center;
+    }
 }

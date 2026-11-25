@@ -298,9 +298,9 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
             )}
 
             {guiaPdf && (
-                <div className="flex items-center gap-3 p-3 rounded-xl border theme-border theme-element">
+                <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl border theme-border theme-element">
                     <FileText className="w-6 h-6 shrink-0" style={{ color: 'var(--color-primario)' }} />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-[8rem] flex-1">
                         <p className="text-[9px] font-black uppercase theme-text-muted m-0">Archivo cargado</p>
                         <p className="text-sm font-bold theme-text-main m-0 truncate">{guiaPdf.nombre_original}</p>
                     </div>
@@ -347,6 +347,7 @@ export default function ModalDetalleDelegado({
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
     const badgeErrorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
     const docs = documentosVisibles(pedido);
+    const cajasVigentes = (pedido.cajas || []).filter((caja) => !['retirada', 'cancelada'].includes(caja.estado_operativo));
     const dir = pedido.direccion_vigente || pedido.direccionVigente;
     const modo = modoAccionGuia(pedido);
     const puedeReportar = ['PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO', 'EN_CEDIS'].includes(fase) && !pedido.es_resguardo;
@@ -453,6 +454,38 @@ export default function ModalDetalleDelegado({
                                 <CampoConCopia label="Almacén" value={etiquetaAlmacen(pedido.almacen)} copiar={false} />
                             </div>
                         </section>
+
+                        {cajasVigentes.length > 0 && (
+                            <section className={SECCION_WRAP}>
+                                <p className={SECCION}>Cajas y cobertura</p>
+                                <div className="rounded-xl border theme-border theme-element overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-xs theme-text-muted">
+                                                <th className="px-3 py-2 font-bold">Caja</th>
+                                                <th className="px-3 py-2 font-bold">Medidas (cm)</th>
+                                                <th className="px-3 py-2 font-bold">Peso real</th>
+                                                <th className="px-3 py-2 font-bold">Peso cobrado</th>
+                                                <th className="px-3 py-2 font-bold">Flete</th>
+                                                <th className="px-3 py-2 font-bold">Seguro</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {cajasVigentes.map((caja, indice) => (
+                                                <tr key={caja.id} className="border-t theme-border">
+                                                    <td className="px-3 py-2 font-bold">Caja {indice + 1}</td>
+                                                    <td className="px-3 py-2">{[caja.largo, caja.ancho, caja.alto].every((v) => v != null) ? `${Number(caja.largo)} × ${Number(caja.ancho)} × ${Number(caja.alto)}` : '—'}</td>
+                                                    <td className="px-3 py-2">{caja.peso_real_kg != null ? `${Number(caja.peso_real_kg)} kg` : '—'}</td>
+                                                    <td className="px-3 py-2">{caja.peso_cobrado_kg != null ? `${Number(caja.peso_cobrado_kg)} kg` : '—'}</td>
+                                                    <td className="px-3 py-2">{formatearMoneda(caja.costo_envio)}</td>
+                                                    <td className="px-3 py-2">{pedido.aplica_seguro ? formatearMoneda(caja.costo_seguro) : 'Sin seguro'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
+                        )}
 
                         <section className={SECCION_WRAP}>
                             <p className={SECCION}>Costos</p>

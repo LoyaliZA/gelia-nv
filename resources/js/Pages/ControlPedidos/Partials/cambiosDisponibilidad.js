@@ -1,4 +1,27 @@
-/** Conserva los índices guardados: dos solicitudes del mismo SKU son cambios distintos. */
+export function esPiezaConDetalleNumerada(pieza) {
+    return !pieza.sku && pieza.condicion !== 'faltante' && pieza.estado_fisico !== 'sin_existencia'
+        && /^Pieza con detalle(?: \d+)?$/.test(pieza.descripcion || '');
+}
+
+export function numerarPiezasConDetalle(piezas, desde = 0) {
+    let numero = desde;
+    return piezas.map(pieza => esPiezaConDetalleNumerada(pieza)
+        ? { ...pieza, descripcion: `Pieza con detalle ${++numero}` }
+        : pieza);
+}
+
+export function esFilaRespuestaCorrecta(fila) {
+    return fila.estado_fisico === 'bueno' && !(fila.resolucion || fila.original?.resolucion);
+}
+
+export function revisionesVisiblesDeConsulta(pedido = {}, solicitud = {}) {
+    const enCurso = revisionesDelCicloEnCurso(solicitud);
+    const revisiones = (pedido.revisiones_producto || pedido.revisionesProducto || pedido.excepciones || [])
+        .filter(pieza => !pieza.retirada_at && !enCurso.has(Number(pieza.id)) && !esFilaRespuestaCorrecta(pieza))
+        .map(pieza => ({ ...pieza, descripcion: pieza.descripcion_producto || pieza.descripcion }));
+    return new Map(numerarPiezasConDetalle(revisiones).map(pieza => [Number(pieza.id), pieza]));
+}
+
 function documentoDe(documentos, id) {
     return documentos.find((d) => Number(d.id) === Number(id));
 }
@@ -8,6 +31,7 @@ function idsDocumentosAnexo(anexo) {
     return [...new Set([anexo.documento_id, ...(anexo.documentos || []).map((documento) => documento.id)].filter((id) => id && !soporte.has(Number(id))))];
 }
 
+/** Conserva los índices guardados: dos solicitudes del mismo SKU son cambios distintos. */
 export function unidadRevisionId(tipo, linea = {}, clase = 'sku', documentoId = null, pieza = {}, indice = null) {
     const ancla = linea.linea_id || linea.solicitud_id || '';
     if (documentoId) return ancla ? `${tipo}:${ancla}:doc:${documentoId}` : `${tipo}:doc:${documentoId}`;
@@ -68,9 +92,14 @@ export function revisionesDelCicloEnCurso(solicitud = {}) {
     return ids;
 }
 
+function consultaComoTienda(solicitud = {}) {
+    return (solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda')
+        || (solicitud.modalidad_entrega === 'municipal' && solicitud.consulta_municipal?.area === 'tienda');
+}
+
 export function revisionesNoEnviadasTienda(solicitud = {}) {
     const ids = new Set();
-    if (solicitud.modalidad_entrega !== 'tienda' || solicitud.area_revision !== 'preparacion_tienda') return ids;
+    if (!consultaComoTienda(solicitud)) return ids;
     for (const anexo of solicitud.anexo_sin_remision || []) {
         for (const unidad of anexo.unidades || []) {
             const vigentes = unidad.resultado === 'incidencia' ? (unidad.revision_ids || []).map(Number) : [];
@@ -85,6 +114,7 @@ export function revisionesNoEnviadasTienda(solicitud = {}) {
 
 /** El ciclo vigente es lo pedido después de la última respuesta; lo anterior queda en historial. */
 export function cambioDelCicloActual(cambio, solicitud = {}) {
+    if (cambio.movimiento_historico) return false;
     const corte = solicitud.revision_disponibilidad?.respondida_at;
     if (!corte) return true;
     const fecha = cambio.solicitado_at || cambio.fecha || null;
@@ -111,6 +141,15 @@ export function particionarCambiosConsulta(cambios, solicitud = {}, vista = 'ven
     return { actuales, anteriores: cambios.filter((cambio) => !esRespuestaAlmacen(cambio)) };
 }
 
+/** Replica `UnidadesRevisionConsulta::lineaYaAtendida`: una línea de una respuesta ya enviada no admite guardados. */
+export function lineaYaAtendida(linea = {}, tipo = 'anexo') {
+    if (tipo === 'retiro') return linea.estado === 'aplicada';
+    if (['disponible', 'con_detalle', 'rechazado'].includes(linea.estado)) return true;
+    if (linea.pendiente_revision === true) return false;
+    if (linea.pendiente_revision === false) return true;
+    return Boolean(linea.respondida_at);
+}
+
 function ficha(linea, extra, tienda = false) {
     const guardada = persistidaDe(linea, extra.unidad_id);
     const retiro = extra.tipo === 'retiro';
@@ -126,7 +165,8 @@ function ficha(linea, extra, tienda = false) {
         ...extra,
         resultado,
         persistida: Boolean(guardada?.resultado) || (atendida && !guardada),
-        pendiente: retiro ? false : !resultado,
+        pendiente: retiro || linea.movimiento_historico ? false : !resultado,
+        ya_atendida: lineaYaAtendida(linea, extra.tipo),
         respuesta_cambio: resultado || linea.respuesta_cambio,
         avance_pendiente: avancePendiente,
         guardada_at: guardada?.respondida_at,
@@ -136,20 +176,32 @@ function ficha(linea, extra, tienda = false) {
     };
 }
 
-export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
-    const tienda = solicitud.modalidad_entrega === 'tienda' && solicitud.area_revision === 'preparacion_tienda';
-    const decisiones = Object.values(solicitud.acciones_disponibilidad || {});
+export function cambiosDisponibilidad(solicitud = {}, documentos = [], revisionesVisibles = new Map()) {
+    const tienda = consultaComoTienda(solicitud);
+    const conDescripcionVisible = pieza => {
+        const descripcion = revisionesVisibles.get(Number(pieza.revision_id))?.descripcion;
+        return descripcion ? { ...pieza, descripcion } : pieza;
+    };
+    const decisiones = Object.values(solicitud.acciones_disponibilidad || {}).map(conDescripcionVisible);
     const corte = solicitud.revision_disponibilidad?.respondida_at;
     const anexos = (solicitud.anexo_sin_remision || []).flatMap((a, indice) => {
         const ids = idsDocumentosAnexo(a);
         const docs = ids.map((id) => documentoDe(documentos, id) || (a.documentos || []).find((documento) => Number(documento.id) === Number(id))).filter(Boolean);
-        const retirada = decisiones.find(d => d.accion === 'sustituir' && Number(d.revision_id) === Number(a.sustituye_revision_id));
+        const decision = decisiones.find(d => d.accion === 'sustituir' && Number(d.revision_id) === Number(a.sustituye_revision_id));
+        const esSustitucion = Boolean(a.sustituye_revision_id || a.piezas_originales?.length);
+        const originales = a.piezas_originales || (esSustitucion ? [decision || { revision_id: a.sustituye_revision_id }] : []);
+        const retiradas = originales.map(pieza => {
+            const id = Number(pieza.revision_id);
+            const revision = revisionesVisibles.get(id);
+            const fotos = documentos.filter(doc => doc.url && doc.activo !== false && doc.relacion_tipo === 'revision_producto' && Number(doc.relacion_id) === id);
+            return { ...pieza, ...revision, documentos: revision?.documentos?.length ? revision.documentos : fotos };
+        });
         if (docs.length) {
             return docs.map((documento) => {
                 const unidad_id = idCanonico(a, documento.id, unidadRevisionId('anexo', a, 'captura', documento.id, {}, indice));
                 return ficha(a, {
                     clave: unidad_id, unidad_id, tipo: 'anexo', clase: 'captura', indice,
-                    documento_id: documento.id, documentos: [documento], esDocumento: true, retirada,
+                    documento_id: documento.id, documentos: [documento], esDocumento: true, retiradas,
                     sku: a.sku, descripcion: a.descripcion, cantidad: a.cantidad,
                 }, tienda);
             });
@@ -158,13 +210,14 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         const unidad_id = idCanonico(a, null, unidadRevisionId('anexo', a, esDocumento ? 'captura' : 'sku', null, {}, indice));
         return [ficha(a, {
             clave: unidad_id, unidad_id, tipo: 'anexo', clase: esDocumento ? 'captura' : 'sku', indice,
-            documentos: [], esDocumento, retirada,
+            documentos: [], esDocumento, retiradas,
         }, tienda)];
     });
     const retiros = (solicitud.retiro_piezas || []).flatMap((r, indice) => {
         const docs = (r.documentos_piezas || []).map(d => documentoDe(documentos, d.id) || (d.url ? d : null)).filter(Boolean);
         const peticion = (r.documentos_peticion || []).map(d => documentoDe(documentos, d.id) || (d.url ? d : null)).filter(Boolean);
-        const descripcion = (r.piezas_solicitadas || r.piezas || []).map(p => `${p.descripcion}${p.sku ? ` · ${p.sku}` : ''}`).join(', ');
+        const piezas = (r.piezas_solicitadas || r.piezas || []).map(conDescripcionVisible);
+        const descripcion = piezas.map(p => `${p.descripcion}${p.sku ? ` · ${p.sku}` : ''}`).join(', ');
         if (docs.length) {
             return docs.map((documento) => {
                 const unidad_id = idCanonico(r, documento.id, unidadRevisionId('retiro', r, 'captura', documento.id, {}, indice));
@@ -175,14 +228,13 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
                 });
             });
         }
-        const piezas = r.piezas_solicitadas || r.piezas || [];
         if (piezas.length) {
             return piezas.map((pieza) => {
                 const unidad_id = unidadRevisionId('retiro', r, 'sku', null, pieza, indice);
                 return ficha(r, {
                     clave: unidad_id, unidad_id, tipo: 'retiro', clase: 'sku', indice,
                     documentos: [], documentosPeticion: peticion, esDocumento: false,
-                    sku: pieza.sku, descripcion: pieza.descripcion, cantidad: pieza.cantidad,
+                    sku: pieza.sku, descripcion: pieza.descripcion, cantidad: pieza.cantidad, revision_id: pieza.revision_id,
                 });
             });
         }
@@ -197,4 +249,38 @@ export function cambiosDisponibilidad(solicitud = {}, documentos = []) {
         .map(d => ({ ...d, clave: `decision-${d.revision_id}`, tipo: d.accion === 'confirmar' ? 'confirmacion' : 'retiro', clase: 'sku', documentos: [],
             pendiente: false }));  // Decisión de Ventas ya registrada: se informa, no se revisa.
     return [...anexos, ...retiros, ...sueltas].sort((a, b) => Number(Boolean(b.esDocumento)) - Number(Boolean(a.esDocumento)));
+}
+
+const ACCIONES_EXITO = ['confirmar', 'aceptar_condicion'];
+
+/** Tono de la fila de una pieza: la decisión de Ventas manda; sin ella, el estado físico. */
+export function tonoDePieza(fila = {}) {
+    const accion = fila.resolucion?.accion;
+    if (ACCIONES_EXITO.includes(accion)) return 'exito';
+    if (accion === 'retirar') return 'peligro';
+    if (accion === 'sustituir') return 'aviso';
+    if (fila.estado_fisico === 'bueno') return 'exito';
+    if (fila.estado_fisico === 'sin_existencia') return 'peligro';
+    return 'aviso';
+}
+
+function filaDeCambio(cambio) {
+    const base = { clave: cambio.clave, descripcion: cambio.descripcion || (cambio.tipo === 'retiro' ? 'Piezas retiradas' : 'Piezas en captura'), sku: cambio.sku || '', cantidad: cambio.cantidad ?? null, documentos: cambio.documentos || [], tipo: cambio.tipo };
+    if (cambio.tipo === 'confirmacion') return { ...base, tono: 'exito', etiqueta: 'Confirmado con el cliente' };
+    if (cambio.tipo === 'retiro') return { ...base, tono: 'peligro', etiqueta: 'Retiro solicitado' };
+    if (cambio.avance_pendiente || cambio.pendiente) return { ...base, tono: 'aviso', etiqueta: 'Por revisar' };
+    if (cambio.resultado === 'correcto') return { ...base, tono: 'exito', etiqueta: 'Todo OK' };
+    return { ...base, tono: 'aviso', etiqueta: 'Con piezas reportadas' };
+}
+
+/** Filas de la tabla única de respuesta; las piezas ya presentes en la tabla no se repiten. */
+export function filasDeCambios(solicitud = {}, documentos = [], { revisionIdsEnTabla = new Set() } = {}) {
+    const visibles = cambiosDisponibilidad(solicitud, documentos).filter((cambio) => !(cambio.revision_id && revisionIdsEnTabla.has(Number(cambio.revision_id))));
+    const corte = solicitud.revision_disponibilidad?.respondida_at;
+    const esActual = (cambio) => cambioDelCicloActual(cambio, solicitud)
+        || Boolean(cambio.tipo === 'anexo' && cambio.respondida_at && corte && cambio.respondida_at >= corte);
+    return {
+        actuales: visibles.filter(esActual).map(filaDeCambio),
+        anteriores: visibles.filter((cambio) => !esActual(cambio)).map(filaDeCambio),
+    };
 }

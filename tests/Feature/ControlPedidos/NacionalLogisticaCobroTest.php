@@ -150,7 +150,7 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertSame(90.0, (float) $fresco->costo_envio);
     }
 
-    public function test_cambiar_paqueteria_antes_de_salida_invalida_guia_y_rechaza_costo_cero(): void
+    public function test_cambiar_paqueteria_antes_de_salida_invalida_guia_y_permite_costo_cero(): void
     {
         $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
             'numero_rastreo' => 'PRE-1',
@@ -163,16 +163,19 @@ class NacionalLogisticaCobroTest extends TestCase
         $otra = $this->paqueteria('FedEx');
         $contexto = $this->contexto($pedido, $otra->id, [['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 0]]);
 
-        $rechazo = $this->rechazo(fn () => app(CambiarPaqueteriaNacional::class)->ejecutar($pedido->fresh(), $contexto));
-        $this->assertNotNull($rechazo);
-        $this->assertStringContainsString('cero', $rechazo->getMessage());
-        $this->assertSame(80.0, (float) $caja->fresh()->costo_envio);
-        $this->assertSame('PRE-1', $pedido->fresh()->numero_rastreo);
+        $conCero = app(CambiarPaqueteriaNacional::class)->ejecutar($pedido->fresh(), $contexto);
 
-        $valido = $this->contexto($pedido->fresh(), $otra->id, [
+        $this->assertSame($otra->id, $conCero->catalogo_paqueteria_id);
+        $this->assertSame('0.00', number_format((float) $caja->fresh()->costo_envio, 2, '.', ''));
+        $this->assertNull($conCero->numero_rastreo);
+        $this->assertNull($caja->fresh()->numero_rastreo);
+        $this->assertFalse($guia->fresh()->activo);
+        $this->assertNull($conCero->pago_validado_at);
+
+        $valido = $this->contexto($conCero, $otra->id, [
             ['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 95],
         ]);
-        $aplicada = app(CambiarPaqueteriaNacional::class)->ejecutar($pedido->fresh(), $valido);
+        $aplicada = app(CambiarPaqueteriaNacional::class)->ejecutar($conCero->fresh(), $valido);
         $reintento = app(CambiarPaqueteriaNacional::class)->ejecutar($aplicada->fresh(), [
             ...$this->contexto($aplicada->fresh(), $pedido->catalogo_paqueteria_id, [
                 ['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 10],
@@ -181,10 +184,6 @@ class NacionalLogisticaCobroTest extends TestCase
         ]);
 
         $this->assertSame($otra->id, $aplicada->catalogo_paqueteria_id);
-        $this->assertNull($aplicada->numero_rastreo);
-        $this->assertNull($caja->fresh()->numero_rastreo);
-        $this->assertFalse($guia->fresh()->activo);
-        $this->assertNull($aplicada->pago_validado_at);
         $this->assertSame(95.0, (float) $caja->fresh()->costo_envio);
         $this->assertSame($otra->id, $reintento->catalogo_paqueteria_id);
         $this->assertSame((int) $aplicada->revision_registro, (int) $reintento->revision_registro);
@@ -320,6 +319,73 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertStringContainsString('cobertura', $rechazo->getMessage());
         $this->assertFalse($caja->fresh()->estaRecolectada());
         $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $pedido->fresh()->estatus->fase_ciclo);
+    }
+
+    public function test_la_cotizacion_nacional_no_cobra_flete_y_conserva_reexpedicion(): void
+    {
+        $this->activarDetalle();
+        $dhl = $this->paqueteria('DHL');
+        $zona = CatalogoZonaPedido::query()->updateOrCreate(
+            ['nombre' => 'Con reexpedición'],
+            ['costo_adicional' => 150, 'activo' => true]
+        );
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA, [
+            'catalogo_paqueteria_id' => $dhl->id,
+            'catalogo_zona_id' => $zona->id,
+            'total_mercancia' => 1000,
+            'aplica_seguro' => true,
+            'costo_envio' => 1,
+            'costo_seguro' => 0,
+        ]);
+        $caja = $this->caja($pedido, ['costo_envio' => 1, 'peso_real_kg' => 2]);
+
+        $actual = app(CambiarPaqueteriaNacional::class)->ejecutar($pedido->fresh(), $this->contexto($pedido, $dhl->id, [
+            ['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 0],
+        ], true));
+
+        $this->assertSame('0.00', number_format((float) $caja->fresh()->costo_envio, 2, '.', ''));
+        $this->assertSame('71.00', number_format((float) $actual->costo_seguro, 2, '.', ''));
+        $this->assertSame('150.00', number_format((float) $actual->costo_envio, 2, '.', ''));
+    }
+
+    public function test_capturar_envio_en_auditoria_corrige_el_excedente_sin_validar_el_pago(): void
+    {
+        $this->activarDetalle();
+        $zona = CatalogoZonaPedido::query()->create([
+            'nombre' => 'Reexpedición del pedido en auditoría', 'costo_adicional' => 150, 'activo' => true,
+        ]);
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR, [
+            'catalogo_zona_id' => $zona->id,
+            'total_mercancia' => 2000,
+            'aplica_seguro' => false,
+            'costo_envio' => 150,
+        ]);
+        $caja = $this->caja($pedido, ['costo_envio' => 0, 'peso_real_kg' => 2]);
+        $pago = PedidoBmaPago::query()->create([
+            'pedido_bma_id' => $pedido->id,
+            'numero_exhibicion' => 1,
+            'monto' => 2356,
+            'forma_pago' => 'efectivo',
+            'ruta_archivo' => 'pedidos_bma/pagos/prueba.pdf',
+            'estado_revision' => PedidoBmaPago::REVISION_PENDIENTE,
+            'activo_para_cobertura' => true,
+            'capturado_por_id' => $this->usuario->id,
+        ]);
+        $cobertura = app(CoberturaPagoPedidoBmaService::class);
+        $this->assertSame('206.00', $cobertura->calcular($pedido->fresh())['excedente_generado']);
+
+        $actual = app(CambiarPaqueteriaNacional::class)->ejecutar(
+            $pedido->fresh(),
+            $this->contexto($pedido, $pedido->catalogo_paqueteria_id, [
+                ['uuid_operativo' => $caja->uuid_operativo, 'costo_envio' => 206],
+            ]),
+        );
+
+        $resumen = $cobertura->calcular($actual);
+        $this->assertSame('2356.00', $resumen['total_a_cubrir']);
+        $this->assertSame('0.00', $resumen['excedente_generado']);
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_AUXILIAR, $actual->estatus->fase_ciclo);
+        $this->assertSame(PedidoBmaPago::REVISION_PENDIENTE, $pago->fresh()->estado_revision);
     }
 
     public function test_dhl_cobra_reexpedicion_una_vez_y_asegura_solo_el_flete(): void

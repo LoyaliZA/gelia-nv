@@ -35,6 +35,24 @@ describe('identidad de las unidades por revisar', () => {
         expect(cambio.avance_pendiente).toBe(false);
         expect(esRespuestaAlmacen(cambio)).toBe(true);
     });
+
+    it.each(['correcto', 'incidencia'])('municipal a tienda conserva pendiente el avance %s hasta el envío', resultado => {
+        const solicitud = {
+            modalidad_entrega: 'municipal',
+            consulta_municipal: { area: 'tienda', estado: 'excepciones_pendientes', enviada_at: '2026-11-20T09:00:00Z' },
+            anexo_sin_remision: [{ solicitud_id: 'sol', sku: 'A', pendiente_revision: true,
+                unidades: [{ unidad_id: 'anexo:sol:sku:A', resultado, respondida_at: '2026-11-20T10:00:00Z', respondida_por: 'Auxiliar' }] }],
+        };
+        const cambio = cambiosDisponibilidad(solicitud)[0];
+        expect(cambio.avance_pendiente).toBe(true);
+        expect(cambio.respondida_at).toBeNull();
+        expect(esRespuestaAlmacen(cambio)).toBe(false);
+        solicitud.anexo_sin_remision[0].pendiente_revision = false;
+        solicitud.anexo_sin_remision[0].respondida_at = '2026-11-20T11:00:00Z';
+        const enviada = cambiosDisponibilidad(solicitud)[0];
+        expect(esRespuestaAlmacen(enviada)).toBe(true);
+        expect(enviada.respondida_at).toBe('2026-11-20T11:00:00Z');
+    });
     it('distingue líneas con la misma solicitud, documento y SKU', () => {
         const documentos = [{ id: 71, url: '/pedido.png' }];
         const solicitud = { anexo_sin_remision: ['linea-a', 'linea-b'].map(linea_id => ({

@@ -106,7 +106,7 @@ it('envía la consulta de pesaje con la paquetería comercial', async () => {
     expect(document.getElementById('almacen-salida-nacional').disabled).toBe(true);
 });
 
-it('actualiza la paquetería después del cierre, incluida la pendiente', async () => {
+it('conserva la paquetería comercial del alta y no la vuelve a pedir tras el cierre', async () => {
     const cerrado = {
         ...pedido,
         consulta_cerrada_at: '2026-11-20T18:00:00Z',
@@ -115,7 +115,29 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
         revision_registro: 4,
         base_captura: 'd'.repeat(64),
     };
-    axios.post.mockResolvedValue({ data: { ok: true, catalogo_paqueteria_id: 9 } });
+    await act(async () => {
+        root.render(
+            <FormularioRegistrarNacional pedido={cerrado} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
+                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
+            </FormularioRegistrarNacional>,
+        );
+    });
+    expect(document.getElementById('paqueteria-posterior')).toBeNull();
+    expect(document.getElementById('paqueteria-nacional')).toBeNull();
+    expect(document.body.textContent).toContain('Paquetería: DHL');
+    expect([...document.querySelectorAll('button')].some((item) => item.textContent.includes('Seleccionar paquetería'))).toBe(false);
+});
+
+it('con PAQ. PENDIENTE ofrece DHL y las demás nacionales para definir la empresa', async () => {
+    const cerrado = {
+        ...pedido,
+        consulta_cerrada_at: '2026-11-20T18:00:00Z',
+        pesaje_solicitado_at: '2026-11-20T12:00:00Z',
+        catalogo_paqueteria_id: 9,
+        revision_registro: 4,
+        base_captura: 'd'.repeat(64),
+    };
+    axios.post.mockResolvedValue({ data: { ok: true, catalogo_paqueteria_id: 8 } });
     await act(async () => {
         root.render(
             <FormularioRegistrarNacional pedido={cerrado} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
@@ -125,19 +147,20 @@ it('actualiza la paquetería después del cierre, incluida la pendiente', async 
     });
     const select = document.getElementById('paqueteria-posterior');
     expect(select).not.toBeNull();
+    expect(select.textContent).toContain('DHL');
     expect(select.textContent).toContain('PAQ. PENDIENTE');
     expect(document.getElementById('paqueteria-nacional')).toBeNull();
     await act(async () => {
-        select.value = '9';
+        select.value = '8';
         select.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Actualizar paquetería'));
+    const boton = [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Seleccionar paquetería'));
     expect(boton.disabled).toBe(false);
     await act(async () => boton.click());
     expect(axios.post).toHaveBeenCalledWith(
         '/control-pedidos/9/paqueteria-nacional',
         expect.objectContaining({
-            catalogo_paqueteria_id: 9,
+            catalogo_paqueteria_id: 8,
             revision_esperada: 4,
             base_captura: 'd'.repeat(64),
         }),
@@ -175,38 +198,45 @@ it('no ofrece el anexo extraordinario mientras el pedido no tiene pago ni remisi
     expect([...document.querySelectorAll('button')].some((item) => item.textContent.trim() === 'Anexo extraordinario')).toBe(false);
 });
 
-it('solicita recolección en sucursal sin convertir la modalidad', async () => {
-    const conRemision = {
-        ...pedido,
-        numero_remision: 'REM-9',
-        consulta_cerrada_at: '2026-11-20T14:00:00Z',
-        pesaje_solicitado_at: '2026-11-20T12:00:00Z',
-        costo_envio: 55,
-        revision_registro: 3,
-        base_captura: 'c'.repeat(64),
-    };
-    axios.post.mockResolvedValue({ data: { ok: true, id: 9, cambio_a_tienda: { estado: 'pendiente_recepcion', sucursal_destino_id: 4 } } });
-    await act(async () => {
-        root.render(
-            <FormularioRegistrarNacional pedido={conRemision} catalogos={catalogos} guardar={vi.fn()} onPedido={vi.fn()}>
-                {({ contenido, panelEnvio, pie }) => <div>{panelEnvio}{contenido}{pie}</div>}
-            </FormularioRegistrarNacional>,
-        );
+const nacionalCerradoConRemision = {
+    numero_remision: 'REM-9',
+    pesaje_solicitado_at: '2026-11-20T12:00:00Z',
+    pesaje_respondido_at: '2026-11-20T13:00:00Z',
+    consulta_cerrada_at: '2026-11-20T14:00:00Z',
+};
+
+it.each([
+    { nombre: 'DHL', id: 8, continuacion: 'Cotización y pago' },
+    { nombre: 'PAQ. PENDIENTE', id: 9, continuacion: 'Pago de mercancía' },
+])('conserva la continuación para $nombre sin el panel de sucursal', async ({ id, continuacion }) => {
+    await render({ ...nacionalCerradoConRemision, catalogo_paqueteria_id: id });
+
+    expect(host.textContent).toContain(continuacion);
+    expect(host.textContent).toContain('Anexo extraordinario');
+    expect(host.querySelector('[aria-label="Recolección en sucursal"]')).toBeNull();
+    expect(host.querySelector('#sucursal-recoleccion-nacional')).toBeNull();
+    expect(host.textContent).not.toMatch(/Sucursal de recolección|Elegir sucursal|Solicitar recolección en sucursal/i);
+    expect(axios.post).not.toHaveBeenCalled();
+});
+
+it.each([false, true])('conserva las restricciones de un cambio registrado y el aviso de guía (cancelación confirmada: %s)', async cancelacionConfirmada => {
+    await render({
+        ...nacionalCerradoConRemision,
+        catalogo_paqueteria_id: 9,
+        solicitud_preparacion: {
+            cambio_a_tienda: { estado: 'pendiente_recepcion', sucursal_destino_id: 4, saldo_envio: 55 },
+            invalidacion_guia: { cancelacion_paqueteria_confirmada: cancelacionConfirmada },
+        },
     });
-    expect(document.body.textContent).not.toContain('Falta confirmar la cancelación');
-    const select = document.getElementById('sucursal-recoleccion-nacional');
-    await act(async () => {
-        select.value = '4';
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-    await act(async () => {
-        [...document.querySelectorAll('button')].find((item) => item.textContent.includes('Solicitar recolección en sucursal')).click();
-    });
-    expect(axios.post).toHaveBeenCalledWith(
-        '/control-pedidos/9/cambio-tienda-nacional',
-        expect.objectContaining({ sucursal_destino_id: 4, solicitud_id: '11111111-1111-4111-8111-111111111111' }),
-        expect.anything(),
-    );
+
+    expect(host.querySelector('[aria-label="Recolección en sucursal"]')).toBeNull();
+    expect(host.textContent).not.toMatch(/Recolección en sucursal|Costo de envío conservado/);
+    expect(host.querySelector('#paqueteria-posterior')).toBeNull();
+    expect([...host.querySelectorAll('p')].some(({ textContent }) => ['Pago de mercancía', 'Cotización y pago'].includes(textContent))).toBe(false);
+    expect(host.querySelector('[aria-label="Anexo extraordinario"]')).toBeNull();
+    const aviso = [...host.querySelectorAll('[role="status"]')].find(({ textContent }) => textContent.includes('Falta confirmar la cancelación de la guía con la paquetería.'));
+    expect(Boolean(aviso)).toBe(!cancelacionConfirmada);
+    expect(axios.post).not.toHaveBeenCalled();
 });
 
 it('transmite piezas precapturadas sin exigir recaptura ni una lista de SKU', async () => {

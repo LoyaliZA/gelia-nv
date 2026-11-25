@@ -2,7 +2,7 @@ import { resumenActualizacionConsulta } from './resumenActualizacionConsulta';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import { presentacionPedidoCedis } from '../../Partials/presentacionPedidoCedis';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import { X, Scale, Plus, Trash2, FileText, ChevronDown, Search, ExternalLink, Smartphone, Package } from 'lucide-react';
@@ -35,7 +35,18 @@ import GaleriaEvidencias from '../../Partials/GaleriaEvidenciasPedido';
 import InputConEscanner from '../../../../Components/Escanner/InputConEscanner';
 import { desbloquearBipAudio, reproducirBipConfirmacion, reproducirBipError } from '../../../../Components/Escanner/bipScanner';
 import ModalSesionEvidenciaCedis from './ModalSesionEvidenciaCedis';
-import useDispositivoCampo, { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
+import useDispositivoCampo from '../../../Activos/Partials/useDispositivoCampo';
+import CapturaExcepcionesConsulta, {
+    EstadoPedidoConsulta, aplicarCambioExcepcion, excepcionDesdeElegido, liberarPreviews, mensajeValidacionExcepciones,
+} from '../../Partials/CapturaExcepcionesConsulta';
+import ResumenCambiosDisponibilidad from '../../Partials/ResumenCambiosDisponibilidad';
+import ModalSeleccionProductosDetalle from '../../Partials/ModalSeleccionProductosDetalle';
+import { solicitudNacionalConCambios } from './ajustesNacionalesComoCambios';
+import { anexosPendientesRevision, cambioDelCicloActual, cambiosDisponibilidad, revisionesDelCicloEnCurso, revisionesVisiblesDeConsulta } from '../../Partials/cambiosDisponibilidad';
+import useEscaneoPreparacion from '../../Tienda/Partials/useEscaneoPreparacion';
+import {
+    completarRevisionesPesajeNacional, excepcionesDesdeRevisiones, piezasVigentesNacional,
+} from './completarRevisionesPesajeNacional';
 
 const SECCION = `${THEME_LABEL} mb-2 block`;
 const ESTADOS = Object.keys(LABELS_ESTADO_FISICO);
@@ -69,6 +80,23 @@ const envioVacio = () => ({
     peso_real_kg: '',
     peso_volumetrico_kg: '',
 });
+
+const enviosDesdeCajasPedido = (cajas = []) => (Array.isArray(cajas) ? cajas : []).map((c) => ({
+    ...envioVacio(),
+    client_uuid: uuidOperativo(c.uuid_operativo || c.client_uuid),
+    catalogo_tipo_caja_id: String(c.catalogo_tipo_caja_id || c.tipo_caja?.id || ''),
+    largo: c.largo ?? '',
+    ancho: c.ancho ?? '',
+    alto: c.alto ?? '',
+    peso_real_kg: c.peso_real_kg ?? '',
+    peso_volumetrico_kg: c.peso_volumetrico_kg ?? '',
+}));
+
+const uuidsGuardadosDeCajas = (cajas = []) => (Array.isArray(cajas) ? cajas : [])
+    .map((c) => (esUuidValido(c.uuid_operativo) ? String(c.uuid_operativo) : null))
+    .filter(Boolean);
+
+const envioCubreGuardados = (envios, uuids) => uuids.every((u) => envios.some((e) => e.client_uuid === u));
 
 const revisionDesdeProducto = (producto) => ({
     client_uuid: nuevoUuid(),
@@ -172,6 +200,25 @@ const previewsVigentes = (pedido, relacionTipo, relacionId) => (pedido?.document
         documento_id: d.id,
     }));
 
+/** Nacional: piezas que Ventas retiró o sustituyó y CEDIS aún no ha reemplazado en su respuesta. */
+export function sinRetiradasPorVentas(pedido, revisiones = []) {
+    const solicitud = pedido?.solicitud_preparacion || {};
+    const retiradas = new Set();
+    const vigentes = solicitud.piezas_nacionales_vigentes;
+    if (Array.isArray(vigentes)) {
+        const ids = new Set(vigentes.map((pieza) => pieza.id));
+        Object.entries(solicitud.respuestas_piezas_nacionales || {})
+            .filter(([uuid]) => !ids.has(uuid))
+            .forEach(([, revisionId]) => retiradas.add(String(revisionId)));
+    }
+    (Array.isArray(solicitud.ajustes_nacionales) ? solicitud.ajustes_nacionales : [])
+        .filter((ajuste) => ['retiro', 'sustitucion'].includes(ajuste?.tipo))
+        .flatMap((ajuste) => ajuste.piezas || [])
+        .forEach((pieza) => { if (pieza?.revision_id) retiradas.add(String(pieza.revision_id)); });
+
+    return retiradas.size ? revisiones.filter((fila) => !retiradas.has(String(fila.id))) : revisiones;
+}
+
 export function precargarMercanciaNacional(pedido, revisiones) {
     const solicitud = pedido.solicitud_preparacion;
     if (solicitud?.modalidad_entrega !== 'nacional' || solicitud.captura_nacional !== 'compartida') return revisiones;
@@ -246,6 +293,14 @@ export default function ModalResponderPesaje({
     const [tipoCajaRevision, setTipoCajaRevision] = useState('');
     const loteUuidRef = useRef(nuevoUuid());
     const [revisiones, setRevisiones] = useState([]);
+    const [estadoPedido, setEstadoPedido] = useState('');
+    const [excepciones, setExcepciones] = useState([]);
+    const [manualExcepcion, setManualExcepcion] = useState(false);
+    const [origenIncidencia, setOrigenIncidencia] = useState(null);
+    const [capturaRapida, setCapturaRapida] = useState(null);
+    const [respuestasCambios, setRespuestasCambios] = useState({});
+    const secuenciaExcepcion = useRef(0);
+    const incidenciasRef = useRef(null);
     const [galeria, setGaleria] = useState({ abierto: false, documentos: [], indice: 0 });
     const [skuQuery, setSkuQuery] = useState('');
     const [almacenElegidoId, setAlmacenElegidoId] = useState('');
@@ -298,6 +353,15 @@ export default function ModalResponderPesaje({
             prev.forEach((r) => revocarPreviews(r.previews));
             return [];
         });
+        setEstadoPedido('');
+        setExcepciones((prev) => {
+            prev.forEach((fila) => revocarPreviews(fila.previews));
+            return [];
+        });
+        setManualExcepcion(false);
+        setOrigenIncidencia(null);
+        setCapturaRapida(null);
+        setRespuestasCambios({});
         setGaleria({ abierto: false, documentos: [], indice: 0 });
         setSkuQuery('');
         setSkuResultados([]);
@@ -337,6 +401,8 @@ export default function ModalResponderPesaje({
         setPaso(0);
         skipAutosaveRef.current = true;
         hydratingRef.current = true;
+        setPedirMotivoRetiro(false);
+        setMotivoRetiro('');
         loteUuidRef.current = nuevoUuid();
         setEvidenciasLote((prev) => {
             revocarPreviews(prev.previews);
@@ -347,18 +413,25 @@ export default function ModalResponderPesaje({
             try {
                 const draft = await leerBorradorPesaje(pedido.id);
                 if (cancelado) return;
-                setAlmacenElegidoId(draft?.almacenId || '');
+                const cajasPrevias = pedido.cajas || pedido.cajas_pesaje || [];
+                const uuidsBd = uuidsGuardadosDeCajas(cajasPrevias);
+                setPedirMotivoRetiro(false);
+                setMotivoRetiro('');
+                setAlmacenElegidoId(nacional ? '' : (draft?.almacenId || ''));
+                setUuidsGuardados(uuidsBd);
 
-                if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote) {
-                    setEnvios(
-                        draft.envios?.length
-                            ? draft.envios.map((e) => ({
-                                ...envioVacio(),
-                                ...e,
-                                client_uuid: uuidOperativo(e.client_uuid || e.uuid_operativo),
-                            }))
-                            : [envioVacio()]
-                    );
+                if (draft?.envios?.length || (soloRevisiones && draft?.revisiones?.length) || draft?.evidenciasLote
+                    || (nacional && (draft?.estadoPedido || draft?.excepciones?.length))) {
+                    const draftEnvios = (draft.envios || []).map((e) => ({
+                        ...envioVacio(),
+                        ...e,
+                        client_uuid: uuidOperativo(e.client_uuid || e.uuid_operativo),
+                    }));
+                    const usarCajasGuardadas = uuidsBd.length > 0 && !envioCubreGuardados(draftEnvios, uuidsBd);
+                    const enviosHidratados = usarCajasGuardadas
+                        ? enviosDesdeCajasPedido(cajasPrevias)
+                        : (draftEnvios.length ? draftEnvios : [envioVacio()]);
+                    setEnvios(enviosHidratados);
                     setRevisiones((prev) => {
                         prev.forEach((r) => revocarPreviews(r.previews));
                         const previas = (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((row) => !row.retirada_at);
@@ -389,15 +462,69 @@ export default function ModalResponderPesaje({
                                 expandido: false,
                             };
                         });
-                        return precargarMercanciaNacional(pedido, recuperadas);
+                        return nacional ? [] : precargarMercanciaNacional(pedido, recuperadas);
                     });
+                    if (nacional) {
+                        const extraDraft = (draft.excepciones || []);
+                        setExcepciones((prev) => {
+                            prev.forEach((fila) => revocarPreviews(fila.previews));
+                            if (extraDraft.length) {
+                                return extraDraft.map((fila, i) => {
+                                    const evidencias = Array.isArray(fila.evidencias) ? fila.evidencias.filter((f) => f instanceof Blob) : [];
+                                    return excepcionDesdeElegido(
+                                        { descripcion: fila.descripcion, sku: fila.sku, id: fila.producto_id },
+                                        {
+                                            clave: fila.clave || `draft-${i}`,
+                                            client_uuid: fila.client_uuid || null,
+                                            revision_id: fila.revision_id || null,
+                                            condicion: fila.condicion || 'detalle',
+                                            detalle: fila.detalle || '',
+                                            unica_pieza: Boolean(fila.unica_pieza),
+                                            mejor_ejemplar: Boolean(fila.mejor_ejemplar),
+                                            archivos: evidencias,
+                                            previews: [...previewsDesdeArchivos(evidencias), ...(fila.previews || []).filter((p) => p.remoto)],
+                                            origen_cambio: fila.origen_cambio || null,
+                                        },
+                                    );
+                                });
+                            }
+                            const previas = sinRetiradasPorVentas(pedido, (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((row) => !row.retirada_at));
+                            return excepcionesDesdeRevisiones(previas.map((r) => ({
+                                ...r,
+                                previews: previewsVigentes(pedido, 'revision_producto', r.id),
+                            })));
+                        });
+                        const extraServidor = extraDraft.length
+                            ? extraDraft
+                            : excepcionesDesdeRevisiones(sinRetiradasPorVentas(pedido, (pedido.revisiones_producto || pedido.revisionesProducto || []).filter((row) => !row.retirada_at)));
+                        setEstadoPedido(draft.estadoPedido || (extraServidor.length ? 'detalle' : ''));
+                        setRespuestasCambios(draft.respuestasCambios || {});
+                        setManualExcepcion(Boolean(draft.manualExcepcion));
+                    }
                     setEvidenciasPorEnvio((prev) => {
                         prev.forEach((s) => revocarPreviews(s.previews));
-                        const slots = (draft.evidenciasPorEnvio || []).map((slot) => {
+                        if (usarCajasGuardadas) {
+                            return cajasPrevias.map((c) => ({
+                                archivos: [],
+                                previews: previewsVigentes(pedido, 'envio_caja', c.id),
+                            }));
+                        }
+                        const slots = (draft.evidenciasPorEnvio || []).map((slot, i) => {
                             const archivos = Array.isArray(slot?.archivos)
                                 ? slot.archivos.filter((f) => f instanceof Blob)
                                 : [];
-                            return { archivos, previews: previewsDesdeArchivos(archivos) };
+                            // El borrador solo guarda archivos nuevos: las fotos ya registradas de ese envío se recuperan del pedido.
+                            const uuidEnvio = enviosHidratados[i]?.client_uuid;
+                            const cajaGuardada = uuidEnvio
+                                ? cajasPrevias.find((c) => uuidOperativo(c.uuid_operativo || c.client_uuid) === uuidEnvio)
+                                : null;
+                            return {
+                                archivos,
+                                previews: [
+                                    ...previewsDesdeArchivos(archivos),
+                                    ...(cajaGuardada ? previewsVigentes(pedido, 'envio_caja', cajaGuardada.id) : []),
+                                ],
+                            };
                         });
                         return slots.length ? slots : [slotEnvioVacio()];
                     });
@@ -423,7 +550,6 @@ export default function ModalResponderPesaje({
                     setListaProductosAbierta(false);
                     setBorradorMsg('Borrador recuperado');
                     if (pedido.consulta_actualizacion_pendiente || pedido.motivo_repesaje) {
-                        const cajasPrevias = pedido.cajas || pedido.cajas_pesaje || [];
                         const revsPrevias = pedido.revisiones_producto || pedido.revisionesProducto || [];
                         if (cajasPrevias.length || revsPrevias.length) {
                             setBaselineConsulta(snapshotConsulta(
@@ -437,25 +563,10 @@ export default function ModalResponderPesaje({
                     }
                 } else {
                     // Precarga respuesta previa (actualización de consulta).
-                    const cajasPrevias = pedido.cajas || pedido.cajas_pesaje || [];
                     const revsPrevias = pedido.revisiones_producto || pedido.revisionesProducto || [];
                     if (cajasPrevias.length || revsPrevias.length) {
                         if (!soloRevisiones && cajasPrevias.length) {
-                            const nextEnvios = cajasPrevias.map((c) => ({
-                                ...envioVacio(),
-                                client_uuid: uuidOperativo(c.uuid_operativo || c.client_uuid),
-                                catalogo_tipo_caja_id: String(c.catalogo_tipo_caja_id || c.tipo_caja?.id || ''),
-                                largo: c.largo ?? '',
-                                ancho: c.ancho ?? '',
-                                alto: c.alto ?? '',
-                                peso_real_kg: c.peso_real_kg ?? '',
-                                peso_volumetrico_kg: c.peso_volumetrico_kg ?? '',
-                            }));
-                            setEnvios(nextEnvios);
-                            // Solo marcar como "ya guardados" los que traen uuid de BD válido (retiro con motivo).
-                            setUuidsGuardados(cajasPrevias
-                                .map((c) => (esUuidValido(c.uuid_operativo) ? c.uuid_operativo : null))
-                                .filter(Boolean));
+                            setEnvios(enviosDesdeCajasPedido(cajasPrevias));
                             setEvidenciasPorEnvio(cajasPrevias.map((c) => ({
                                 archivos: [],
                                 previews: previewsVigentes(pedido, 'envio_caja', c.id),
@@ -466,7 +577,7 @@ export default function ModalResponderPesaje({
                         }
                         setRevisiones((prev) => {
                             prev.forEach((r) => revocarPreviews(r.previews));
-                            return precargarMercanciaNacional(pedido, revsPrevias.filter((r) => !r.retirada_at).map((r) => ({
+                            const recuperadas = (nacional ? sinRetiradasPorVentas(pedido, revsPrevias.filter((r) => !r.retirada_at)) : revsPrevias.filter((r) => !r.retirada_at)).map((r) => ({
                                 ...revisionDesdeProducto({
                                     id: r.producto_id,
                                     sku: r.sku,
@@ -488,7 +599,14 @@ export default function ModalResponderPesaje({
                                 evidencias: [],
                                 previews: previewsVigentes(pedido, 'revision_producto', r.id),
                                 expandido: false,
-                            })));
+                            }));
+                            if (nacional) {
+                                const extra = excepcionesDesdeRevisiones(recuperadas);
+                                setExcepciones(extra);
+                                setEstadoPedido(extra.length ? 'detalle' : recuperadas.length ? 'correcto' : '');
+                                return [];
+                            }
+                            return precargarMercanciaNacional(pedido, recuperadas);
                         });
                         const loteDocs = (pedido.documentos || []).filter((d) => d.tipo === 'evidencia_condicion' && d.relacion_tipo === 'revision_general' && d.activo !== false && d.url);
                         if (loteDocs.length) {
@@ -522,13 +640,13 @@ export default function ModalResponderPesaje({
                         setBorradorMsg(pedido.consulta_actualizacion_pendiente ? 'Precarga: respuesta anterior' : null);
                     } else {
                         resetFormularioVacio();
-                        setRevisiones(precargarMercanciaNacional(pedido, []));
+                        setRevisiones(nacional ? [] : precargarMercanciaNacional(pedido, []));
                     }
                 }
             } catch {
                 if (!cancelado) {
                     resetFormularioVacio();
-                    setRevisiones(precargarMercanciaNacional(pedido, []));
+                    setRevisiones(nacional ? [] : precargarMercanciaNacional(pedido, []));
                 }
             } finally {
                 window.setTimeout(() => {
@@ -572,6 +690,14 @@ export default function ModalResponderPesaje({
                     ...rest,
                     evidencias: rest.evidencias || [],
                 })),
+                estadoPedido,
+                excepciones: excepciones.map(({ previews, ...rest }) => ({
+                    ...rest,
+                    evidencias: rest.archivos || rest.evidencias || [],
+                    previews: (previews || []).filter((p) => p.remoto),
+                })),
+                respuestasCambios,
+                manualExcepcion,
                 evidenciasPorEnvio: evidenciasPorEnvio.map((s) => ({
                     archivos: s.archivos || [],
                 })),
@@ -586,7 +712,7 @@ export default function ModalResponderPesaje({
         }, 700);
 
         return () => window.clearTimeout(timer);
-    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote, bultosAproximados, almacenElegidoId]);
+    }, [abierto, pedido?.id, envios, revisiones, evidenciasPorEnvio, evidenciasLote, bultosAproximados, almacenElegidoId, estadoPedido, excepciones, respuestasCambios, manualExcepcion]);
 
     const anexarFotoRemota = (foto) => {
         if (!foto?.objetivo_uuid) return;
@@ -618,6 +744,11 @@ export default function ModalResponderPesaje({
             if (r.client_uuid !== foto.objetivo_uuid) return r;
             if ((r.previews || []).some((p) => p.id === foto.id)) return r;
             return { ...r, previews: [...(r.previews || []), preview], expandido: true };
+        }));
+        setExcepciones((prev) => prev.map((fila) => {
+            if (String(fila.clave) !== String(foto.objetivo_uuid) && String(fila.client_uuid || '') !== String(foto.objetivo_uuid)) return fila;
+            if ((fila.previews || []).some((p) => p.id === foto.id)) return fila;
+            return { ...fila, previews: [...(fila.previews || []), preview] };
         }));
     };
 
@@ -662,11 +793,17 @@ export default function ModalResponderPesaje({
     useEffect(() => {
         if (!abierto || !pedido?.id || !sesionId) return undefined;
         const t = window.setTimeout(() => {
-            const productos = revisiones.map((r) => ({
-                client_uuid: r.client_uuid,
-                sku: r.sku || '',
-                descripcion: r.descripcion_producto || '',
-            }));
+            const productos = nacional
+                ? excepciones.map((fila) => ({
+                    client_uuid: String(fila.clave),
+                    sku: fila.sku || '',
+                    descripcion: fila.descripcion || '',
+                }))
+                : revisiones.map((r) => ({
+                    client_uuid: r.client_uuid,
+                    sku: r.sku || '',
+                    descripcion: r.descripcion_producto || '',
+                }));
             const cajas = soloRevisiones
                 ? [{
                     client_uuid: loteUuidRef.current,
@@ -681,7 +818,11 @@ export default function ModalResponderPesaje({
             window.axios.put(route('control_pedidos.cedis.sesion_evidencia.snapshot', pedido.id), { productos, cajas }).catch(() => {});
         }, 300);
         return () => window.clearTimeout(t);
-    }, [abierto, pedido?.id, sesionId, revisiones, envios, tiposCaja, soloRevisiones]);
+    }, [abierto, pedido?.id, sesionId, revisiones, excepciones, envios, tiposCaja, soloRevisiones, nacional]);
+
+    useEffect(() => {
+        if (origenIncidencia) incidenciasRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    }, [origenIncidencia]);
 
     useEffect(() => {
         if (nacional || !abierto || esCampo || paso !== 1) return undefined;
@@ -693,8 +834,17 @@ export default function ModalResponderPesaje({
         evidenciasPorEnvio.forEach((s) => revocarPreviews(s.previews));
         revocarPreviews(evidenciasLote.previews);
         revisiones.forEach((r) => revocarPreviews(r.previews));
+        excepciones.forEach((fila) => revocarPreviews(fila.previews));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const agregarExcepcion = useCallback((elegido) => {
+        if (!elegido) return;
+        setExcepciones((actual) => [...actual, excepcionDesdeElegido(elegido, { clave: ++secuenciaExcepcion.current, origen_cambio: origenIncidencia?.clave })]);
+        if (origenIncidencia) setRespuestasCambios((actual) => ({ ...actual, [origenIncidencia.clave]: 'incidencia' }));
+    }, [origenIncidencia]);
+    const almacenIdEscaneo = nacional ? null : (almacenElegidoId || pedido?.almacen_id || pedido?.almacen?.id);
+    const escaneoNacional = useEscaneoPreparacion({ almacenId: almacenIdEscaneo, permitirSinAlmacen: true, onProducto: agregarExcepcion });
 
     const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: () => pedirCerrar(), bloqueado: procesando });
 
@@ -702,6 +852,31 @@ export default function ModalResponderPesaje({
 
     const almacenBusqueda = almacenElegidoId ? (almacenesBusqueda || []).find((a) => String(a.id) === String(almacenElegidoId)) : resolverAlmacenBusqueda(pedido, almacenesBusqueda);
     const almacenBusquedaId = almacenBusqueda?.id || null;
+    const solicitudNacional = nacional ? solicitudNacionalConCambios(pedido) : (pedido.solicitud_preparacion || pedido.solicitud_preparacion_json || {});
+    const actualizacionNacional = nacional && (anexosPendientesRevision(solicitudNacional) || Boolean(pedido.consulta_actualizacion_pendiente));
+    const cambiosNacional = actualizacionNacional ? cambiosDisponibilidad(solicitudNacional, pedido.documentos || []) : [];
+    // Lo capturado en consultas anteriores se archiva: solo se edita lo ligado al ciclo en curso o a esta sesión.
+    const clavesArchivadas = (() => {
+        if (!actualizacionNacional) return new Set();
+        const enCurso = revisionesDelCicloEnCurso(solicitudNacional);
+        const clavesActuales = new Set(cambiosNacional.filter((c) => cambioDelCicloActual(c, solicitudNacional)).map((c) => c.clave));
+        const origenes = solicitudNacional.revision_origenes || {};
+        return new Set(excepciones
+            .filter((fila) => fila.revision_id && !fila.origen_cambio
+                && !enCurso.has(Number(fila.revision_id))
+                && !clavesActuales.has(origenes[fila.revision_id]))
+            .map((fila) => fila.clave));
+    })();
+    const indicacionesVentas = solicitudNacional.observaciones_solicitud || solicitudNacional.observaciones || pedido.observaciones_solicitud || pedido.observaciones || '';
+    const confirmacionNacional = estadoPedido === 'correcto' || (actualizacionNacional && excepciones.length === 0);
+    const revisionesNacional = nacional
+        ? completarRevisionesPesajeNacional(
+            piezasVigentesNacional(pedido),
+            estadoPedido === 'detalle' || actualizacionNacional ? excepciones : [],
+            confirmacionNacional,
+            [],
+        )
+        : revisiones;
 
     const esImagenDoc = (doc) => {
         const mime = String(doc?.mime_type || '');
@@ -716,7 +891,7 @@ export default function ModalResponderPesaje({
     const cantidadSolicitadaRevisada = (trasladoInterno || revisiones.some((r) => r.piezaSolicitada))
         ? revisiones.reduce((total, r) => total + Number(r.cantidad_solicitada || 0), 0)
         : revisiones.length;
-    const estadoGeneralDerivado = revisiones.reduce((acc, r) => {
+    const estadoGeneralDerivado = revisionesNacional.reduce((acc, r) => {
         const s = r.estado_fisico || 'bueno';
         return (severidadEstado[s] ?? 0) > (severidadEstado[acc] ?? 0) ? s : acc;
     }, 'bueno');
@@ -725,6 +900,90 @@ export default function ModalResponderPesaje({
         const lista = (documentos || []).filter((d) => d?.url);
         if (!lista.length) return;
         setGaleria({ abierto: true, documentos: lista, indice });
+    };
+
+    const cambiarExcepcion = (indice, cambiosPieza) => {
+        setExcepciones((actual) => actual.map((fila, i) => (i !== indice ? fila : aplicarCambioExcepcion(fila, cambiosPieza))));
+    };
+    const quitarExcepcion = (indice) => {
+        setExcepciones((actual) => {
+            liberarPreviews(actual[indice]?.previews);
+            return actual.filter((_, i) => i !== indice);
+        });
+    };
+    const responderCambioNacional = (cambio, respuesta) => {
+        setRespuestasCambios((actual) => ({ ...actual, [cambio.clave]: respuesta }));
+        setExcepciones((actual) => {
+            actual.filter((fila) => fila.origen_cambio === cambio.clave).forEach((fila) => liberarPreviews(fila.previews));
+            return actual.filter((fila) => fila.origen_cambio !== cambio.clave);
+        });
+        if (origenIncidencia?.clave === cambio.clave) setOrigenIncidencia(null);
+    };
+    const reportarCambioNacional = (cambio, condicion) => {
+        if (cambio.esDocumento) {
+            setCapturaRapida({ origen: cambio });
+            return;
+        }
+        const pieza = excepcionDesdeElegido(cambio, {
+            clave: ++secuenciaExcepcion.current,
+            origen_cambio: cambio.clave,
+            condicion,
+            cantidad: condicion === 'faltante' ? Number(cambio.cantidad) || 1 : 1,
+        });
+        setOrigenIncidencia(cambio);
+        setRespuestasCambios((actual) => ({ ...actual, [cambio.clave]: 'incidencia' }));
+        setExcepciones((actual) => (actual.some((fila) => fila.origen_cambio === cambio.clave) ? actual : [...actual, pieza]));
+    };
+    const agregarSeleccionDetalle = (seleccionadas, origen) => {
+        setExcepciones((actual) => [...actual, ...seleccionadas.map((pieza) => excepcionDesdeElegido(pieza, {
+            clave: ++secuenciaExcepcion.current,
+            origen_cambio: origen?.clave,
+            abrir_detalle: seleccionadas.length === 1,
+        }))]);
+        if (seleccionadas.some((pieza) => !pieza.sku)) setManualExcepcion(true);
+        if (origen) {
+            setOrigenIncidencia(origen);
+            setRespuestasCambios((actual) => ({ ...actual, [origen.clave]: 'incidencia' }));
+        }
+        setCapturaRapida(null);
+        window.requestAnimationFrame(() => incidenciasRef.current?.scrollIntoView?.({ block: 'nearest' }));
+    };
+
+    const validarEstadoNacional = () => {
+        const afectadas = (estadoPedido === 'detalle' || actualizacionNacional ? excepciones : []).filter((fila) => !clavesArchivadas.has(fila.clave));
+        if (!actualizacionNacional && !estadoPedido) {
+            setPaso(0);
+            setAlerta({ abierto: true, tipo: 'error', titulo: 'Estado del pedido', mensaje: 'Indica el estado del pedido.' });
+            return false;
+        }
+        if (!actualizacionNacional && estadoPedido === 'detalle') {
+            const mensaje = mensajeValidacionExcepciones(afectadas, { usaPreviews: true });
+            if (mensaje) {
+                setPaso(0);
+                setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos con detalle', mensaje });
+                return false;
+            }
+        }
+        if (actualizacionNacional && cambiosNacional.length) {
+            const pendientes = cambiosNacional.filter((c) => c.pendiente && !respuestasCambios[c.clave] && !c.persistida);
+            if (pendientes.length) {
+                setPaso(0);
+                setAlerta({
+                    abierto: true,
+                    tipo: 'error',
+                    titulo: 'Actualización de consulta',
+                    mensaje: 'Revise cada captura: marque Todo OK o registre las piezas con detalle.',
+                });
+                return false;
+            }
+            const mensaje = afectadas.length ? mensajeValidacionExcepciones(afectadas, { usaPreviews: true }) : '';
+            if (mensaje) {
+                setPaso(0);
+                setAlerta({ abierto: true, tipo: 'error', titulo: 'Productos con detalle', mensaje });
+                return false;
+            }
+        }
+        return true;
     };
 
     const renderSoporte = (doc, titulo) => {
@@ -994,12 +1253,12 @@ export default function ModalResponderPesaje({
             }
 
             const cambiosPiezas = baselineConsulta
-                ? resumenActualizacionConsulta(baselineConsulta.productos, snapshotConsulta(revisiones, envios).productos)
+                ? resumenActualizacionConsulta(baselineConsulta.productos, snapshotConsulta(nacional ? revisionesNacional : revisiones, envios).productos)
                 : null;
             const paqueteIgual = !cambiosPiezas || cambiosPiezas.sinCambioPiezas;
             for (let i = 0; i < envios.length; i++) {
                 const hayLocal = evidenciasPorEnvio[i]?.archivos?.length;
-                const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto && (!p.vigente || paqueteIgual));
+                const hayRemota = evidenciasPorEnvio[i]?.previews?.some((p) => p.remoto && (nacional || !p.vigente || paqueteIgual));
                 if (!hayLocal && !hayRemota) {
                     avisarCampo(`pesaje-evidencia-${envios[i].client_uuid}`, 'Adjunta una foto del contenido de esta caja.');
                     return;
@@ -1032,7 +1291,7 @@ export default function ModalResponderPesaje({
         }
 
         const piezasPedido = Number(pedido.cantidad_piezas || 0);
-        if (piezasPedido > 0 && cantidadSolicitadaRevisada < piezasPedido && !avisoPiezasRef.current) {
+        if (!nacional && piezasPedido > 0 && cantidadSolicitadaRevisada < piezasPedido && !avisoPiezasRef.current) {
             avisoPiezasRef.current = true;
             setAlerta({
                 abierto: true,
@@ -1040,6 +1299,12 @@ export default function ModalResponderPesaje({
                 titulo: 'Piezas por revisar',
                 mensaje: `El pedido tiene ${piezasPedido} piezas y solo revisó ${cantidadSolicitadaRevisada}. Confirme de nuevo para continuar, o agregue las piezas faltantes. Si falta stock, márquela Sin existencias; si agregó una de más, elimínela.`,
             });
+            return;
+        }
+
+        if (nacional) {
+            if (!validarEstadoNacional()) return;
+            setConfirmacion('registrar');
             return;
         }
 
@@ -1103,7 +1368,7 @@ export default function ModalResponderPesaje({
                 peso_volumetrico_kg: Number(e.peso_volumetrico_kg),
             }));
         const form = new FormData();
-        if (almacenBusquedaId) form.append('almacen_id', String(almacenBusquedaId));
+        if (!nacional && almacenBusquedaId) form.append('almacen_id', String(almacenBusquedaId));
         cajas.forEach((c, i) => {
             Object.entries(c).forEach(([k, v]) => form.append(`cajas[${i}][${k}]`, String(v)));
             if (envios[i]?.client_uuid) {
@@ -1117,6 +1382,21 @@ export default function ModalResponderPesaje({
         }
         form.append('estado_fisico_general', estadoGeneralDerivado);
         form.append('comentario_fisico_general', '');
+        if (nacional) {
+            form.append('confirmacion_explicita', confirmacionNacional ? '1' : '0');
+            (estadoPedido === 'detalle' || actualizacionNacional ? excepciones : []).forEach((pieza, indice) => {
+                form.append(`excepciones[${indice}][descripcion]`, String(pieza.descripcion || ''));
+                form.append(`excepciones[${indice}][sku]`, String(pieza.sku || ''));
+                form.append(`excepciones[${indice}][cantidad]`, String(pieza.cantidad || 1));
+                form.append(`excepciones[${indice}][condicion]`, String(pieza.condicion || 'detalle'));
+                form.append(`excepciones[${indice}][detalle]`, String(pieza.detalle || ''));
+                form.append(`excepciones[${indice}][unica_pieza]`, pieza.unica_pieza ? '1' : '0');
+                form.append(`excepciones[${indice}][mejor_ejemplar]`, pieza.mejor_ejemplar ? '1' : '0');
+                if (pieza.client_uuid) form.append(`excepciones[${indice}][client_uuid]`, String(pieza.client_uuid));
+                if (pieza.producto_id) form.append(`excepciones[${indice}][producto_id]`, String(pieza.producto_id));
+                (pieza.archivos || []).forEach((archivo) => form.append(`excepciones[${indice}][evidencias][]`, archivo));
+            });
+        }
         if (soloRevisiones) {
             form.append('numero_cajas', String(Number(bultosAproximados)));
             if (exigeCajaSinPeso) form.append('catalogo_tipo_caja_id', String(Number(tipoCajaRevision)));
@@ -1127,7 +1407,7 @@ export default function ModalResponderPesaje({
                 (slot.archivos || []).forEach((f, j) => form.append(`evidencias_envios[${i}][${j}]`, f));
             });
         }
-        revisiones.forEach((r, i) => {
+        (nacional ? revisionesNacional : revisiones).forEach((r, i) => {
             form.append(`revisiones[${i}][descripcion_producto]`, r.descripcion_producto);
             if (r.producto_id) form.append(`revisiones[${i}][producto_id]`, String(r.producto_id));
             if (r.sku) form.append(`revisiones[${i}][sku]`, String(r.sku));
@@ -1167,6 +1447,8 @@ export default function ModalResponderPesaje({
     };
 
     const hayDatosPesaje = revisiones.length > 0
+        || Boolean(estadoPedido)
+        || excepciones.length > 0
         || envios.some((e) => e.peso_real_kg || e.catalogo_tipo_caja_id)
         || evidenciasPorEnvio.some((s) => s.archivos?.length)
         || evidenciasLote.archivos?.length;
@@ -1187,7 +1469,7 @@ export default function ModalResponderPesaje({
 
     const resumenAntesDespues = (() => {
         if (!baselineConsulta) return null;
-        const despues = snapshotConsulta(revisiones, soloRevisiones ? [] : envios);
+        const despues = snapshotConsulta(nacional ? revisionesNacional : revisiones, soloRevisiones ? [] : envios);
         const piezas = resumenActualizacionConsulta(baselineConsulta.productos, despues.productos);
         return {
             antes: baselineConsulta,
@@ -1212,8 +1494,12 @@ export default function ModalResponderPesaje({
         if (nacional) {
             window.requestAnimationFrame(() => {
                 cuerpoRef.current?.scrollTo({ top: 0, behavior: 'instant' });
-                if (destino === 0 && !esCampo) skuPistolaRef.current?.focus({ preventScroll: true });
-                else document.getElementById(destino === 2 ? 'pesaje-envios' : 'pesaje-referencia')?.focus({ preventScroll: true });
+                if (destino === 2) document.getElementById('pesaje-envios')?.focus({ preventScroll: true });
+                else {
+                    const radio = document.querySelector('input[name="estado-pesaje-nacional"]');
+                    (radio || document.getElementById('cedis-sku-pesaje') || document.getElementById('pesaje-referencia'))
+                        ?.focus({ preventScroll: true });
+                }
             });
             return;
         }
@@ -1371,7 +1657,10 @@ export default function ModalResponderPesaje({
         <>
             <button type="button" onClick={() => paso > 0 ? cambiarPaso(nacional ? 0 : paso - 1) : pedirCerrar()} className={`${BTN_SECONDARY} outline-none min-h-[44px]`} disabled={procesando}>{paso > 0 ? 'Atrás' : 'Cerrar'}</button>
             {paso < 2 ? (
-                <button type="button" onClick={() => cambiarPaso(nacional ? 2 : paso + 1)} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{nacional ? 'Siguiente' : paso === 0 ? 'Revisar productos' : (soloRevisiones ? empaqueConsulta.ctaPaso : 'Cajas y evidencias')}</button>
+                <button type="button" onClick={() => {
+                    if (nacional && !validarEstadoNacional()) return;
+                    cambiarPaso(nacional ? 2 : paso + 1);
+                }} disabled={procesando} className={`${BTN_PRIMARY} min-h-[44px]`}>{nacional ? 'Siguiente' : paso === 0 ? 'Revisar productos' : (soloRevisiones ? empaqueConsulta.ctaPaso : 'Cajas y evidencias')}</button>
             ) : (
                 <button type="button" onClick={confirmar} disabled={procesando} aria-busy={procesando} className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none min-h-[44px]`}>
                     <Scale className="w-4 h-4" aria-hidden="true" /> <span>{procesando ? 'Guardando…' : (nacional ? 'Enviar respuesta' : soloRevisiones ? 'Registrar consulta' : 'Registrar pesaje')}</span>
@@ -1469,9 +1758,13 @@ export default function ModalResponderPesaje({
     const pieRespuesta = (
         <div className="flex flex-col gap-3 pt-2">
             <p className="m-0 text-xs theme-text-muted" role="status">
-                <strong className="theme-text-main tabular-nums">{revisiones.length} piezas</strong>
+                <strong className="theme-text-main tabular-nums">
+                    {nacional
+                        ? (estadoPedido === 'correcto' ? 'Todo OK' : estadoPedido === 'detalle' ? `${excepciones.length} afectadas` : 'Sin estado')
+                        : `${revisiones.length} piezas`}
+                </strong>
                 {soloRevisiones ? ` · ${bultosAproximados || '—'} ${empaqueConsulta.unidad}` : ` · ${envios.length} envíos · ${new Intl.NumberFormat('es-MX', { maximumFractionDigits: 4 }).format(totalCobrado)} kg cobrados`}
-                <span className="block mt-0.5">{borradorMsg || 'Revisa los datos antes de registrar la respuesta.'}</span>
+                <span className="block mt-0.5">{borradorMsg || (nacional && paso < 2 ? 'Indica el estado y continúa a cajas y peso.' : 'Revisa los datos antes de registrar la respuesta.')}</span>
             </p>
             <div className="flex flex-wrap gap-2 sm:justify-end">
                 {accionesRespuesta}
@@ -1551,6 +1844,28 @@ export default function ModalResponderPesaje({
                         <SeccionPesaje {...encabezadoSeccion(0, 'Pedido')}>
                         <div hidden={!nacional && paso !== 0} className="gelia-pedidos-paso space-y-4">
                         <section id="pesaje-referencia" tabIndex={-1} className="gelia-pedidos-seccion space-y-4">
+                            {nacional ? (
+                                <>
+                                    {indicacionesVentas ? (
+                                        <aside className="gelia-preparacion-instrucciones">
+                                            <h4>Indicaciones de Ventas</h4>
+                                            <p>{indicacionesVentas}</p>
+                                        </aside>
+                                    ) : null}
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="text-sm font-semibold theme-text-main m-0">Documento del pedido</p>
+                                        <button
+                                            type="button"
+                                            disabled={!pdfPedido?.url && anexosPiezas.length === 0}
+                                            onClick={() => abrirGaleria([pdfPedido, ...anexosPiezas].filter((d) => d?.url), 0)}
+                                            className={`${BTN_SECONDARY} inline-flex items-center justify-center gap-1.5 text-xs min-h-[44px]`}
+                                        >
+                                            <FileText className="w-3.5 h-3.5" /> Ver pedido
+                                        </button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <h3 className="gelia-pedidos-seccion-titulo">PDF o foto del pedido</h3>
@@ -1589,6 +1904,8 @@ export default function ModalResponderPesaje({
                                     </div>
                                 </div>
                             )}
+                                </>
+                            )}
                         </section>
 
                         {soloRevisiones && (
@@ -1609,10 +1926,51 @@ export default function ModalResponderPesaje({
                         </SeccionPesaje>
                         <fieldset disabled={procesando} className={`gelia-pedidos-respuesta-main min-w-0 border-0 p-0 m-0 ${nacional ? 'gelia-pesaje-nacional-campos' : ''}`}>
                         <SeccionPesaje {...encabezadoSeccion(1, 'Revisión física de productos')}>
-                        {nacional && almacenPreparacion}
                         <section id="pesaje-productos" tabIndex={-1} hidden={!nacional && paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
+                            {nacional ? (
+                                <>
+                                    <ResumenCambiosDisponibilidad
+                                        solicitud={solicitudNacionalConCambios(pedido, { incluirHistorial: true })}
+                                        documentos={pedido.documentos || []}
+                                        revisionesVisibles={revisionesVisiblesDeConsulta(pedido, solicitudNacional)}
+                                        vista="revision"
+                                        interactivo={actualizacionNacional && !procesando}
+                                        respuestas={respuestasCambios}
+                                        onResponder={responderCambioNacional}
+                                        onIncidencia={reportarCambioNacional}
+                                        disabled={procesando}
+                                        onVer={(documentos, indice) => setGaleria({ abierto: true, documentos, indice })}
+                                    />
+                                    {!actualizacionNacional && (
+                                        <EstadoPedidoConsulta name="estado-pesaje-nacional" estado={estadoPedido} onChange={setEstadoPedido} disabled={procesando} />
+                                    )}
+                                    {(estadoPedido === 'detalle' || actualizacionNacional) && (
+                                        <CapturaExcepcionesConsulta
+                                            actualizacion={actualizacionNacional}
+                                            excepciones={excepciones}
+                                            archivadas={clavesArchivadas}
+                                            origenIncidencia={origenIncidencia}
+                                            incidenciasRef={incidenciasRef}
+                                            manual={manualExcepcion}
+                                            almacenId={null}
+                                            inputId="cedis-sku-pesaje"
+                                            disabled={procesando}
+                                            ocupado={procesando}
+                                            escaneo={escaneoNacional}
+                                            onAgregar={agregarExcepcion}
+                                            onCapturarCodigo={(valor) => escaneoNacional.encolar(valor)}
+                                            onCapturarManual={() => { setManualExcepcion(true); agregarExcepcion({ descripcion: '', sku: '' }); }}
+                                            onAgregarDetalle={() => setCapturaRapida({ origen: origenIncidencia })}
+                                            onChange={cambiarExcepcion}
+                                            onQuitar={quitarExcepcion}
+                                            onVer={(docs, indice) => setGaleria({ abierto: true, documentos: docs, indice })}
+                                        />
+                                    )}
+                                </>
+                            ) : (
+                            <>
                             <div className="flex items-center justify-between gap-2 flex-wrap">
-                                {!nacional && <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>}
+                                <h3 className="gelia-pedidos-seccion-titulo">{soloRevisiones ? 'Registro de productos' : 'Revisión física de productos'}</h3>
                                 <span className="text-xs theme-text-muted tabular-nums">{cantidadSolicitadaRevisada} de {pedido.cantidad_piezas || '—'} piezas</span>
                                 {borradorMsg && (
                                     <p className="text-xs font-medium theme-text-muted m-0" role="status">{borradorMsg}</p>
@@ -1664,7 +2022,7 @@ export default function ModalResponderPesaje({
                                 />
                                 {mensajeError('cedis-sku-pesaje')}
                                 <div className="flex flex-wrap gap-2">
-                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
+                                    <button type="button" onClick={() => buscarProductos(skuQuery, { autoAgregar: true })} disabled={skuCargando || String(skuQuery).trim().length < 2 || !almacenBusquedaId} title={!almacenBusquedaId ? 'Elija primero el almacén del catálogo' : String(skuQuery).trim().length < 2 ? 'Escriba al menos 2 caracteres del SKU o del nombre' : undefined} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
                                         <Search className="w-3.5 h-3.5" /> {skuCargando ? 'Buscando…' : 'Buscar y agregar'}
                                     </button>
                                     {!esCampo && <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} text-xs flex items-center gap-1.5 min-h-[44px] outline-none`}>
@@ -1725,6 +2083,8 @@ export default function ModalResponderPesaje({
                                 </details>
                             ) : (
                                 <div className="space-y-2">{listaProductos}</div>
+                            )}
+                            </>
                             )}
                         </section>
 
@@ -1875,9 +2235,16 @@ export default function ModalResponderPesaje({
                                     );
                                 })}
                             </div>
-                            <button type="button" onClick={agregarEnvio} className={`${BTN_SECONDARY} w-full min-h-[44px] text-xs flex items-center justify-center gap-1.5 outline-none mt-3`}>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                            <button type="button" onClick={agregarEnvio} className={`${BTN_SECONDARY} w-full min-h-[44px] text-xs flex items-center justify-center gap-1.5 outline-none`}>
                                 <Plus className="w-3.5 h-3.5" /> Otro envío
                             </button>
+                            {nacional && !esCampo && (
+                                <button type="button" onClick={abrirSesionEvidencia} className={`${BTN_SECONDARY} w-full min-h-[44px] text-xs flex items-center justify-center gap-1.5 outline-none`}>
+                                    <Smartphone className="w-3.5 h-3.5" /> Tomar evidencias con celular
+                                </button>
+                            )}
+                            </div>
                             {envios.length > 1 && (
                                 <p className="text-xs theme-text-muted font-normal m-0 mt-3">
                                     Total peso cobrado: {Math.round(totalCobrado * 10000) / 10000} kg · {envios.length} envíos
@@ -1907,6 +2274,14 @@ export default function ModalResponderPesaje({
                     {nacional && <footer className="gelia-pesaje-nacional-footer">{pieRespuesta}</footer>}
                 </div>
             </div>
+            {capturaRapida && (
+                <ModalSeleccionProductosDetalle
+                    almacenId={null}
+                    origen={capturaRapida.origen}
+                    onClose={() => setCapturaRapida(null)}
+                    onAgregar={agregarSeleccionDetalle}
+                />
+            )}
             <ModalAlertaPedido
                 abierto={alerta.abierto}
                 tipo={alerta.tipo}
@@ -1942,7 +2317,7 @@ export default function ModalResponderPesaje({
                                 : ` · ${envios.length} envío(s), ${Math.round(totalCobrado * 10000) / 10000} kg.`)
                         : (soloRevisiones
                             ? `Se registrarán ${revisiones.length} producto(s) en la consulta de mercancía.`
-                            : `Se registrarán ${envios.length} envío(s), ${revisiones.length} producto(s) y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`))
+                            : `Se registrarán ${envios.length} envío(s), ${nacional ? `${revisionesNacional.length} producto(s)` : `${revisiones.length} producto(s)`} y ${Math.round(totalCobrado * 10000) / 10000} kg cobrados.`))
                     : confirmacion === 'cerrar'
                         ? '¿Cerrar? El borrador se conserva.'
                         : confirmacion?.tipo === 'quitar_envio'

@@ -5,6 +5,8 @@ import {
     etapaAlReabrir,
     guardarEtapaUi,
     importeNetoRestante,
+    deltaPendienteExhibicion,
+    costoEnvioParaResumenVivo,
     mismaMarcaTiempo,
 } from './persistenciaFormularioPedido';
 
@@ -43,5 +45,25 @@ describe('importe neto restante', () => {
         expect(importeNetoRestante({ pendiente: 1620.484 })).toBe(1620.48);
         expect(importeNetoRestante({ pendiente: -5 })).toBe(0);
         expect(importeNetoRestante(null)).toBe(0);
+    });
+
+    it('al editar una exhibición suma el monto ya contado para no omitir el envío', () => {
+        // Mercancía 2156 ya exhibida; faltan 50 de transporte.
+        expect(importeNetoRestante({ pendiente: 50 }, 2156)).toBe(2206);
+        expect(importeNetoRestante({ pendiente: 2206 })).toBe(2206);
+        expect(importeNetoRestante({ pendiente: 50 }, 0)).toBe(50);
+        expect(deltaPendienteExhibicion({ pendiente: 50 }, { montoPropuesto: 2206, montoYaContado: 2156 })).toBe(0);
+        expect(deltaPendienteExhibicion({ pendiente: 50 }, { montoPropuesto: 50, montoYaContado: 0 })).toBe(0);
+        expect(deltaPendienteExhibicion({ pendiente: 50 }, { montoPropuesto: 2156, montoYaContado: 2156 })).toBe(50);
+    });
+
+    it('recupera el envío del resumen si el formulario no lo trae', () => {
+        const resumen = { total_a_cubrir: 2206, totales_envio: { costo_para_cobertura: '50.00' } };
+        expect(costoEnvioParaResumenVivo({ costoEnvio: null, totalMercancia: 2156, resumen })).toBe(50);
+        expect(costoEnvioParaResumenVivo({ costoEnvio: 0, totalMercancia: 2156, resumen })).toBe(50);
+        expect(costoEnvioParaResumenVivo({ costoEnvio: '', totalMercancia: 2156, resumen: { total_a_cubrir: 2206 } })).toBe(50);
+        expect(costoEnvioParaResumenVivo({ costoEnvio: 50, totalMercancia: 2156, resumen })).toBe(50);
+        expect(costoEnvioParaResumenVivo({ omiteEnvio: true, costoEnvio: 50, resumen })).toBe(0);
+        expect(costoEnvioParaResumenVivo({ costoEnvio: 0, totalMercancia: 2156, resumen: { total_a_cubrir: 2156 } })).toBe(0);
     });
 });

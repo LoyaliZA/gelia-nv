@@ -65,7 +65,6 @@ class CambiarPaqueteriaNacional
             }
 
             $lineas = is_array($contexto['lineas'] ?? null) ? $contexto['lineas'] : [];
-            $this->rechazarCostoCero($pedido, $lineas);
 
             $usuarioId = (int) $contexto['usuario_id'];
             if ($cambioReal && $this->tieneGuiaVigente($pedido)) {
@@ -85,9 +84,8 @@ class CambiarPaqueteriaNacional
                 $activas = $pedido->cajas->filter(fn (PedidoBmaCaja $caja) => $caja->estaActiva());
                 $ids = array_column($lineas, 'uuid_operativo');
                 if ($activas->isEmpty() || count($ids) !== $activas->count()
-                    || $activas->pluck('uuid_operativo')->diff($ids)->isNotEmpty()
-                    || collect($lineas)->contains(fn ($linea) => (float) $linea['costo_envio'] <= 0)) {
-                    throw new InvalidArgumentException('Indique el flete de cada caja activa.');
+                    || $activas->pluck('uuid_operativo')->diff($ids)->isNotEmpty()) {
+                    throw new InvalidArgumentException('Indique cada caja activa del pesaje.');
                 }
                 $direccionCambio = (int) $pedido->cliente_direccion_id !== (int) $cotizacion['cliente_direccion_id'];
                 if (! $cambioReal && $direccionCambio && $this->tieneGuiaVigente($pedido)) {
@@ -156,19 +154,6 @@ class CambiarPaqueteriaNacional
         }
 
         return $pedido->cajas->contains(fn (PedidoBmaCaja $caja) => $caja->estaActiva() && $caja->estaRecolectada());
-    }
-
-    /** @param  list<array<string, mixed>>  $lineas */
-    private function rechazarCostoCero(PedidoBma $pedido, array $lineas): void
-    {
-        foreach ($lineas as $linea) {
-            $caja = $pedido->cajas->firstWhere('uuid_operativo', (string) ($linea['uuid_operativo'] ?? ''));
-            $anterior = round((float) ($caja?->costo_envio ?? 0), 2);
-            $nuevo = round((float) ($linea['costo_envio'] ?? 0), 2);
-            if ($caja && $anterior > 0 && $nuevo <= 0) {
-                throw new RuntimeException('Un costo mayor que cero no se sustituye por cero.');
-            }
-        }
     }
 
     private function tieneGuiaVigente(PedidoBma $pedido): bool

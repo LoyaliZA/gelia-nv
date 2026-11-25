@@ -185,9 +185,23 @@ recargar_nginx() {
 }
 
 graceful_php_fpm_reload() {
-    log "Recargando PHP-FPM sin cortar peticiones activas..."
-    exec_app sh -c "kill -USR2 \$(pgrep -o php-fpm) 2>/dev/null || true" || true
-    ok "Señal USR2 enviada a PHP-FPM."
+    # OPcache de PHP-FPM corre con validate_timestamps=Off. USR2 respawnea
+    # workers sobre la misma memoria compartida: si composer --no-dev quitó un
+    # paquete (p. ej. laravel/boost), FPM sigue ejecutando el bytecode viejo
+    # y la app responde 500. Hay que reiniciar el master del contenedor.
+    log "Reiniciando ${APP_CONTAINER} para vaciar OPcache de PHP-FPM..."
+    docker restart "$APP_CONTAINER"
+    local intento=0
+    while [ "$intento" -lt 30 ]; do
+        if container_running "$APP_CONTAINER" \
+            && docker exec -i "$APP_CONTAINER" sh -c 'pgrep -o php-fpm >/dev/null 2>&1'; then
+            ok "PHP-FPM listo. OPcache vaciado."
+            return 0
+        fi
+        intento=$((intento + 1))
+        sleep 1
+    done
+    fail "PHP-FPM no quedó listo tras reiniciar ${APP_CONTAINER}."
 }
 
 esperar_cola() {
