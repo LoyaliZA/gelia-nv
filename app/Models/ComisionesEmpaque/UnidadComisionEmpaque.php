@@ -11,6 +11,18 @@ class UnidadComisionEmpaque extends Model
 {
     public const PENDIENTE_REVISION = 'pendiente_revision';
 
+    public const PENDIENTE_CONCILIACION = 'pendiente_conciliacion';
+
+    public const MOTIVOS_COMERCIALES = [
+        'cobrado_remision' => 'Cobrado en remisión',
+        'por_cobrar' => 'Envío por cobrar',
+        'caja_pagada' => 'Caja pagada por el cliente',
+        'guia_cliente' => 'Guía proporcionada por el cliente',
+        'otro_autorizado' => 'Otro motivo autorizado',
+        'sin_informacion' => 'Sin información suficiente',
+        'captura_incorrecta' => 'Captura incorrecta o empaque no comisionable',
+    ];
+
     public const RECHAZADA = 'rechazada';
 
     public const PENDIENTE_CLASIFICACION = 'pendiente_clasificacion';
@@ -40,6 +52,7 @@ class UnidadComisionEmpaque extends Model
     public const LIQUIDACION_PAGADO_FUERA = 'pagado_fuera';
 
     public const ETIQUETAS = [
+        self::PENDIENTE_CONCILIACION => 'Pendiente de conciliación',
         self::PENDIENTE_REVISION => 'Pendiente de revisión',
         self::RECHAZADA => 'Rechazada',
         self::PENDIENTE_CLASIFICACION => 'Pendiente de clasificación',
@@ -56,6 +69,7 @@ class UnidadComisionEmpaque extends Model
     ];
 
     public const POR_REVISAR = [
+        self::PENDIENTE_CONCILIACION,
         self::PENDIENTE_REVISION,
         self::PENDIENTE_CLASIFICACION,
         self::PENDIENTE_TARIFA,
@@ -75,7 +89,7 @@ class UnidadComisionEmpaque extends Model
         'revision_estado', 'revision_motivo', 'revision_por_id', 'revision_at', 'corte_id', 'incorporacion_tardia',
         'excepcion_resguardo', 'huella', 'ancla_decision', 'ancla_huella', 'ancla_motivo', 'ancla_por_id', 'ancla_at',
         'clave_idempotencia', 'posible_duplicado', 'duplicados_relacionados', 'duplicados_reconocidos',
-        'operacion_folio', 'es_complemento', 'diferencia', 'notas',
+        'operacion_folio', 'es_complemento', 'diferencia', 'notas', 'conciliacion',
     ];
 
     protected $casts = [
@@ -84,6 +98,7 @@ class UnidadComisionEmpaque extends Model
         'revision_at' => 'datetime',
         'ancla_at' => 'datetime',
         'logistica' => 'array',
+        'conciliacion' => 'array',
         'posible_duplicado' => 'boolean',
         'duplicados_relacionados' => 'array',
         'duplicados_reconocidos' => 'array',
@@ -94,6 +109,14 @@ class UnidadComisionEmpaque extends Model
         'excepcion_resguardo' => 'boolean',
         'es_complemento' => 'boolean',
     ];
+
+    public function conciliacionVigente(): ?array
+    {
+        return ($this->conciliacion['huella'] ?? null) === $this->huella
+            && ($this->conciliacion['fuente'] ?? null) === ($this->logistica['huella_comercial'] ?? null)
+            ? $this->conciliacion
+            : null;
+    }
 
     public function area(): BelongsTo
     {

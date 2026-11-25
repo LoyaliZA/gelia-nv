@@ -34,10 +34,13 @@ class GuardarEquipoComisionEmpaqueService
                 if ($puntos <= 0 || $puntos > 10000) {
                     throw ValidationException::withMessages(['lineas' => 'Cada porcentaje debe ser mayor a cero y no exceder 100%.']);
                 }
-                $normalizadas[$usuario->id] = ['usuario' => $usuario, 'puntos' => $puntos];
+                $normalizadas[$usuario->id] = ['usuario' => $usuario, 'puntos' => $puntos, 'encargado' => (bool) ($linea['encargado'] ?? false)];
             }
             if (array_sum(array_column($normalizadas, 'puntos')) !== 10000) {
                 throw ValidationException::withMessages(['lineas' => 'El reparto del fondo común debe sumar exactamente 100%.']);
+            }
+            if (count(array_filter(array_column($normalizadas, 'encargado'))) > 1) {
+                throw ValidationException::withMessages(['lineas' => 'Seleccione a una sola persona encargada del equipo.']);
             }
             $anterior = RepartoComisionEmpaque::permanente($areaId);
             if ($versionEsperada !== null && $versionEsperada !== (int) ($anterior?->id ?? 0)) {
@@ -59,7 +62,7 @@ class GuardarEquipoComisionEmpaqueService
                 if (! $persona->activo) {
                     throw ValidationException::withMessages(['lineas' => 'La cuenta '.$persona->nombre.' está inactiva en comisiones. Reactívela antes de incluirla.']);
                 }
-                $reparto->lineas()->create(['participante_id' => $persona->id, 'puntos_base' => $linea['puntos']]);
+                $reparto->lineas()->create(['participante_id' => $persona->id, 'puntos_base' => $linea['puntos'], 'encargado' => $linea['encargado']]);
             }
             AuditoriaComisionEmpaque::anotar($responsable, 'equipo', $reparto->id, 'guardar_reparto_permanente', $motivo, ['anterior_id' => $anterior?->id, 'lineas' => $reparto->load('lineas')->lineas->toArray()]);
 

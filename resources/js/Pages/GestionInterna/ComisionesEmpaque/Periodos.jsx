@@ -1,14 +1,17 @@
-import { router, useForm } from '@inertiajs/react';
+import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { ir } from './compartido';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 
 function siguienteDia(fecha) { const dia = new Date(`${fecha}T12:00:00Z`); dia.setUTCDate(dia.getUTCDate() + 1); return dia.toISOString().slice(0, 10); }
 export default function Periodos({ periodos = [], equipo, areaId, puede }) {
     const [editor, setEditor] = useState(null);
     const lista = periodos.filter((p) => String(p.area_id) === String(areaId));
-    const navegar = (params) => router.get(route('gestion_interna.comisiones_empaque.index'), { area_id: areaId, ...params }, { preserveState: false });
-    return <div className="space-y-4">
+    const navegar = (params) => ir({ area_id: areaId, ...params });
+    if (!areaId) return <p role="status">Seleccione un área para consultar sus periodos de comisión.</p>;
+    return <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap justify-between items-start gap-3"><div><h2 className="text-lg font-bold m-0">Periodos de comisión</h2><p className="theme-text-muted text-sm mt-1 max-w-3xl">Elija el rango que desea acumular y cerrar. El equipo y sus porcentajes se heredan del reparto permanente del área.</p></div>{puede.configurar && !editor && <button type="button" className={THEME_BTN_PRIMARY} onClick={() => setEditor({ clave: Date.now() })}>Crear periodo</button>}</div>
+        {puede.configurar && !equipo?.lineas?.length && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar({ tab: 'equipo' })}>Configurar equipo</button>}
         {editor && <EditorPeriodo key={editor.clave} {...editor} equipo={equipo} areaId={areaId} onCerrar={() => setEditor(null)} />}
         {!lista.length && <div className={geliaCardClass('p-5')}><p className="m-0">Todavía no hay periodos en esta área. Cree uno con las fechas que desea revisar.</p></div>}
         {lista.map((p) => <section key={p.id} className={geliaCardClass('p-4 md:p-5 space-y-3')}>
@@ -16,7 +19,7 @@ export default function Periodos({ periodos = [], equipo, areaId, puede }) {
                 {puede.configurar && !p.cerrado && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => setEditor({ periodo: p, clave: Date.now() })}>Cambiar fechas</button>}
                 {puede.configurar && p.cerrado && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => setEditor({ periodo: p, siguiente: true, clave: Date.now() })}>Crear siguiente periodo</button>}
                 {!p.cerrado && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar({ tab: 'acumulado', periodo_id: p.id })}>Revisar empaques</button>}
-                {puede.confirmar && !p.cerrado && <button type="button" className={THEME_BTN_PRIMARY} onClick={() => navegar({ tab: 'preparar', limite_desde: p.desde, limite_hasta: p.hasta })}>Cerrar periodo</button>}
+                {puede.confirmar && !p.cerrado && <button type="button" className={THEME_BTN_PRIMARY} onClick={() => navegar({ tab: 'preparar', periodo_id: p.id, limite_desde: p.desde, limite_hasta: p.hasta })}>Preparar liquidación</button>}
                 {p.cerrado && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar({ tab: 'cortes', corte: p.corte_id })}>Ver corte</button>}
             </div></div>
             <p className="text-xs theme-text-muted m-0">{p.cerrado ? 'Reparto conservado al confirmar el corte' : 'Reparto permanente vigente · los porcentajes se administran en Equipo y reparto'}</p>

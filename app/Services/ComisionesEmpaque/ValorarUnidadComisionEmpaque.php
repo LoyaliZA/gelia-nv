@@ -98,6 +98,12 @@ class ValorarUnidadComisionEmpaque
             return $unidad;
         }
 
+        $conciliacion = $unidad->conciliacionVigente();
+        if (! in_array($unidad->situacion, self::CONGELADAS, true) && ($conciliacion['decision'] ?? null) === 'excluir') {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::EXCLUIDA, 'cantidad_comisionable' => 0, 'importe_centavos' => 0]);
+
+            return $unidad;
+        }
         $unidad->loadMissing('lineas');
         $suma = (int) $unidad->lineas->sum('cantidad');
         $congelada = in_array($unidad->situacion, self::CONGELADAS, true);
@@ -122,6 +128,14 @@ class ValorarUnidadComisionEmpaque
                 $unidad->situacion = UnidadComisionEmpaque::EXCLUIDA;
             }
             $unidad->save();
+
+            return $unidad;
+        }
+
+        if (! $congelada && (($conciliacion['decision'] ?? null) === 'pendiente'
+                || ($unidad->conciliacion && ! $conciliacion)
+                || (! $conciliacion && ($unidad->logistica['motivo_fuente'] ?? null) === 'sin_informacion'))) {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::PENDIENTE_CONCILIACION, 'cantidad_comisionable' => null, 'importe_centavos' => null]);
 
             return $unidad;
         }

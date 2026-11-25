@@ -53,7 +53,8 @@ export default function BuscarUsuario({ value, nombre = '', onChange, etiqueta =
                 <button type="button" className="w-full text-left px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2" onClick={() => {
                     ++secuencia.current;
                     peticion.current?.abort();
-                    onChange(opcion.id, opcion.name);
+                    if (opcion.facultades) onChange(opcion.id, opcion.name, opcion);
+                    else onChange(opcion.id, opcion.name);
                     setQ(opcion.name);
                     setOpciones([]);
                 }}>{opcion.name}</button>

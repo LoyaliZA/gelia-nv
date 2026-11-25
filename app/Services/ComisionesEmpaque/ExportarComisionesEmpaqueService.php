@@ -29,11 +29,11 @@ class ExportarComisionesEmpaqueService
                     'Fecha de incorporación' => $fila['incorporado_at'],
                     'Cliente' => $fila['cliente'],
                     'Pedido' => $fila['folio_pedido'],
-                    'Remisión' => $fila['folio_remision'],
+                    'Remisión' => implode(', ', $fila['remisiones']),
                     'Área' => $fila['area'],
                     'Desglose' => implode('; ', $fila['tipos'] ?: ['Pendiente de clasificación']),
                     'Cantidad de origen' => $fila['cantidad_origen'],
-                    'Cajas comisionables' => $fila['cajas'],
+                    'Cajas' => $fila['cajas'],
                     'Bolsas excluidas' => $fila['bolsas'],
                     'Persona que empacó' => $fila['empacador'],
                     'Paquetería' => $fila['logistica']['paqueteria'] ?? null,
@@ -42,13 +42,22 @@ class ExportarComisionesEmpaqueService
                         'sin' => 'Sin logística',
                         default => null,
                     },
-                    'Liquidación' => ($fila['liquidacion'] ?? 'pendiente') === 'pagado_fuera' ? 'Pagado fuera' : 'Pendiente',
+                    'Liquidación' => $fila['corte'] ? 'En corte' : ($fila['liquidacion'] === 'pagado_fuera' ? 'Pagado fuera' : 'Pendiente'),
+                    'Modalidad de envío' => $fila['logistica']['modalidad_envio'] ?? $fila['logistica']['modalidad_preparacion'] ?? null,
+                    'Motivo comercial' => $fila['motivo_comercial'],
+                    'Estado de conciliación' => match ($fila['conciliacion']['decision'] ?? null) {
+                        'validar' => 'Validada', 'excluir' => 'Excluida', 'pendiente' => 'Pendiente',
+                        default => $fila['motivo_comercial_codigo'] === 'sin_informacion' ? 'Sin información' : 'Informada por el pedido',
+                    },
+                    'Observaciones' => $fila['conciliacion']['observaciones'] ?? $fila['notas'],
+                    'Referencia' => $fila['conciliacion']['referencia'] ?? $fila['referencia'],
+                    'Tarifa por caja' => $fila['tarifa'],
                     'Categoría de paquetería' => $fila['logistica']['categoria_paqueteria'] ?? null,
                     'Modalidad de tarifa' => $fila['logistica']['modalidad_tarifa'] ?? null,
                     'Tipo de guía' => $fila['logistica']['tipo_guia'] ?? null,
                     'Envío tienda' => $fila['logistica']['envio_tienda'] ?? null,
                     'Origen del pedido' => $fila['logistica']['origen_solicitud'] ?? null,
-                    'Importe' => $fila['importe'],
+                    'Importe' => $fila['importe_comisionable'] ?? ($fila['liquidacion'] === 'pagado_fuera' ? $fila['importe'] : null),
                     'Situación' => $fila['situacion_etiqueta'],
                     'Corte' => $fila['corte'],
                     'Incorporación tardía' => $fila['incorporacion_tardia'] ? 'Sí' : 'No',
@@ -58,6 +67,24 @@ class ExportarComisionesEmpaqueService
             });
 
         return (new FastExcel($filas))->download('comisiones-empaque-acumulado.xlsx');
+    }
+
+    public function productividad(Request $request, ?User $usuario): StreamedResponse
+    {
+        $filas = collect($this->consultar->productividad($request, $usuario))->map(fn ($fila) => [
+            'Empacador' => $fila['nombre'],
+            'Área' => $fila['area'],
+            'Desde' => $request->input('desde'),
+            'Hasta' => $request->input('hasta'),
+            'Cajas registradas' => $fila['cajas'],
+            'Cajas válidas' => $fila['validas'],
+            'Cajas pendientes' => $fila['pendientes'],
+            'Cajas excluidas' => $fila['excluidas'],
+            'Pedidos distintos' => $fila['pedidos'],
+            'Participación física (%)' => $fila['porcentaje'],
+        ]);
+
+        return (new FastExcel($filas))->download('comisiones-empaque-productividad.xlsx');
     }
 
     public function tipos(Request $request, ?User $usuario): StreamedResponse

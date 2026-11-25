@@ -41,67 +41,89 @@ class ComprobarFuenteCorteComisionEmpaque
             return null;
         }
 
-        $viva = $this->huellaViva($unidad);
-        if ($viva === null) {
-            return 'No se pudo comprobar la fuente de '.$unidad->clave_origen.'. No se confirma con la información anterior.';
+        $viva = $this->fuenteViva($unidad);
+        if (! $viva || $unidad->huella !== $viva['huella']) {
+            return 'La fuente de '.$unidad->clave_origen.' cambió o dejó de estar activa. Pulse Actualizar y revise el empaque.';
         }
-        if (! hash_equals((string) $unidad->huella, $viva)) {
-            return 'La fuente de '.$unidad->clave_origen.' cambió (cantidad, fecha, cancelación o tipo). Pulse Actualizar y revise el cálculo antes de confirmar.';
+        if (($unidad->logistica['huella_comercial'] ?? null) !== $viva['comercial']) {
+            return 'Cambió la información comercial de '.$unidad->clave_origen.'. Pulse Actualizar y revise la conciliación.';
         }
 
         return null;
     }
 
-    private function huellaViva(UnidadComisionEmpaque $unidad): ?string
+    private function fuenteViva(UnidadComisionEmpaque $unidad): ?array
     {
-        if ($unidad->procedencia === FuentesComisionEmpaque::CEDIS_CAJA) {
-            $caja = PedidoBmaCaja::query()->with('pedido')->find($unidad->origen_id);
-            if (! $caja || ! $caja->estaActiva() || ! $caja->pedido?->empacado_at) {
-                return hash('sha256', 'ausente');
-            }
-
-            return HuellaFuenteComisionEmpaque::de(
-                max(1, (int) $caja->cantidad),
-                $caja->pedido->empacado_at,
-                $caja->pedido->cancelado_at,
-                $caja->catalogo_tipo_caja_id
-            );
+        $procedencia = $unidad->procedencia;
+        $municipalTienda = $procedencia === FuentesComisionEmpaque::TIENDA_MUNICIPAL;
+        if ($municipalTienda) {
+            $procedencia = match ($unidad->origen_tipo) {
+                'pedido_bma_cajas' => FuentesComisionEmpaque::CEDIS_CAJA,
+                'pedido_bma_bultos_empaque' => FuentesComisionEmpaque::CEDIS_BULTO,
+                default => FuentesComisionEmpaque::CEDIS_CABECERA,
+            };
         }
 
-        if ($unidad->procedencia === FuentesComisionEmpaque::CEDIS_BULTO) {
-            $bulto = PedidoBmaBultoEmpaque::query()->find($unidad->origen_id);
-            $pedido = $bulto ? PedidoBma::query()->find($bulto->pedido_bma_id) : null;
-            if (! $bulto || ! $pedido?->empacado_at) {
-                return hash('sha256', 'ausente');
-            }
-
-            return HuellaFuenteComisionEmpaque::de(1, $pedido->empacado_at, $pedido->cancelado_at, null);
+        $caja = null;
+        $cumplimiento = null;
+        $tipo = null;
+        switch ($procedencia) {
+            case FuentesComisionEmpaque::CEDIS_CAJA:
+                $caja = PedidoBmaCaja::query()->with(['pedido', 'remisionesActivas.pedido:id,numero_remision,folio_remision'])->find($unidad->origen_id);
+                if (! $caja?->estaActiva()) {
+                    return null;
+                }
+                $pedido = $caja->pedido;
+                $fecha = $pedido?->empacado_at;
+                $cantidad = max(1, (int) $caja->cantidad);
+                $tipo = $caja->catalogo_tipo_caja_id;
+                break;
+            case FuentesComisionEmpaque::CEDIS_BULTO:
+                $bulto = PedidoBmaBultoEmpaque::query()->with('pedido')->find($unidad->origen_id);
+                $pedido = $bulto?->pedido;
+                $fecha = $pedido?->empacado_at ? ($bulto->empacado_at ?: $pedido->empacado_at) : null;
+                $cantidad = 1;
+                if ($pedido?->cajas()->activas()->exists()) {
+                    return null;
+                }
+                break;
+            case FuentesComisionEmpaque::CEDIS_CABECERA:
+                $pedido = PedidoBma::query()->find($unidad->origen_id);
+                $fecha = $pedido?->empacado_at;
+                $cantidad = (int) $pedido?->numero_cajas;
+                if ($pedido?->cajas()->activas()->exists() || $pedido?->bultosEmpaque()->exists()) {
+                    return null;
+                }
+                break;
+            case FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO:
+                $cumplimiento = PedidoBmaCumplimientoFisico::query()->with('tarea.pedido')->find($unidad->origen_id);
+                $pedido = $cumplimiento?->tarea?->pedido;
+                $fecha = $cumplimiento?->empacado_at;
+                $cantidad = (int) $cumplimiento?->bultos_salida;
+                break;
+            default:
+                return null;
+        }
+        if (! $pedido || ! $fecha || $cantidad < 1) {
+            return null;
+        }
+        if ($procedencia !== FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO
+            && $municipalTienda !== HuellaFuenteComisionEmpaque::empaqueMunicipalEnTienda($pedido)) {
+            return null;
+        }
+        if ($municipalTienda && $pedido->tareasPreparacion()->whereHas('cumplimientoFisico', fn ($q) => $q->whereNotNull('empacado_at')->where('bultos_salida', '>', 0))->exists()) {
+            return null;
+        }
+        if ($procedencia === FuentesComisionEmpaque::CEDIS_CABECERA
+            && ($operacion = $pedido->miembroOperacionEmpaque?->operacion_empaque_id)
+            && \App\Models\ControlPedidos\OperacionEmpaqueMiembro::query()
+                ->where('operacion_empaque_id', $operacion)->whereHas('pedido.cajas', fn ($q) => $q->activas())->exists()) {
+            return null;
         }
 
-        if ($unidad->procedencia === FuentesComisionEmpaque::CEDIS_CABECERA) {
-            $pedido = PedidoBma::query()->find($unidad->origen_id);
-            if (! $pedido?->empacado_at || (int) $pedido->numero_cajas < 1) {
-                return hash('sha256', 'ausente');
-            }
-
-            return HuellaFuenteComisionEmpaque::de((int) $pedido->numero_cajas, $pedido->empacado_at, $pedido->cancelado_at, null);
-        }
-
-        if ($unidad->procedencia === FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO) {
-            $cumplimiento = PedidoBmaCumplimientoFisico::query()->with('tarea.pedido')->find($unidad->origen_id);
-            $pedido = $cumplimiento?->tarea?->pedido;
-            if (! $cumplimiento?->empacado_at || ! $pedido || (int) $cumplimiento->bultos_salida < 1) {
-                return hash('sha256', 'ausente');
-            }
-
-            return HuellaFuenteComisionEmpaque::de(
-                (int) $cumplimiento->bultos_salida,
-                $cumplimiento->empacado_at,
-                $pedido->cancelado_at,
-                null
-            );
-        }
-
-        return null;
+        return [
+            'huella' => HuellaFuenteComisionEmpaque::de($cantidad, $fecha, $pedido->cancelado_at, $tipo),
+            'comercial' => HuellaFuenteComisionEmpaque::datosComerciales($pedido, $caja, $cumplimiento)['huella_comercial'],
+        ];
     }
 }

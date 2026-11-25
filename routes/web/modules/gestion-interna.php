@@ -63,6 +63,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::get('/unidades/{unidad}/pedido', [ComisionesEmpaqueController::class, 'pedidoInformativo'])->name('pedido.informativo');
         Route::post('/unidades/{unidad}/revisar', [ComisionesEmpaqueController::class, 'revisar'])->name('revisar');
         Route::post('/unidades/{unidad}/clasificar', [ComisionesEmpaqueController::class, 'clasificar'])->name('clasificar');
+        Route::post('/unidades/{unidad}/conciliar', [ComisionesEmpaqueController::class, 'conciliar'])->name('conciliar');
         Route::post('/unidades/{unidad}/decision', [ComisionesEmpaqueController::class, 'decision'])->name('decision');
         Route::post('/unidades/{unidad}/resolver', [ComisionesEmpaqueController::class, 'resolver'])->name('resolver');
         Route::put('/equipo', [ComisionesEmpaqueController::class, 'guardarEquipo'])->name('equipo');
@@ -82,6 +83,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::post('/configuracion/repartos', [ComisionesEmpaqueController::class, 'guardarReparto'])->name('repartos.store');
         Route::get('/configuracion/usuarios', [ComisionesEmpaqueController::class, 'buscarUsuarios'])->name('usuarios');
         Route::get('/exportar/acumulado', [ComisionesEmpaqueController::class, 'exportarAcumulado'])->name('exportar.acumulado');
+        Route::get('/exportar/productividad', [ComisionesEmpaqueController::class, 'exportarProductividad'])->name('exportar.productividad');
         Route::get('/exportar/tipos', [ComisionesEmpaqueController::class, 'exportarTipos'])->name('exportar.tipos');
         Route::get('/exportar/cortes/{corte}', [ComisionesEmpaqueController::class, 'exportarCorte'])->name('exportar.corte');
         Route::get('/exportar/cortes/{corte}/reparto', [ComisionesEmpaqueController::class, 'exportarReparto'])->name('exportar.reparto');

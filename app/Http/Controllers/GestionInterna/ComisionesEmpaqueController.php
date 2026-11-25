@@ -54,8 +54,11 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.ver');
         $tab = $request->string('tab')->toString() ?: 'acumulado';
         $usuario = $request->user();
+        if ($request->input('area_id') === 'todas') {
+            $request->merge(['area_id' => null]);
+        }
         $areas = $this->alcance->areas($usuario);
-        if ($tab !== 'acumulado' && ! $request->filled('area_id') && $areas->isNotEmpty()) {
+        if (in_array($tab, ['preparar', 'periodos', 'equipo'], true) && ! $request->has('area_id') && $areas->isNotEmpty()) {
             $request->merge(['area_id' => $areas->first()->id]);
         }
         if ($request->filled('area_id')) {
@@ -69,6 +72,10 @@ class ComisionesEmpaqueController extends Controller
                 abort_unless((int) $periodoSeleccionado->area_id === (int) $request->input('area_id'), 403);
             }
         }
+        if ($tab === 'liquidaciones') {
+            $tab = 'periodos';
+        }
+        abort_if(in_array($tab, ['configuracion', 'ajustes'], true) && ! $usuario->can('gestion_interna.comisiones_empaque.configurar'), 403);
         $config = ConfiguracionComisionEmpaque::actual();
         if ($periodoSeleccionado) {
             $request->merge([
@@ -76,7 +83,16 @@ class ComisionesEmpaqueController extends Controller
                 'hasta' => $periodoSeleccionado->hasta->copy()->subSecond()->timezone($config->zona_horaria)->toDateString(),
             ]);
         }
-        $sync = SincronizacionComisionEmpaque::query()->latest('id')->first();
+        $alcanceSync = $this->alcance->ids($usuario);
+        $areasConsulta = $request->filled('area_id') ? [$request->integer('area_id')] : $alcanceSync;
+        $sync = SincronizacionComisionEmpaque::query()
+            ->when($areasConsulta !== null, fn ($q) => $q->where(function ($q) use ($areasConsulta) {
+                $q->whereNull('area_ids');
+                foreach ($areasConsulta as $areaId) {
+                    $q->orWhereJsonContains('area_ids', $areaId);
+                }
+            }))
+            ->latest('id')->first();
 
         $props = [
             'tab' => $tab,
@@ -104,13 +120,14 @@ class ComisionesEmpaqueController extends Controller
                 'nuevas' => $sync->unidades_nuevas,
                 'actualizadas' => $sync->unidades_actualizadas,
                 'diferencias' => $sync->diferencias,
-                'detalle' => $sync->detalle ?: [],
+                'detalle' => $alcanceSync === null ? ($sync->detalle ?: []) : [],
             ] : null,
             'resumen' => $this->consultar->resumen($usuario, $request),
             'fuentes' => FuentesComisionEmpaque::resumen(),
             'situaciones' => UnidadComisionEmpaque::ETIQUETAS,
+            'motivos_comerciales' => UnidadComisionEmpaque::MOTIVOS_COMERCIALES,
             'tipos_caja' => CatalogoTipoCajaPedido::query()->orderBy('nombre')->get(['id', 'nombre', 'activo']),
-            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista']),
+            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista', 'empacador_id', 'empacador_nombre', 'seccion']),
             'sin_areas' => $this->alcance->ids($usuario) === [],
             'captura_nombre' => $usuario->name,
             'paqueterias' => CatalogoPaqueteriaPedido::query()->orderBy('nombre')->get(['id', 'nombre', 'sin_logistica']),
@@ -157,6 +174,10 @@ class ComisionesEmpaqueController extends Controller
             }
         }
 
+        if ($tab === 'productividad') {
+            $props['productividad'] = $this->consultar->productividad($request, $usuario);
+        }
+
         if ($tab === 'pagos') {
             $props['saldos'] = $this->consultar->saldos($usuario, $request->integer('area_id') ?: null);
         }
@@ -181,6 +202,7 @@ class ComisionesEmpaqueController extends Controller
                 'importe' => DineroComisionEmpaque::texto((int) $t->importe_centavos),
                 'vigente_desde' => optional($t->vigente_desde)->format('Y-m-d H:i'),
                 'vigente_hasta' => optional($t->vigente_hasta)->format('Y-m-d H:i'),
+                'estado' => $t->vigente_desde?->isFuture() ? 'Programada' : ($t->vigente_hasta?->isPast() ? 'Histórica' : 'Vigente'),
             ]);
             $props['repartos'] = RepartoComisionEmpaque::query()->with(['area:id,nombre', 'lineas.participante:id,nombre'])->tap(fn ($q) => $this->alcance->aplicar($q, $usuario))->orderByDesc('vigente_desde')->get();
             $props['alcances'] = UsuarioAreaComisionEmpaque::query()
@@ -208,6 +230,7 @@ class ComisionesEmpaqueController extends Controller
                     'participante_id' => $l->participante_id, 'user_id' => $l->participante?->user_id,
                     'nombre' => $l->participante?->nombre, 'activo' => $l->participante?->activo,
                     'porcentaje' => DineroComisionEmpaque::porcentaje((int) $l->puntos_base),
+                    'encargado' => $l->encargado,
                 ])->values()->all() ?? [],
             ]];
         });
@@ -237,7 +260,9 @@ class ComisionesEmpaqueController extends Controller
     public function sincronizar(Request $request, SincronizarComisionesEmpaqueService $service): RedirectResponse
     {
         Gate::authorize('gestion_interna.comisiones_empaque.ver');
-        $sync = $service->ejecutar($request->user());
+        $areas = $this->alcance->ids($request->user());
+        abort_if($areas === [], 403);
+        $sync = $service->ejecutar($request->user(), $areas);
 
         return back()->with($sync->estado === 'ok' ? 'success' : 'warning', $sync->mensaje);
     }
@@ -357,6 +382,8 @@ class ComisionesEmpaqueController extends Controller
             'paqueteria:id,nombre',
             'cajas' => fn ($q) => $q->activas()->with('tipoCaja:id,nombre'),
             'bultosEmpaque:id,pedido_bma_id',
+            'documentos' => fn ($q) => $q->whereIn('tipo', ['remision', 'guia', 'evidencia_pesaje', 'evidencia_bulto_empaque', 'evidencia_ticket_bulto_empaque'])
+                ->select(['id', 'pedido_bma_id', 'tipo', 'nombre_original']),
         ])->find($unidad->pedido_bma_id);
 
         if (! $pedido) {
@@ -375,6 +402,11 @@ class ComisionesEmpaqueController extends Controller
             'paqueteria' => $pedido->paqueteria?->nombre,
             'cajas_declaradas' => (int) $pedido->numero_cajas,
             'empacado_at' => $pedido->empacado_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
+            'documentos' => $pedido->documentos->filter(fn ($documento) => \App\Support\ControlPedidos\VisibilidadPedidoBma::puedeConsultarDocumentos($request->user(), $pedido, $documento->tipo))->map(fn ($documento) => [
+                'id' => $documento->id,
+                'nombre' => $documento->nombre_original ?: ucfirst(str_replace('_', ' ', $documento->tipo)),
+                'url' => route('control_pedidos.documentos.show', [$pedido->id, $documento->id]),
+            ])->values(),
             'bultos' => $pedido->bultosEmpaque->count(),
             'cajas' => $pedido->cajas->map(fn ($caja) => [
                 'tipo' => $caja->tipoCaja?->nombre ?: 'Caja sin tipo',
@@ -414,6 +446,23 @@ class ComisionesEmpaqueController extends Controller
         return back()->with('success', 'Desglose guardado.');
     }
 
+    public function conciliar(Request $request, UnidadComisionEmpaque $unidad, GestionarUnidadComisionEmpaqueService $service): RedirectResponse
+    {
+        Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
+        $this->assertArea($request->user(), (int) $unidad->area_id);
+        $datos = $request->validate([
+            'decision' => ['required', 'in:validar,excluir,pendiente'],
+            'motivo_comercial' => ['required', \Illuminate\Validation\Rule::in(array_keys(UnidadComisionEmpaque::MOTIVOS_COMERCIALES))],
+            'observaciones' => ['required', 'string', 'max:2000'],
+            'referencia' => ['nullable', 'string', 'max:500'],
+            'huella' => ['required', 'string', 'size:64'],
+            'fuente' => ['nullable', 'string', 'size:64'],
+        ]);
+        $service->conciliar($unidad, $datos, $request->user());
+
+        return back()->with('success', 'Conciliación guardada.');
+    }
+
     public function decision(Request $request, UnidadComisionEmpaque $unidad, GestionarUnidadComisionEmpaqueService $service): RedirectResponse
     {
         Gate::authorize('gestion_interna.comisiones_empaque.clasificar');
@@ -446,7 +495,7 @@ class ComisionesEmpaqueController extends Controller
         [$area, $desde, $hasta, $tardias] = $this->intervalo($request);
         $service->guardarBorrador($area, $desde, $hasta, $tardias, $request->user());
 
-        return redirect()->route('gestion_interna.comisiones_empaque.index', ['tab' => 'cortes'])
+        return redirect()->route('gestion_interna.comisiones_empaque.index', ['tab' => 'cortes', 'area_id' => $area])
             ->with('success', 'Borrador guardado. No aparta las cajas ni confirma el corte.');
     }
 
@@ -454,10 +503,13 @@ class ComisionesEmpaqueController extends Controller
     {
         Gate::authorize('gestion_interna.comisiones_empaque.confirmar_cortes');
         [$area, $desde, $hasta, $tardias] = $this->intervalo($request);
-        $request->validate(['hash' => ['required', 'string']]);
+        $request->validate([
+            'hash' => ['required', 'string'],
+            'periodo_id' => ['nullable', 'integer', \Illuminate\Validation\Rule::exists('comisiones_empaque_periodos', 'id')->where('area_id', $area)],
+        ]);
         $corte = $service->confirmar($area, $desde, $hasta, $tardias, $request->input('hash'), $request->user(), $request->integer('borrador_id') ?: null);
 
-        return redirect()->route('gestion_interna.comisiones_empaque.index', ['tab' => 'cortes', 'corte' => $corte->id])
+        return redirect()->route('gestion_interna.comisiones_empaque.index', ['tab' => 'cortes', 'area_id' => $area, 'corte' => $corte->id, 'periodo_id' => $request->integer('periodo_id') ?: null])
             ->with('success', 'Corte '.$corte->folio.' confirmado. Aún no está pagado.');
     }
 
@@ -590,6 +642,7 @@ class ComisionesEmpaqueController extends Controller
             'motivo' => ['required', 'string', 'min:5', 'max:2000'],
             'lineas' => ['required', 'array', 'min:1'],
             'lineas.*.user_id' => ['required', 'integer', 'distinct', 'exists:users,id'],
+            'lineas.*.encargado' => ['sometimes', 'boolean'],
             'lineas.*.porcentaje' => ['required', 'string'],
         ]);
         $this->assertArea($request->user(), (int) $datos['area_id']);
@@ -698,7 +751,7 @@ class ComisionesEmpaqueController extends Controller
             ->orderBy('name')
             ->limit($limite)
             ->get(['id', 'name', 'username', 'departamento_id', 'area_id'])
-            ->map(function (User $usuario) {
+            ->map(function (User $usuario) use ($request) {
                 $ubicacion = $this->ubicacionCuenta($usuario);
 
                 return [
@@ -707,6 +760,13 @@ class ComisionesEmpaqueController extends Controller
                     'username' => $usuario->username,
                     'departamento' => $ubicacion['departamento'],
                     'area' => $ubicacion['area'],
+                    'facultades' => $request->user()->can('gestion_interna.comisiones_empaque.configurar')
+                        ? collect([
+                            'ver' => 'Consultar', 'ver_todas' => 'Todas las áreas', 'capturar' => 'Capturar',
+                            'clasificar' => 'Conciliar', 'configurar' => 'Configurar', 'confirmar_cortes' => 'Confirmar liquidaciones',
+                            'registrar_pagos' => 'Registrar pagos', 'ajustar' => 'Ajustar', 'exportar' => 'Exportar',
+                        ])->filter(fn ($etiqueta, $permiso) => $usuario->can('gestion_interna.comisiones_empaque.'.$permiso))->values()
+                        : null,
                 ];
             })
             ->values();
@@ -748,6 +808,13 @@ class ComisionesEmpaqueController extends Controller
         Gate::authorize('gestion_interna.comisiones_empaque.exportar');
 
         return $service->acumulado($request, $request->user());
+    }
+
+    public function exportarProductividad(Request $request, ExportarComisionesEmpaqueService $service): StreamedResponse
+    {
+        Gate::authorize('gestion_interna.comisiones_empaque.exportar');
+
+        return $service->productividad($request, $request->user());
     }
 
     public function exportarTipos(Request $request, ExportarComisionesEmpaqueService $service): StreamedResponse

@@ -8,6 +8,7 @@ use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\ParticipanteComisionEmpaque;
 use App\Models\ComisionesEmpaque\SincronizacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
+use App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque;
 use App\Models\User;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,10 +37,14 @@ class ConsultarComisionesEmpaqueService
         $listo = $config->fecha_inicio !== null && $sync && $sync->estado !== 'omitida';
         $mensaje = $listo ? null : ($sync?->mensaje ?: 'Aún no hay una sincronización. Defina la fecha de inicio y pulse Actualizar.');
 
-        $contexto = new Request($request?->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador']) ?? []);
+        $contexto = new Request($request?->only(['area_id', 'desde', 'hasta', 'cliente', 'remision', 'pedido', 'empacador', 'empacador_id', 'empacador_nombre']) ?? []);
         $base = $this->filtrar($contexto, $usuario);
 
         $elegibles = (clone $base)->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->whereNull('corte_id');
+        $cajas = UnidadLineaComisionEmpaque::query()->where('es_bolsa', false);
+        $validas = [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE];
+        $excluidas = [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA];
+        $importeValido = (int) (clone $base)->whereIn('situacion', $validas)->sum('importe_centavos');
         $porPagar = AsignacionComisionEmpaque::query()->whereHas('corte', function ($q) use ($usuario, $request) {
             if ($request?->filled('area_id')) {
                 $q->where('area_id', (int) $request->input('area_id'));
@@ -52,7 +57,12 @@ class ConsultarComisionesEmpaqueService
             'listo' => (bool) $listo,
             'total_registros' => (clone $base)->count(),
             'revisados' => (clone $base)->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA])->count(),
-            'cajas_elegibles' => (int) $elegibles->sum('cantidad_comisionable'),
+            'cajas_elegibles' => (int) (clone $base)->whereIn('situacion', $validas)->sum('cantidad_comisionable'),
+            'cajas_registradas' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->select('id'))->sum('cantidad'),
+            'cajas_pendientes' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->select('id'))->sum('cantidad'),
+            'cajas_excluidas' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->whereIn('situacion', $excluidas)->select('id'))->sum('cantidad'),
+            'pendientes_sin_desglose' => (int) (clone $base)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->whereDoesntHave('lineas')->sum('cantidad_origen'),
+            'importe_valido' => DineroComisionEmpaque::texto($importeValido),
             'importe_por_cortar' => DineroComisionEmpaque::texto((int) (clone $elegibles)->sum('importe_centavos')),
             'importe_constancia' => DineroComisionEmpaque::texto((int) (clone $base)->where('liquidacion', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)->sum('importe_centavos')),
             'importe_confirmado_por_pagar' => DineroComisionEmpaque::texto((int) $porPagar),
@@ -63,7 +73,7 @@ class ConsultarComisionesEmpaqueService
 
     public function unidades(Request $request, ?User $usuario)
     {
-        $query = $this->filtrar($request, $usuario)->with(['area:id,nombre,codigo', 'lineas.tipo:id,nombre', 'corte:id,folio,estado']);
+        $query = $this->filtrar($request, $usuario)->with(['area:id,nombre,codigo', 'lineas.tipo:id,nombre', 'corte:id,folio,estado', 'incidencias.responsable:id,name']);
         $totales = $this->totales(clone $query);
 
         $pagina = $query->orderByDesc('empacado_at')->orderByDesc('id')->paginate(25)->withQueryString();
@@ -106,7 +116,8 @@ class ConsultarComisionesEmpaqueService
             $query->where('cliente_nombre', 'like', '%'.$request->input('cliente').'%');
         }
         if ($request->filled('remision')) {
-            $query->where('folio_remision', 'like', '%'.$request->input('remision').'%');
+            $termino = '%'.$request->input('remision').'%';
+            $query->where(fn ($q) => $q->where('folio_remision', 'like', $termino)->orWhere('logistica->folios_remision', 'like', $termino));
         }
         if ($request->filled('pedido')) {
             $query->where('folio_pedido', 'like', '%'.$request->input('pedido').'%');
@@ -114,7 +125,18 @@ class ConsultarComisionesEmpaqueService
         if ($request->filled('empacador')) {
             $query->where('empacador_nombre', 'like', '%'.$request->input('empacador').'%');
         }
-        if ($request->input('vista') === 'pendientes') {
+        if ($request->filled('empacador_id')) {
+            $query->where('empacador_user_id', $request->integer('empacador_id') ?: null);
+        }
+        if ($request->filled('empacador_nombre')) {
+            $nombre = $request->input('empacador_nombre');
+            $query->where(fn ($q) => $nombre === 'sin_identificar'
+                ? $q->whereNull('empacador_nombre')->orWhere('empacador_nombre', '')
+                : $q->where('empacador_nombre', $nombre));
+        }
+        if ($request->input('vista') === 'excluidos') {
+            $query->whereIn('situacion', [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA]);
+        } elseif ($request->input('vista') === 'pendientes') {
             $query->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR);
         } elseif ($request->input('vista') === 'revisados') {
             $query->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA]);
@@ -139,8 +161,33 @@ class ConsultarComisionesEmpaqueService
             return $l->cantidad.' '.($l->tipo?->nombre ?: 'caja sin tipo');
         })->values()->all();
 
+        $conciliacion = $u->conciliacionVigente();
+        $motivo = $conciliacion['motivo_comercial'] ?? $u->logistica['motivo_fuente'] ?? 'sin_informacion';
+        $valida = in_array($u->situacion, [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE], true);
+        $remisiones = collect($u->logistica['remisiones'] ?? [])->pluck('folio')->filter()->unique()->values()->all();
+        if ($remisiones === [] && $u->folio_remision) {
+            $remisiones = [$u->folio_remision];
+        }
+
         return [
             'id' => $u->id,
+            'huella' => $u->huella,
+            'fuente' => $u->logistica['huella_comercial'] ?? null,
+            'remisiones' => $remisiones,
+            'evidencias_remision' => collect($u->logistica['remisiones'] ?? [])->pluck('evidencia_id')->filter()->unique()->values()->all(),
+            'conciliacion' => $conciliacion,
+            'incidencias' => $u->relationLoaded('incidencias') ? $u->incidencias->sortByDesc('id')->map(fn ($i) => [
+                'id' => $i->id,
+                'estado' => $i->estado,
+                'motivo' => $i->motivo,
+                'responsable' => $i->responsable?->name,
+                'fecha' => ($i->resuelta_at ?? $i->created_at)?->format('Y-m-d H:i'),
+            ])->values()->all() : [],
+            'conciliacion_previa' => $conciliacion ? null : $u->conciliacion,
+            'motivo_comercial' => UnidadComisionEmpaque::MOTIVOS_COMERCIALES[$motivo],
+            'motivo_comercial_codigo' => $motivo,
+            'importe_comisionable' => $valida ? DineroComisionEmpaque::texto((int) $u->importe_centavos) : null,
+            'tarifa' => $valida && $u->cantidad_comisionable ? DineroComisionEmpaque::texto(intdiv((int) $u->importe_centavos, $u->cantidad_comisionable)) : null,
             'empacado_at' => $u->empacado_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
             'incorporado_at' => $u->incorporado_at?->timezone(config('app.timezone'))->format('Y-m-d H:i'),
             'cliente' => $u->cliente_nombre ?: 'Sin cliente',
@@ -156,6 +203,7 @@ class ConsultarComisionesEmpaqueService
             'logistica' => $u->logistica ?: [],
             'importe' => $u->importe_centavos === null ? null : DineroComisionEmpaque::texto((int) $u->importe_centavos),
             'situacion' => $u->situacion,
+            'ancla_decision' => $u->ancla_huella === $u->huella ? $u->ancla_decision : null,
             'liquidacion' => $u->liquidacion ?: UnidadComisionEmpaque::LIQUIDACION_PENDIENTE,
             'situacion_etiqueta' => UnidadComisionEmpaque::ETIQUETAS[$u->situacion] ?? $u->situacion,
             'corte' => $u->corte?->folio ?: ($u->corte?->estado === CorteComisionEmpaque::BORRADOR ? 'Borrador' : null),
@@ -191,6 +239,48 @@ class ConsultarComisionesEmpaqueService
                 'tipo' => $l->tipo?->nombre,
             ])->values()->all(),
         ];
+    }
+
+    public function productividad(Request $request, ?User $usuario): array
+    {
+        $unidades = $this->filtrar(new Request($request->only(['area_id', 'desde', 'hasta'])), $usuario)
+            ->with('area:id,nombre')
+            ->select(['id', 'area_id', 'empacador_user_id', 'empacador_nombre', 'pedido_bma_id', 'folio_pedido', 'situacion', 'logistica'])
+            ->withSum(['lineas as cajas' => fn ($q) => $q->where('es_bolsa', false)], 'cantidad')
+            ->get();
+        $totalesArea = $unidades->groupBy('area_id')->map->sum('cajas');
+
+        return $unidades->groupBy([
+            'area_id',
+            fn ($u) => $u->empacador_user_id ? 'cuenta:'.$u->empacador_user_id : 'nombre:'.($u->empacador_nombre ?: ''),
+        ])->flatMap(fn ($personas) => $personas->map(function ($grupo) use ($totalesArea) {
+            $persona = $grupo->first();
+            $cajas = (int) $grupo->sum('cajas');
+            $volumenArea = (int) $totalesArea[$persona->area_id];
+
+            $pedidos = $grupo->flatMap(function ($u) {
+                $pedidos = collect($u->logistica['remisiones'] ?? [])->pluck('pedido_id')->filter();
+                if ($u->pedido_bma_id) {
+                    $pedidos->push($u->pedido_bma_id);
+                }
+
+                return $pedidos->isEmpty() ? [$u->folio_pedido] : $pedidos->map(fn ($id) => 'id:'.$id)->all();
+            })->filter()->unique()->count();
+
+            return [
+                'area_id' => $persona->area_id,
+                'area' => $persona->area?->nombre,
+                'empacador_id' => $persona->empacador_user_id ?? 0,
+                'nombre' => $persona->empacador_nombre ?: 'Sin empacador identificado',
+                'filtro_nombre' => $persona->empacador_user_id ? null : ($persona->empacador_nombre ?: 'sin_identificar'),
+                'cajas' => $cajas,
+                'validas' => (int) $grupo->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA])->sum('cajas'),
+                'pendientes' => (int) $grupo->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->sum('cajas'),
+                'excluidas' => (int) $grupo->whereIn('situacion', [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA])->sum('cajas'),
+                'pedidos' => $pedidos,
+                'porcentaje' => $volumenArea ? round(100 * $cajas / $volumenArea, 2) : 0,
+            ];
+        })->values())->sortBy([['area', 'asc'], ['nombre', 'asc']])->values()->all();
     }
 
     public function saldos(?User $usuario, ?int $areaId = null): array

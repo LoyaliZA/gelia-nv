@@ -3,7 +3,7 @@ import React, { act, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import BuscarUsuario from '../Pages/GestionInterna/ComisionesEmpaque/BuscarUsuario';
-import { Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import ComisionesEmpaque, { Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
 import Equipo from '../Pages/GestionInterna/ComisionesEmpaque/Equipo';
 import Periodos from '../Pages/GestionInterna/ComisionesEmpaque/Periodos';
 
@@ -133,9 +133,21 @@ it('abre el reporte sin una captura manual permanente y permite revisar un empaq
     await act(() => boton('Revisar').click());
     expect(document.body.textContent).toContain('Revisión del empaque');
     expect(document.body.textContent).toContain('Cliente pendiente');
-    expect(document.body.textContent).toContain('El desglose debe sumar 4 cajas');
+    expect(document.body.textContent).toContain('El desglose debe sumar 4 piezas');
     expect(document.body.textContent).toContain('Agregar tipo de caja');
     expect(document.body.textContent).not.toContain('Abrir pedido de origen');
     await act(() => container.querySelector('button[aria-label="Por revisar"]').click());
     expect(navegar.mock.calls[0][1]).toMatchObject({ area_id: 1, tab: 'acumulado', vista: 'pendientes' });
+});
+
+it('conserva el área y el rango seleccionados al abrir Liquidaciones o Productividad', async () => {
+    await render(<ComisionesEmpaque tab="acumulado" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }, { id: 2, nombre: 'Tienda' }]}
+        filtros={{ area_id: 2, periodo_id: 4, desde: '2026-11-01', hasta: '2026-11-15' }}
+        periodos={[{ id: 4, area_id: 2, nombre: 'Primera quincena', desde: '2026-11-01', hasta: '2026-11-15' }]} />);
+    const contexto = { area_id: 2, periodo_id: 4, desde: '2026-11-01', hasta: '2026-11-15' };
+    await act(() => boton('Liquidaciones').click());
+    expect(navegar.mock.calls[0][1]).toMatchObject({ ...contexto, tab: 'periodos' });
+    await act(() => boton('Productividad').click());
+    expect(navegar.mock.calls[1][1]).toMatchObject({ ...contexto, tab: 'productividad' });
 });
