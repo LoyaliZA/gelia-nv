@@ -23,7 +23,8 @@
 - Un color significa una sola cosa en todo el producto. Para estados operativos (pendiente, en custodia, entregado) añade siempre icono o texto además del color.
 - Los iconos acompañan a toda acción repetida y a toda categoría. No mezclar librerías ni usar emojis.
 - No añadir pantallas de demostración ni secciones explicativas que el encargo no pidió.
-- Prohibido: glassmorphism, degradados arcoíris, ilustraciones de caricatura, scrollbars anidados, textos de acción sin forma de botón.
+- Prohibido: glassmorphism decorativo suelto, degradados arcoíris, ilustraciones de caricatura, scrollbars anidados, textos de acción sin forma de botón.
+- Translucidez de paneles es un ajuste de quien usa la app (`html.glass-active`): blur, opacidad configurable, borde visible y fallback opaco. No es el estilo por defecto.
 - Accesibilidad: contraste de 4.5:1 en texto normal, objetivos táctiles de 44 px, foco visible, `prefers-reduced-motion`. Las acciones solo con icono llevan `aria-label` y tooltip.
 - Acciones destructivas: confirmación explícita con el nombre de lo que se elimina.
 - Copy: español directo, sentence case en párrafos; los botones empiezan con verbo y nombran la operación, nunca códigos de ficha. Las personas se nombran por rol o acción, sin género («Registrado por», «Responsable»).

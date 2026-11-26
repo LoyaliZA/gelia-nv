@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2,
+    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2, FileCheck, CheckCircle2,
 } from 'lucide-react';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
 import {
@@ -433,6 +433,10 @@ export default function ModalDetalleDelegado({
         && ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase);
     const faltaConfirmar = !pedido.numero_rastreo
         || cajasPendientes.some((caja) => guiaDeCaja(caja)?.relacion_tipo !== 'guia_caja_confirmada');
+    const guiasConfirmadas = guiasPorCaja
+        ? cajasVigentes.filter((caja) => guiaDeCaja(caja)?.relacion_tipo === 'guia_caja_confirmada').length
+        : 0;
+    const mostrarResumenGuias = !faltaConfirmar && guiasConfirmadas > 0;
     const dir = pedido.direccion_vigente || pedido.direccionVigente;
     const modo = modoAccionGuia(pedido);
     const puedeReportar = ['PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO', 'EN_CEDIS'].includes(fase) && !pedido.es_resguardo;
@@ -641,12 +645,28 @@ export default function ModalDetalleDelegado({
                                         Guía asignada. El número queda fijo mientras el pedido sigue en {LABELS_ESTATUS_POR_FASE.EN_CEDIS}; puedes adjuntar o reemplazar el PDF.
                                     </p>
                                 )}
-                                {guiasPorCaja && (
+                                {mostrarResumenGuias && (
+                                    <div className="border-t theme-border pt-4">
+                                        <div role="status" className="flex items-center gap-3 rounded-xl border p-3 border-[color-mix(in_srgb,var(--color-exito)_48%,transparent)] bg-[color-mix(in_srgb,var(--color-exito)_10%,var(--theme-surface-solid))]">
+                                            <FileCheck size={24} className="shrink-0 theme-text-exito" aria-hidden="true" />
+                                            <div className="min-w-0 flex-1 space-y-1">
+                                                <p className="m-0 text-sm font-bold theme-text-main">
+                                                    {guiasConfirmadas} {guiasConfirmadas === 1 ? 'guía cargada' : 'guías cargadas'}
+                                                </p>
+                                                <p className="m-0 text-xs theme-text-exito">
+                                                    {guiasConfirmadas === 1 ? 'Guía confirmada' : 'Guías confirmadas'}
+                                                </p>
+                                            </div>
+                                            <CheckCircle2 size={16} className="shrink-0 theme-text-exito" aria-hidden="true" />
+                                        </div>
+                                    </div>
+                                )}
+                                {guiasPorCaja && !mostrarResumenGuias && (
                                     <p role="status" className="text-sm theme-text-muted m-0">
                                         {guiasCargadas} de {cajasPendientes.length} guías cargadas para cajas pendientes
                                     </p>
                                 )}
-                                {puedeGestionarCajas && (
+                                {puedeGestionarCajas && !mostrarResumenGuias && (
                                     <CampoAsignarGuia key={pedido.id} pedido={pedido} onDone={recargarPedido}
                                         listo={faltaConfirmar && cajasPendientes.length > 0 && guiasCargadas === cajasPendientes.length}
                                         rastreoFijo={!faltaConfirmar || cajasPendientes.length !== cajasVigentes.length || (fase === 'EN_CEDIS' && Boolean(pedido.numero_rastreo))} />

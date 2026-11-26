@@ -1,0 +1,85 @@
+/**
+ * Cristal de GELIA — html.glass-active.
+ * Va al final de app.css para ganar a los fondos sólidos de features.
+ * No reescribe --theme-surface-solid (selects, toasts, theme-no-blur).
+ *
+ * LightningCSS (Tailwind v4) descarta `backdrop-filter: blur(var(--token))`
+ * y el par -webkit/std. El filtro va en --gelia-glass-filter (valor completo).
+ *
+ * Rendimiento: el blur cuesta por píxel y por radio. Solo las superficies
+ * (paneles, tarjetas, modales, sidebar) llevan backdrop-filter; los
+ * `.theme-element` (botones, inputs, chips) solo reciben alfa. No se pinta
+ * una copia del wallpaper por tarjeta (antes: ::before con
+ * background-attachment: fixed + filter, que repintaba cada tarjeta en cada scroll).
+ */
+
+html.glass-active :is(
+    .theme-surface,
+    .theme-card,
+    .gelia-modal-shell,
+    .gelia-pro-sidebar,
+    .sidebar-glass,
+    .gelia-ajustes
+):not(.theme-no-blur):not(.theme-card--solid):not(.theme-surface-solid):not([class*='pdv-llamado']):not(thead):not(tbody):not(tr):not(table) {
+    background-color: color-mix(
+        in srgb,
+        var(--theme-surface-solid) calc(var(--theme-glass-opacity) * 100%),
+        transparent
+    ) !important;
+    backdrop-filter: var(--gelia-glass-filter) !important;
+}
+
+/* Elementos pequeños y repetidos: solo transparencia, sin blur (cientos por pantalla). */
+html.glass-active .theme-element:not(.theme-no-blur):not(.theme-card--solid):not(.theme-surface-solid) {
+    background-color: color-mix(
+        in srgb,
+        var(--theme-element-bg) calc(var(--theme-glass-opacity) * 100%),
+        transparent
+    ) !important;
+}
+
+/* Tarjetas dentro de tarjetas: el blur anidado no se ve y multiplica el costo. */
+html.glass-active :is(.theme-surface, .theme-card) :is(.theme-surface, .theme-card):not(.gelia-modal-shell):not(.gelia-ajustes) {
+    backdrop-filter: none !important;
+}
+
+html.glass-active .gelia-ajustes-overlay,
+html.glass-active .gelia-modal-overlay {
+    backdrop-filter: var(--gelia-modal-filter) !important;
+}
+
+/* El aside cambia de ancho en cada cuadro: re-muestrear el blur ahí es lo más caro.
+   Se apaga mientras anima y vuelve al terminar (data-anim se limpia en transitionend). */
+html.glass-active .gelia-pro-sidebar[data-anim] {
+    backdrop-filter: none !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    html.glass-active :is(
+        .theme-surface,
+        .theme-element,
+        .theme-card,
+        .gelia-modal-shell,
+        .gelia-pro-sidebar,
+        .sidebar-glass,
+        .gelia-ajustes
+    ):not(.theme-no-blur):not(.theme-card--solid):not(.theme-surface-solid):not([class*='pdv-llamado']) {
+        background-color: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent) !important;
+        backdrop-filter: none !important;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    html.glass-active :is(
+        .theme-surface,
+        .theme-element,
+        .theme-card,
+        .gelia-modal-shell,
+        .gelia-pro-sidebar,
+        .sidebar-glass,
+        .gelia-ajustes
+    ):not(.theme-no-blur):not(.theme-card--solid):not(.theme-surface-solid):not([class*='pdv-llamado']) {
+        background-color: color-mix(in srgb, var(--theme-surface-solid) 92%, transparent) !important;
+        backdrop-filter: none !important;
+    }
+}

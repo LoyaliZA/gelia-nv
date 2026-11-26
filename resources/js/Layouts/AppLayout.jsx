@@ -44,6 +44,11 @@ import {
     applyFontScaleToRoot,
 } from '../utils/fontScale';
 import {
+    GLASS_OPACITY_DEFAULT,
+    GLASS_OPACITY_STORAGE_KEY,
+    applyGlassOpacityToRoot,
+} from '../utils/glassOpacity';
+import {
     applyContentDensityToRoot,
     resolveContentDensity,
 } from '../utils/contentDensity';
@@ -650,6 +655,14 @@ export default function AppLayout({ children, fullScreen = false }) {
 
         if (isGlassActive) root.classList.add('glass-active');
         else root.classList.remove('glass-active');
+
+        const savedGlassOpacity = typeof window !== 'undefined' ? localStorage.getItem(GLASS_OPACITY_STORAGE_KEY) : null;
+        applyGlassOpacityToRoot(
+            savedGlassOpacity !== null && savedGlassOpacity !== ''
+                ? savedGlassOpacity
+                : (tema.opacidad_cristal ?? GLASS_OPACITY_DEFAULT),
+            root
+        );
 
         const density = applyContentDensityToRoot(tema);
         setContentDensityMode(density.modo);

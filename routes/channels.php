@@ -28,6 +28,10 @@ Broadcast::channel('solicitudes.operativas', function ($user) {
     return $user->hasPermissionTo('cancelaciones_cotizaciones.ver_listado');
 });
 
+Broadcast::channel('solicitudes.tags', function ($user) {
+    return $user->can('solicitudes.ver_listado');
+});
+
 Broadcast::channel('cobranza.ejecucion', function ($user) {
     return $user->can('cobranza.ejecutar_llamadas')
         || $user->can('cobranza.ver_admin')

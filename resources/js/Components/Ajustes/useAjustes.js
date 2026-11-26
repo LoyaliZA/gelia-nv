@@ -14,6 +14,12 @@ import {
     FONT_SCALE_STORAGE_KEY,
 } from '../../utils/fontScale';
 import {
+    clampGlassOpacity,
+    applyGlassOpacityToRoot,
+    GLASS_OPACITY_STEP,
+    GLASS_OPACITY_STORAGE_KEY,
+} from '../../utils/glassOpacity';
+import {
     clampContentMaxRem,
     clampContentPaddingRem,
     normalizeDensityMode,
@@ -70,6 +76,7 @@ export default function useAjustes() {
     const [font, setFont] = useState(inicial.font);
     const [scale, setScale] = useState(inicial.scale);
     const [glass, setGlass] = useState(inicial.glass);
+    const [glassOpacity, setGlassOpacity] = useState(inicial.glassOpacity);
     const [layout, setLayout] = useState(inicial.layout);
     const [mobileLayout, setMobileLayout] = useState(inicial.mobileLayout);
     const [sidebarMode, setSidebarMode] = useState(inicial.sidebarMode);
@@ -88,9 +95,9 @@ export default function useAjustes() {
     useEffect(() => () => clearTimeout(temporizadorRef.current), []);
 
     const estado = useMemo(() => ({
-        color, dark, bg, font, scale, glass, layout, mobileLayout, sidebarMode, fixedPosition,
+        color, dark, bg, font, scale, glass, glassOpacity, layout, mobileLayout, sidebarMode, fixedPosition,
         contentDensity, contentMaxRem, contentPaddingRem, alertas,
-    }), [color, dark, bg, font, scale, glass, layout, mobileLayout, sidebarMode, fixedPosition, contentDensity, contentMaxRem, contentPaddingRem, alertas]);
+    }), [color, dark, bg, font, scale, glass, glassOpacity, layout, mobileLayout, sidebarMode, fixedPosition, contentDensity, contentMaxRem, contentPaddingRem, alertas]);
 
     const huellaBase = useRef(null);
     if (huellaBase.current === null) huellaBase.current = huellaAjustes(estado);
@@ -153,6 +160,14 @@ export default function useAjustes() {
         setGlass(activo);
         document.documentElement.classList.toggle('glass-active', activo);
         localStorage.setItem('theme_glass', String(activo));
+        emitir('theme-changed');
+    };
+
+    const pasoOpacidadCristal = (direccion) => {
+        const siguiente = clampGlassOpacity(glassOpacity + direccion * GLASS_OPACITY_STEP);
+        setGlassOpacity(siguiente);
+        applyGlassOpacityToRoot(siguiente);
+        localStorage.setItem(GLASS_OPACITY_STORAGE_KEY, String(siguiente));
         emitir('theme-changed');
     };
 
@@ -301,7 +316,7 @@ export default function useAjustes() {
         }
 
         aplicarTemaAlDocumento({
-            color: acento, font: fuente, bg: fondo, scale: escala, glass: cristal,
+            color: acento, font: fuente, bg: fondo, scale: escala, glass: cristal, glassOpacity,
             contentDensity, contentMaxRem, contentPaddingRem,
         });
         localStorage.setItem('theme', oscuro ? 'dark' : 'light');
@@ -402,7 +417,7 @@ export default function useAjustes() {
         descartarAviso: () => setAviso(null),
         bgInputRef,
         acciones: {
-            cambiarModo, cambiarColor, cambiarFuente, cambiarCristal, pasoEscala,
+            cambiarModo, cambiarColor, cambiarFuente, cambiarCristal, pasoOpacidadCristal, pasoEscala,
             cambiarDensidad, pasoAncho, pasoMargen, cambiarFondo, subirFondo, quitarFondoPropio,
             cambiarLayout, cambiarLayoutMovil, cambiarModoSidebar, cambiarPosicionFija,
             aplicarPreset, actualizarAlertas, alternarCanal, alternarTipo,

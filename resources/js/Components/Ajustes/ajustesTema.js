@@ -5,6 +5,12 @@ import {
     FONT_SCALE_STORAGE_KEY,
 } from '../../utils/fontScale';
 import {
+    clampGlassOpacity,
+    applyGlassOpacityToRoot,
+    GLASS_OPACITY_DEFAULT,
+    GLASS_OPACITY_STORAGE_KEY,
+} from '../../utils/glassOpacity';
+import {
     clampContentMaxRem,
     clampContentPaddingRem,
     normalizeDensityMode,
@@ -59,6 +65,7 @@ export function leerTemaAlmacenado(temaVisual = {}) {
             font: temaVisual?.fuente_principal || 'mono',
             scale: clampFontScale(temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT),
             glass: temaVisual?.efecto_cristal !== false,
+            glassOpacity: clampGlassOpacity(temaVisual?.opacidad_cristal ?? GLASS_OPACITY_DEFAULT),
             layout: resolveSidebarLayout(null, temaVisual?.layout_sidebar),
             mobileLayout: temaVisual?.layout_sidebar_mobile || DEFAULT_SIDEBAR_MOBILE_LAYOUT,
             sidebarMode: temaVisual?.sidebar_modo || 'collapsed',
@@ -81,6 +88,9 @@ export function leerTemaAlmacenado(temaVisual = {}) {
             localStorage.getItem(FONT_SCALE_STORAGE_KEY) ?? temaVisual?.escala_fuente ?? FONT_SCALE_DEFAULT
         ),
         glass: savedGlass !== null ? savedGlass === 'true' : temaVisual?.efecto_cristal !== false,
+        glassOpacity: clampGlassOpacity(
+            localStorage.getItem(GLASS_OPACITY_STORAGE_KEY) ?? temaVisual?.opacidad_cristal ?? GLASS_OPACITY_DEFAULT
+        ),
         layout: resolveSidebarLayout(localStorage.getItem('theme_layout'), temaVisual?.layout_sidebar),
         mobileLayout: localStorage.getItem('theme_layout_mobile')
             || temaVisual?.layout_sidebar_mobile
@@ -100,7 +110,7 @@ export function leerTemaAlmacenado(temaVisual = {}) {
 }
 
 const CLAVES_TEMA = [
-    'theme', 'theme_color', 'bg_base', 'theme_font', FONT_SCALE_STORAGE_KEY, 'theme_glass',
+    'theme', 'theme_color', 'bg_base', 'theme_font', FONT_SCALE_STORAGE_KEY, 'theme_glass', GLASS_OPACITY_STORAGE_KEY,
     'theme_layout', 'theme_layout_mobile', 'theme_sidebar_mode', 'theme_fixed_position',
     CONTENT_DENSITY_STORAGE_KEY, CONTENT_MAX_REM_STORAGE_KEY, CONTENT_PADDING_REM_STORAGE_KEY,
 ];
@@ -128,6 +138,7 @@ export function aplicarTemaAlDocumento(tema, root = typeof document !== 'undefin
     root.style.setProperty('--font-principal', FUENTES[tema.font] || FUENTES.inter);
     applyFondoPantalla(root, normalizeFondoBase(tema.bg));
     applyFontScaleToRoot(tema.scale);
+    applyGlassOpacityToRoot(tema.glassOpacity, root);
     root.classList.toggle('glass-active', Boolean(tema.glass));
     applyContentDensityToRoot({
         densidad_contenido: tema.contentDensity,
@@ -149,6 +160,7 @@ export function construirTemaVisual(estado, { archivoFondo = false } = {}) {
         sidebar_modo: estado.sidebarMode,
         sidebar_posicion_fija: estado.fixedPosition,
         efecto_cristal: estado.glass,
+        opacidad_cristal: clampGlassOpacity(estado.glassOpacity),
         densidad_contenido: estado.contentDensity,
         contenido_max_rem: estado.contentMaxRem,
         contenido_padding_rem: estado.contentPaddingRem,

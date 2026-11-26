@@ -109,6 +109,7 @@ class ProfileController extends Controller
             'tema_visual.sidebar_modo'     => 'nullable|string|in:collapsed,expanded',
             'tema_visual.sidebar_posicion_fija' => 'nullable|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
+            'tema_visual.opacidad_cristal' => 'nullable|numeric|min:0.5|max:0.95',
             'tema_visual.densidad_contenido' => 'nullable|string|in:compacto,completo,personalizado',
             'tema_visual.contenido_max_rem' => 'nullable|numeric|min:60|max:120',
             'tema_visual.contenido_padding_rem' => 'nullable|numeric|min:0.5|max:2',
@@ -127,6 +128,12 @@ class ProfileController extends Controller
             $escala = (float) $configVisual['escala_fuente'];
             $escala = round($escala / 0.0625) * 0.0625;
             $configVisual['escala_fuente'] = max(0.875, min(1.5, $escala));
+        }
+
+        if (isset($configVisual['opacidad_cristal'])) {
+            $opacidad = (float) $configVisual['opacidad_cristal'];
+            $opacidad = round($opacidad / 0.05) * 0.05;
+            $configVisual['opacidad_cristal'] = max(0.5, min(0.95, round($opacidad, 2)));
         }
 
         if (isset($configVisual['densidad_contenido'])) {

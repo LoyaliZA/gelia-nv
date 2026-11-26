@@ -806,8 +806,24 @@
     opacity: 0;
 }
 
-.gelia-pro-sidebar[data-anim] {
-    will-change: width;
+/* Mientras el aside cambia de ancho, lo único que anima es ese ancho (contenido en
+   `contain: layout paint`) y el fundido de etiquetas (opacity, compositor). El resto de
+   transiciones de geometría (height/padding/margin/gap/max-width/flex de ~todas las filas)
+   forzaban un layout por cuadro: ahí estaba el lag. Los hijos se asientan al instante,
+   recortados por el overflow del aside. */
+.gelia-pro-sidebar[data-anim] * {
+    transition: none !important;
+}
+
+.gelia-pro-sidebar[data-anim] :is(
+    .gelia-pro-sidebar__brand-text,
+    .gelia-pro-sidebar__row-label,
+    .gelia-pro-sidebar__row-chevron,
+    .gelia-pro-sidebar__badge,
+    .gelia-pro-sidebar__user-meta,
+    .gelia-pro-sidebar__user-chevron
+) {
+    transition: opacity var(--gelia-pro-label-duration) var(--gelia-pro-ease) !important;
 }
 
 /* Las filas dentro de submenús se recortan al plegarse: no hace falta animar su geometría. */

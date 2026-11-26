@@ -28,6 +28,7 @@ class MobileProfileUpdateRequest extends FormRequest
             'tema_visual.sidebar_modo' => 'sometimes|string|in:collapsed,expanded',
             'tema_visual.sidebar_posicion_fija' => 'sometimes|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal' => 'sometimes|boolean',
+            'tema_visual.opacidad_cristal' => 'sometimes|numeric|min:0.5|max:0.95',
             'tema_visual.densidad_contenido' => 'sometimes|string|in:compacto,completo,personalizado',
             'tema_visual.contenido_max_rem' => 'sometimes|numeric|min:60|max:120',
             'tema_visual.contenido_padding_rem' => 'sometimes|numeric|min:0.5|max:2',

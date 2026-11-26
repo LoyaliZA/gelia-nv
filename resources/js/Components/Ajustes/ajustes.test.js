@@ -24,7 +24,7 @@ function almacenFalso(inicial = {}) {
 }
 
 const estadoBase = {
-    color: 'azul', dark: true, bg: 'blob', font: 'mono', scale: 1, glass: false,
+    color: 'azul', dark: true, bg: 'blob', font: 'mono', scale: 1, glass: false, glassOpacity: 0.75,
     layout: 'professional_left', mobileLayout: 'mobile_bottom', sidebarMode: 'expanded', fixedPosition: 'left',
     contentDensity: 'completo', contentMaxRem: 80, contentPaddingRem: 1,
     alertas: { canales: { sonido: true }, tipos: {}, tono_id: 'default', mensajeria_voz: 'solo_aviso' },
@@ -63,6 +63,7 @@ describe('tema de Ajustes', () => {
             sidebar_modo: 'expanded',
             densidad_contenido: 'completo',
             efecto_cristal: false,
+            opacidad_cristal: 0.75,
         });
         expect(tema.alertas_prefs).toEqual(estadoBase.alertas);
     });
@@ -81,6 +82,7 @@ describe('tema de Ajustes', () => {
         const base = huellaAjustes(estadoBase);
         expect(huellaAjustes({ ...estadoBase })).toBe(base);
         expect(huellaAjustes({ ...estadoBase, color: 'verde' })).not.toBe(base);
+        expect(huellaAjustes({ ...estadoBase, glassOpacity: 0.6 })).not.toBe(base);
         expect(huellaAjustes({ ...estadoBase, alertas: { ...estadoBase.alertas, tono_id: 'otro' } })).not.toBe(base);
     });
 

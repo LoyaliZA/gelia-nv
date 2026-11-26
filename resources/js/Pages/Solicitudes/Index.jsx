@@ -26,6 +26,7 @@ import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamient
 import ModalDesgloseTipoCliente from './Partials/ModalDesgloseTipoCliente';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
+import useSolicitudRealtime from '../../hooks/useSolicitudRealtime';
 import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 import useIconoHover from '@/hooks/useIconoHover';
 import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
@@ -44,6 +45,7 @@ import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '.
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 import { efectosCancelacionSolicitud, recorridoListaCancelacion, recorridoTipoCancelacion } from './Partials/efectosCancelacionSolicitud';
 
+const PROPS_LISTADO = ['solicitudes', 'metricas', 'resumen', 'conteosTab'];
 const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-semibold theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 const ITEM_EXPORTAR = 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2 dark:hover:bg-white/5';
 function BotonCabecera({ iconos, className, children, ...props }) {
@@ -918,20 +920,7 @@ export default function Index({
     const [modalDesglose, setModalDesglose] = useState(false);
     const exportarRef = useRef(null);
 
-    const modalsAbiertosRef = useRef(false);
-    modalsAbiertosRef.current = modalForm.abierto
-        || modalRespuesta.abierto
-        || modalBitacora.abierto
-        || modalConsulta.abierto
-        || modalRespuestaConsulta.abierto
-        || modalPago.abierto
-        || modalCancelacion.abierto
-        || modalConfirmarCancelacion.abierto
-        || modalEscalonamiento
-        || detalleId !== null
-        || modalAccion !== null
-        || menuAbierto !== null
-        || modalDesglose;
+    useSolicitudRealtime('solicitudes.tags', '.solicitud-tag.actualizada', PROPS_LISTADO, auth);
 
     const {
         tabActiva,
@@ -999,15 +988,6 @@ export default function Index({
             onFinish: () => setProcesandoAccion(false),
         });
     };
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            if (/\/\d+\//.test(window.location.pathname)) return;
-            if (modalsAbiertosRef.current) return;
-            router.reload({ only: ['solicitudes', 'metricas', 'resumen', 'conteosTab'], preserveState: true, preserveScroll: true, showProgress: false });
-        }, 15000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         const handleScroll = (event) => {

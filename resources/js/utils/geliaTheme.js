@@ -45,7 +45,7 @@ export const GELIA_PAGE_SHELL = 'gelia-page-shell min-w-0 box-border';
 
 export const GELIA_PAGE_SECTION = 'w-full max-w-full min-w-0 box-border';
 
-export const GELIA_PREVENT_OVERFLOW_X = 'overflow-x-hidden max-w-full';
+export const GELIA_PREVENT_OVERFLOW_X = 'overflow-x-clip max-w-full';
 
 export const GELIA_SEGMENT_TABS_SCROLL = 'gelia-segment-tabs-scroll';
 export const GELIA_SEGMENT_TABS_TRACK = 'gelia-segment-tabs-track';

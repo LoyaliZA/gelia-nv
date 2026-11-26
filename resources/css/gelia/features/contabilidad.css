@@ -27,5 +27,5 @@ html.glass-active .contabilidad-page .theme-surface.theme-card {
 }
 
 .contabilidad-page .animate-page-reveal {
-    animation-fill-mode: both;
+    animation-fill-mode: backwards;
 }

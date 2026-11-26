@@ -254,23 +254,7 @@ html:not(.glass-active) .theme-card--solid,
     box-shadow: inset 0 2px 4px color-mix(in srgb, var(--theme-text-main) 4%, transparent);
 }
 
-/* Efecto cristal / transparencia (toggle en perfil → html.glass-active) */
-html.glass-active .theme-surface:not(.theme-no-blur),
-html.glass-active .theme-element:not(.theme-no-blur),
-html.glass-active .sidebar-glass:not(.theme-no-blur) {
-    backdrop-filter: blur(var(--theme-glass-blur));
-    -webkit-backdrop-filter: blur(var(--theme-glass-blur));
-}
-
-html.glass-active .theme-surface:not(.theme-no-blur) {
-    background-color: var(--theme-glass-surface-bg);
-    border-color: var(--theme-glass-surface-border);
-}
-
-html.glass-active .theme-element:not(.theme-no-blur) {
-    background-color: var(--theme-glass-element-bg) !important;
-    border-color: var(--theme-glass-element-border) !important;
-}
+/* El cristal (blur + opacidad) vive en glass.css, importado al final de app.css. */
 
 /* Formularios */
 .theme-label {
@@ -460,8 +444,7 @@ html.glass-active .theme-element:not(.theme-no-blur) {
     overflow-y: auto;
     overscroll-behavior: contain;
     background-color: var(--theme-modal-overlay-bg);
-    backdrop-filter: blur(var(--theme-modal-blur));
-    -webkit-backdrop-filter: blur(var(--theme-modal-blur));
+    backdrop-filter: var(--gelia-modal-filter);
 }
 
 body > .gelia-modal-overlay {

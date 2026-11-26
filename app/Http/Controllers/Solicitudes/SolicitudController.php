@@ -16,6 +16,7 @@ use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\TipoClienteSolicitudResolver;
 use App\Services\Solicitudes\EscalonamientoService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
+use App\Support\Solicitudes\EmitirSolicitudTagActualizada;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\SolicitudTag;
@@ -102,7 +103,8 @@ class SolicitudController extends Controller
 
     public function store(StoreSolicitudRequest $request, CrearSolicitudService $crearSolicitudService): RedirectResponse
     {
-        $crearSolicitudService->ejecutar($request->validated(), Auth::id());
+        $solicitud = $crearSolicitudService->ejecutar($request->validated(), Auth::id());
+        EmitirSolicitudTagActualizada::desde($solicitud, 'creada', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Solicitud creada correctamente.');
     }
@@ -178,6 +180,8 @@ class SolicitudController extends Controller
                 }
             });
 
+            EmitirSolicitudTagActualizada::desde($solicitud, 'pago_confirmado', Auth::id());
+
             return $this->redirectToSolicitudesList($request, 'Operación procesada.');
         }
 
@@ -199,6 +203,8 @@ class SolicitudController extends Controller
                     ],
                 ]);
             });
+
+            EmitirSolicitudTagActualizada::desde($solicitud, 'pago_parcial', Auth::id());
 
             return $this->redirectToSolicitudesList($request, 'Abono registrado. El pago final sustituirá la cotización.');
         }
@@ -287,6 +293,8 @@ class SolicitudController extends Controller
             }
         });
 
+        EmitirSolicitudTagActualizada::desde($solicitud, 'pago_confirmado', Auth::id());
+
         return $this->redirectToSolicitudesList($request, 'Operación procesada.');
     }
 
@@ -319,6 +327,8 @@ class SolicitudController extends Controller
                 'datos_snapshot' => !empty($snapshotDiff) ? $snapshotDiff : null,
             ]);
         });
+
+        EmitirSolicitudTagActualizada::desde($solicitud, 'lista_confirmada', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Ajuste de lista confirmado. Los registros del cliente han sido actualizados.');
     }
@@ -480,6 +490,8 @@ class SolicitudController extends Controller
                 ));
             }
         });
+
+        EmitirSolicitudTagActualizada::desde($solicitud, 'actualizada', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Solicitud corregida y enviada a revisión.');
     }
@@ -707,9 +719,13 @@ class SolicitudController extends Controller
                 $solicitud->increment('aplicacion_intentos');
                 \App\Jobs\Solicitudes\RecuperarAplicacionClienteJob::dispatch($solicitud->id);
 
+                EmitirSolicitudTagActualizada::desde($solicitud, 'estado', Auth::id());
+
                 return $this->redirectToSolicitudesList($request, 'La solicitud quedó autorizada. La actualización del cliente sigue pendiente.');
             }
         }
+
+        EmitirSolicitudTagActualizada::desde($solicitud, 'estado', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'El estado ha sido actualizado correctamente.');
     }
@@ -773,6 +789,8 @@ class SolicitudController extends Controller
             }
         });
 
+        EmitirSolicitudTagActualizada::desde($solicitud, 'pago_rechazado', Auth::id());
+
         return $this->redirectToSolicitudesList($request, 'Pago rechazado. La vendedora y auxiliares han sido notificados.');
     }
 
@@ -799,6 +817,7 @@ class SolicitudController extends Controller
         ]);
 
         $eliminarService->ejecutar($solicitud, $request->motivo);
+        EmitirSolicitudTagActualizada::desde($solicitud, 'eliminada', Auth::id());
 
         return redirect()->route('solicitudes.index')->with('success', 'La solicitud ha sido eliminada y el evento ha sido auditado.');
     }
@@ -821,6 +840,8 @@ class SolicitudController extends Controller
             'datos_snapshot' => $solicitud->toArray()
         ]);
 
+        EmitirSolicitudTagActualizada::desde($solicitud, 'restaurada', Auth::id());
+
         return $this->redirectToSolicitudesList($request, 'La solicitud ha sido restaurada correctamente.');
     }
 
@@ -837,6 +858,7 @@ class SolicitudController extends Controller
         ]);
 
         $service->ejecutar($solicitud, $request->all());
+        EmitirSolicitudTagActualizada::desde($solicitud, 'consulta', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Consulta enviada al encargado.');
     }
@@ -852,6 +874,7 @@ class SolicitudController extends Controller
         ]);
 
         $service->ejecutar($solicitud, $consulta, $request->all());
+        EmitirSolicitudTagActualizada::desde($solicitud, 'consulta_respondida', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Consulta respondida correctamente.');
     }
@@ -887,6 +910,7 @@ class SolicitudController extends Controller
         ]);
 
         $service->ejecutar($solicitud, $request->motivo_cancelacion);
+        EmitirSolicitudTagActualizada::desde($solicitud, 'cancelacion_solicitada', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Solicitud de cancelación enviada al área administrativa.');
     }
@@ -905,6 +929,7 @@ class SolicitudController extends Controller
         ]);
 
         $service->ejecutar($solicitud, $request->motivo_cancelacion);
+        EmitirSolicitudTagActualizada::desde($solicitud, 'cancelada', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'La solicitud ha sido cancelada correctamente.');
     }
@@ -948,6 +973,8 @@ class SolicitudController extends Controller
                 ));
             }
         });
+
+        EmitirSolicitudTagActualizada::desde($solicitud, 'rollback', Auth::id());
 
         return $this->redirectToSolicitudesList($request, 'Reversión confirmada. La vendedora ha sido notificada.');
     }
