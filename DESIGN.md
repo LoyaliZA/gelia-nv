@@ -2,6 +2,8 @@
 
 **Referencia viva: la vista Listados** ([Listados.jsx](resources/js/Pages/FuncionesOperativas/Listados.jsx), ruta `/funciones/listados`). Es la que mejor conserva la identidad original de GELIA. Ábrela antes de diseñar y busca ahí la solución a tu caso; si otra pantalla se ve distinta, la que se acerca a Listados es la que está bien.
 
+> **Libertad de diseño.** Listados fija el concepto, no cada medida. Si ves una forma de que se vea o se entienda mejor (composición, radios, densidad, jerarquía), propónla y aplícala, siempre que conserve el concepto de abajo. Explica el cambio en una línea. No hace falta copiar Listados al píxel.
+
 ## Principio
 
 **Lo gráfico antes que el texto.** Cada elemento se reconoce por su icono, su color y su forma; el texto confirma, no es lo único que hay. Un bote de basura se entiende más rápido que la palabra «Eliminar» en gris pálido. Un botón debe verse como botón.
@@ -34,4 +36,4 @@
 3. Haz el cambio completo que pide el usuario. Si cuestiona la apariencia, revisa la composición entera, no solo espacios.
 4. Verifica en la app real a 1440, 1024 y 390 px, en claro y oscuro ([GUIA_EVIDENCIA_VISUAL.md](GUIA_EVIDENCIA_VISUAL.md)).
 
-Para propuestas amplias o exploración, el usuario las pedirá. Las skills de diseño son opcionales: úsalas cuando ayuden a un problema concreto, siempre dentro de esta identidad.
+Las skills de diseño (`frontend-design`, `design-system`) y Superpowers son bienvenidas cuando ayuden a un problema concreto. Usa una o dos, no una cadena, y mantén el concepto de GELIA. Para exploraciones de varias alternativas, espera a que el usuario las pida.

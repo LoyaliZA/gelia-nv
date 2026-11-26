@@ -1,6 +1,5 @@
 # GELIA — contexto de producto
 
-<!-- impeccable:product-schema 1 -->
 
 Contexto basado en las decisiones del usuario y en la inspección del repositorio. Fecha de actualización: 4 de noviembre de 2026. Este archivo orienta el diseño; no acredita implementaciones, pruebas ni despliegues.
 
