@@ -2,6 +2,7 @@
 
 namespace App\Models\ComisionesEmpaque;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,6 +15,11 @@ class IncidenciaComisionEmpaque extends Model
     ];
 
     protected $casts = ['resuelta_at' => 'datetime', 'datos' => 'array'];
+
+    public function responsable(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'responsable_id');
+    }
 
     public function unidad(): BelongsTo
     {

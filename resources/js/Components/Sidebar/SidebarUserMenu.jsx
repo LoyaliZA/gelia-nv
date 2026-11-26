@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useForm } from '@inertiajs/react';
 import { LogOutIcon } from '@animateicons/react/lucide/log-out-icon';
 import { MoonIcon } from '@animateicons/react/lucide/moon-icon';
@@ -8,8 +8,31 @@ import { SunIcon } from '@animateicons/react/lucide/sun-icon';
 import { UserIcon } from '@animateicons/react/lucide/user-icon';
 import useIconoEnControl from '../../hooks/useIconoEnControl';
 import { clearEphemeralThemeKeys } from '../../utils/clearEphemeralThemeKeys';
+import { abrirAjustes } from '../Ajustes/ajustesEvents';
 
 export { clearEphemeralThemeKeys };
+
+/** Debe coincidir con la duración de geliaProMenuOut en sidebar-professional.css. */
+export const USER_MENU_EXIT_MS = 160;
+
+/**
+ * Mantiene montado el menú mientras corre su animación de salida.
+ * `open` entra de inmediato; al cerrarse sigue presente USER_MENU_EXIT_MS con estado "closing".
+ */
+export function useMenuPresence(open, exitMs = USER_MENU_EXIT_MS) {
+    const [present, setPresent] = useState(open);
+
+    useEffect(() => {
+        if (open) {
+            setPresent(true);
+            return undefined;
+        }
+        const timer = setTimeout(() => setPresent(false), exitMs);
+        return () => clearTimeout(timer);
+    }, [open, exitMs]);
+
+    return { present: open || present, state: open ? 'open' : 'closing' };
+}
 
 export default function SidebarUserMenu({
     open,
@@ -22,14 +45,16 @@ export default function SidebarUserMenu({
 }) {
     const { post } = useForm({});
     const perfil = useIconoEnControl();
-    const preferencias = useIconoEnControl();
+    const ajustes = useIconoEnControl();
     const novedades = useIconoEnControl();
     const tema = useIconoEnControl();
     const salir = useIconoEnControl();
+    const { present, state } = useMenuPresence(open);
 
-    if (!open) return null;
+    if (!present) return null;
 
     const itemClass = 'gelia-pro-sidebar__user-menu-item';
+    const closing = state === 'closing';
 
     return (
         <div
@@ -38,6 +63,8 @@ export default function SidebarUserMenu({
             style={style}
             role="menu"
             aria-label="Menú de cuenta"
+            data-state={state}
+            inert={closing}
         >
             <Link
                 href={typeof route === 'function' ? route('profile.index') : '/perfil'}
@@ -49,16 +76,20 @@ export default function SidebarUserMenu({
                 <UserIcon ref={perfil.ref} size={16} duration={1} isAnimated={false} className="w-4 h-4" aria-hidden />
                 Mi perfil
             </Link>
-            <Link
-                href={typeof route === 'function' ? route('profile.preferencias') : '/perfil/preferencias'}
+            <button
+                type="button"
                 role="menuitem"
                 className={itemClass}
-                {...preferencias.triggerProps}
-                onClick={onClose}
+                aria-haspopup="dialog"
+                {...ajustes.triggerProps}
+                onClick={() => {
+                    onClose?.();
+                    abrirAjustes();
+                }}
             >
-                <SettingsIcon ref={preferencias.ref} size={16} duration={1} isAnimated={false} className="w-4 h-4" aria-hidden />
-                Preferencias
-            </Link>
+                <SettingsIcon ref={ajustes.ref} size={16} duration={1} isAnimated={false} className="w-4 h-4" aria-hidden />
+                Ajustes
+            </button>
             <Link
                 href={typeof route === 'function' ? route('profile.novedades') : '/perfil/novedades'}
                 role="menuitem"
@@ -84,6 +115,7 @@ export default function SidebarUserMenu({
                     : <MoonIcon ref={tema.ref} size={16} duration={1} isAnimated={false} className="w-4 h-4" aria-hidden />}
                 {isDarkMode ? 'Tema claro' : 'Tema oscuro'}
             </button>
+            <span className="gelia-pro-sidebar__user-menu-sep" role="separator" />
             <button
                 type="button"
                 role="menuitem"

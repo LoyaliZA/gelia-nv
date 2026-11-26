@@ -15,7 +15,10 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
     const permisos = { includes: (p) => auth?.user?.roles?.includes('Super Admin') || (auth?.user?.permissions || []).includes(p) };
     const puedeEmpacar = permisos.includes('control_pedidos.tienda.empacar_municipio');
     const puedeDespachar = permisos.includes('control_pedidos.tienda.despachar_municipio');
-    const [bultos, setBultos] = useState(String(apartado?.bultos_salida || 1));
+    const [cajas, setCajas] = useState('');
+    const [bolsas, setBolsas] = useState('');
+    const [errorEmpaque, setErrorEmpaque] = useState('');
+    const bultos = Number(cajas) + Number(bolsas);
     const [receptor, setReceptor] = useState('');
 
     if (!apartado) return null;
@@ -28,9 +31,16 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
         postOperacion(route('control_pedidos.tienda.municipio.evidencia_empaque', tarea.id), form, { forceFormData: true });
     };
 
-    const empacar = () => {
+    const empacar = (e) => {
+        e.preventDefault();
+        if (!Number.isInteger(bultos) || bultos < 1 || bultos > 99) {
+            setErrorEmpaque('Registra entre 1 y 99 bultos en total.');
+            return;
+        }
         postOperacion(route('control_pedidos.tienda.municipio.empacar', tarea.id), {
             bultos,
+            cajas: Number(cajas),
+            bolsas: Number(bolsas),
             version: apartado.version,
         });
     };
@@ -89,13 +99,17 @@ export default function EmpaqueMunicipioTienda({ onEnviar = null,  tarea, aparta
                             </label>
                         ))}
                     </div>
-                    <div className="grid sm:grid-cols-3 gap-3 items-end">
-                        <div>
-                            <label className={THEME_LABEL}>Bultos</label>
-                            <input className={`${THEME_INPUT} w-full mt-1`} type="number" min="1" value={bultos} onChange={(e) => setBultos(e.target.value)} />
-                        </div>
-                        <button type="button" className={BTN_PRIMARY} onClick={empacar}>Confirmar empaque</button>
-                    </div>
+                    <form onSubmit={empacar} className="flex flex-wrap items-end gap-3">
+                        {[[ 'Cajas', cajas, setCajas ], [ 'Bolsas', bolsas, setBolsas ]].map(([etiqueta, valor, cambiar]) => (
+                            <label key={etiqueta} className="w-24">
+                                <span className={THEME_LABEL}>{etiqueta}</span>
+                                <input className={`${THEME_INPUT} w-full`} type="number" min="0" max="99" step="1" placeholder="0" value={valor} onChange={(e) => { cambiar(e.target.value); setErrorEmpaque(''); }} />
+                            </label>
+                        ))}
+                        <span className="py-2 text-sm theme-text-muted">Total de bultos: {bultos}</span>
+                        <button type="submit" className={BTN_PRIMARY}>Confirmar empaque</button>
+                        {errorEmpaque && <p className="w-full text-sm theme-text-peligro" role="alert">{errorEmpaque}</p>}
+                    </form>
                 </>
             )}
             {apartado.estado === 'EMPACADA' && puedeDespachar && (

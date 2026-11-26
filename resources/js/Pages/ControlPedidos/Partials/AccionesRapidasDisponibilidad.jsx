@@ -6,7 +6,13 @@ import { CheckCircle2, PackageMinus, ArrowRightLeft, Send, X, Search, FileImage,
 import { GELIA_BTN_OUTLINE, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from './GaleriaEvidenciasPedido';
+import usePedidoDialog from './usePedidoDialog';
 const etiquetas = { aceptar_condicion: 'Estado confirmado con el cliente', retirar: 'Retiro registrado', sustituir: 'Sustitución solicitada' };
+const acciones = {
+    confirmar: { titulo: 'Confirmar estado', Icono: CheckCircle2 },
+    retirar: { titulo: 'Retirar', Icono: PackageMinus },
+    sustituir: { titulo: 'Sustituir', Icono: ArrowRightLeft },
+};
 
 function MenuCompactoDisponibilidad({ descripcion, permiteConfirmar, onElegir }) {
     const id = useId();
@@ -85,6 +91,11 @@ function MenuCompactoDisponibilidad({ descripcion, permiteConfirmar, onElegir })
         const boton = botonRef.current;
         setDestino(destino ? null : boton.closest('[role="dialog"]') || boton.parentElement);
     };
+    const elegir = accion => {
+        setDestino(null);
+        botonRef.current.focus({ preventScroll: true });
+        onElegir(accion);
+    };
     const teclado = event => {
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
         const opciones = [...menuRef.current.querySelectorAll('button')];
@@ -106,14 +117,36 @@ function MenuCompactoDisponibilidad({ descripcion, permiteConfirmar, onElegir })
         {destino && createPortal(
             <div className="tienda-respuesta-menu-capa">
                 <div ref={menuRef} id={id} className="tienda-respuesta-menu-lista" role="menu" aria-label={`Acciones de ${descripcion}`} onKeyDown={teclado}>
-                    {permiteConfirmar && <button role="menuitem" tabIndex={-1} type="button" onClick={() => onElegir('confirmar')}><CheckCircle2 size={16} aria-hidden />Confirmar estado</button>}
-                    <button role="menuitem" tabIndex={-1} type="button" onClick={() => onElegir('retirar')}><PackageMinus size={16} aria-hidden />Retirar</button>
-                    <button role="menuitem" tabIndex={-1} type="button" onClick={() => onElegir('sustituir')}><ArrowRightLeft size={16} aria-hidden />Sustituir</button>
+                    {permiteConfirmar && <button role="menuitem" tabIndex={-1} type="button" onClick={() => elegir('confirmar')}><CheckCircle2 size={16} aria-hidden />Confirmar estado</button>}
+                    <button role="menuitem" tabIndex={-1} type="button" onClick={() => elegir('retirar')}><PackageMinus size={16} aria-hidden />Retirar</button>
+                    <button role="menuitem" tabIndex={-1} type="button" onClick={() => elegir('sustituir')}><ArrowRightLeft size={16} aria-hidden />Sustituir</button>
                 </div>
             </div>,
             destino,
         )}
     </div>;
+}
+
+function DialogoAccionDisponibilidad({ accion, ocupado, onClose, children }) {
+    const tituloId = useId();
+    const dialogo = usePedidoDialog({ abierto: true, onClose, bloqueado: ocupado });
+    const { titulo, Icono } = acciones[accion];
+
+    return createPortal(
+        <div className="gelia-modal-overlay tienda-accion-capa" onClick={event => event.stopPropagation()}>
+            <div {...dialogo} className="gelia-modal-shell tienda-accion-dialogo" data-accion={accion} aria-labelledby={tituloId}>
+                <header className="tienda-accion-encabezado">
+                    <span className="tienda-accion-icono theme-element border theme-border"><Icono size={22} aria-hidden /></span>
+                    <h2 id={tituloId}>{titulo}</h2>
+                    <button type="button" className={GELIA_BTN_OUTLINE} aria-label={`Cerrar ${titulo.toLowerCase()}`} disabled={ocupado} onClick={onClose}>
+                        <X size={19} aria-hidden />
+                    </button>
+                </header>
+                <div className="tienda-accion-cuerpo">{children}</div>
+            </div>
+        </div>,
+        document.body,
+    );
 }
 
 export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, descripcionVisible = pieza.descripcion_producto || pieza.descripcion, almacenId, onActualizar, onVer, soloLectura = false, compacta = false, onOcupado = null, ejecutor = null }) {
@@ -151,20 +184,33 @@ export default function AccionesRapidasDisponibilidad({ pedidoId, pieza, descrip
     };
     if (pieza.resolucion) return <p role="status" className="gelia-pedidos-atributo text-xs font-semibold theme-text-main m-0">{etiquetas[pieza.resolucion] || 'Decisión registrada'}</p>;
     if (soloLectura) return null;
-    return <div className={`grid gap-3 min-w-0 ${compacta ? 'tienda-acciones-compactas' : 'mt-3'}`} aria-label={`Acciones rápidas de ${descripcionVisible}`}>
-        {!accion ? compacta ? <MenuCompactoDisponibilidad descripcion={descripcionVisible} permiteConfirmar={pieza.estado_fisico !== 'sin_existencia'} onElegir={elegir} /> : <div className="flex flex-wrap gap-2">
-            {pieza.estado_fisico !== 'sin_existencia' && <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('confirmar')}><CheckCircle2 size={16} />Confirmar estado</button>}
-            <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('retirar')}><PackageMinus size={16} />Retirar</button>
-            <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('sustituir')}><ArrowRightLeft size={16} />Sustituir</button>
-        </div> : <div className="tienda-accion-formulario grid gap-3 rounded-xl border theme-border p-3">
+    const permiteConfirmar = pieza.estado_fisico !== 'sin_existencia';
+    const volver = () => setAccion('');
+    const formulario = accion && <div className="tienda-accion-formulario grid gap-3 rounded-xl border theme-border p-3">
             <p className="text-sm font-semibold m-0 theme-text-main">{accion === 'confirmar' ? 'Confirmar la pieza en el estado reportado con el cliente' : accion === 'retirar' ? 'Retirar esta pieza del pedido' : 'Solicitar otra pieza en su lugar'}</p>
             {accion === 'sustituir' && <><div className="tienda-sustitucion-modos" role="group" aria-label="Cómo indicar la pieza alternativa"><button type="button" aria-pressed={entrada === 'documento'} onClick={() => setEntrada('documento')}><FileImage size={16} aria-hidden />Por captura o PDF</button><button type="button" aria-pressed={entrada === 'catalogo'} onClick={() => setEntrada('catalogo')}><Search size={16} aria-hidden />Por SKU</button></div>
                 <p className="text-xs theme-text-muted m-0">{entrada === 'documento' ? 'Adjunta la captura o el PDF donde aparece la pieza que el cliente quiere en su lugar.' : 'Busca la pieza alternativa por SKU o nombre.'}</p>
                 {entrada === 'catalogo' ? <SelectorProducto almacenId={almacenId} incluirSinInventario value={producto?.id || ''} onChange={(_, p) => setProducto(p)} disabled={ocupado} /> : <GaleriaEvidenciasPedido compacto accionesCamara zonaPegado mensajeLimite="La sustitución admite una sola captura o PDF. Si necesitas más piezas, usa «Modificar pedido» más abajo." label="Captura de la pieza alternativa" maxArchivos={1} archivos={archivos} previews={previews} onChange={(a,p) => { setArchivos(a); setPreviews(p); }} onVer={onVer} disabled={ocupado} />}
                 <p className="text-xs theme-text-muted m-0">Quien revisó confirmará la disponibilidad de la alternativa. No cambia el pago ni confirma separación.</p>
             </>}
-            <div className="flex gap-2 flex-wrap"><button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={enviar}><Send size={16} />{ocupado ? 'Enviando…' : accion === 'confirmar' ? 'Confirmar estado' : accion === 'retirar' ? 'Confirmar retiro' : 'Solicitar sustitución'}</button><button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={() => setAccion('')}><X size={16} />Volver</button></div>
-        </div>}
-        {error && <p role="alert" className="tienda-alerta-disponibilidad text-sm m-0 p-3 rounded-xl">{error}</p>}
+            <div className="flex gap-2 flex-wrap"><button type="button" className={THEME_BTN_PRIMARY} disabled={ocupado} onClick={enviar}><Send size={16} />{ocupado ? 'Enviando…' : accion === 'confirmar' ? 'Confirmar estado' : accion === 'retirar' ? 'Confirmar retiro' : 'Solicitar sustitución'}</button><button type="button" className={GELIA_BTN_OUTLINE} disabled={ocupado} onClick={volver}><X size={16} />Volver</button></div>
+    </div>;
+    const aviso = error && <p role="alert" className="tienda-alerta-disponibilidad text-sm m-0 p-3 rounded-xl">{error}</p>;
+
+    return <div className={`grid gap-3 min-w-0 ${compacta ? 'tienda-acciones-compactas' : 'mt-3'}`} aria-label={`Acciones rápidas de ${descripcionVisible}`}>
+        {compacta ? <>
+            <MenuCompactoDisponibilidad descripcion={descripcionVisible} permiteConfirmar={permiteConfirmar} onElegir={elegir} />
+            {accion && <DialogoAccionDisponibilidad accion={accion} ocupado={ocupado} onClose={volver}>
+                {formulario}
+                {aviso}
+            </DialogoAccionDisponibilidad>}
+        </> : <>
+            {accion ? formulario : <div className="flex flex-wrap gap-2">
+                {permiteConfirmar && <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('confirmar')}><CheckCircle2 size={16} />Confirmar estado</button>}
+                <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('retirar')}><PackageMinus size={16} />Retirar</button>
+                <button type="button" className={GELIA_BTN_OUTLINE} onClick={() => elegir('sustituir')}><ArrowRightLeft size={16} />Sustituir</button>
+            </div>}
+            {aviso}
+        </>}
     </div>;
 }

@@ -20,6 +20,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
         return [
             'bultos_por_pedido' => ['nullable', 'array'],
             'bultos_por_pedido.*' => ['required', 'array', 'min:1', 'max:50'],
+            'bultos_por_pedido.*.*.tipo_bulto' => ['nullable', 'in:caja,bolsa'],
             'bultos_por_pedido.*.*.foto_bulto' => ['required', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'bultos_por_pedido.*.*.foto_ticket' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'bultos_por_pedido.*.*.usar_remision_pdf' => ['nullable', 'boolean'],
@@ -128,6 +129,7 @@ class MarcarEmpacadoPedidoBmaRequest extends FormRequest
                 }
                 $filas[] = [
                     'foto_bulto' => $fila['foto_bulto'] ?? null,
+                    'tipo_bulto' => $fila['tipo_bulto'] ?? null,
                     'foto_ticket' => $fila['foto_ticket'] ?? null,
                     'usar_remision_pdf' => filter_var(
                         $this->input('bultos_por_pedido.'.$pedidoId.'.'.count($filas).'.usar_remision_pdf'),

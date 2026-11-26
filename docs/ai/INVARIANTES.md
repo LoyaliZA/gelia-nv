@@ -11,4 +11,4 @@
 - Preservar snapshots, permisos e invalidación de [Direcciones](modulos/DIRECCIONES.md#reglas-que-no-se-rompen).
 - Separar resolución física/financiera y vencimientos de [Cancelación](modulos/CANCELACION_SEGUIMIENTO.md#reglas-que-no-se-rompen).
 - [verificado] No mostrar códigos de fichas internas en acciones de usuario: `AGENTS.md:47`.
-- [verificado] Conservar tema, fuente, acento y evidencia visual GELIA; una captura aislada no acredita integración: `GUIA_DISENO_GELIA.md:36`; [guía de evidencia](../../GUIA_EVIDENCIA_VISUAL.md).
+- [verificado] Conservar tema, fuente, acento y evidencia visual GELIA; una captura aislada no acredita integración: `DESIGN.md`; [guía de evidencia](../../GUIA_EVIDENCIA_VISUAL.md).

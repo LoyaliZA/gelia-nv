@@ -42,6 +42,7 @@ import {
     Monitor,
     Images,
     History,
+    Building2,
 } from 'lucide-react';
 
 import { ADMIN_MODULES, isAdminModuleAllowed, adminModuleHref } from './adminModules';
@@ -65,14 +66,17 @@ function compareNavByLabel(a, b) {
     });
 }
 
+/** Grupos cuyo orden de hijos es de trabajo, no alfabético (Inicio: el panel va primero). */
+const GRUPOS_ORDEN_EXPLICITO = new Set(['inicio', 'logistica', 'almacenes', 'gestion_pedidos']);
+
 /** Orden alfabético de hijos en cada grupo (no reordena las secciones principales del sidebar). */
 export function sortNavigationGroupChildren(nodes) {
     return (nodes || []).map((node) => {
         if (!node || node.type !== 'group' || !node.children?.length) {
             return node;
         }
-        // Almacenes y Gestión de pedidos declaran un orden de trabajo; el resto sigue alfabético.
-        const ordenExplicito = node.id === 'almacenes' || node.id === 'gestion_pedidos';
+        // Estos grupos declaran un orden de trabajo (flujo o prioridad); el resto sigue alfabético.
+        const ordenExplicito = GRUPOS_ORDEN_EXPLICITO.has(node.id);
         const hijos = ordenExplicito ? [...node.children] : [...node.children].sort(compareNavByLabel);
         const children = hijos.map((child) => {
             if (child?.type === 'group' && child.children?.length) {
@@ -100,8 +104,8 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
     const showLimpiezaArchivos = can('funciones.limpieza_archivos');
     const showTransacciones = can('funciones.transacciones');
 
-    const showGrupoReportes = showReportes || showReporteTraspasos || showVentas || showPagosPedidos;
-    const showHerramientas = showListados || showLimpieza || showEjercicioEscalonamiento || showAsistencia || showAvisos || showGastos || showLimpiezaArchivos || showTransacciones;
+    const showGrupoReportes = showReportes || showReporteTraspasos || showVentas || showPagosPedidos || showListados;
+    const showHerramientas = showLimpieza || showGastos || showLimpiezaArchivos || showTransacciones;
 
     const solicitudesChildren = [
         can('solicitudes.ver_listado') && {
@@ -120,6 +124,10 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('cancelaciones_cotizaciones.index', '/cancelaciones-cotizaciones'),
             active: (url) => url.startsWith('/cancelaciones-cotizaciones'),
         },
+    ].filter(Boolean);
+
+    // Mover mercancía entre sucursales y CEDIS es logística, no una solicitud comercial.
+    const traspasosChildren = [
         can('traspasos.ver_listado') && {
             type: 'link',
             id: 'traspasos',
@@ -253,9 +261,27 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('escalonamiento.index', '/escalonamiento'),
             active: (url) => url.startsWith('/escalonamiento'),
         },
+        showEjercicioEscalonamiento && {
+            type: 'link',
+            id: 'ejercicio_escalonamiento',
+            label: 'Ejercicio Escalonamiento',
+            icon: Calculator,
+            href: () => routeHref('ejercicio_escalonamiento.index', '/funciones/ejercicio-escalonamiento'),
+            active: (url) => url.startsWith('/funciones/ejercicio-escalonamiento'),
+        },
     ].filter(Boolean);
 
+    // Comercial reúne lo que atiende el vendedor: cartera, visitas, solicitudes y su plantilla de pedidos.
     const comercialChildren = [
+        ...solicitudesChildren,
+        can('plantilla_pedidos.ver') && {
+            type: 'link',
+            id: 'plantilla_bellaroma',
+            label: 'Plantilla Pedidos',
+            icon: FileSpreadsheet,
+            href: () => routeHref('plantilla_bellaroma.index', '/plantilla-bellaroma'),
+            active: (url) => url.startsWith('/plantilla-bellaroma'),
+        },
         can('mis_clientes.gestionar') && {
             type: 'link',
             id: 'mis_clientes',
@@ -283,6 +309,15 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('entregas.index', '/entregas/cotizador'),
             active: (url) => url.startsWith('/entregas') && !url.startsWith('/admin/mapa-logistico'),
         },
+        ...traspasosChildren,
+        gestionPedidosChildren.length > 0 && {
+            type: 'group',
+            id: 'gestion_pedidos',
+            label: 'Gestión de pedidos',
+            icon: Package,
+            children: gestionPedidosChildren,
+        },
+        // La configuración de zonas va al final: se usa menos que la operación diaria.
         can('entregas.configurar_zonas') && {
             type: 'link',
             id: 'mapa_logistico',
@@ -290,13 +325,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: Layers,
             href: () => routeHref('admin.mapa_logistico.index', '/admin/mapa-logistico'),
             active: (url) => url.startsWith('/admin/mapa-logistico'),
-        },
-        gestionPedidosChildren.length > 0 && {
-            type: 'group',
-            id: 'gestion_pedidos',
-            label: 'Gestión de pedidos',
-            icon: Package,
-            children: gestionPedidosChildren,
         },
     ].filter(Boolean);
 
@@ -379,32 +407,7 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
-    const operacionesChildren = [
-        solicitudesChildren.length > 0 && {
-            type: 'group',
-            id: 'solicitudes_group',
-            label: 'Solicitudes',
-            icon: ClipboardList,
-            children: solicitudesChildren,
-        },
-        comercialChildren.length > 0 && {
-            type: 'group',
-            id: 'comercial',
-            label: 'Comercial',
-            icon: User,
-            children: comercialChildren,
-        },
-    ].filter(Boolean);
-
     const herramientasChildren = [
-        showListados && {
-            type: 'link',
-            id: 'listados',
-            label: 'Listados',
-            icon: List,
-            href: () => routeHref('listados.index', '/funciones/listados'),
-            active: (url) => url.startsWith('/funciones/listados') || url.startsWith('/listados'),
-        },
         showLimpieza && {
             type: 'link',
             id: 'limpieza_clientes',
@@ -412,30 +415,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             icon: Database,
             href: () => routeHref('funciones.limpieza-clientes.index', '/funciones/limpieza-clientes'),
             active: (url) => url.startsWith('/funciones/limpieza-clientes'),
-        },
-        showEjercicioEscalonamiento && {
-            type: 'link',
-            id: 'ejercicio_escalonamiento',
-            label: 'Ejercicio Escalonamiento',
-            icon: Calculator,
-            href: () => routeHref('ejercicio_escalonamiento.index', '/funciones/ejercicio-escalonamiento'),
-            active: (url) => url.startsWith('/funciones/ejercicio-escalonamiento'),
-        },
-        showAsistencia && {
-            type: 'link',
-            id: 'asistencia',
-            label: 'Asistencia',
-            icon: Users,
-            href: () => routeHref('funciones.asistencia.index', '/funciones/asistencia'),
-            active: (url) => url.startsWith('/funciones/asistencia'),
-        },
-        showAvisos && {
-            type: 'link',
-            id: 'avisos',
-            label: 'Avisos Mercancía',
-            icon: FileSpreadsheet,
-            href: () => routeHref('funciones.avisos.index', '/funciones/avisos'),
-            active: (url) => url.startsWith('/funciones/avisos'),
         },
         showGastos && {
             type: 'link',
@@ -520,6 +499,14 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('almacenes.importaciones.index', '/almacenes/importaciones'),
             active: (url) => url.startsWith('/almacenes/importaciones'),
         },
+        showAvisos && {
+            type: 'link',
+            id: 'avisos',
+            label: 'Avisos Mercancía',
+            icon: FileSpreadsheet,
+            href: () => routeHref('funciones.avisos.index', '/funciones/avisos'),
+            active: (url) => url.startsWith('/funciones/avisos'),
+        },
         can('catalogos.gestionar') && {
             type: 'link',
             id: 'almacenes_config_catalogos',
@@ -576,22 +563,15 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
+    // Personas y activos de la empresa. Productos vive en Almacenes (misma ruta, ya no se duplica aquí).
     const gestionChildren = [
-        (can('gestion_interna.productos.ver') || can('almacenes.productos.ver') || can('catalogos.gestionar')) && {
+        showAsistencia && {
             type: 'link',
-            id: 'gestion_productos',
-            label: 'Productos',
-            icon: Package,
-            href: () => routeHref('gestion_interna.productos.index', '/gestion-interna/productos'),
-            active: (url) => url.startsWith('/gestion-interna/productos'),
-        },
-        can('plantilla_pedidos.ver') && {
-            type: 'link',
-            id: 'plantilla_bellaroma',
-            label: 'Plantilla Pedidos',
-            icon: FileSpreadsheet,
-            href: () => routeHref('plantilla_bellaroma.index', '/plantilla-bellaroma'),
-            active: (url) => url.startsWith('/plantilla-bellaroma'),
+            id: 'asistencia',
+            label: 'Asistencia',
+            icon: Users,
+            href: () => routeHref('funciones.asistencia.index', '/funciones/asistencia'),
+            active: (url) => url.startsWith('/funciones/asistencia'),
         },
         can('rh.ver') && {
             type: 'link',
@@ -670,8 +650,11 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
+    // Estas pantallas ya viven en su sección (Logística, Soporte) con el mismo permiso: no se repiten en Sistema.
+    const rutasYaUbicadas = new Set(['/admin/mapa-logistico', '/soporte/agente/tickets']);
+
     const sistemaAdminLinks = showAdminMenu
-        ? ADMIN_MODULES.map((item) => isAdminModuleAllowed(item, can) && {
+        ? ADMIN_MODULES.filter((item) => !rutasYaUbicadas.has(item.path)).map((item) => isAdminModuleAllowed(item, can) && {
             type: 'link',
             id: item.id,
             label: item.title,
@@ -694,152 +677,186 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
         },
     ].filter(Boolean);
 
-    return sortNavigationGroupChildren([
-        { type: 'header', id: 'accesos', label: 'Accesos' },
-        {
-            type: 'group',
-            id: 'inicio',
-            label: 'Inicio',
-            icon: Home,
-            defaultOpen: true,
-            children: [
-                {
-                    type: 'link',
-                    id: 'dashboard',
-                    label: 'Panel Principal',
-                    icon: LayoutDashboard,
-                    href: () => routeHref('dashboard', '/dashboard'),
-                    active: (url) => url === '/dashboard',
-                },
-                {
-                    type: 'link',
-                    id: 'mensajeria',
-                    label: 'Mensajería',
-                    icon: MessageCircle,
-                    href: () => routeHref('mensajeria.index', '/mensajeria'),
-                    active: (url) => url.startsWith('/mensajeria'),
-                },
-                geliaAiVisible && {
-                    type: 'link',
-                    id: 'gelia_ai',
-                    label: 'GELIA',
-                    icon: Bot,
-                    href: () => routeHref('gelia_ai.index', '/gelia-ai'),
-                    active: (url) => url.startsWith('/gelia-ai'),
-                },
-            ].filter(Boolean),
-        },
-        operacionesChildren.length > 0 && {
-            type: 'group',
-            id: 'operaciones',
-            label: 'Operaciones',
-            icon: Briefcase,
-            children: operacionesChildren,
-        },
-        logisticaChildren.length > 0 && {
-            type: 'group',
-            id: 'logistica',
-            label: 'Logística',
-            icon: Truck,
-            children: logisticaChildren,
-        },
-        puntoVentaChildren.length > 0 && {
-            type: 'group',
-            id: 'punto_venta',
-            label: 'Punto de venta',
-            icon: Store,
-            children: puntoVentaChildren,
-        },
-        finanzasChildren.length > 0 && {
-            type: 'group',
-            id: 'finanzas',
-            label: 'Finanzas',
-            icon: Landmark,
-            children: finanzasChildren,
-        },
-        showGrupoReportes && {
-            type: 'group',
-            id: 'reportes',
-            label: 'Reportes',
-            icon: BarChart3,
-            children: [
-                showVentas && {
-                    type: 'link',
-                    id: 'reportes_ventas',
-                    label: 'Ventas',
-                    icon: DollarSign,
-                    href: () => routeHref('reportes.ventas.index', '/reportes/ventas'),
-                    active: (url) => url.startsWith('/reportes/ventas'),
-                },
-                showReportes && {
-                    type: 'link',
-                    id: 'reportes_solicitudes',
-                    label: 'Solicitudes',
-                    icon: FileSpreadsheet,
-                    href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
-                    active: (url) => url.startsWith('/reportes/solicitudes'),
-                },
-                showReporteTraspasos && {
-                    type: 'link',
-                    id: 'reportes_traspasos_dia',
-                    label: 'Traspasos del día',
-                    icon: Package,
-                    href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
-                    active: (url) => url.startsWith('/reportes/traspasos-dia'),
-                },
-                showPagosPedidos && {
-                    type: 'link',
-                    id: 'reportes_pagos_pedidos',
-                    label: 'Pagos de pedidos',
-                    icon: DollarSign,
-                    href: () => routeHref('reportes.pagos_pedidos.index', '/reportes/pagos-pedidos'),
-                    active: (url) => url.startsWith('/reportes/pagos-pedidos'),
-                },
-            ].filter(Boolean),
-        },
-        showHerramientas && herramientasChildren.length > 0 && {
-            type: 'group',
-            id: 'herramientas',
-            label: 'Herramientas',
-            icon: Wrench,
-            children: herramientasChildren,
-        },
-        vinculacionesChildren.length > 0 && {
-            type: 'group',
-            id: 'vinculaciones',
-            label: 'Vinculaciones',
-            icon: Link2,
-            children: vinculacionesChildren,
-        },
-        gestionChildren.length > 0 && {
-            type: 'group',
-            id: 'gestion_interna',
-            label: 'Gestión Interna',
-            icon: Settings,
-            children: gestionChildren,
-        },
-        almacenesChildren.length > 0 && {
-            type: 'group',
-            id: 'almacenes',
-            label: 'Almacenes',
-            icon: Warehouse,
-            children: almacenesChildren,
-        },
-        soporteChildren.length > 0 && {
-            type: 'group',
-            id: 'soporte',
-            label: 'Soporte',
-            icon: LifeBuoy,
-            children: soporteChildren,
-        },
-        sistemaChildren.length > 0 && {
-            type: 'group',
-            id: 'sistema',
-            label: 'Sistema',
-            icon: Lock,
-            children: sistemaChildren,
-        },
-    ].filter(Boolean));
+    const grupoInicio = {
+        type: 'group',
+        id: 'inicio',
+        label: 'Inicio',
+        icon: Home,
+        defaultOpen: true,
+        children: [
+            {
+                type: 'link',
+                id: 'dashboard',
+                label: 'Panel Principal',
+                icon: LayoutDashboard,
+                href: () => routeHref('dashboard', '/dashboard'),
+                active: (url) => url === '/dashboard',
+            },
+            {
+                type: 'link',
+                id: 'mensajeria',
+                label: 'Mensajería',
+                icon: MessageCircle,
+                href: () => routeHref('mensajeria.index', '/mensajeria'),
+                active: (url) => url.startsWith('/mensajeria'),
+            },
+            geliaAiVisible && {
+                type: 'link',
+                id: 'gelia_ai',
+                label: 'GELIA',
+                icon: Bot,
+                href: () => routeHref('gelia_ai.index', '/gelia-ai'),
+                active: (url) => url.startsWith('/gelia-ai'),
+            },
+        ].filter(Boolean),
+    };
+
+    const grupoComercial = comercialChildren.length > 0 && {
+        type: 'group',
+        id: 'comercial',
+        label: 'Comercial',
+        icon: User,
+        children: comercialChildren,
+    };
+
+    const grupoLogistica = logisticaChildren.length > 0 && {
+        type: 'group',
+        id: 'logistica',
+        label: 'Logística',
+        icon: Truck,
+        children: logisticaChildren,
+    };
+
+    const grupoPuntoVenta = puntoVentaChildren.length > 0 && {
+        type: 'group',
+        id: 'punto_venta',
+        label: 'Punto de venta',
+        icon: Store,
+        children: puntoVentaChildren,
+    };
+
+    const grupoFinanzas = finanzasChildren.length > 0 && {
+        type: 'group',
+        id: 'finanzas',
+        label: 'Finanzas',
+        icon: Landmark,
+        children: finanzasChildren,
+    };
+
+    const grupoReportes = showGrupoReportes && {
+        type: 'group',
+        id: 'reportes',
+        label: 'Reportes',
+        icon: BarChart3,
+        children: [
+            showVentas && {
+                type: 'link',
+                id: 'reportes_ventas',
+                label: 'Ventas',
+                icon: DollarSign,
+                href: () => routeHref('reportes.ventas.index', '/reportes/ventas'),
+                active: (url) => url.startsWith('/reportes/ventas'),
+            },
+            showReportes && {
+                type: 'link',
+                id: 'reportes_solicitudes',
+                label: 'Solicitudes',
+                icon: FileSpreadsheet,
+                href: () => routeHref('reportes.solicitudes.index', '/reportes/solicitudes'),
+                active: (url) => url.startsWith('/reportes/solicitudes'),
+            },
+            showReporteTraspasos && {
+                type: 'link',
+                id: 'reportes_traspasos_dia',
+                label: 'Traspasos del día',
+                icon: Package,
+                href: () => routeHref('reportes.traspasos_dia.index', '/reportes/traspasos-dia'),
+                active: (url) => url.startsWith('/reportes/traspasos-dia'),
+            },
+            showPagosPedidos && {
+                type: 'link',
+                id: 'reportes_pagos_pedidos',
+                label: 'Pagos de pedidos',
+                icon: DollarSign,
+                href: () => routeHref('reportes.pagos_pedidos.index', '/reportes/pagos-pedidos'),
+                active: (url) => url.startsWith('/reportes/pagos-pedidos'),
+            },
+            showListados && {
+                type: 'link',
+                id: 'listados',
+                label: 'Listados',
+                icon: List,
+                href: () => routeHref('listados.index', '/funciones/listados'),
+                active: (url) => url.startsWith('/funciones/listados') || url.startsWith('/listados'),
+            },
+        ].filter(Boolean),
+    };
+
+    const grupoAlmacenes = almacenesChildren.length > 0 && {
+        type: 'group',
+        id: 'almacenes',
+        label: 'Almacenes',
+        icon: Warehouse,
+        children: almacenesChildren,
+    };
+
+    const grupoVinculaciones = vinculacionesChildren.length > 0 && {
+        type: 'group',
+        id: 'vinculaciones',
+        label: 'Vinculaciones',
+        icon: Link2,
+        children: vinculacionesChildren,
+    };
+
+    const grupoGestionInterna = gestionChildren.length > 0 && {
+        type: 'group',
+        id: 'gestion_interna',
+        label: 'Gestión Interna',
+        icon: Building2,
+        children: gestionChildren,
+    };
+
+    const grupoHerramientas = showHerramientas && herramientasChildren.length > 0 && {
+        type: 'group',
+        id: 'herramientas',
+        label: 'Herramientas',
+        icon: Wrench,
+        children: herramientasChildren,
+    };
+
+    const grupoSoporte = soporteChildren.length > 0 && {
+        type: 'group',
+        id: 'soporte',
+        label: 'Soporte',
+        icon: LifeBuoy,
+        children: soporteChildren,
+    };
+
+    const grupoSistema = sistemaChildren.length > 0 && {
+        type: 'group',
+        id: 'sistema',
+        label: 'Sistema',
+        icon: Lock,
+        children: sistemaChildren,
+    };
+
+    // Secciones del menú: cada encabezado solo aparece si el usuario ve al menos un grupo debajo.
+    const secciones = [
+        { id: 'principal', label: 'Principal', grupos: [grupoInicio] },
+        { id: 'operacion', label: 'Operación', grupos: [grupoComercial, grupoLogistica, grupoPuntoVenta] },
+        { id: 'finanzas', label: 'Finanzas y reportes', grupos: [grupoFinanzas, grupoReportes] },
+        { id: 'inventario', label: 'Inventario y catálogo', grupos: [grupoAlmacenes, grupoVinculaciones] },
+        { id: 'organizacion', label: 'Organización', grupos: [grupoGestionInterna] },
+        { id: 'sistema', label: 'Sistema', grupos: [grupoHerramientas, grupoSoporte, grupoSistema] },
+    ];
+
+    return sortNavigationGroupChildren(
+        secciones.flatMap(({ id, label, grupos }) => {
+            const visibles = grupos.filter(Boolean);
+            if (visibles.length === 0) return [];
+            return [{ type: 'header', id: `seccion_${id}`, label }, ...visibles];
+        })
+    );
 }
 
 /** IDs de grupos ancestros de la ruta activa (para expandir al navegar). */

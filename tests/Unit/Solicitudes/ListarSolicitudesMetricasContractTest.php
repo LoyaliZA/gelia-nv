@@ -23,4 +23,11 @@ class ListarSolicitudesMetricasContractTest extends TestCase
         $this->assertTrue($ref->isPublic());
         $this->assertSame(1, $ref->getNumberOfParameters());
     }
+
+    public function test_aislar_consulta_es_metodo_publico(): void
+    {
+        $ref = new \ReflectionMethod(ListarSolicitudesService::class, 'aislarConsulta');
+        $this->assertTrue($ref->isPublic());
+        $this->assertSame(2, $ref->getNumberOfParameters());
+    }
 }

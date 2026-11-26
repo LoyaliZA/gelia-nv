@@ -54,6 +54,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
 
     Route::middleware(['can:gestion_interna.comisiones_empaque.ver'])->prefix('comisiones-empaque')->name('comisiones_empaque.')->group(function () {
         Route::get('/', [ComisionesEmpaqueController::class, 'index'])->name('index');
+        Route::get('/sincronizacion/estado', [ComisionesEmpaqueController::class, 'estadoSincronizacion'])->name('sincronizacion.estado');
         Route::post('/sincronizar', [ComisionesEmpaqueController::class, 'sincronizar'])->name('sincronizar');
         Route::post('/manual', [ComisionesEmpaqueController::class, 'manual'])->name('manual');
         Route::post('/carga/revisar', [ComisionesEmpaqueController::class, 'revisarCarga'])->name('carga.revisar');
@@ -63,6 +64,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::get('/unidades/{unidad}/pedido', [ComisionesEmpaqueController::class, 'pedidoInformativo'])->name('pedido.informativo');
         Route::post('/unidades/{unidad}/revisar', [ComisionesEmpaqueController::class, 'revisar'])->name('revisar');
         Route::post('/unidades/{unidad}/clasificar', [ComisionesEmpaqueController::class, 'clasificar'])->name('clasificar');
+        Route::post('/unidades/{unidad}/conciliar', [ComisionesEmpaqueController::class, 'conciliar'])->name('conciliar');
         Route::post('/unidades/{unidad}/decision', [ComisionesEmpaqueController::class, 'decision'])->name('decision');
         Route::post('/unidades/{unidad}/resolver', [ComisionesEmpaqueController::class, 'resolver'])->name('resolver');
         Route::put('/equipo', [ComisionesEmpaqueController::class, 'guardarEquipo'])->name('equipo');
@@ -81,7 +83,9 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::post('/configuracion/tarifas', [ComisionesEmpaqueController::class, 'guardarTarifa'])->name('tarifas.store');
         Route::post('/configuracion/repartos', [ComisionesEmpaqueController::class, 'guardarReparto'])->name('repartos.store');
         Route::get('/configuracion/usuarios', [ComisionesEmpaqueController::class, 'buscarUsuarios'])->name('usuarios');
+        Route::get('/exportar/reporte', [ComisionesEmpaqueController::class, 'exportarReporte'])->name('exportar.reporte');
         Route::get('/exportar/acumulado', [ComisionesEmpaqueController::class, 'exportarAcumulado'])->name('exportar.acumulado');
+        Route::get('/exportar/productividad', [ComisionesEmpaqueController::class, 'exportarProductividad'])->name('exportar.productividad');
         Route::get('/exportar/tipos', [ComisionesEmpaqueController::class, 'exportarTipos'])->name('exportar.tipos');
         Route::get('/exportar/cortes/{corte}', [ComisionesEmpaqueController::class, 'exportarCorte'])->name('exportar.corte');
         Route::get('/exportar/cortes/{corte}/reparto', [ComisionesEmpaqueController::class, 'exportarReparto'])->name('exportar.reparto');

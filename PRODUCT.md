@@ -1,6 +1,5 @@
 # GELIA — contexto de producto
 
-<!-- impeccable:product-schema 1 -->
 
 Contexto basado en las decisiones del usuario y en la inspección del repositorio. Fecha de actualización: 4 de noviembre de 2026. Este archivo orienta el diseño; no acredita implementaciones, pruebas ni despliegues.
 
@@ -96,9 +95,9 @@ Siguen sin regla aprobada: momento exacto del vencimiento de crédito, duración
 
 ## Brand Commitments
 
-Dirección visual compartida: leer `GUIA_DISENO_GELIA.md` antes de elegir o aplicar skills de diseño. Contiene las referencias de Punto de venta, solicitudes, facturas, cancelaciones y resguardos, junto con el modal Registrar pedido revisado con el usuario el 2 de noviembre de 2026. Las skills aportan técnicas dentro de esa dirección; Impeccable es opcional. La coherencia se comprueba en la composición completa, no solo en el uso de tokens o la ausencia de desbordamientos.
+Dirección visual: leer `DESIGN.md` (vista de referencia: Listados). Prioridad del usuario: comprensión y eficiencia; lo gráfico (icono, color, forma) antes que el texto.
 
-Nombre de producto: GELIA. Lenguaje operativo en español, directo y concreto. Prioridad explícita del usuario: comprensión, accesibilidad y eficiencia por encima de decoración. El rediseño puede sustituir funcionamiento incompatible; conservar piezas exige que encajen en el proceso requerido.
+Nombre de producto: GELIA. Lenguaje operativo en español, directo y concreto.  El rediseño puede sustituir funcionamiento incompatible; conservar piezas exige que encajen en el proceso requerido.
 
 ## Evidence on Hand
 
@@ -108,7 +107,6 @@ Nombre de producto: GELIA. Lenguaje operativo en español, directo y concreto. P
 - Backend del módulo: `app/Services/ControlPedidos`, `app/Models/ControlPedidos` y `app/Support/ControlPedidos`.
 - Interfaces: `resources/js/Pages/ControlPedidos`; los vínculos de PDV deben inspeccionarse en su módulo correspondiente.
 - Sistema visual: `resources/css/gelia`, `resources/js/utils/geliaTheme.js`, componentes GELIA y `docs/style-system`. Comprobar imports y valores efectivos antes de proponer estilos.
-- Reglas y skills de Cursor: `.cursor/rules` y `.cursor/skills`. Leer las instrucciones reales; su presencia no demuestra que se hayan ejecutado.
 - El repositorio declara Anime.js y Motion. En esta revisión Anime.js 4.4.1 está instalado; comprobar vigencia antes de implementar movimiento.
 
 No inventar métricas de ahorro, evidencia de uso, aprobaciones, pruebas realizadas ni entregas confirmadas.

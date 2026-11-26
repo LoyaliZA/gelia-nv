@@ -19,7 +19,8 @@
     }
 }
 
-.dashboard-widget__header-title {
+.dashboard-widget__header-title,
+.dashboard-widget-mobile__title {
     font-weight: 600;
     text-transform: none;
     letter-spacing: -0.01em;
@@ -38,6 +39,7 @@
     padding: 0.5rem 0.625rem;
     border-radius: 0.75rem;
     min-width: 0;
+    min-height: 44px;
     transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -94,7 +96,7 @@
 
 .dashboard-widget-empty {
     text-align: center;
-    padding: 1.5rem 0.5rem;
+    padding: 0.5rem 0.25rem;
     font-size: 0.75rem;
     font-style: italic;
     opacity: 0.75;
@@ -187,9 +189,6 @@
 
 .dashboard-panel-shell__title {
     font-size: clamp(0.875rem, 0.65rem + 0.8cqw, 1.0625rem);
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: -0.01em;
     line-height: 1.25;
 }
 
@@ -200,9 +199,7 @@
 }
 
 .dashboard-panel-mobile__title {
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.025em;
 }
 
 .dashboard-panel-mobile__label,
@@ -215,7 +212,7 @@
 }
 
 .dashboard-panel-empty {
-    padding: 1.5rem 1rem;
+    padding: 0.75rem 1rem;
     border-radius: 0.75rem;
     border-style: dashed;
     text-align: center;
@@ -228,14 +225,13 @@
 
 .dashboard-panel-cards {
     --card-min-w: 8.5rem;
-    --card-max-w: 13rem;
     --card-gap: 0.625rem;
 }
 
 .dashboard-module-card {
     border-width: 1px;
     border-radius: 1rem;
-    min-height: 7rem;
+    min-height: 6.25rem;
     padding: 0.875rem;
 }
 
@@ -255,7 +251,7 @@
 }
 
 .dashboard-module-card:hover {
-    box-shadow: 0 2px 12px -4px color-mix(in srgb, var(--color-primario) 14%, transparent);
+    box-shadow: 0 2px 12px -4px color-mix(in srgb, var(--dashboard-modulo, var(--color-primario)) 18%, transparent);
 }
 
 .dashboard-module-card:focus-visible {

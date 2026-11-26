@@ -5,6 +5,7 @@ import {
     GELIA_BTN_OUTLINE,
     GELIA_SEGMENT_TABS_SCROLL,
     GELIA_SEGMENT_TABS_TRACK_COMPACT,
+    THEME_BTN_PRIMARY,
 } from '../../utils/geliaTheme';
 
 const PRESET_OPTIONS = [
@@ -77,7 +78,11 @@ export default function DashboardToolbar({
                         Organizar
                     </button>
                 )}
-                <button type="button" onClick={onConfigure} className={`${GELIA_BTN_OUTLINE} min-h-[44px]`}>
+                <button
+                    type="button"
+                    onClick={onConfigure}
+                    className={`${THEME_BTN_PRIMARY} theme-btn-primary--compact min-h-[44px]`}
+                >
                     <Settings2 className="w-3.5 h-3.5 shrink-0" aria-hidden />
                     Configurar
                 </button>

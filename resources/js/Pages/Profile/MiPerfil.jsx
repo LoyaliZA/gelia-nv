@@ -12,6 +12,7 @@ import GeliaLoader from '../../Components/GeliaLoader';
 import GeliaLogo from '../../Components/GeliaLogo';
 import { geliaCardClass } from '../../utils/geliaTheme';
 import PasskeysSection from './Partials/PasskeysSection';
+import { abrirAjustes } from '../../Components/Ajustes/ajustesEvents';
 import {
     compressImageToWebp,
     validateImageSource,
@@ -949,16 +950,18 @@ export default function MiPerfil({ perfilUsuario = {}, sesiones = [], sesiones_s
                         </h2>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <Link
-                            href={profileRoute('profile.preferencias', '/perfil/preferencias')}
-                            className="flex items-center gap-4 p-5 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-all outline-none group"
+                        <button
+                            type="button"
+                            onClick={() => abrirAjustes()}
+                            aria-haspopup="dialog"
+                            className="flex items-center gap-4 p-5 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-all outline-none group text-left"
                         >
                             <Settings2 className="w-8 h-8 shrink-0 group-hover:scale-110 transition-transform" style={{ color: 'var(--color-primario)' }} />
                             <div>
-                                <span className="text-sm font-black theme-text-main uppercase tracking-widest block">Preferencias</span>
+                                <span className="text-sm font-black theme-text-main uppercase tracking-widest block">Ajustes</span>
                                 <span className="text-[10px] font-bold theme-text-muted">Apariencia, alertas y navegación</span>
                             </div>
-                        </Link>
+                        </button>
                         <Link
                             href={profileRoute('profile.novedades', '/perfil/novedades')}
                             className="flex items-center gap-4 p-5 rounded-2xl theme-element border theme-border hover:border-[var(--color-primario)] transition-all outline-none group"

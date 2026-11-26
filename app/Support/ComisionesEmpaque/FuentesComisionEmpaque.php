@@ -35,6 +35,8 @@ class FuentesComisionEmpaque
 
     public const TIENDA_CUMPLIMIENTO = 'tienda_cumplimiento';
 
+    public const TIENDA_MUNICIPAL = 'tienda_municipal';
+
     public const MANUAL = 'manual';
 
     /** @return list<array{flujo: string, prevalece: string}> */

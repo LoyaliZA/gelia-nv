@@ -1,10 +1,11 @@
 import React from 'react';
-import { Briefcase, Clock, AlertTriangle } from 'lucide-react';
+import { Briefcase, Clock, AlertTriangle, Check } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import DashboardQueueRow from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { formatoDeduccionEntera, formatoMoneda, nombreCompletoColaborador } from '../../../utils/formatoMoneda';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetRh({ rh_widget = {}, variant = 'desktop' }) {
     const pendientesHe = rh_widget.pendientes_he ?? rh_widget.pendientes ?? 0;
@@ -22,7 +23,7 @@ export default function WidgetRh({ rh_widget = {}, variant = 'desktop' }) {
             {totalPendientes} pendientes
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     const summary = hayPendientes ? (
@@ -45,6 +46,7 @@ export default function WidgetRh({ rh_widget = {}, variant = 'desktop' }) {
             variant={variant}
             title="Recursos humanos"
             icon={Briefcase}
+            tono={DASHBOARD_WIDGET_TONO.rh}
             href={route('rh.index')}
             ctaLabel="Abrir módulo RH"
             minimalCount={totalPendientes}

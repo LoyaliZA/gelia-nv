@@ -1,6 +1,8 @@
 <?php
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Jobs\Tiendanube\Precios\RecuperarPrecioEjecucionesJob;
+use App\Services\ComisionesEmpaque\SincronizarComisionesEmpaqueService;
 use App\Services\ControlPedidos\PreparacionTiendaConfig;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -12,6 +14,10 @@ use Illuminate\Support\Facades\Schema;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+Schedule::job(new ProcesarCambiosComisionesEmpaque)->everyMinute()->withoutOverlapping();
+Schedule::call(fn () => app(SincronizarComisionesEmpaqueService::class)->ejecutar(null))
+    ->name('comisiones-empaque:reconciliar')->dailyAt('03:15')->withoutOverlapping();
 
 Schedule::command('reportes:limpiar-exportaciones-pagos-pedidos')->dailyAt('03:30');
 

@@ -52,7 +52,12 @@ it('abre el menú real para una pieza con detalle y un faltante', async () => {
     const retirar = host.querySelector('[role="menuitem"]');
     await act(() => retirar.click());
     expect(opciones()).toEqual([]);
-    expect(host.textContent).toContain('Confirmar retiro');
+    const dialogo = document.querySelector('.tienda-accion-dialogo');
+    expect(dialogo.textContent).toContain('Confirmar retiro');
+    expect(host.contains(dialogo)).toBe(false);
+    await act(() => [...dialogo.querySelectorAll('button')].find(boton => boton.textContent === 'Volver').click());
+    expect(document.querySelector('.tienda-accion-dialogo')).toBeNull();
+    expect(document.activeElement).toBe(faltante);
 });
 
 it('identifica el envío municipal y nombra la espera sin hablar de aceptación del cliente', async () => {

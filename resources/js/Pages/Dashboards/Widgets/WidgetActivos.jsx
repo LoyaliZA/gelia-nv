@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, AlertTriangle, Clock, Wrench } from 'lucide-react';
+import { AlertTriangle, Clock, Wrench, Check } from 'lucide-react';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import DashboardQueueRow from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
@@ -29,7 +30,7 @@ export default function WidgetActivos({ alertas_resumen = {}, alertas_destacadas
             {total} alertas
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Sin alertas</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Sin alertas</DashboardWidgetStatus>
     );
 
     const summary =
@@ -52,7 +53,8 @@ export default function WidgetActivos({ alertas_resumen = {}, alertas_destacadas
         <DashboardAdaptiveWidget
             variant={variant}
             title="Activos"
-            icon={Package}
+            icon={Wrench}
+            tono={DASHBOARD_WIDGET_TONO.activos}
             href={route('activos.index')}
             ctaLabel="Explorar activos"
             minimalCount={total}

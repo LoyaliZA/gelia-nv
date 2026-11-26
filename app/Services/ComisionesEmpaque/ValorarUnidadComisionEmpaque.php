@@ -63,7 +63,7 @@ class ValorarUnidadComisionEmpaque
             return $unidad;
         }
 
-        if ($unidad->origen_registro === 'manual'
+        if (in_array($unidad->origen_registro, ['manual', 'carga'], true)
             && $unidad->ancla_decision === 'excluir'
             && $unidad->pedido_bma_id
             && $unidad->ancla_huella) {
@@ -98,6 +98,18 @@ class ValorarUnidadComisionEmpaque
             return $unidad;
         }
 
+        if (($unidad->logistica['revisar_desglose'] ?? false) && ! in_array($unidad->situacion, self::CONGELADAS, true)) {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::PENDIENTE_CLASIFICACION, 'cantidad_comisionable' => null, 'importe_centavos' => null]);
+
+            return $unidad;
+        }
+
+        $conciliacion = $unidad->conciliacionVigente();
+        if (! in_array($unidad->situacion, self::CONGELADAS, true) && ($conciliacion['decision'] ?? null) === 'excluir') {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::EXCLUIDA, 'cantidad_comisionable' => 0, 'importe_centavos' => 0]);
+
+            return $unidad;
+        }
         $unidad->loadMissing('lineas');
         $suma = (int) $unidad->lineas->sum('cantidad');
         $congelada = in_array($unidad->situacion, self::CONGELADAS, true);
@@ -126,6 +138,14 @@ class ValorarUnidadComisionEmpaque
             return $unidad;
         }
 
+        if (! $congelada && (($conciliacion['decision'] ?? null) === 'pendiente'
+                || ($unidad->conciliacion && ! $conciliacion)
+                || (! $conciliacion && ($unidad->logistica['motivo_fuente'] ?? null) === 'sin_informacion'))) {
+            $unidad->update(['situacion' => UnidadComisionEmpaque::PENDIENTE_CONCILIACION, 'cantidad_comisionable' => null, 'importe_centavos' => null]);
+
+            return $unidad;
+        }
+
         $tarifa = TarifaComisionEmpaque::vigente((int) $unidad->area_id, $unidad->empacado_at);
         if (! $tarifa) {
             $unidad->importe_centavos = null;
@@ -146,18 +166,25 @@ class ValorarUnidadComisionEmpaque
         return $unidad;
     }
 
+    public const MOTIVO_TARDIA = 'El empaque llegó después del cierre. El supervisor debe definir el reparto antes de reconocer la comisión mediante un ajuste vinculado a esta unidad.';
+
     public function marcarTardiaSiCorresponde(UnidadComisionEmpaque $unidad): void
     {
-        $cubre = CorteComisionEmpaque::query()
+        $corte = CorteComisionEmpaque::query()
             ->where('area_id', $unidad->area_id)
             ->where('estado', CorteComisionEmpaque::CONFIRMADO)
             ->where('limite_desde', '<=', $unidad->empacado_at)
             ->where('limite_hasta', '>=', $unidad->empacado_at)
-            ->exists();
+            ->first(['id', 'folio']);
 
-        if ($cubre) {
+        if ($corte) {
             $unidad->incorporacion_tardia = true;
             $unidad->save();
+            $this->abrirIncidencia($unidad, 'incorporacion_tardia', null, self::MOTIVO_TARDIA, [
+                'huella' => $unidad->huella,
+                'corte_original_id' => $corte->id,
+                'folio_corte_original' => $corte->folio,
+            ]);
         }
     }
 

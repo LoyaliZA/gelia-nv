@@ -307,6 +307,8 @@ final class VisibilidadTareaPreparacion
             'resguardo_pdv_id' => $apartado->resguardo_pdv_id,
             'entrega_pdv_id' => $apartado->entrega_pdv_id,
             'bultos_salida' => $apartado->bultos_salida,
+            'cajas_empaque' => $apartado->cajas_empaque,
+            'bolsas_empaque' => $apartado->bolsas_empaque,
             'empacado_at' => $apartado->empacado_at?->toIso8601String(),
             'despachada_at' => $apartado->despachada_at?->toIso8601String(),
             'vendedor_id' => $tarea->pedido?->vendedor_id,

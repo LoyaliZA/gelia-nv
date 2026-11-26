@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, Clock } from 'lucide-react';
+import { ClipboardList, Clock, Check } from 'lucide-react';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
@@ -22,14 +23,15 @@ export default function WidgetPedidosBma({ metricas = {}, variant = 'desktop' })
             {atascados} en cola
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     return (
         <DashboardAdaptiveWidget
             variant={variant}
             title="Pedidos"
-            icon={Package}
+            icon={ClipboardList}
+            tono={DASHBOARD_WIDGET_TONO.pedidos}
             href={route('control_pedidos.index')}
             ctaLabel="Ver pedidos"
             minimalCount={atascados}

@@ -1,17 +1,23 @@
 // @vitest-environment happy-dom
 import React, { act, useRef, useState } from 'react';
+import axios from 'axios';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import BuscarUsuario from '../Pages/GestionInterna/ComisionesEmpaque/BuscarUsuario';
-import { Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import { Index as ComisionesEmpaque } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import { Preparar, Pagos } from '../Pages/GestionInterna/ComisionesEmpaque/Liquidaciones';
+import { Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Empaques';
 import Equipo from '../Pages/GestionInterna/ComisionesEmpaque/Equipo';
 import Periodos from '../Pages/GestionInterna/ComisionesEmpaque/Periodos';
+import { precargarComisiones } from '../Pages/GestionInterna/ComisionesEmpaque/compartido';
 
-const { guardar, navegar } = vi.hoisted(() => ({ guardar: vi.fn(), navegar: vi.fn() }));
+const { guardar, navegar, recargar, precargar, invalidar } = vi.hoisted(() => ({
+    guardar: vi.fn(), navegar: vi.fn(), recargar: vi.fn(), precargar: vi.fn(), invalidar: vi.fn(),
+}));
 vi.mock('../Layouts/AppLayout', () => ({ default: ({ children }) => children }));
 vi.mock('@inertiajs/react', () => ({
     Head: () => null, usePage: () => ({ props: {} }),
-    router: { get: navegar },
+    router: { get: navegar, reload: recargar, prefetch: precargar, flushByCacheTags: invalidar },
     useForm: (inicial) => {
         const base = useRef(inicial);
         const transformar = useRef((data) => data);
@@ -32,7 +38,7 @@ beforeEach(() => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    guardar.mockClear(); navegar.mockClear();
+    guardar.mockClear(); navegar.mockClear(); recargar.mockClear(); precargar.mockClear(); invalidar.mockClear();
 });
 afterEach(async () => {
     await act(() => root.unmount());
@@ -101,6 +107,25 @@ it('guarda porcentajes permanentes distintos sobre un mismo fondo', async () => 
     expect(guardar.mock.calls[0][1]).not.toHaveProperty('desde');
 });
 
+it('limita cada porcentaje al saldo del equipo y permite completarlo desde el botón', async () => {
+    const lineas = [
+        { user_id: 1, nombre: 'Ana', porcentaje: '45' },
+        { user_id: 2, nombre: 'Beatriz', porcentaje: '40' },
+        { user_id: 3, nombre: 'Carlos', porcentaje: '10' },
+    ];
+    await render(<Equipo areaId={1} equipo={{ area: 'Tienda', lineas }} puede={{ configurar: true }} />);
+    await act(() => boton('Ajustar equipo y porcentajes').click());
+    const campos = container.querySelectorAll('input[type="number"]');
+    expect(campos[2].max).toBe('15.00');
+    await escribir(campos[2], '60');
+    expect(campos[2].value).toBe('15.00');
+    await escribir(campos[0], '35');
+    expect(campos[2].max).toBe('25.00');
+    await act(() => container.querySelector('[aria-label="Usar máximo disponible para Carlos"]').click());
+    expect(campos[2].value).toBe('25.00');
+    expect(container.querySelector('[role="status"]').textContent).toContain('100.00% asignado');
+});
+
 it('confirma el corte con la petición transformada sin encadenar el envío', async () => {
     await render(<Preparar areas={[{ id: 1, nombre: 'CEDIS' }]} puede={{ confirmar: true }} filtros={{ area_id: '1', limite_desde: '2026-10-01', limite_hasta: '2026-10-13' }} preview={{ cajas: 100, importe: '1000.00', hash: 'calculo-revisado', unidades: [{ id: 1, cantidad: 100 }], tramos: [], tipos: [], errores: [] }} />);
     await act(() => boton('Confirmar corte').click());
@@ -133,9 +158,198 @@ it('abre el reporte sin una captura manual permanente y permite revisar un empaq
     await act(() => boton('Revisar').click());
     expect(document.body.textContent).toContain('Revisión del empaque');
     expect(document.body.textContent).toContain('Cliente pendiente');
-    expect(document.body.textContent).toContain('El desglose debe sumar 4 cajas');
+    expect(document.body.textContent).toContain('El desglose debe sumar 4 piezas');
     expect(document.body.textContent).toContain('Agregar tipo de caja');
     expect(document.body.textContent).not.toContain('Abrir pedido de origen');
     await act(() => container.querySelector('button[aria-label="Por revisar"]').click());
     expect(navegar.mock.calls[0][1]).toMatchObject({ area_id: 1, tab: 'acumulado', vista: 'pendientes' });
+});
+
+it('conserva el área y el rango seleccionados al abrir Liquidaciones o Productividad', async () => {
+    await render(<ComisionesEmpaque tab="acumulado" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }, { id: 2, nombre: 'Tienda' }]}
+        filtros={{ area_id: 2, periodo_id: 4, desde: '2026-11-01', hasta: '2026-11-15' }}
+        periodos={[{ id: 4, area_id: 2, nombre: 'Primera quincena', desde: '2026-11-01', hasta: '2026-11-15' }]} />);
+    const contexto = { area_id: 2, periodo_id: 4, desde: '2026-11-01', hasta: '2026-11-15' };
+    await act(() => boton('Liquidaciones').click());
+    expect(navegar.mock.calls[0][1]).toMatchObject({ ...contexto, tab: 'periodos' });
+    await act(() => boton('Productividad').click());
+    expect(navegar.mock.calls[1][1]).toMatchObject({ ...contexto, tab: 'productividad' });
+    for (const visita of navegar.mock.calls) {
+        expect(visita[2]).toMatchObject({ showProgress: false, preserveState: true, preserveScroll: true });
+    }
+});
+
+
+it('difiere datos nuevos mientras hay una captura y refresca solo el reporte al cerrarla', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(axios, 'get').mockResolvedValue({ data: { estado: 'ok', revision: 'nueva' } });
+        await render(<ComisionesEmpaque tab="acumulado" puede={{ capturar: true }}
+            areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, vista: 'pendientes', buscar: 'REC' }}
+            sincronizacion={{ estado: 'ok', revision: 'anterior' }} />);
+        await act(() => boton('Registrar empaque').click());
+        const cliente = [...container.querySelectorAll('form label')].find((etiqueta) => etiqueta.textContent.trim() === 'Cliente' && etiqueta.querySelector('input[required]')).querySelector('input');
+        await escribir(cliente, 'Captura en curso');
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(container.textContent).toContain('Hay datos nuevos');
+        expect(container.textContent).toContain('Se conserva la revisión actual');
+        expect(container.textContent).not.toMatch(/\b(tú|tienes)\b/i);
+        expect(cliente.value).toBe('Captura en curso');
+        expect(recargar).not.toHaveBeenCalled();
+        expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('sincronizacion.estado'), expect.objectContaining({ params: { area_id: 1 } }));
+
+        await act(() => boton('Ocultar captura').click());
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(recargar).toHaveBeenCalledWith(expect.objectContaining({
+            only: ['acumulado', 'totales', 'resumen', 'sincronizacion'], preserveState: true, preserveScroll: true, showProgress: false,
+        }));
+        expect(container.querySelector('[data-busqueda-live]').value).toBe('REC');
+        expect(container.querySelector('[aria-label="Por revisar"]').getAttribute('aria-pressed')).toBe('true');
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('aplica Más filtros y recibe nuevos empaques sin desmontar la superficie', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(axios, 'get').mockResolvedValue({ data: { estado: 'ok', revision: 'r2' } });
+        const inicial = {
+            tab: 'acumulado', puede: { configurar: true }, areas: [{ id: 1, nombre: 'CEDIS' }],
+            filtros: { area_id: 1 }, sincronizacion: { estado: 'ok', revision: 'r1' },
+        };
+        await render(<ComisionesEmpaque {...inicial} />);
+        const titulo = container.querySelector('h1');
+        const encabezado = container.querySelector('header');
+        const panel = container.querySelector('.theme-card--solid');
+        const form = container.querySelector('form');
+        const detalles = form.querySelector('details');
+        await act(() => { detalles.open = true; });
+        await escribir(detalles.querySelector('input'), 'Cliente nuevo');
+        await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+        expect(navegar.mock.lastCall[1]).toMatchObject({ tab: 'acumulado', cliente: 'Cliente nuevo', area_id: 1 });
+        expect(navegar.mock.lastCall[2]).toMatchObject({ showProgress: false, preserveState: true, preserveScroll: true });
+        const payload = { ...inicial, filtros: { area_id: 1, cliente: 'Cliente nuevo' } };
+        await render(<ComisionesEmpaque {...payload} />);
+        await act(() => navegar.mock.lastCall[2].onSuccess({ props: payload }));
+        expect(detalles.open).toBe(false);
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(recargar).toHaveBeenCalledWith(expect.objectContaining({ showProgress: false, only: ['acumulado', 'totales', 'resumen', 'sincronizacion'] }));
+        await render(<ComisionesEmpaque {...payload} sincronizacion={{ estado: 'ok', revision: 'r2' }}
+            acumulado={{ data: [{ id: 1, cliente: 'Cliente nuevo', situacion: 'elegible', lineas: [] }] }} />);
+        expect(container.textContent).toContain('Cliente nuevo');
+        expect(container.querySelector('h1')).toBe(titulo);
+        expect(container.querySelector('header')).toBe(encabezado);
+        expect(container.querySelector('.theme-card--solid')).toBe(panel);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('ignora una precarga en curso al navegar a otra sección', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        await render(<ComisionesEmpaque tab="acumulado" puede={{ configurar: true }}
+            areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1 }}
+            sincronizacion={{ estado: 'ok', revision: 'r1', contexto: 'usuario-cedis' }} />);
+        await act(async () => vi.advanceTimersByTimeAsync(700));
+        expect(precargar).toHaveBeenCalledTimes(2);
+        const periodos = precargar.mock.calls.find(([, opciones]) => opciones.data.tab === 'periodos')[1];
+        expect(periodos).toMatchObject({ showProgress: false, data: { area_id: 1, tab: 'periodos' } });
+        await act(() => boton('Liquidaciones').click());
+        expect(navegar).not.toHaveBeenCalled();
+        await act(() => boton('Configuración').click());
+        expect(navegar.mock.lastCall[1].tab).toBe('configuracion');
+        await act(() => {
+            periodos.onPrefetched({ status: 200 });
+            precargar.mock.calls.find(([, opciones]) => opciones.data.tab === 'productividad')[1].onPrefetched({ status: 200 });
+        });
+        expect(navegar).toHaveBeenCalledTimes(1);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('reanuda la precarga bajo demanda después de una espera agotada', () => {
+    vi.useFakeTimers();
+    try {
+        const parametros = { tab: 'productividad', area_id: 1 };
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(5000);
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(30_000);
+        expect(precargar).toHaveBeenCalledTimes(1);
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(2);
+        precargar.mock.lastCall[1].onPrefetched({ status: 200 });
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('conserva el cálculo revisado hasta solicitar otra vista previa', async () => {
+    const filtros = { area_id: '1', limite_desde: '2026-10-01', limite_hasta: '2026-10-13' };
+    const previo = { cajas: 1, importe: '10.00', hash: 'revisado', unidades: [{ id: 1 }], tramos: [], tipos: [], errores: [] };
+    const nuevo = { ...previo, cajas: 2, importe: '20.00', hash: 'nuevo' };
+    const props = { areas: [{ id: 1, nombre: 'CEDIS' }], filtros, puede: { confirmar: true } };
+    await render(<Preparar {...props} preview={previo} />);
+    await render(<Preparar {...props} preview={nuevo} />);
+    expect(container.textContent).toContain('$10.00');
+    const form = container.querySelector('form');
+    await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await act(() => navegar.mock.lastCall[2].onSuccess({ props: { preview: nuevo } }));
+    expect(container.textContent).toContain('$20.00');
+});
+
+const enNav = (aria, texto) => [...container.querySelector(`[aria-label="${aria}"]`).querySelectorAll('button')].find((b) => b.textContent.trim() === texto);
+
+it('muestra el cierre de periodo como recorrido numerado con icono y aria-current', async () => {
+    await render(<ComisionesEmpaque tab="periodos" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1 }} />);
+    const cierre = container.querySelector('[aria-label="Cierre de periodo"]');
+    expect(['Periodos', 'Preparar corte', 'Por pagar', 'Historial'].every((nombre) => {
+        const item = enNav('Cierre de periodo', nombre);
+        return item && item.querySelector('svg');
+    })).toBe(true);
+    expect(enNav('Cierre de periodo', 'Periodos').getAttribute('aria-current')).toBe('page');
+    expect(enNav('Cierre de periodo', 'Preparar corte').getAttribute('aria-disabled')).toBe('true');
+    expect(cierre.querySelector('[aria-pressed]')).toBeNull();
+    await act(() => enNav('Cierre de periodo', 'Preparar corte').click());
+    expect(navegar).not.toHaveBeenCalled();
+});
+
+it('habilita Preparar corte cuando hay contexto de corte y lo marca como página actual', async () => {
+    await render(<ComisionesEmpaque tab="preparar" puede={{ configurar: true, confirmar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, limite_desde: '2026-10-01', limite_hasta: '2026-10-13' }} />);
+    const preparar = enNav('Cierre de periodo', 'Preparar corte');
+    expect(preparar.getAttribute('aria-current')).toBe('page');
+    expect(preparar.getAttribute('aria-disabled')).toBeNull();
+    expect(enNav('Cierre de periodo', 'Periodos').getAttribute('aria-current')).toBeNull();
+});
+
+it('usa aria-current e iconos en la subnavegación de configuración', async () => {
+    await render(<ComisionesEmpaque tab="configuracion" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, seccion: 'tarifas' }} />);
+    const nav = container.querySelector('[aria-label="Configuración de comisiones"]');
+    expect(['Tarifa por caja', 'Equipo y porcentajes', 'Áreas', 'Accesos', 'Sincronización e históricos'].every((nombre) => {
+        const item = enNav('Configuración de comisiones', nombre);
+        return item && item.querySelector('svg');
+    })).toBe(true);
+    expect(enNav('Configuración de comisiones', 'Tarifa por caja').getAttribute('aria-current')).toBe('page');
+    expect(enNav('Configuración de comisiones', 'Áreas').querySelector('svg')).toBeTruthy();
+    expect(enNav('Configuración de comisiones', 'Accesos').querySelector('svg')).toBeTruthy();
+    expect(nav.querySelector('[aria-pressed]')).toBeNull();
+});
+
+it('habla en voz neutra en el armazón cuando no hay áreas asignadas', async () => {
+    await render(<ComisionesEmpaque tab="reporte" sin_areas puede={{}} />);
+    expect(container.textContent).toContain('Solicite al administrador acceso a un área de empaque.');
+    expect(container.textContent).not.toMatch(/\b(tú|tienes)\b/i);
+    expect(container.querySelector('h1').textContent).toContain('Comisiones de empaque_');
 });

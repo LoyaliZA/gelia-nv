@@ -14,6 +14,7 @@ class PedidoBmaBultoEmpaque extends Model
     protected $fillable = [
         'pedido_bma_id',
         'numero',
+        'tipo_bulto',
         'empacado_por_id',
         'empacado_at',
     ];

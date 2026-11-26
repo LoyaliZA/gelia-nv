@@ -1,5 +1,4 @@
 import React from 'react';
-import { GELIA_ICON_BOX } from '../../utils/geliaTheme';
 import useIconoEnControl from '../../hooks/useIconoEnControl';
 
 /**
@@ -10,26 +9,22 @@ import useIconoEnControl from '../../hooks/useIconoEnControl';
 export default function DashboardPanel({
     title,
     icon: Icon,
-    iconStyle,
-    iconClassName = '',
     headerActions,
     variant = 'desktop',
     panelClassName = '',
     children,
 }) {
     const { ref, triggerProps } = useIconoEnControl();
-    const iconColorStyle = iconStyle || (iconClassName ? undefined : { color: 'var(--color-primario)' });
 
     const iconNode = Icon ? (
-        <span className={`${GELIA_ICON_BOX} !p-2 shrink-0`} aria-hidden>
+        <span className="dashboard-panel-shell__icon" aria-hidden>
             <Icon
                 ref={ref}
                 size={16}
                 duration={1}
                 isAnimated={false}
                 color="currentColor"
-                className={`w-4 h-4 ${iconClassName}`}
-                style={iconColorStyle}
+                className="w-4 h-4"
             />
         </span>
     ) : null;
@@ -70,7 +65,7 @@ export default function DashboardPanel({
                     <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">{headerActions}</div>
                 )}
             </div>
-            <div className="dashboard-panel-shell__body flex-1 min-h-0 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col">
+            <div className="dashboard-panel-shell__body flex-1 min-h-0 overflow-x-hidden flex flex-col">
                 {children}
             </div>
         </div>

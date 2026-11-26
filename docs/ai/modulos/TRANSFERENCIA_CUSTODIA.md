@@ -6,7 +6,7 @@
 - Pruebas: `tests/Feature/ControlPedidos/TransferenciaTiendaTest.php`; `Partials/{SeguimientoTransferenciaTienda,ModalMovimientosTienda}.test.jsx` junto al frontend.
 
 ## Estado actual
-- [verificado] Bolsas, salida, recepción, ubicación de custodia y entrega se registran separadas: `app/Services/ControlPedidos/TransferenciaTiendaService.php:169`.
+- [verificado] En transferencia ordinaria con consulta en Preparación Tienda, confirmar bolsas registra en la misma transacción la separación de los anexos documentales revisados y resueltos. La salida, recepción, custodia y entrega conservan su registro por etapa: `app/Services/ControlPedidos/TransferenciaTiendaService.php`.
 - [verificado] La configuración operativa tiene horarios apagados por defecto; los valores persistidos determinan ejecución: `app/Services/ControlPedidos/ConfiguracionOperativaTienda.php:14` y `:26`.
 - [verificado] Con horarios activos, MD usa días/corte configurados en zona operativa; apagados no exige corte: `app/Support/ControlPedidos/CorteMismoDiaTienda.php:36`.
 
@@ -33,4 +33,4 @@
 - [verificado] `InstruccionEntrega::assertSegundoTraslado` conserva una regla distinta y no tiene llamadas encontradas en app/; no conectarla como atajo: `app/Support/ControlPedidos/InstruccionEntrega.php:124`.
 - [inferido] Usar ese helper reintroduciría veto a gerencia que vendió; por confirmar con prueba de actor dual antes de reutilizarlo: `app/Support/ControlPedidos/InstruccionEntrega.php:130`.
 
-- Última verificación: 2026-11-20, working tree sobre `b5be2bb5`, autorización de piso PDV en cambio-tienda-nacional.
+- Última verificación: 2026-11-26, árbol de trabajo sobre `64425d8f`, preparación de bolsas con anexos documentales resueltos.

@@ -41,25 +41,31 @@ class ComisionesEmpaqueConcurrenciaMysqlTest extends TestCase
         $this->assertSame(0, $this->carrera('capturar'));
     }
 
+    public function test_sincronizacion_completa_y_worker_concurrentes_no_duplican_un_empaque(): void
+    {
+        $this->assertSame(0, $this->carrera('sincronizar'));
+    }
+
+    public function test_empaque_confirmado_despues_de_comprobar_fuentes_queda_como_tardio_una_sola_vez(): void
+    {
+        $this->assertSame(0, $this->carrera('empaque-durante-cierre'));
+    }
+
     private function carrera(string $caso): int
     {
-        $script = __DIR__.'/concurrencia.php';
-        $procesos = [];
-        foreach ([1, 2] as $n) {
-            $procesos[$n] = proc_open(
-                [PHP_BINARY, $script, $caso, (string) $n],
-                [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-                $pipes
-            );
-            $this->assertIsResource($procesos[$n]);
-            $procesos[$n.'_pipes'] = $pipes;
-        }
+        $proceso = proc_open(
+            [PHP_BINARY, __DIR__.'/concurrencia.php', $caso],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $canales
+        );
+        $this->assertIsResource($proceso);
+        $salida = stream_get_contents($canales[1]);
+        $error = stream_get_contents($canales[2]);
+        fclose($canales[1]);
+        fclose($canales[2]);
+        $codigo = proc_close($proceso);
+        $this->assertStringContainsString('VERIFICADO', $salida, $salida.$error);
 
-        $codigos = [];
-        foreach ([1, 2] as $n) {
-            $codigos[$n] = proc_close($procesos[$n]);
-        }
-
-        return max($codigos);
+        return $codigo;
     }
 }

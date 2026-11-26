@@ -70,7 +70,7 @@ export function buildPresetLayout(presetId, flags = {}) {
     let widgetY = 0;
     let maxWidgetY = 0;
 
-    const pushWidget = (id, w = 6, h = 4) => {
+    const pushWidget = (id, w = 6, h = 5) => {
         layout.push({
             i: id,
             x: widgetX,
@@ -97,14 +97,14 @@ export function buildPresetLayout(presetId, flags = {}) {
                 x: panelX,
                 y: nextRow,
                 w: 12,
-                h: 8,
+                h: 10,
                 minW: CARD_GRID_PANEL_MIN_W,
                 minH: CARD_GRID_PANEL_MIN_H,
             });
             panelX += 12;
             if (panelX >= GRID_COLS) {
                 panelX = 0;
-                nextRow += 8;
+                nextRow += 10;
             }
         };
         if (hasModulos) pushPanel(PANEL_IDS.MODULOS);
@@ -117,12 +117,12 @@ export function buildPresetLayout(presetId, flags = {}) {
     }
 
     if (presetId === DASHBOARD_PRESETS.COMERCIAL) {
-        if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES, 8, 4);
-        if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES, 8, 4);
-        if (hasWidgetContabilidad) pushWidget(PANEL_IDS.CONTABILIDAD, 8, 4);
+        if (hasWidgetSolicitudes) pushWidget(PANEL_IDS.SOLICITUDES, 8, 5);
+        if (hasWidgetCancelaciones) pushWidget(PANEL_IDS.CANCELACIONES, 8, 5);
+        if (hasWidgetContabilidad) pushWidget(PANEL_IDS.CONTABILIDAD, 8, 5);
         if (widgetX > 0) {
             widgetX = 0;
-            widgetY += 4;
+            widgetY += 5;
             maxWidgetY = Math.max(maxWidgetY, widgetY);
         }
         if (hasWidgetCredibox) pushWidget(PANEL_IDS.CREDIBOX);
@@ -475,4 +475,91 @@ export function layoutsEqual(a, b) {
         if (!other) return false;
         return item.x === other.x && item.y === other.y && item.w === other.w && item.h === other.h;
     });
+}
+
+/**
+ * Ancho de referencia (px) con el que se diseñan los layouts guardados: el modo compacto.
+ * En contenedores más anchos (abarcamiento «Completo» o personalizado) los paneles conservan
+ * su tamaño en píxeles y se reacomodan para que quepan más por fila, en lugar de estirarse.
+ */
+export const REFLOW_REFERENCE_WIDTH_PX = 1300;
+/** Por debajo de esta proporción sobre la referencia no se reacomoda (evita saltos por pocos píxeles). */
+export const REFLOW_MIN_RATIO = 1.15;
+
+function findFirstFreeSpot(item, w, placed, startY) {
+    for (let y = startY; ; y++) {
+        for (let x = 0; x <= GRID_COLS - w; x++) {
+            const candidate = { ...item, x, y, w };
+            if (!placed.some((other) => rectsOverlap(candidate, other))) return candidate;
+        }
+    }
+}
+
+/** Reparte el espacio libre de cada fila entre sus paneles, solo si no pisa a otros. */
+function fillRowGaps(layout) {
+    let result = layout;
+    const rows = new Map();
+    layout.forEach((item) => rows.set(item.y, [...(rows.get(item.y) ?? []), item]));
+
+    for (const members of rows.values()) {
+        const row = [...members].sort((a, b) => a.x - b.x);
+        const used = row.reduce((sum, item) => sum + item.w, 0);
+        const contiguous = row[0].x === 0 && row.every((item, i) => i === 0 || item.x === row[i - 1].x + row[i - 1].w);
+        const free = GRID_COLS - used;
+        if (!contiguous || free <= 0) continue;
+
+        let cursor = 0;
+        const widened = new Map(row.map((item, i) => {
+            const w = item.w + Math.floor(free / row.length) + (i < free % row.length ? 1 : 0);
+            const next = { ...item, x: cursor, w };
+            cursor += w;
+            return [item.i, next];
+        }));
+        const candidate = result.map((item) => widened.get(item.i) ?? item);
+        if (!layoutHasCollisions(candidate)) result = candidate;
+    }
+    return result;
+}
+
+/**
+ * Ancho (px) con el que se diseñó un layout: cada panel guardado lleva `rw`.
+ * Sin `rw` (layouts antiguos y predeterminados) se asume el ancho compacto de referencia.
+ */
+export function layoutReferenceWidth(layout) {
+    const stamped = layout?.find((item) => Number(item.rw) > 0);
+    return stamped ? Number(stamped.rw) : REFLOW_REFERENCE_WIDTH_PX;
+}
+
+/** Marca el layout como diseñado para `gridWidth`: así se ve idéntico a como se editó. */
+export function stampLayoutWidth(layout, gridWidth) {
+    const rw = Math.round(gridWidth);
+    return layout.map((item) => ({ ...item, rw }));
+}
+
+/**
+ * Layout de visualización para un ancho de cuadrícula dado. No modifica ni guarda el layout original.
+ * Reacomoda tanto al ensanchar (caben más por fila) como al estrechar (se envuelven en más filas).
+ */
+export function reflowLayoutForWidth(layout, gridWidth, referenceWidth = layoutReferenceWidth(layout)) {
+    if (!layout?.length || !gridWidth) return layout;
+    const ratio = gridWidth / referenceWidth;
+    if (ratio >= 1 / REFLOW_MIN_RATIO && ratio <= REFLOW_MIN_RATIO) return layout;
+
+    const factor = referenceWidth / gridWidth;
+    const placed = [];
+    let startY = 0;
+
+    for (const item of [...layout].sort((a, b) => a.y - b.y || a.x - b.x)) {
+        const minW = Math.max(item.minW ?? 2, PANEL_GRID_MIN_W);
+        // Un panel de ancho completo es una fila en sí misma: no se encoge ni deja que otros se le unan.
+        const w = item.w >= GRID_COLS
+            ? GRID_COLS
+            : Math.max(minW, Math.min(GRID_COLS, Math.round(item.w * factor)));
+        const spot = findFirstFreeSpot(item, w, placed, startY);
+        placed.push(spot);
+        // Orden de lectura: un panel nunca sube por encima del anterior.
+        startY = spot.y;
+    }
+
+    return fillRowGaps(placed);
 }

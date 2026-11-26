@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import SidebarBrand from './SidebarBrand';
 import SidebarTree from './SidebarTree';
 import SidebarUtilities from './SidebarUtilities';
 import SidebarUserPanel from './SidebarUserPanel';
+import SidebarTipLayer from './SidebarTipLayer';
 
 /**
  * Panel de navegación profesional (desktop fijo o drawer móvil).
@@ -32,6 +33,13 @@ export default function MobileSidebarDrawer({
     isDarkMode,
     toggleTheme,
 }) {
+    const asideRef = useRef(null);
+    const setAsideRef = useCallback((el) => {
+        asideRef.current = el;
+        if (typeof panelRef === 'function') panelRef(el);
+        else if (panelRef) panelRef.current = el;
+    }, [panelRef]);
+
     const className = [
         'gelia-pro-sidebar',
         asDrawer ? 'gelia-pro-sidebar--drawer' : '',
@@ -47,7 +55,7 @@ export default function MobileSidebarDrawer({
                 />
             )}
             <aside
-                ref={panelRef}
+                ref={setAsideRef}
                 className={className}
                 data-collapsed={collapsed ? 'true' : 'false'}
                 data-anim={anim || undefined}
@@ -87,6 +95,7 @@ export default function MobileSidebarDrawer({
                     />
                 </div>
             </aside>
+            {!asDrawer && <SidebarTipLayer rootRef={asideRef} enabled={structuralCollapsed} />}
         </>
     );
 }

@@ -1,22 +1,32 @@
 <?php
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Models\ComisionesEmpaque\AreaComisionEmpaque;
+use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteUnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\PagoComisionEmpaque;
 use App\Models\ComisionesEmpaque\ParticipanteComisionEmpaque;
+use App\Models\ComisionesEmpaque\PeriodoComisionEmpaque;
 use App\Models\ComisionesEmpaque\RepartoComisionEmpaque;
 use App\Models\ComisionesEmpaque\RepartoParticipanteComisionEmpaque;
 use App\Models\ComisionesEmpaque\TarifaComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque;
+use App\Models\ControlPedidos\CatalogoEstatusPedido;
+use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\User;
+use App\Services\ComisionesEmpaque\ComprobarFuenteCorteComisionEmpaque;
 use App\Services\ComisionesEmpaque\ConfirmarCorteComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\GestionarUnidadComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\RegistrarPagoComisionEmpaqueService;
+use App\Services\ComisionesEmpaque\SincronizarComisionesEmpaqueService;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
+use App\Support\ComisionesEmpaque\RepartirCentavosComisionEmpaque;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -24,7 +34,7 @@ require __DIR__.'/../../../vendor/autoload.php';
 $app = require __DIR__.'/../../../bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
-config(['database.connections.mysql.database' => 'gelia_ce_test']);
+config(['database.default' => 'mysql', 'database.connections.mysql.database' => 'gelia_ce_test']);
 DB::purge('mysql');
 DB::reconnect('mysql');
 if (DB::connection()->getDatabaseName() !== 'gelia_ce_test') {
@@ -33,6 +43,11 @@ if (DB::connection()->getDatabaseName() !== 'gelia_ce_test') {
 }
 
 $caso = $argv[1] ?? '';
+if ($caso === 'empaque-durante-cierre') {
+    $verificado = empaqueDuranteCierre();
+    fwrite(STDOUT, $verificado ? "VERIFICADO\n" : "FALLO_VERIFICACION\n");
+    exit($verificado ? 0 : 1);
+}
 $worker = $argv[2] ?? 'padre';
 $marca = $argv[3] ?? '';
 
@@ -72,9 +87,107 @@ try {
 }
 exit(($fallos > 0 || ! $verificado) ? 1 : 0);
 
+function empaqueDuranteCierre(): bool
+{
+    $marca = 'ce-cierre-'.bin2hex(random_bytes(4));
+    $usuario = User::factory()->create(['name' => $marca]);
+    $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+    $config = ConfiguracionComisionEmpaque::actual();
+    $config->update(['fecha_inicio' => '2026-01-01']);
+    $limite = max(
+        CorteComisionEmpaque::query()->where('area_id', $area->id)->where('limite_hasta', '>=', '2026-11-16')->max('limite_hasta'),
+        PeriodoComisionEmpaque::query()->where('area_id', $area->id)->where('hasta', '>=', '2026-11-16')->max('hasta'),
+    );
+    $fecha = $limite ? Carbon::parse($limite, 'UTC')->timezone($config->zona_horaria)->addDay()->toDateString() : '2026-11-16';
+    $desde = DineroComisionEmpaque::inicioDia($fecha, $config->zona_horaria);
+    $hasta = DineroComisionEmpaque::finDia($fecha, $config->zona_horaria);
+    $estatus = CatalogoEstatusPedido::query()->where('fase_ciclo', CatalogoEstatusPedido::FASE_EN_CEDIS)->firstOrFail();
+    $participante = ParticipanteComisionEmpaque::query()->create(['nombre' => $marca, 'user_id' => $usuario->id, 'activo' => true]);
+    $reparto = RepartoComisionEmpaque::query()->create(['area_id' => $area->id, 'vigente_desde' => $desde, 'creado_por_id' => $usuario->id]);
+    RepartoParticipanteComisionEmpaque::query()->create(['reparto_id' => $reparto->id, 'participante_id' => $participante->id, 'puntos_base' => 10000]);
+
+    $crearPedido = function (string $folio, bool $empacado) use ($usuario, $estatus, $fecha, $desde) {
+        $pedido = PedidoBma::query()->create([
+            'folio' => $folio, 'fecha' => $fecha, 'vendedor_id' => $usuario->id,
+            'catalogo_estatus_pedido_id' => $estatus->id, 'numero_cajas' => 1, 'total_mercancia' => 100,
+            'costo_envio' => 0, 'envio_por_cobrar' => true,
+            'empacado_at' => $empacado ? $desde->copy()->addHours(8) : null,
+            'empacado_por_id' => $usuario->id,
+        ]);
+        PedidoBmaCaja::query()->create([
+            'pedido_bma_id' => $pedido->id, 'uuid_operativo' => (string) Illuminate\Support\Str::uuid(),
+            'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+            'orden' => 1, 'cantidad' => 1, 'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA,
+            'estatus_recoleccion' => PedidoBmaCaja::ESTATUS_PENDIENTE,
+        ]);
+
+        return $pedido;
+    };
+    $primero = $crearPedido($marca.'-inicial', true);
+    $nuevo = $crearPedido($marca.'-tardio', false);
+    $sync = app(SincronizarComisionesEmpaqueService::class);
+    $job = new ProcesarCambiosComisionesEmpaque;
+    $job->handle($sync);
+
+    config(['database.connections.mysql_escritura' => config('database.connections.mysql')]);
+    $servicio = new class(app(RepartirCentavosComisionEmpaque::class), app(ComprobarFuenteCorteComisionEmpaque::class), $sync) extends ConfirmarCorteComisionEmpaqueService
+    {
+        public Closure $confirmarEmpaque;
+
+        protected function assertSinCambiosNuevos(int $areaId, Carbon $desde, Carbon $hasta, array $cambiosConocidos): void
+        {
+            parent::assertSinCambiosNuevos($areaId, $desde, $hasta, $cambiosConocidos);
+            ($this->confirmarEmpaque)();
+        }
+    };
+    $escrituras = 0;
+    $servicio->confirmarEmpaque = function () use ($nuevo, $desde, &$escrituras) {
+        $escrituras += DB::connection('mysql_escritura')->table('pedidos_bma')->where('id', $nuevo->id)
+            ->update(['empacado_at' => $desde->copy()->addHours(9)]);
+    };
+    $preview = $servicio->calcular($area->id, $desde, $hasta, false);
+    $corte = $servicio->confirmar($area->id, $desde, $hasta, false, $preview['hash'], $usuario);
+    $job->handle($sync);
+    $sync->ejecutar($usuario, [$area->id]);
+    $unidad = UnidadComisionEmpaque::query()->where('pedido_bma_id', $nuevo->id)->sole();
+    $incidencia = $unidad->incidencias()->where('tipo', 'incorporacion_tardia')->sole();
+    $tardias = $servicio->calcular($area->id, $hasta->copy()->addMicrosecond(), $hasta->copy()->addDay(), true);
+
+    return $escrituras === 1
+        && $preview['importe_centavos'] > 0
+        && $corte->unidades()->count() === 1
+        && (int) $corte->total_centavos === $preview['importe_centavos']
+        && $corte->unidades()->with('unidad')->first()->unidad->pedido_bma_id === $primero->id
+        && $unidad->incorporacion_tardia && $unidad->corte_id === null
+        && $incidencia->estado === 'pendiente'
+        && $incidencia->datos['corte_original_id'] === $corte->id
+        && $tardias['unidades'] === [] && $tardias['errores'] !== [];
+}
+
 function preparar(string $caso, string $marca): void
 {
     $user = User::factory()->create(['name' => $marca]);
+    if ($caso === 'sincronizar') {
+        ConfiguracionComisionEmpaque::actual()->update(['fecha_inicio' => '2026-01-01']);
+        $area = AreaComisionEmpaque::query()->where('codigo', 'cedis')->firstOrFail();
+        $estatus = CatalogoEstatusPedido::query()->where('fase_ciclo', CatalogoEstatusPedido::FASE_EN_CEDIS)->first()
+            ?? CatalogoEstatusPedido::query()->firstOrFail();
+        $pedido = PedidoBma::query()->create([
+            'folio' => $marca, 'fecha' => '2026-10-11', 'vendedor_id' => $user->id,
+            'catalogo_estatus_pedido_id' => $estatus->id, 'numero_cajas' => 1, 'total_mercancia' => 100,
+            'costo_envio' => 0, 'envio_por_cobrar' => true, 'empacado_at' => '2026-10-11 12:00:00',
+            'empacado_por_id' => $user->id,
+        ]);
+        PedidoBmaCaja::query()->create([
+            'pedido_bma_id' => $pedido->id, 'uuid_operativo' => (string) Illuminate\Support\Str::uuid(),
+            'catalogo_tipo_caja_id' => DB::table('catalogo_tipos_caja_pedido')->value('id'),
+            'orden' => 1, 'cantidad' => 1, 'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA,
+            'estatus_recoleccion' => PedidoBmaCaja::ESTATUS_PENDIENTE,
+        ]);
+        file_put_contents(sys_get_temp_dir().'/'.$marca, $user->id.'|'.$area->id);
+
+        return;
+    }
     $tienda = AreaComisionEmpaque::query()->create([
         'codigo' => $marca, 'nombre' => $marca, 'activo' => true, 'sistema' => false,
     ]);
@@ -139,16 +252,33 @@ function preparar(string $caso, string $marca): void
 
 function trabajador(string $caso, string $marca): int
 {
+    $hasta = microtime(true) + 10;
     while (file_get_contents(sys_get_temp_dir().'/'.$marca.'-go') !== 'go') {
+        if (microtime(true) >= $hasta) {
+            fwrite(STDERR, "No inició la carrera.\n");
+
+            return 1;
+        }
         usleep(20000);
     }
     $partes = explode('|', (string) file_get_contents(sys_get_temp_dir().'/'.$marca));
     $user = User::query()->findOrFail((int) $partes[0]);
     $tienda = AreaComisionEmpaque::query()->findOrFail((int) ($partes[1] ?? 0));
     try {
+        if ($caso === 'sincronizar') {
+            $sync = app(SincronizarComisionesEmpaqueService::class);
+            if ($GLOBALS['argv'][2] === '1') {
+                return $sync->ejecutar($user, [$tienda->id])->estado === 'ok' ? 0 : 1;
+            }
+
+            (new ProcesarCambiosComisionesEmpaque)->handle($sync);
+
+            return 0;
+        }
         if ($caso === 'capturar') {
             app(GestionarUnidadComisionEmpaqueService::class)->registrarManual([
                 'clave_idempotencia' => $marca,
+                'area_id' => $tienda->id,
                 'empacado_at' => '2026-10-11 12:00:00',
                 'cantidad' => 1,
                 'cliente_nombre' => $marca,
@@ -197,6 +327,12 @@ function trabajador(string $caso, string $marca): int
 
 function verificar(string $caso, string $marca): bool
 {
+    if ($caso === 'sincronizar') {
+        $unidades = UnidadComisionEmpaque::query()->where('folio_pedido', $marca)->get();
+
+        return $unidades->count() === 1 && $unidades->first()->situacion === UnidadComisionEmpaque::ELEGIBLE
+            && $unidades->first()->lineas()->count() === 1;
+    }
     if ($caso === 'capturar') {
         return UnidadComisionEmpaque::query()->where('clave_idempotencia', $marca)->count() === 1;
     }

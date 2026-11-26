@@ -322,10 +322,8 @@ body {
         --gelia-main-inset-inline-start: var(--gelia-sidebar-collapsed-width);
     }
 
-    /* Misma curva/duración que el rail: evita desync contenido vs sidebar. */
-    .gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body {
-        transition: padding-inline-start var(--gelia-pro-duration, 0.38s) var(--gelia-pro-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    }
+    /* Sin transición de padding: animarlo re-maqueta la página entera en cada cuadro del rail
+       (era la causa del lag al contraer/expandir). El contenido se acomoda una sola vez. */
 
     /* Chat inmersivo (GELIA / mensajería): sin franjas arriba/abajo del body */
     .gelia-app-shell[data-page-fullscreen='true'] {
