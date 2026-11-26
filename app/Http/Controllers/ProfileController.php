@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Carbon\Carbon;
 use App\Services\PersonalizacionCatalogoService;
@@ -70,40 +71,18 @@ class ProfileController extends Controller
     }
 
     /**
-     * Preferencias: personalización del sistema (vista Profile/Edit).
+     * Ajustes ya no es una página: es un modal disponible en cualquier vista.
+     * Esta ruta se conserva para enlaces y marcadores antiguos: abre el modal sobre el panel principal.
      */
-    public function edit(Request $request): Response
+    public function edit(Request $request): RedirectResponse
     {
-        $user = $request->user()->load(['area.departamento', 'areas.departamento']);
-
-        $configuracion = DB::table('configuraciones_usuarios')
-            ->where('user_id', $user->id)
-            ->first();
-
-        $temaVisual = $configuracion ? (json_decode($configuracion->tema_visual ?? '[]', true) ?: []) : [];
-
-        $areaPrincipal = $user->area ?? $user->areas->first();
-
-        return Inertia::render('Profile/Edit', [
-            'tema_visual' => $temaVisual,
-            'perfilUsuario' => [
-                'fecha_nacimiento' => $user->fecha_nacimiento
-                    ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
-                    : null,
-                'area' => $areaPrincipal ? [
-                    'nombre'       => $areaPrincipal->nombre,
-                    'departamento' => $areaPrincipal->departamento ? [
-                        'nombre' => $areaPrincipal->departamento->nombre,
-                    ] : null,
-                ] : null,
-            ],
-        ]);
+        return redirect()->route('dashboard', ['ajustes' => 'apariencia']);
     }
 
     /**
      * Actualiza la información del perfil y la configuración visual sin sobrescribir el Dashboard.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
 
@@ -283,6 +262,15 @@ class ProfileController extends Controller
             ],
             $user->id
         );
+
+        // Ajustes guarda en segundo plano (axios): sin redirección, la interfaz no se recarga.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'fondo_base' => $configVisual['fondo_base'] ?? null,
+                'alertas_prefs' => $configVisual['alertas_prefs'] ?? null,
+            ]);
+        }
 
         return back()->with('success', 'Perfil actualizado exitosamente.');
     }

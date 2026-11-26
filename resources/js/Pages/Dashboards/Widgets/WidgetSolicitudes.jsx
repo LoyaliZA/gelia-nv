@@ -1,10 +1,11 @@
 import React from 'react';
-import { FileSignature, Clock } from 'lucide-react';
+import { FileSignature, Clock, Check } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import DashboardQueueRow from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { estiloEstadoSolicitud } from '../../../Components/Dashboard/dashboardEstadoSolicitud';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetSolicitudes({ ultimas_solicitudes = [], metricas = {}, variant = 'desktop' }) {
     const pendientes = metricas.pendientes ?? 0;
@@ -18,7 +19,7 @@ export default function WidgetSolicitudes({ ultimas_solicitudes = [], metricas =
             {pendientes} pendientes
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     const summary =
@@ -38,6 +39,7 @@ export default function WidgetSolicitudes({ ultimas_solicitudes = [], metricas =
             variant={variant}
             title="Solicitudes"
             icon={FileSignature}
+            tono={DASHBOARD_WIDGET_TONO.solicitudes}
             href={route('solicitudes.index')}
             ctaLabel="Ver listado de solicitudes"
             minimalCount={pendientes}

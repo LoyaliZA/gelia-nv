@@ -1,4 +1,4 @@
-import { Boxes, Coins, History, Store, UsersRound } from 'lucide-react';
+import { Boxes, Coins, History, Store } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
 import { lazy, Suspense, useState } from 'react';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
@@ -8,22 +8,14 @@ import { useProtegerEdicion } from './useActualizacionComisiones';
 import { ACCION_PRINCIPAL_COMISIONES, ErroresFormulario, dinero, momentoLegible } from './compartido';
 
 const Carga = lazy(() => import('./Carga'));
-
-const secciones = [['tarifas', 'Tarifa por caja', Coins], ['equipo', 'Equipo y porcentajes', UsersRound], ['areas', 'Áreas'], ['accesos', 'Accesos'], ['sincronizacion', 'Sincronización e históricos']];
+const SECCIONES = ['tarifas', 'equipo', 'areas', 'accesos', 'sincronizacion'];
 
 export default function Configuracion({ areas, areaId, fechaInicio, fechaFin, tarifas, alcances, equipo, puede, fondo, repartos, sincronizacion, inicial = 'tarifas', cargaRevision, onSeccion, onAjustes, editarEquipo = false, simple = false }) {
-    const seccion = cargaRevision ? 'sincronizacion' : secciones.some(([id]) => id === inicial) ? inicial : 'tarifas';
-    const administracion = secciones.slice(2);
-    const esAdministracion = administracion.some(([id]) => id === seccion);
-    const visibles = simple && !esAdministracion ? secciones.slice(0, 2) : secciones;
+    const seccion = cargaRevision ? 'sincronizacion' : SECCIONES.includes(inicial) ? inicial : 'tarifas';
+    const esAdministracion = ['areas', 'accesos', 'sincronizacion'].includes(seccion);
     const areaActiva = areaId || (seccion === 'tarifas' ? areas.find((a) => a.activo)?.id : '') || '';
     const AreaIcono = areas.find((a) => String(a.id) === String(areaActiva))?.codigo === 'tienda' ? Store : Boxes;
     return <div className="min-w-0 space-y-4">
-        <nav className="gelia-segment p-1" aria-label="Configuración de comisiones">
-            <div className={`grid w-full min-w-0 grid-cols-2 gap-1 ${visibles.length === 2 ? '' : 'md:grid-cols-5'}`}>
-                {visibles.map(([id, nombre, Icono]) => <button type="button" key={id} className={`gelia-segment-btn min-h-11 min-w-0 px-1 ${id === 'sincronizacion' ? 'col-span-2 md:col-span-1' : ''}`} aria-pressed={seccion === id} data-active={seccion === id} onClick={() => onSeccion(id)}>{Icono && <Icono className="size-4 shrink-0" aria-hidden="true" />}{nombre}</button>)}
-            </div>
-        </nav>
         {simple && !esAdministracion && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => onSeccion('areas')}>Abrir administración avanzada</button>}
         {esAdministracion && <button type="button" className={THEME_BTN_SECONDARY} onClick={onAjustes}>Consultar ajustes de cortes</button>}
         {['tarifas', 'equipo'].includes(seccion) && <label className="block max-w-xs">

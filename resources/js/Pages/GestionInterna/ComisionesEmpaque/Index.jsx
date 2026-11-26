@@ -1,15 +1,18 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, Clock, History, Layers, Package, RefreshCw, Settings, Wallet } from 'lucide-react';
+import { AlertCircle, CalendarDays, CheckCircle2, Clock, History, Layers, RefreshCw, Settings, Wallet } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPageShell from '@/Components/GeliaPageShell';
-import { THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL } from '@/utils/geliaTheme';
+import { GELIA_ICON_BOX, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL } from '@/utils/geliaTheme';
 import { emitirToastGelia } from '@/utils/geliaToast';
 import {
     bloquearConsultas, cancelarConsulta, confirmarAntesDeConsultar, invalidarPrecargas, ir, momentoLegible,
     observarConsultas, precargarComisiones,
 } from './compartido';
+import NavegacionComisiones, {
+    itemsConfiguracion, itemsLiquidacion, itemsPrincipales, seccionConfiguracionActiva,
+} from './NavegacionComisiones';
 import Reporte from './Reporte';
 import useActualizacionComisiones, { ProteccionEdiciones } from './useActualizacionComisiones';
 
@@ -21,12 +24,9 @@ const Periodos = lazy(() => import('./Periodos'));
 const Configuracion = lazy(() => import('./Configuracion'));
 const Productividad = lazy(() => import('./Productividad'));
 
-const LIQUIDACIONES = [['periodos', 'Periodos y liquidación'], ['pagos', 'Por pagar'], ['cortes', 'Historial']];
-const SECCIONES = [['acumulado', 'Empaques', Package], ['periodos', 'Liquidaciones', Wallet], ['productividad', 'Productividad', BarChart3], ['configuracion', 'Configuración', Settings]];
-
 function avisosDePagina({ sin_areas, flash }) {
     const items = [];
-    if (sin_areas) items.push({ mensaje: 'No tienes áreas asignadas.', tipo: 'aviso' });
+    if (sin_areas) items.push({ mensaje: 'No hay áreas asignadas.', tipo: 'aviso' });
     if (flash?.success) items.push({ mensaje: flash.success, tipo: 'success' });
     if (flash?.error) items.push({ mensaje: flash.error, tipo: 'error' });
     if (flash?.warning) items.push({ mensaje: flash.warning, tipo: 'aviso' });
@@ -154,6 +154,7 @@ export function Index({ tab, reporte, origen_simple = false, contexto_simple = {
     const liquidaciones = ['periodos', 'preparar', 'cortes', 'pagos'].includes(tab);
     const configuracion = ['equipo', 'ajustes', 'configuracion'].includes(tab);
     const principal = liquidaciones ? 'periodos' : configuracion ? 'configuracion' : tab;
+    const seccionConfig = seccionConfiguracionActiva(tab, filtros, carga_revision);
     const identidad = observado?.contexto && [observado.contexto, observado.revision, contexto].join('/');
     const opcionesPeriodo = periodos_opciones.filter((p) => String(p.area_id) === String(areaId));
 
@@ -243,20 +244,28 @@ export function Index({ tab, reporte, origen_simple = false, contexto_simple = {
             <Head title="Comisiones de empaque" />
             <GeliaPageShell className="min-w-0 space-y-4 pt-4 pb-8 md:pt-0">
                 <ProteccionEdiciones.Provider value={actualizacionDiscreta.registrarEdicion}>
-                <div className="theme-card theme-card--solid theme-surface theme-no-blur theme-border min-w-0 space-y-3 !rounded-2xl p-3 md:p-5 [&_.theme-label]:!text-xs [&_.theme-label]:!font-semibold [&_.theme-input]:!min-h-11">
-                <header className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b theme-border pb-3">
+                <div className="theme-card theme-card--solid theme-surface theme-no-blur theme-border min-w-0 space-y-4 !rounded-2xl p-3 md:p-5 [&_.theme-input]:!min-h-11 [&_.theme-label]:!text-xs [&_.theme-label]:!font-semibold">
+                <header className="flex flex-wrap items-start justify-between gap-x-5 gap-y-3 border-b theme-border pb-3 md:pb-4">
                     <div className="min-w-0">
-                        <h1 className="m-0 flex items-center gap-2 text-xl font-bold theme-text-main"><span className="grid size-9 shrink-0 place-items-center rounded-lg theme-element theme-text-primario"><Wallet className="size-5" aria-hidden="true" /></span>Comisiones de empaque</h1>
-                        <p role="status" className="m-0 mt-1 flex items-start gap-2 text-sm theme-text-muted">
+                        <div className="flex items-start gap-3">
+                            <span className={`${GELIA_ICON_BOX} rounded-2xl p-3 theme-text-primario`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-primario) 10%, transparent)', borderColor: 'color-mix(in srgb, var(--color-primario) 30%, transparent)' }}>
+                                <Wallet className="size-6" aria-hidden="true" />
+                            </span>
+                            <div className="min-w-0">
+                                <h1 className="m-0 text-2xl font-black uppercase italic tracking-tighter theme-text-main md:text-3xl">Comisiones de empaque_</h1>
+                                <p className="m-0 mt-1 text-[11px] font-bold uppercase tracking-widest theme-text-muted">Revise empaques, cierre periodos y liquide comisiones.</p>
+                            </div>
+                        </div>
+                        <p role="status" className="m-0 mt-3 flex items-start gap-2 text-sm theme-text-muted">
                             <IconoActualizacion className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                             <span title={actualizacion.fecha ? `Última sincronización ${actualizacion.fecha}` : undefined}>{simple && observado?.estado !== 'ok' ? 'Actualización pendiente' : actualizacion.etiqueta}{!simple && actualizacion.detalle && ` · ${actualizacion.detalle}`}</span>
                         </p>
-                        {actualizacionDiscreta.pendiente && <p className="m-0 mt-1 text-xs theme-text-aviso" role="status">Hay datos nuevos. Se conserva tu revisión actual.</p>}
+                        {actualizacionDiscreta.pendiente && <p className="m-0 mt-1 text-xs theme-text-aviso" role="status">Hay datos nuevos. Se conserva la revisión actual.</p>}
                     </div>
                     {!sin_areas && <div className="flex flex-wrap items-center gap-2">
                         <div className="gelia-segment p-1" role="group" aria-label="Modo de comisiones">
                             {['simple', 'avanzado'].map((modo) => <button type="button" key={modo}
-                                className="gelia-segment-btn min-h-11 px-3" data-active={simple === (modo === 'simple')}
+                                className="gelia-segment-btn min-h-11 px-3 motion-reduce:transition-none focus-visible:!outline-2 focus-visible:outline-offset-2" data-active={simple === (modo === 'simple')}
                                 aria-pressed={simple === (modo === 'simple')}
                                 onClick={() => {
                                     if (modo === 'simple' && !simple) navegar('reporte', {
@@ -294,18 +303,14 @@ export function Index({ tab, reporte, origen_simple = false, contexto_simple = {
                         </div>
                     </div>}
                 {observado?.estado === 'sin_acceso' ? <div className="space-y-2">
-                    <p role="alert" className="theme-text-aviso">Consulta las áreas a las que tienes acceso.</p>
+                    <p role="alert" className="theme-text-aviso">Consulte las áreas con acceso disponible.</p>
                     <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar(simple ? 'reporte' : 'acumulado', { area_id: 'todas', periodo_id: undefined, desde: undefined, hasta: undefined })}>Consultar áreas disponibles</button>
                 </div> : sin_areas ? <p role="alert" className="theme-text-aviso">Solicite al administrador acceso a un área de empaque.</p> : <>
                     {origen_simple && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => volverAlReporte()}>Volver al cálculo</button>}
                     {!!filtros.retorno_corte && tab !== 'preparar' && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar('preparar', { periodo_id: filtros.periodo_id || filtros.retorno_periodo_id, retorno_corte: undefined, retorno_periodo_id: undefined })}>Volver a preparar el corte</button>}
-                    {!simple && <nav className="gelia-segment p-1" aria-label="Secciones de comisiones">
-                        <div className="grid w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-4">{SECCIONES.filter(([id]) => id !== 'configuracion' || puede.configurar).map(([id, nombre, Icono]) =>
-                            <button key={id} type="button" className="gelia-segment-btn min-h-11 min-w-0 px-1" aria-current={principal === id ? 'page' : undefined} data-active={principal === id} onPointerEnter={() => precargar(id)} onFocus={() => precargar(id)} onClick={() => navegar(id)}><Icono className="size-4 shrink-0" aria-hidden="true" />{nombre}</button>)}
-                        </div>
-                    </nav>}
-                    {!simple && liquidaciones && <nav aria-label="Secciones de liquidación" className="flex flex-wrap gap-2 border-b theme-border">{LIQUIDACIONES.map(([id, nombre]) =>
-                        <button key={id} type="button" className="min-h-11 border-b-2 border-transparent px-2 text-sm theme-text-main aria-[current=page]:border-current aria-[current=page]:font-semibold aria-[current=page]:theme-text-primario" aria-current={(tab === id || (tab === 'preparar' && id === 'periodos')) ? 'page' : undefined} onClick={() => navegar(id)}>{nombre}</button>)}</nav>}
+                    {!simple && <NavegacionComisiones ariaLabel="Secciones de comisiones" items={itemsPrincipales({ principal, puedeConfigurar: puede.configurar, onNavegar: navegar, onPrecargar: precargar })} />}
+                    {!simple && liquidaciones && <NavegacionComisiones compacto ariaLabel="Cierre de periodo" items={itemsLiquidacion({ tab, filtros, onNavegar: navegar })} />}
+                    {configuracion && puede.configurar && <NavegacionComisiones compacto ariaLabel="Configuración de comisiones" items={itemsConfiguracion({ seccion: seccionConfig, simple, onSeccion: (seccion) => navegar('configuracion', { seccion }) })} />}
                     <section aria-label="Contenido de comisiones" aria-busy={consulta?.pendiente || undefined} className="min-w-0 space-y-3">
                     <ProgresoConsulta consulta={consulta} />
                     {tab === 'reporte' && reporte && <Reporte reporte={reporte} areaId={areaId} filtros={filtros}

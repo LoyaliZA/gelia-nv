@@ -6,6 +6,7 @@ import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidget
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { formatoMoneda } from '../../../utils/formatoMoneda';
 import { contabilidadRoutes } from '../../Contabilidad/contabilidadRoutes';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetContabilidad({ metricas = {}, variant = 'desktop' }) {
     const ventas = metricas.ventas ?? 0;
@@ -17,11 +18,12 @@ export default function WidgetContabilidad({ metricas = {}, variant = 'desktop' 
             variant={variant}
             title="Contabilidad"
             icon={Calculator}
+            tono={DASHBOARD_WIDGET_TONO.contabilidad}
             href={contabilidadRoutes.index()}
             ctaLabel="Abrir contabilidad"
             minimalCount={null}
             minimalCountLabel=""
-            badge={<DashboardWidgetStatus tono="info">Mes actual</DashboardWidgetStatus>}
+            badge={<DashboardWidgetStatus tono="info">{metricas.etiqueta_periodo || 'Periodo'}</DashboardWidgetStatus>}
             summary={
                 <DashboardWidgetSummaryChip tono="info">
                     Margen {Number(margen).toFixed(1)}%
@@ -29,7 +31,7 @@ export default function WidgetContabilidad({ metricas = {}, variant = 'desktop' 
             }
         >
             <div className="dashboard-stat-grid">
-                <DashboardStatBlock label="Ventas del mes" value={formatoMoneda(ventas)} />
+                <DashboardStatBlock label="Ventas" value={formatoMoneda(ventas)} />
                 <DashboardStatBlock
                     label="Utilidad neta"
                     value={formatoMoneda(utilidad)}

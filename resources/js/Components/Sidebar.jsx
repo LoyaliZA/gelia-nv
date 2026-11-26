@@ -13,6 +13,7 @@ import SidebarNavLeafLink from './SidebarNavLeafLink';
 
 import NotificationBell, { NotificationCountBadge } from './NotificationBell';
 import MensajeriaWidget from './Mensajeria/MensajeriaWidget';
+import { abrirAjustes } from './Ajustes/ajustesEvents';
 
 const SIDEBAR_MODE_STORAGE_KEY = 'theme_sidebar_mode';
 const SIDEBAR_MODES = { collapsed: 'collapsed', expanded: 'expanded' };
@@ -165,11 +166,12 @@ const suffixGroupClass = (visible, orientation) => {
 const SIDEBAR_WIDGET_ICON_BTN_CLASS = 'sidebar-widget-icon-btn';
 const PROFILE_MENU_ITEMS = [
     { id: 'perfil', label: 'Mi perfil', routeName: 'profile.index', path: '/perfil', icon: User },
-    { id: 'preferencias', label: 'Preferencias', routeName: 'profile.preferencias', path: '/perfil/preferencias', icon: Settings2 },
+    { id: 'ajustes', label: 'Ajustes', action: abrirAjustes, icon: Settings2 },
     { id: 'novedades', label: 'Novedades', routeName: 'profile.novedades', path: '/perfil/novedades', icon: Sparkles },
 ];
 
 function profileMenuHref(item) {
+    if (!item.routeName) return '#';
     if (typeof route === 'function') {
         try {
             return route(item.routeName);
@@ -695,11 +697,12 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                 <nav className="gelia-sidebar-profile-links flex flex-col gap-0.5 px-2 min-w-0" aria-label="Perfil">
                                     {PROFILE_MENU_ITEMS.map((item) => {
                                         const IconComponent = item.icon;
-                                        const isActive = isRouteActive(item.path);
+                                        const isActive = item.path ? isRouteActive(item.path) : false;
                                         return (
                                             <SidebarNavLeafLink
                                                 key={item.id}
                                                 href={profileMenuHref(item)}
+                                                onAction={item.action}
                                                 active={isActive}
                                                 onClick={closeProfileMenu}
                                                 icon={IconComponent}
@@ -789,7 +792,8 @@ export default function Sidebar({ isDarkMode, toggleTheme, user, permissions, la
                                                             <SidebarNavLeafLink
                                                                 key={item.id}
                                                                 href={profileMenuHref(item)}
-                                                                active={isRouteActive(item.path)}
+                                                                onAction={item.action}
+                                                                active={item.path ? isRouteActive(item.path) : false}
                                                                 onClick={closeMobileMenu}
                                                                 icon={IconComponent}
                                                                 label={item.label}

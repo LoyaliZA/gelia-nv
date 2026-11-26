@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SIDEBAR_LAYOUT_IDS, isProfessionalSidebarLayout } from '../../config/sidebarLayouts';
+import { SIDEBAR_LAYOUT_IDS, isProfessionalSidebarLayout } from '../config/sidebarLayouts';
 
 /** Contrato AppLayout: professional_left monta V2; el resto legacy. */
 export function resolveSidebarVariant(layout) {

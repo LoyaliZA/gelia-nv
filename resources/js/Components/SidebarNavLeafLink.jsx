@@ -18,6 +18,7 @@ export default function SidebarNavLeafLink({
     role,
     disabled = false,
     badge,
+    onAction,
 }) {
     const icono = useIconoHover(Icon, {
         size: 14,
@@ -64,6 +65,29 @@ export default function SidebarNavLeafLink({
         );
     }
 
+    const className = `gelia-sidebar-nav-child-link group flex items-center w-full py-1.5 pr-3 transition-colors outline-none ${paddingClass} ${
+        active ? 'gelia-sidebar-nav-child-link--active' : ''
+    } ${extraClassName}`.trim();
+
+    // Acción sin ruta (p. ej. abrir el modal de Ajustes): botón con el mismo aspecto que un enlace.
+    if (onAction) {
+        return (
+            <button
+                type="button"
+                {...icono.triggerProps}
+                role={role}
+                aria-haspopup="dialog"
+                className={`${className} text-left bg-transparent border-0`}
+                onClick={(event) => {
+                    onClick?.(event);
+                    onAction();
+                }}
+            >
+                {content}
+            </button>
+        );
+    }
+
     return (
         <Link
             href={href}
@@ -71,9 +95,7 @@ export default function SidebarNavLeafLink({
             onClick={onClick}
             role={role}
             aria-current={active ? 'page' : undefined}
-            className={`gelia-sidebar-nav-child-link group flex items-center w-full py-1.5 pr-3 transition-colors outline-none ${paddingClass} ${
-                active ? 'gelia-sidebar-nav-child-link--active' : ''
-            } ${extraClassName}`.trim()}
+            className={className}
         >
             {content}
         </Link>

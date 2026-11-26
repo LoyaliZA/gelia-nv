@@ -125,6 +125,11 @@ class ListarSolicitudesService
         );
     }
 
+    public function aislarConsulta(Builder $query, User $usuario): void
+    {
+        $this->aplicarAislamientoDeDatos($query, $usuario);
+    }
+
     /** Contrato de claves para widgets/dashboard (checkable sin DB). */
     public static function empaquetarMetricas(int $pendientes, int $respondidasHoy, int $incorrectas): array
     {

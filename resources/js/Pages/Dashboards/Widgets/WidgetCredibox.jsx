@@ -1,10 +1,11 @@
 import React from 'react';
-import { CreditCard, AlertTriangle } from 'lucide-react';
+import { CreditCard, AlertTriangle, Check } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import { DashboardStatBlock } from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { formatoMoneda } from '../../../utils/formatoMoneda';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetCredibox({ metricas = {}, variant = 'desktop' }) {
     const alertas = metricas.alertas_pendientes ?? 0;
@@ -16,7 +17,7 @@ export default function WidgetCredibox({ metricas = {}, variant = 'desktop' }) {
             {alertas} alertas
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     const summary =
@@ -31,6 +32,7 @@ export default function WidgetCredibox({ metricas = {}, variant = 'desktop' }) {
             variant={variant}
             title="Credibox"
             icon={CreditCard}
+            tono={DASHBOARD_WIDGET_TONO.credibox}
             href={route('auto-cobranza.index')}
             ctaLabel="Abrir Credibox"
             minimalCount={alertas}

@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Link } from '@inertiajs/react';
 import useIconoHover from '@/hooks/useIconoHover';
 
-export default function SidebarLink({
+function SidebarLink({
     href,
     label,
     icon: Icon,
@@ -28,7 +28,6 @@ export default function SidebarLink({
             className={[
                 'gelia-pro-sidebar__row',
                 'gelia-pro-sidebar__link',
-                'gelia-pro-sidebar__tooltip',
                 depthClass,
                 active ? 'gelia-pro-sidebar__row--active' : '',
             ].filter(Boolean).join(' ')}
@@ -41,3 +40,5 @@ export default function SidebarLink({
         </Link>
     );
 }
+
+export default memo(SidebarLink);

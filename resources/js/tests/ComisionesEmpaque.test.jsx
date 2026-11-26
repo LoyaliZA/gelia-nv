@@ -194,6 +194,8 @@ it('difiere datos nuevos mientras hay una captura y refresca solo el reporte al 
         await escribir(cliente, 'Captura en curso');
         await act(async () => vi.advanceTimersByTimeAsync(25000));
         expect(container.textContent).toContain('Hay datos nuevos');
+        expect(container.textContent).toContain('Se conserva la revisión actual');
+        expect(container.textContent).not.toMatch(/\b(tú|tienes)\b/i);
         expect(cliente.value).toBe('Captura en curso');
         expect(recargar).not.toHaveBeenCalled();
         expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('sincronizacion.estado'), expect.objectContaining({ params: { area_id: 1 } }));
@@ -221,6 +223,7 @@ it('aplica Más filtros y recibe nuevos empaques sin desmontar la superficie', a
         };
         await render(<ComisionesEmpaque {...inicial} />);
         const titulo = container.querySelector('h1');
+        const encabezado = container.querySelector('header');
         const panel = container.querySelector('.theme-card--solid');
         const form = container.querySelector('form');
         const detalles = form.querySelector('details');
@@ -239,6 +242,7 @@ it('aplica Más filtros y recibe nuevos empaques sin desmontar la superficie', a
             acumulado={{ data: [{ id: 1, cliente: 'Cliente nuevo', situacion: 'elegible', lineas: [] }] }} />);
         expect(container.textContent).toContain('Cliente nuevo');
         expect(container.querySelector('h1')).toBe(titulo);
+        expect(container.querySelector('header')).toBe(encabezado);
         expect(container.querySelector('.theme-card--solid')).toBe(panel);
     } finally {
         vi.useRealTimers();
@@ -301,4 +305,51 @@ it('conserva el cálculo revisado hasta solicitar otra vista previa', async () =
     await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
     await act(() => navegar.mock.lastCall[2].onSuccess({ props: { preview: nuevo } }));
     expect(container.textContent).toContain('$20.00');
+});
+
+const enNav = (aria, texto) => [...container.querySelector(`[aria-label="${aria}"]`).querySelectorAll('button')].find((b) => b.textContent.trim() === texto);
+
+it('muestra el cierre de periodo como recorrido numerado con icono y aria-current', async () => {
+    await render(<ComisionesEmpaque tab="periodos" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1 }} />);
+    const cierre = container.querySelector('[aria-label="Cierre de periodo"]');
+    expect(['Periodos', 'Preparar corte', 'Por pagar', 'Historial'].every((nombre) => {
+        const item = enNav('Cierre de periodo', nombre);
+        return item && item.querySelector('svg');
+    })).toBe(true);
+    expect(enNav('Cierre de periodo', 'Periodos').getAttribute('aria-current')).toBe('page');
+    expect(enNav('Cierre de periodo', 'Preparar corte').getAttribute('aria-disabled')).toBe('true');
+    expect(cierre.querySelector('[aria-pressed]')).toBeNull();
+    await act(() => enNav('Cierre de periodo', 'Preparar corte').click());
+    expect(navegar).not.toHaveBeenCalled();
+});
+
+it('habilita Preparar corte cuando hay contexto de corte y lo marca como página actual', async () => {
+    await render(<ComisionesEmpaque tab="preparar" puede={{ configurar: true, confirmar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, limite_desde: '2026-10-01', limite_hasta: '2026-10-13' }} />);
+    const preparar = enNav('Cierre de periodo', 'Preparar corte');
+    expect(preparar.getAttribute('aria-current')).toBe('page');
+    expect(preparar.getAttribute('aria-disabled')).toBeNull();
+    expect(enNav('Cierre de periodo', 'Periodos').getAttribute('aria-current')).toBeNull();
+});
+
+it('usa aria-current e iconos en la subnavegación de configuración', async () => {
+    await render(<ComisionesEmpaque tab="configuracion" puede={{ configurar: true }}
+        areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1, seccion: 'tarifas' }} />);
+    const nav = container.querySelector('[aria-label="Configuración de comisiones"]');
+    expect(['Tarifa por caja', 'Equipo y porcentajes', 'Áreas', 'Accesos', 'Sincronización e históricos'].every((nombre) => {
+        const item = enNav('Configuración de comisiones', nombre);
+        return item && item.querySelector('svg');
+    })).toBe(true);
+    expect(enNav('Configuración de comisiones', 'Tarifa por caja').getAttribute('aria-current')).toBe('page');
+    expect(enNav('Configuración de comisiones', 'Áreas').querySelector('svg')).toBeTruthy();
+    expect(enNav('Configuración de comisiones', 'Accesos').querySelector('svg')).toBeTruthy();
+    expect(nav.querySelector('[aria-pressed]')).toBeNull();
+});
+
+it('habla en voz neutra en el armazón cuando no hay áreas asignadas', async () => {
+    await render(<ComisionesEmpaque tab="reporte" sin_areas puede={{}} />);
+    expect(container.textContent).toContain('Solicite al administrador acceso a un área de empaque.');
+    expect(container.textContent).not.toMatch(/\b(tú|tienes)\b/i);
+    expect(container.querySelector('h1').textContent).toContain('Comisiones de empaque_');
 });

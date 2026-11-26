@@ -68,7 +68,6 @@ export default function SidebarGroup({
                 type="button"
                 className={[
                     'gelia-pro-sidebar__row',
-                    'gelia-pro-sidebar__tooltip',
                     isRoot ? 'gelia-pro-sidebar__row--root' : 'gelia-pro-sidebar__row--subgroup',
                     hasActiveChild && !isExpanded ? 'gelia-pro-sidebar__row--hint' : '',
                     isExpanded && isRoot && !collapsed ? 'gelia-pro-sidebar__row--root-open' : '',
@@ -80,9 +79,8 @@ export default function SidebarGroup({
                 onMouseLeave={handleMouseLeave}
                 onFocus={icono.triggerProps.onFocus}
                 onBlur={icono.triggerProps.onBlur}
-                data-tip={collapsed && !inFlyout ? label : ''}
             >
-                {icono.nodo}
+                {isRoot ? <span className="gelia-pro-sidebar__icon-tile">{icono.nodo}</span> : icono.nodo}
                 <span className="gelia-pro-sidebar__row-label">{label}</span>
                 <ChevronRight
                     className={`gelia-pro-sidebar__row-chevron ${isExpanded ? 'gelia-pro-sidebar__row-chevron--open' : ''}`}
@@ -91,7 +89,7 @@ export default function SidebarGroup({
             </button>
             <div
                 className={`gelia-pro-sidebar__collapse ${isExpanded ? 'gelia-pro-sidebar__collapse--open' : ''}`}
-                aria-hidden={!isExpanded}
+                inert={!isExpanded}
             >
                 <div className="gelia-pro-sidebar__collapse-inner">
                     <div className={`gelia-pro-sidebar__children ${inFlyout ? 'gelia-pro-sidebar__children--flyout' : ''}`} data-depth={depth}>

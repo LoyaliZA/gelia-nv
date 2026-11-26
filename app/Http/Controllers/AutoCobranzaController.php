@@ -10,8 +10,8 @@ use App\Services\Cobranza\ConfirmarPagoCobranzaService;
 use App\Services\Cobranza\CobranzaAlertasReglasService;
 use App\Services\Cobranza\ImportarReporteCobranzaService;
 use App\Services\Cobranza\RecalcularCreditoClienteService;
+use App\Services\Cobranza\ResumenCarteraVencidaService;
 use App\Services\Cobranza\SincronizarAlertasOperativasService;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -63,36 +63,7 @@ class AutoCobranzaController extends Controller
             })
             ->values();
 
-        // 3. Agrupación administrativa de cartera vencida
-        $facturasVencidas = CobranzaFactura::where('pagada', false)->where('monto', '>', 0)->get();
-        $cartera = [
-            'rango_1_30' => ['cantidad' => 0, 'total' => 0.00],
-            'rango_31_60' => ['cantidad' => 0, 'total' => 0.00],
-            'rango_61_90' => ['cantidad' => 0, 'total' => 0.00],
-            'rango_91_120' => ['cantidad' => 0, 'total' => 0.00],
-            'rango_120_mas' => ['cantidad' => 0, 'total' => 0.00],
-        ];
-
-        foreach ($facturasVencidas as $factura) {
-            $atraso = Carbon::parse($factura->fecha_vencimiento)->startOfDay()->diffInDays(now()->startOfDay(), false);
-            
-            if ($atraso >= 1 && $atraso <= 30) {
-                $cartera['rango_1_30']['cantidad']++;
-                $cartera['rango_1_30']['total'] += (float)$factura->monto;
-            } elseif ($atraso >= 31 && $atraso <= 60) {
-                $cartera['rango_31_60']['cantidad']++;
-                $cartera['rango_31_60']['total'] += (float)$factura->monto;
-            } elseif ($atraso >= 61 && $atraso <= 90) {
-                $cartera['rango_61_90']['cantidad']++;
-                $cartera['rango_61_90']['total'] += (float)$factura->monto;
-            } elseif ($atraso >= 91 && $atraso <= 120) {
-                $cartera['rango_91_120']['cantidad']++;
-                $cartera['rango_91_120']['total'] += (float)$factura->monto;
-            } elseif ($atraso > 120) {
-                $cartera['rango_120_mas']['cantidad']++;
-                $cartera['rango_120_mas']['total'] += (float)$factura->monto;
-            }
-        }
+        $cartera = app(ResumenCarteraVencidaService::class)->ejecutar()['cartera'];
 
         $aumentosPendientes = Cliente::with('facturasCobranzaActivas')
             ->where('alerta_aumento_credito', true)
