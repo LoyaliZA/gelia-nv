@@ -30,6 +30,8 @@ Thumbs.db
 /documentacion
 /scripts/backup-snapshot-local.sh
 /snapshots/
+# Respaldos de archivos de resguardos: GitHub rechaza >100MB
+docs/**/*.tar.gz
 /tmp
 /logs
 /evidencia
