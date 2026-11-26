@@ -19,6 +19,7 @@ use App\Support\ControlPedidos\EstatusSucursalPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosCumplimientoFisico;
 use App\Support\ControlPedidos\CustodiaDocumentalTienda;
+use App\Support\ControlPedidos\TransferenciaT02;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\PuntoVenta\Resguardos\GeneradorCodigoEtiquetaResguardoPdv;
 use Carbon\Carbon;
@@ -79,12 +80,24 @@ final class TransferenciaTiendaService
         }
         $custodiaDestino = app(MovimientosTiendaService::class)->tieneCustodiaDestino((int) $pedido->sucursal_destino_id);
         $derivacion = preg_match('/city[\s-]*center/iu', $pedido->sucursalDestino?->nombre ?? '') ? 'T-03' : null;
-        $listo = (! $credito || ($json['credito_wizerp']['resultado'] ?? '') === 'aprobado') && ! $pedido->tieneSinExistenciaAbierta() && $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
+        $paraPreparar = $pedido;
+        if ($estado === 'pendiente_preparacion' && ($indices = $this->anexosDocumentalesPorSeparar($pedido)) !== []) {
+            // La preparación confirma estos anexos. Para las demás etapas se usa el pedido real.
+            $paraPreparar = clone $pedido;
+            $jsonPreparacion = $json;
+            foreach ($indices as $indice) {
+                unset($jsonPreparacion['anexo_sin_remision'][$indice]);
+            }
+            $paraPreparar->solicitud_preparacion_json = $jsonPreparacion;
+        }
+        $requisitosComunes = (! $credito || ($json['credito_wizerp']['resultado'] ?? '') === 'aprobado') && ! $pedido->tieneSinExistenciaAbierta() && $pedido->consultaCerrada() && $pedido->tienePagoValidado() && $pedido->tieneRemision()
             && filled($pedido->numero_remision) && (int) $pedido->sucursal_destino_id > 0
-            && ! $pedido->motivoBloqueoEntregaTienda() && ! $pedido->cancelado_at
+            && ! $pedido->cancelado_at
             && ! $pedido->consulta_actualizacion_pendiente && ! $resguardo?->entrega_bloqueada
             && ($json['retiro_recoleccion']['estado'] ?? '') !== 'pendiente_traslado'
             && ! (($json['segundo_traslado']['estado'] ?? '') === 'autorizada' && ! ($json['segundo_traslado']['recepcion_confirmada'] ?? false));
+        $listo = $requisitosComunes && $pedido->motivoBloqueoEntregaTienda() === null;
+        $listoParaPreparar = $paraPreparar === $pedido ? $listo : $requisitosComunes && $paraPreparar->motivoBloqueoEntregaTienda() === null;
 
         return [
             'aplica' => CustodiaDocumentalTienda::aplica($pedido),
@@ -121,8 +134,8 @@ final class TransferenciaTiendaService
             'nota_md' => app(ConfiguracionOperativaTienda::class)->notaMd(),
             'limite_recoleccion' => $limite?->toIso8601String(),
             'pendiente_gestion' => $estado !== 'entregada' && $limite && now()->gte($limite),
-            'bloqueo' => $this->accionPendiente($pedido),
-            'puede_preparar' => $listo && (! $md || $md['puede_preparar_md']) && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
+            'bloqueo' => $this->accionPendiente($pedido, $paraPreparar),
+            'puede_preparar' => $listoParaPreparar && (! $md || $md['puede_preparar_md']) && $pedido->puedeMarcarEmpacado() && $estado === 'pendiente_preparacion' && $this->puedeOrigen($pedido, $actor)
                 && (($json['area_revision'] ?? '') !== 'control_pedidos' || $actor->can('control_pedidos.cedis.empacar')),
             'bloqueo_destino' => ! $custodiaDestino ? 'La sucursal destino necesita un almacén PDV activo de custodia antes de confirmar la salida.' : null,
             'puede_salida' => $custodiaDestino && $listo && (! $md || $md['puede_preparar_md']) && $estado === 'preparada' && $this->puedeOrigen($pedido, $actor)
@@ -136,13 +149,13 @@ final class TransferenciaTiendaService
     }
 
     /** La vista nombra la etapa pendiente. No cambia el pago ni fuerza el estado. */
-    private function accionPendiente(PedidoBma $pedido): ?string
+    private function accionPendiente(PedidoBma $pedido, PedidoBma $paraPreparar): ?string
     {
         try {
             $partes = [];
             if ($pedido->tieneSinExistenciaAbierta()) {
                 $partes[] = 'Hay piezas sin existencias pendientes. Reabra la consulta para retirarlas o sustituirlas.';
-            } elseif ($entrega = $pedido->motivoBloqueoEntregaTienda()) {
+            } elseif ($entrega = $paraPreparar->motivoBloqueoEntregaTienda()) {
                 $partes[] = $entrega;
             }
             if (CustodiaDocumentalTienda::aplica($pedido) && ! $pedido->consultaCerrada() && $partes === []) {
@@ -210,7 +223,11 @@ final class TransferenciaTiendaService
                 }
                 $operacion['gestiones'][] = ['nota' => trim($datos['observaciones']), 'por_id' => $actor->id, 'por' => $actor->name, 'fecha' => now()->toIso8601String()];
             } elseif ($accion === 'preparar') {
-                app(MarcarEmpacadoPedidoBmaService::class)->ejecutar($pedido, $actor->id, [$pedido->id => $datos['bultos']]);
+                $anexosPorSeparar = $this->anexosDocumentalesPorSeparar($pedido);
+                $empacado = app(MarcarEmpacadoPedidoBmaService::class)->ejecutar($pedido, $actor->id, [$pedido->id => $datos['bultos']]);
+                if ($anexosPorSeparar !== []) {
+                    $this->registrarSeparacionAnexosDocumentales($empacado, $actor, $anexosPorSeparar);
+                }
                 $this->reflejarPreparacion($pedido, $actor);
                 $operacion['observaciones'] = trim($datos['observaciones'] ?? '');
                 $operacion['almacen_origen_id'] = $pedido->almacen_id;
@@ -292,6 +309,54 @@ final class TransferenciaTiendaService
 
             return $this->resumen($pedido->fresh(), $actor);
         });
+    }
+
+    /** @return list<int> */
+    private function anexosDocumentalesPorSeparar(PedidoBma $pedido): array
+    {
+        $json = $pedido->solicitud_preparacion_json ?? [];
+        if (! TransferenciaT02::aplica($pedido) || ! $pedido->esConsultaDisponibilidadTienda()
+            || empty($json['anexo_sin_remision']) || ! $pedido->consultaCerrada()
+            || $pedido->consulta_actualizacion_pendiente || ($json['revision_disponibilidad']['aceptacion_vigente'] ?? true) === false
+            || $pedido->motivoBloqueoCierreConsultaTienda() !== null) {
+            return [];
+        }
+
+        return array_keys(array_filter($json['anexo_sin_remision'], fn ($anexo) => is_array($anexo)
+            && ($anexo['entrada'] ?? null) === 'documento' && ($anexo['estado'] ?? null) === 'revisado_conjunto'
+            && filled($anexo['respondida_at'] ?? null) && ! ($anexo['pendiente_revision'] ?? false)
+            && ! ($anexo['pendiente_identificacion'] ?? false) && empty($anexo['piezas_respuesta'])
+            && ! collect($anexo['unidades'] ?? [])->contains(fn ($unidad) => empty($unidad['resultado']))
+            && ! isset($anexo['separada_at'])));
+    }
+
+    /** @param list<int> $indices */
+    private function registrarSeparacionAnexosDocumentales(PedidoBma $pedido, User $actor, array $indices): void
+    {
+        $json = $pedido->solicitud_preparacion_json;
+        $fecha = now()->toIso8601String();
+        $bultos = $pedido->bultosEmpaque()->pluck('id')->all();
+        $aceptadas = $pedido->revisionesProducto()->where('resolucion', 'aceptar_condicion')
+            ->whereNull('retirada_at')->pluck('id');
+        $separaciones = [];
+        foreach ($indices as $indice) {
+            $anexo = $json['anexo_sin_remision'][$indice];
+            $revisiones = collect($anexo['unidades'] ?? [])->pluck('revision_ids')->flatten()->map(fn ($id) => (int) $id);
+            $json['anexo_sin_remision'][$indice]['separada_at'] = $fecha;
+            $json['anexo_sin_remision'][$indice]['separada_por_id'] = $actor->id;
+            $separaciones[] = [
+                'indice' => $indice,
+                'linea_id' => $anexo['linea_id'] ?? null,
+                'solicitud_id' => $anexo['solicitud_id'] ?? null,
+                'documento_id' => $anexo['documento_id'] ?? null,
+                'revisiones_aceptadas_ids' => $aceptadas->intersect($revisiones)->values()->all(),
+            ];
+        }
+        $pedido->update(['solicitud_preparacion_json' => $json]);
+        app(RegistrarHistorialPedidoService::class)->ejecutar($pedido->id, $actor->id,
+            $pedido->catalogo_estatus_pedido_id, $pedido->catalogo_estatus_pedido_id,
+            'Auxiliar confirmó en bolsas la separación de los anexos conforme a la composición aprobada.', 'separacion_anexo_tienda',
+            snapshot: ['anexos' => $separaciones, 'bultos_empaque_ids' => $bultos]);
     }
 
     private function resguardo(PedidoBma $pedido, bool $bloquear = false): ?ResguardoPdv
