@@ -378,8 +378,8 @@ describe('buildSidebarNavigation permissions', () => {
         const idsDe = (id) => collectLinkIds(grupo(id).children);
 
         expect(idsDe('logistica')).toEqual(expect.arrayContaining(['traspasos', 'traspasos_cedis', 'mapa_logistico']));
-        expect(idsDe('comercial')).toEqual(expect.arrayContaining(['solicitudes', 'cancelaciones', 'mis_clientes', 'plantilla_bellaroma']));
-        expect(idsDe('finanzas')).toContain('ejercicio_escalonamiento');
+        expect(idsDe('comercial')).toEqual(expect.arrayContaining(['solicitudes', 'cancelaciones', 'mis_clientes', 'plantilla_bellaroma', 'ejercicio_escalonamiento']));
+        expect(idsDe('finanzas')).not.toContain('ejercicio_escalonamiento');
         expect(idsDe('reportes')).toContain('listados');
         expect(idsDe('gestion_interna')).toContain('asistencia');
         expect(idsDe('almacenes')).toContain('avisos');

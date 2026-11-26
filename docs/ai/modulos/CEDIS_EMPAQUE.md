@@ -9,7 +9,7 @@
 - [verificado] Nacional con consulta enviada permanece en CEDIS TODOS hasta que Ventas cierra (`consulta_cerrada_at`); PENDIENTES_PESAJE solo lista `pendiente_pesaje`. Destino de tarjeta: quien recibe y domicilio, no sucursal, salvo recolección en sucursal. `ListarPedidosCedisService.php`; `presentacionPedidoCedis.js`.
 - [verificado] Empaque opera sobre raíz y complementos con bloqueo ordenado por ID: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:25`.
 - [verificado] Bultos requieren evidencia cuando la variante lo exige: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:63`.
-- [verificado] Recolección de varias cajas permite selección parcial; el pedido espera las restantes: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php:79` y `:128`.
+- [verificado] En Nacional 2.0 sin seguro con guías de Delegado, **Marcar enviado** en el detalle registra todas las cajas activas pendientes. Los demás flujos mantienen la selección parcial: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php`.
 - [verificado] Destino municipal muestra consignatario, teléfono y dos carátulas (con/sin identificación), vista previa e impresión; el PDF es a demanda y no exige sucursal destino: `SeccionCaratulaMunicipalCedis.jsx`, `control_pedidos.cedis.caratula_municipal`.
 
 ## Reglas que no se rompen
@@ -36,4 +36,4 @@
 - [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
 - [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
 
-- Última verificación: 2026-11-26, árbol de trabajo sobre c0593554; guías por caja y recolección parcial nacional sin seguro.
+- Última verificación: 2026-11-26, árbol de trabajo sobre 050eae0e. Confirmación de todas las cajas pendientes en Nacional sin seguro.

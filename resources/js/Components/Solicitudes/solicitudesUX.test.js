@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ModalAccionSolicitud from '@/Pages/Solicitudes/Partials/ModalAccionSolicitud';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import { eventosHistorial, leerSnapshotSeguro } from '@/Pages/Solicitudes/Partials/solicitudHistorial';
+import { efectosCancelacionSolicitud, recorridoListaCancelacion } from '@/Pages/Solicitudes/Partials/efectosCancelacionSolicitud';
 import { ACCION_VISUAL, estiloEstadoSolicitud, identidadProceso } from '@/Pages/Solicitudes/Partials/solicitudesStyles';
+import ModalDesgloseTipoCliente from '@/Pages/Solicitudes/Partials/ModalDesgloseTipoCliente';
 
 let root, container;
 const solicitud = { id: 42, monto_cotizado: 3500, catalogo_lista_descuento_id: 9, proceso: { nombre: 'TAG y cambio de lista' }, cliente: { nombre: 'Cliente', lista_descuento: { monto_requerido: 3000 } }, lista_descuento: { monto_requerido: 5000 } };
@@ -37,7 +39,10 @@ describe('solicitud visual identity', () => {
         expect(estiloEstadoSolicitud(undefined).tono).toBe('aviso');
         expect(ACCION_VISUAL.aprobar.tono).toBe('exito');
         expect(ACCION_VISUAL.pago.tono).toBe('info');
+        expect(ACCION_VISUAL.solicitar.tono).toBe('info');
+        expect(ACCION_VISUAL.error.tono).toBe('aviso');
         expect(ACCION_VISUAL.eliminar.tono).toBe('peligro');
+        expect(new Set([ACCION_VISUAL.solicitar.tono, ACCION_VISUAL.error.tono, ACCION_VISUAL.eliminar.tono]).size).toBe(3);
     });
 
     it('renders the action modal with the flow header and a tonal notice', async () => {
@@ -67,21 +72,43 @@ describe('Tag and Lista action forms', () => {
         expect(close).toHaveBeenCalledOnce();
     });
 
-    it('offers only active lower lists and sends the cancellation reason to the existing endpoint', async () => {
+    it('does not ask for a lower list and previews the list the client returns to', async () => {
         const post = vi.spyOn(router, 'post').mockImplementation(() => {});
-        const listas = [
-            { id: 1, nombre: 'Público', monto_requerido: 0 },
-            { id: 2, nombre: 'Plata', monto_requerido: 3000 },
-            { id: 3, nombre: 'Oro', monto_requerido: 5000 },
-            { id: 4, nombre: 'Desactivada', monto_requerido: 2000, activo: false },
-            { id: 5, nombre: 'Colaborador', monto_requerido: 1000 },
-        ];
-        await act(() => root.render(React.createElement(ModalAccionSolicitud, { accion: 'solicitar', solicitud, listas, onClose: vi.fn() })));
-        expect([...document.querySelectorAll('#accion-lista option')].map(option => option.value)).toEqual(['', '2', '1']);
-        await act(() => { const select = document.querySelector('#accion-lista'); select.value = '2'; select.dispatchEvent(new Event('change', { bubbles: true })); });
+        const conAscenso = {
+            ...solicitud,
+            estado: { nombre: 'Respondida' },
+            lista_descuento: { nombre: 'MAYOREO ORO', monto_requerido: 5000 },
+            vendedor: { name: 'Ana Ventas' },
+            auditorias: [{ id: 1, datos_snapshot: { antes: { lista_nombre: 'PUBLICO GENERAL', tag_vendedor_nombre: 'Tag previo' } } }],
+        };
+        await act(() => root.render(React.createElement(ModalAccionSolicitud, { accion: 'solicitar', solicitud: conAscenso, onClose: vi.fn() })));
+        expect(document.querySelector('#accion-lista')).toBeNull();
+        expect(document.body.textContent).toContain('El cliente regresa a PUBLICO GENERAL');
+        expect(document.body.textContent).toContain('El TAG se retira');
         await input('#accion-motivo', 'El cliente pospuso su compra.');
         await submit();
-        expect(post).toHaveBeenCalledWith('/solicitudes.solicitar_cancelacion/42', { motivo_cancelacion: 'El cliente pospuso su compra.', catalogo_lista_rebaja_id: '2' }, expect.any(Object));
+        expect(post).toHaveBeenCalledWith('/solicitudes.solicitar_cancelacion/42', { motivo_cancelacion: 'El cliente pospuso su compra.' }, expect.any(Object));
+    });
+
+    it('previews the rollback in the supervision confirmation modal', async () => {
+        const put = vi.spyOn(router, 'put').mockImplementation(() => {});
+        const conAscenso = {
+            ...solicitud,
+            estado: { nombre: 'Respondida' },
+            cancelacion_solicitada_at: '2026-11-26T12:00:00Z',
+            motivo_cancelacion: 'El cliente pospuso su compra.',
+            monto_aplicado_al_cliente: 6000,
+            lista_descuento: { nombre: 'MAYOREO ORO', monto_requerido: 5000 },
+            vendedor: { name: 'Ana Ventas' },
+            auditorias: [{ id: 1, datos_snapshot: { antes: { lista_nombre: 'PUBLICO GENERAL', tag_vendedor_nombre: null } } }],
+        };
+        await act(() => root.render(React.createElement(ModalAccionSolicitud, { accion: 'cancelar', solicitud: conAscenso, onClose: vi.fn() })));
+        expect(document.body.textContent).toContain('Cambios al confirmar la cancelación');
+        expect(document.body.textContent).toContain('El cliente regresa a PUBLICO GENERAL');
+        expect(document.body.textContent).toContain('El TAG se retira');
+        expect(document.body.textContent).toContain('Se revierte el monto operacional');
+        await submit();
+        expect(put).toHaveBeenCalledWith('/solicitudes.cancelar/42', {}, expect.any(Object));
     });
 
     it('does not ask for a lower list when the request did not change the client list', async () => {
@@ -101,6 +128,19 @@ describe('Tag and Lista action forms', () => {
         await input('#accion-motivo', 'Solicitud duplicada por error.');
         await submit();
         expect(destroy).toHaveBeenCalledWith('/solicitudes.destroy/42', expect.objectContaining({ data: { motivo: 'Solicitud duplicada por error.' } }));
+    });
+});
+
+describe('desglose de tipo de cliente', () => {
+    it('opens the type breakdown as a dialog with the flow header', async () => {
+        await act(() => root.render(React.createElement(ModalDesgloseTipoCliente, {
+            resumen: { tipos: [{ id: 3, nombre: 'ACTIVO', solicitudes: 1, clientes: 1, vigentes: 0, errores: 0 }] },
+            onFiltrarTipo: vi.fn(),
+            onLimpiarTipo: vi.fn(),
+            onClose: vi.fn(),
+        })));
+        expect(document.querySelector('h2.gelia-solicitudes-titulo')?.textContent).toBe('Tipos de cliente');
+        expect(document.querySelector('[aria-label="Filtrar por ACTIVO: 1 solicitudes"]')).not.toBeNull();
     });
 });
 
@@ -128,5 +168,58 @@ describe('request history', () => {
         expect(leerSnapshotSeguro('{broken')).toBeNull();
         expect(leerSnapshotSeguro('{"monto_cotizado":3000}')).toEqual({ monto_cotizado: 3000 });
         expect(leerSnapshotSeguro(null)).toBeNull();
+    });
+});
+
+describe('cancellation rollback preview', () => {
+    const base = {
+        proceso: { nombre: 'ASIGNAR TAG Y CAMBIO DE LISTA' },
+        catalogo_lista_descuento_id: 9,
+        lista_descuento: { nombre: 'MAYOREO ORO' },
+        vendedor: { name: 'Ana Ventas' },
+        cliente: { lista_almacenada_nombre: 'PUBLICO GENERAL' },
+        auditorias: [{ id: 1, datos_snapshot: { antes: { lista_nombre: 'PUBLICO GENERAL', tag_vendedor_nombre: 'Tag previo' } } }],
+    };
+
+    it('keeps the original ascent until cancellation is requested', () => {
+        expect(recorridoListaCancelacion({ ...base, estado: { nombre: 'Pendiente' } })).toEqual(expect.objectContaining({
+            origen: 'PUBLICO GENERAL',
+            destino: 'MAYOREO ORO',
+            hayCambio: true,
+            cancelada: false,
+        }));
+    });
+
+    it('inverts the list flow as soon as cancellation is requested', () => {
+        expect(recorridoListaCancelacion({
+            ...base,
+            estado: { nombre: 'Respondida' },
+            cancelacion_solicitada_at: '2026-11-26T12:00:00Z',
+        })).toEqual(expect.objectContaining({
+            origen: 'MAYOREO ORO',
+            destino: 'PUBLICO GENERAL',
+            hayCambio: true,
+            cancelada: true,
+            descenso: true,
+        }));
+    });
+
+    it('inverts the list flow after an approved request is cancelled', () => {
+        const cancelada = {
+            ...base,
+            estado: { nombre: 'Cancelada' },
+            auditorias: [
+                ...base.auditorias,
+                { id: 2, estado_anterior: { nombre: 'Respondida' }, estado_nuevo: { nombre: 'Cancelada' } },
+            ],
+        };
+        expect(recorridoListaCancelacion(cancelada)).toEqual(expect.objectContaining({
+            origen: 'MAYOREO ORO',
+            destino: 'PUBLICO GENERAL',
+            hayCambio: true,
+            cancelada: true,
+            descenso: true,
+        }));
+        expect(efectosCancelacionSolicitud(cancelada).retiraTag).toBe(true);
     });
 });

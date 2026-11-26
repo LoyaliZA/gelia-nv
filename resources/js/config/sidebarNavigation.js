@@ -261,6 +261,11 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('escalonamiento.index', '/escalonamiento'),
             active: (url) => url.startsWith('/escalonamiento'),
         },
+    ].filter(Boolean);
+
+    // Comercial reúne lo que atiende el vendedor: cartera, visitas, solicitudes, plantilla de pedidos y el ejercicio de escalonamiento.
+    const comercialChildren = [
+        ...solicitudesChildren,
         showEjercicioEscalonamiento && {
             type: 'link',
             id: 'ejercicio_escalonamiento',
@@ -269,11 +274,6 @@ export function buildSidebarNavigation({ can, showAdminMenu, manualesHubVisible 
             href: () => routeHref('ejercicio_escalonamiento.index', '/funciones/ejercicio-escalonamiento'),
             active: (url) => url.startsWith('/funciones/ejercicio-escalonamiento'),
         },
-    ].filter(Boolean);
-
-    // Comercial reúne lo que atiende el vendedor: cartera, visitas, solicitudes y su plantilla de pedidos.
-    const comercialChildren = [
-        ...solicitudesChildren,
         can('plantilla_pedidos.ver') && {
             type: 'link',
             id: 'plantilla_bellaroma',

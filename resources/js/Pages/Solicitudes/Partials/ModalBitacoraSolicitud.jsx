@@ -172,7 +172,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             {solicitud.motivo_incorrecta && <AvisoSolicitud tono="peligro" compacto>Motivo del error: {solicitud.motivo_incorrecta.replaceAll('_', ' ')}</AvisoSolicitud>}
                         </div>
                         {solicitud.observaciones_vendedor && <AvisoSolicitud tono="neutro" titulo="Comentario de ventas" className="mt-5">{solicitud.observaciones_vendedor}</AvisoSolicitud>}
-                        {solicitud.motivo_cancelacion && <AvisoSolicitud tono={solicitud.estado?.nombre === 'Cancelada' ? 'neutro' : 'peligro'} titulo={solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'} className="mt-5">{solicitud.motivo_cancelacion}{(solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre && <span className="block">Lista de rebaja: {(solicitud.lista_rebaja || solicitud.listaRebaja).nombre}</span>}</AvisoSolicitud>}
+                        {solicitud.motivo_cancelacion && <AvisoSolicitud tono={solicitud.estado?.nombre === 'Cancelada' ? 'neutro' : 'peligro'} titulo={solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'} className="mt-5">{solicitud.motivo_cancelacion}</AvisoSolicitud>}
                         {solicitud.evidencia_path && <div className="mt-4"><EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" /></div>}
                     </aside>
                     <section className="gelia-tag-history-events" aria-label="Cronología de la solicitud">

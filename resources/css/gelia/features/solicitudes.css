@@ -36,6 +36,7 @@
     padding: clamp(1rem, 2vw, 1.5rem);
     border: 1px solid var(--theme-border);
     background-color: var(--theme-surface-solid);
+    overflow: visible;
 }
 
 .gelia-solicitudes-header-copy {
@@ -77,6 +78,10 @@
     align-items: stretch;
     gap: 0.5rem;
     width: 100%;
+}
+
+.gelia-solicitudes-header-actions :is(a, button) {
+    font-weight: 600;
 }
 
 .gelia-solicitudes-header-actions > :is(a, button, .relative) {

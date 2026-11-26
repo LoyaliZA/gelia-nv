@@ -23,20 +23,32 @@ class MarcarEnviadoPedidoBmaService
     /**
      * @param  list<array{id?: int|string, numero_rastreo?: string|null}>|null  $cajasSeleccion
      */
-    public function ejecutar(PedidoBma $pedido, int $usuarioId, ?array $cajasSeleccion = null): PedidoBma
-    {
-        return DB::transaction(function () use ($pedido, $usuarioId, $cajasSeleccion) {
+    public function ejecutar(
+        PedidoBma $pedido,
+        int $usuarioId,
+        ?array $cajasSeleccion = null,
+        bool $todasLasCajasPendientes = false,
+    ): PedidoBma {
+        return DB::transaction(function () use ($pedido, $usuarioId, $cajasSeleccion, $todasLasCajasPendientes) {
             $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            if ($todasLasCajasPendientes && (! GuiasPdfPorCaja::aplica($pedido) || $cajasSeleccion !== null)) {
+                throw new \InvalidArgumentException('La salida de todas las cajas pendientes solo está disponible para envíos con guías por caja de Delegado y sin selección individual.');
+            }
+
             if ($pedido->estatus?->fase_ciclo === CatalogoEstatusPedido::FASE_ENVIADO) {
                 return $pedido;
             }
 
-            return $this->enviar($pedido, $usuarioId, $cajasSeleccion);
+            return $this->enviar($pedido, $usuarioId, $cajasSeleccion, $todasLasCajasPendientes);
         });
     }
 
-    private function enviar(PedidoBma $pedido, int $usuarioId, ?array $cajasSeleccion): PedidoBma
-    {
+    private function enviar(
+        PedidoBma $pedido,
+        int $usuarioId,
+        ?array $cajasSeleccion,
+        bool $todasLasCajasPendientes,
+    ): PedidoBma {
         $this->assertCajaRecolectadaNoCambiaGuia($pedido, $cajasSeleccion);
         \App\Support\ControlPedidos\Nacional\BarreraRecepcionComplementoNacional::assert($pedido);
         \App\Support\ControlPedidos\Nacional\BarreraSeguroCajaNacional::assert($pedido);
@@ -99,7 +111,7 @@ class MarcarEnviadoPedidoBmaService
         $pendientes = $cajas->filter(fn (PedidoBmaCaja $c) => $c->estaPendiente())->values();
         $seleccion = is_array($cajasSeleccion) ? array_values($cajasSeleccion) : [];
 
-        if ($pendientes->count() > 1 && $seleccion === []) {
+        if (! $todasLasCajasPendientes && $pendientes->count() > 1 && $seleccion === []) {
             throw new \InvalidArgumentException('Selecciona qué envíos se recolectaron');
         }
 

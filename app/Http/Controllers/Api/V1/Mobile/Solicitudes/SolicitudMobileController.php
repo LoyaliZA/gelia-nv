@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\Mobile\Serializar\OperacionMovilSerializer;
 use App\Services\Solicitudes\ListarSolicitudesService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
-use App\Services\Solicitudes\ValidarListaInferiorService;
 use App\Support\Api\V1\AutorizacionMovil;
 use App\Support\Api\V1\RespuestaPaginada;
 use Illuminate\Http\JsonResponse;
@@ -50,7 +49,6 @@ class SolicitudMobileController extends Controller
         SolicitudTag $solicitud,
         ListarSolicitudesService $listar,
         SolicitarCancelacionSolicitudService $cancelar,
-        ValidarListaInferiorService $listas,
         OperacionMovilSerializer $serializar,
     ): JsonResponse {
         $usuario = $this->usuario($request);
@@ -62,17 +60,11 @@ class SolicitudMobileController extends Controller
             abort(403, 'Las solicitudes operativas se cancelan desde el módulo de cancelaciones y cotizaciones.');
         }
 
-        $exigeRebaja = $listas->exigeListaRebaja($solicitud);
         $datos = $request->validate([
             'motivo_cancelacion' => 'required|string|min:10|max:1000',
-            'catalogo_lista_rebaja_id' => ($exigeRebaja ? 'required' : 'nullable').'|integer|exists:catalogo_listas_descuento,id',
         ]);
 
-        $cancelar->ejecutar(
-            $solicitud,
-            $datos['motivo_cancelacion'],
-            isset($datos['catalogo_lista_rebaja_id']) ? (int) $datos['catalogo_lista_rebaja_id'] : null,
-        );
+        $cancelar->ejecutar($solicitud, $datos['motivo_cancelacion']);
 
         $this->cargar($solicitud->refresh());
 

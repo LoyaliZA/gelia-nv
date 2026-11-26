@@ -14,6 +14,7 @@ class MarcarEnviadoPedidoBmaRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'todas_las_cajas_pendientes' => ['sometimes', 'boolean'],
             'cajas' => ['nullable', 'array'],
             'cajas.*.id' => ['required_with:cajas', 'integer'],
             'cajas.*.numero_rastreo' => ['nullable', 'string', 'min:3', 'max:100'],

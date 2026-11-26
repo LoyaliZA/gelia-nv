@@ -14,7 +14,6 @@ use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Services\Solicitudes\ExportarReporteSolicitudesService;
 use App\Services\Solicitudes\AjustarMontoPorSolicitudService;
 use App\Services\Solicitudes\TipoClienteSolicitudResolver;
-use App\Services\Solicitudes\ValidarListaInferiorService;
 use App\Services\Solicitudes\EscalonamientoService;
 use App\Services\Escalonamiento\ProyeccionClienteEscalonamiento;
 use Illuminate\Http\RedirectResponse;
@@ -88,6 +87,7 @@ class SolicitudController extends Controller
             'solicitudes' => $solicitudes,
             'metricas' => fn () => $listarService->metricas(Auth::user()),
             'resumen' => fn () => $listarService->resumenFiltrado(Auth::user(), $request->all()),
+            'conteosTab' => fn () => $listarService->conteosPorTab(Auth::user(), $request->all()),
             'filtros' => $request->all(), // Pasamos los filtros actuales para mantener el estado en React
             'procesos' => $procesos,
             'listas' => CatalogoListaDescuento::with('porcentajeEscalonamiento')->where('activo', true)->get(),
@@ -882,18 +882,11 @@ class SolicitudController extends Controller
             abort(403, 'Las solicitudes operativas se cancelan desde el módulo Cancelaciones y Cotizaciones.');
         }
 
-        $exigeRebaja = app(ValidarListaInferiorService::class)->exigeListaRebaja($solicitud);
-
         $request->validate([
             'motivo_cancelacion' => 'required|string|min:10|max:1000',
-            'catalogo_lista_rebaja_id' => ($exigeRebaja ? 'required' : 'nullable') . '|integer|exists:catalogo_listas_descuento,id',
         ]);
 
-        $service->ejecutar(
-            $solicitud,
-            $request->motivo_cancelacion,
-            $request->input('catalogo_lista_rebaja_id') ? (int) $request->catalogo_lista_rebaja_id : null,
-        );
+        $service->ejecutar($solicitud, $request->motivo_cancelacion);
 
         return $this->redirectToSolicitudesList($request, 'Solicitud de cancelación enviada al área administrativa.');
     }

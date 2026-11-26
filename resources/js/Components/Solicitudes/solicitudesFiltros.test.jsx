@@ -89,3 +89,54 @@ it('muestra una transición accesible hacia la propuesta congelada aunque la sol
     expect(table.querySelectorAll('[data-changed="true"]')).toHaveLength(2);
     expect(table.textContent).toContain('Pasa a');
 });
+
+it('usa cápsulas compactas junto a la búsqueda en la bandeja de solicitudes', async () => {
+    await act(() => root.render(<FiltrosSolicitudes variante="tag-lista" tabActiva="PENDIENTES" busqueda="" tipoFecha="TODAS" fechaInicio="" fechaFin="" filtroVendedor="" filtroMotivo="" conteosTab={{ TODAS: 15, PENDIENTES: 4, RESPONDIDAS: 8, INCORRECTAS: 2, CANCELADAS: 1 }} onAplicarFiltros={vi.fn()} onCambiarTab={vi.fn()} />));
+    expect(container.querySelector('.gelia-segment')).toBeNull();
+    const capsulaActiva = container.querySelector('.gelia-tag-capsula[aria-pressed="true"]');
+    expect(capsulaActiva?.textContent).toContain('Pendientes');
+    expect(capsulaActiva?.textContent).toContain('4');
+    expect(capsulaActiva?.querySelector('svg')).not.toBeNull();
+    expect(container.textContent).not.toContain('Vigentes');
+    expect(container.textContent).not.toContain('Eliminadas');
+    expect(container.querySelector('.gelia-tag-filtros-consulta')).not.toBeNull();
+    expect(container.querySelector('.gelia-tag-filtros-busqueda')).not.toBeNull();
+    expect(container.querySelector('.gelia-tag-filtros-busqueda #filtro-fecha-campo')?.value).toBe('folio');
+    expect(container.querySelector('.gelia-tag-filtros-campo-wrap')?.getAttribute('data-valor')).toBe('Folio');
+    expect([...container.querySelectorAll('.gelia-tag-filtros-campo option')].map((option) => option.textContent)).toEqual(['Folio', 'N.º', 'Cliente', 'Resp.']);
+    expect(container.querySelector('.gelia-tag-filtros-busqueda input[type="search"]')).not.toBeNull();
+    expect([...container.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Buscar')).toBeUndefined();
+});
+
+it('consulta la papelera desde filtros y no desde las cápsulas', async () => {
+    const apply = vi.fn();
+    await act(() => root.render(<FiltrosSolicitudes variante="tag-lista" mostrarEliminadas tabActiva="TODAS" busqueda="" tipoFecha="TODAS" fechaInicio="" fechaFin="" filtroVendedor="" filtroMotivo="" conteosTab={{ ELIMINADAS: 3 }} onAplicarFiltros={apply} onCambiarTab={vi.fn()} />));
+    expect([...container.querySelectorAll('.gelia-tag-capsula')].map((button) => button.textContent)).not.toEqual(expect.arrayContaining([expect.stringContaining('Eliminadas')]));
+    await act(() => document.querySelector('button[aria-controls]').click());
+    expect(container.querySelector('#filtro-fecha-eliminadas')).not.toBeNull();
+    await cambiar('filtro-fecha-eliminadas', '1');
+    await aplicar();
+    expect(apply).toHaveBeenLastCalledWith(expect.objectContaining({ tab: 'ELIMINADAS' }));
+});
+
+it('espera a que dejen de teclear antes de buscar y acota el campo', async () => {
+    vi.useFakeTimers();
+    const apply = vi.fn();
+    await act(() => root.render(<FiltrosSolicitudes variante="tag-lista" tabActiva="TODAS" busqueda="" tipoFecha="TODAS" fechaInicio="" fechaFin="" filtroVendedor="" filtroMotivo="" onAplicarFiltros={apply} onCambiarTab={vi.fn()} />));
+    const input = container.querySelector('input[type="search"]');
+    await act(() => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'Hi');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(apply).not.toHaveBeenCalled();
+    await act(() => { vi.advanceTimersByTime(399); });
+    expect(apply).not.toHaveBeenCalled();
+    await act(() => { vi.advanceTimersByTime(1); });
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({ q: 'Hi', q_campo: 'folio' }), expect.objectContaining({ replace: true }));
+    await act(() => {
+        const campo = document.getElementById('filtro-fecha-campo');
+        campo.value = 'nombre_cliente';
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(apply).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Hi', q_campo: 'nombre_cliente' }), expect.objectContaining({ replace: true }));
+});

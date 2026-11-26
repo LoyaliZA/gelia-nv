@@ -11,7 +11,7 @@ import {
     Clock, Plus, MoreVertical, CheckCircle2, AlertOctagon, Sparkles,
     History, CheckSquare, CreditCard, User, Copy, Check, Tag, ShieldAlert,
     ChevronLeft, ChevronRight, FileImage, MessageSquare, AlertTriangle, Eye, Ban,
-    FileSpreadsheet, FileText, Download, Calculator, ChevronDown, ArrowRight, Store, Info
+    FileSpreadsheet, FileText, Download, Calculator, ChevronDown, TrendingUp, TrendingDown, Store, Info, Users
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -23,6 +23,7 @@ import ModalBitacoraSolicitud from './Partials/ModalBitacoraSolicitud';
 import ModalConsultaSolicitud from './Partials/ModalConsultaSolicitud';
 import ModalRespuestaConsulta from './Partials/ModalRespuestaConsulta';
 import ModalEjercicioEscalonamiento from './Partials/ModalEjercicioEscalonamiento';
+import ModalDesgloseTipoCliente from './Partials/ModalDesgloseTipoCliente';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
@@ -41,8 +42,9 @@ import {
 } from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
+import { efectosCancelacionSolicitud, recorridoListaCancelacion, recorridoTipoCancelacion } from './Partials/efectosCancelacionSolicitud';
 
-const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-medium theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
+const BTN_SECUNDARIO = 'inline-flex items-center justify-center gap-2 rounded-xl border theme-border theme-element px-3 py-2 text-sm font-semibold theme-text-main transition-colors duration-200 hover:border-[var(--color-primario)] hover:text-[var(--color-primario)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 const ITEM_EXPORTAR = 'flex items-center gap-2 rounded-lg px-3 py-2 text-sm theme-text-main hover:bg-black/5 focus-visible:outline focus-visible:outline-2 dark:hover:bg-white/5';
 function BotonCabecera({ iconos, className, children, ...props }) {
     const principal = useIconoHover(iconos[0], { size: 16, className: 'h-4 w-4 shrink-0' });
@@ -154,23 +156,91 @@ const formatearTiempoRelativo = (fechaString, compacto = false) => {
     return `${fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}${aLas}${horaFormateada}`;
 };
 
-// «Ascenso a» cuando la lista destino exige un monto mayor al de la lista actual; «Cambio a» si es una rebaja.
-const etiquetaDestinoLista = (solicitud, listaDestino) => {
-    const actual = solicitud.cliente?.lista_descuento || solicitud.cliente?.listaDescuento;
-    const montoActual = Number(actual?.monto_requerido);
-    const montoDestino = Number(listaDestino?.monto_requerido);
-    return Number.isFinite(montoActual) && Number.isFinite(montoDestino) && actual && montoDestino < montoActual
-        ? 'Cambio a'
-        : 'Ascenso a';
+const leerSnapshot = (snapshot) => {
+    if (typeof snapshot !== 'string') return snapshot;
+    try { return JSON.parse(snapshot); } catch { return null; }
 };
 
-const EtiquetasOperacion = ({ solicitud, children }) => {
+const nombreClave = (nombre) => (nombre || '').replace(/\s+/g, ' ').trim().toUpperCase();
+const nombresIguales = (a, b) => Boolean(nombreClave(a)) && nombreClave(a) === nombreClave(b);
+
+function FlechaEscalera({ cancelada = false, descenso = false }) {
+    const baja = cancelada || descenso;
+    const Icono = baja ? TrendingDown : TrendingUp;
+    const tono = cancelada ? 'peligro' : descenso ? 'aviso' : 'exito';
+    const texto = cancelada ? 'Regresa' : descenso ? 'Descenso' : 'Ascenso';
+    return (
+        <span className="gelia-tag-flujo-escalera" data-tono={tono}>
+            <Icono className="gelia-tag-flujo-flecha" aria-hidden="true" />
+            <span className={cancelada ? 'gelia-tag-flujo-escalera-texto' : 'sr-only'}>{texto}</span>
+        </span>
+    );
+}
+
+function BadgeProceso({ solicitud }) {
+    const identidad = identidadProceso(solicitud);
+    const Icono = identidad.icono;
+    return (
+        <span className="gelia-tag-operacion-titulo gelia-tag-proceso-badge" style={{ '--proceso-color': identidad.color }}>
+            <Icono className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            {identidad.etiqueta}
+        </span>
+    );
+}
+
+function etiquetaTipoCliente(nombre) {
+    return (
+        <EtiquetaConIcono
+            icon={iconoTipoCliente(nombre)}
+            className={claseEtiquetaTipoCliente(nombre)}
+            iconClassName="h-3 w-3"
+            size={12}
+        >
+            {nombre}
+        </EtiquetaConIcono>
+    );
+}
+
+function tipoClienteDestino(solicitud) {
+    return solicitud.tipo_cliente?.nombre || solicitud.tipoCliente?.nombre || null;
+}
+
+function tipoClienteOrigen(solicitud) {
+    const auditorias = [...(solicitud.auditorias || [])].sort((a, b) => (a.id || 0) - (b.id || 0));
+    for (const registro of auditorias) {
+        const nombre = leerSnapshot(registro.datos_snapshot)?.antes?.tipo_cliente_nombre;
+        if (nombre) return nombre;
+    }
+    return solicitud.cliente?.tipo?.nombre
+        || solicitud.cliente?.tipo_cliente?.nombre
+        || solicitud.cliente?.tipoCliente?.nombre
+        || null;
+}
+
+function FlujoTipoCliente({ solicitud }) {
+    const recorrido = recorridoTipoCancelacion(solicitud);
+    const visible = recorrido.destino || recorrido.origen || tipoClienteDestino(solicitud) || tipoClienteOrigen(solicitud);
+    if (!visible) return null;
+    if (!recorrido.hayCambio) {
+        return <div className="gelia-tag-cliente-tipo">{etiquetaTipoCliente(visible)}</div>;
+    }
+    return (
+        <div className="gelia-tag-cliente-tipo">
+            <div className="gelia-tag-flujo">
+                <span className="gelia-tag-flujo-paso">{etiquetaTipoCliente(recorrido.origen)}</span>
+                <FlechaEscalera cancelada={recorrido.cancelada} />
+                <span className="gelia-tag-flujo-paso gelia-tag-flujo-paso--destino">{etiquetaTipoCliente(recorrido.destino)}</span>
+            </div>
+        </div>
+    );
+}
+
+const piezasOperacion = (solicitud, children) => {
     const nombreProceso = solicitud.proceso?.nombre || '';
     const esTag = nombreProceso.toUpperCase().includes('TAG');
-    const esCambioLista = nombreProceso.toUpperCase().includes('LISTA');
-    const objLista = solicitud.lista_descuento || solicitud.listaDescuento;
-    const objTipo = solicitud.tipo_cliente || solicitud.tipoCliente;
-    const responsableTag = solicitud.vendedor?.name?.split(' ').slice(0, 2).join(' ') || 'Responsable';
+    const efectos = efectosCancelacionSolicitud(solicitud);
+    const recorridoLista = recorridoListaCancelacion(solicitud);
+    const responsableTag = (efectos.tagNombre || solicitud.vendedor?.name || '').split(' ').slice(0, 2).join(' ') || 'Responsable';
 
     const listaAlmacenada = solicitud.cliente?.lista_almacenada_nombre
         || solicitud.cliente?.lista_descuento?.nombre
@@ -195,83 +265,92 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
         )
     );
 
-    return (
-        <div className="gelia-tag-etiquetas flex flex-col items-start">
+    const listaVisible = recorridoLista.destino || recorridoLista.origen || listaEfectiva || listaAlmacenada;
+    const recorrido = (
+        <div className="gelia-tag-operacion-recorrido">
+            {recorridoLista.hayCambio ? (
+                <div className="gelia-tag-flujo">
+                    <span className="gelia-tag-flujo-paso">{etiquetaLista(recorridoLista.origen)}</span>
+                    <FlechaEscalera cancelada={recorridoLista.cancelada} descenso={recorridoLista.descenso} />
+                    <span className="gelia-tag-flujo-paso gelia-tag-flujo-paso--destino">{etiquetaLista(recorridoLista.destino)}</span>
+                </div>
+            ) : (
+                etiquetaLista(listaVisible)
+            )}
+        </div>
+    );
+
+    const tagRetirado = esTag && efectos.retiraTag;
+    const tag = esTag ? (
+        tagRetirado && efectos.tagAnterior && !nombresIguales(efectos.tagNombre, efectos.tagAnterior) ? (
             <div className="gelia-tag-flujo">
                 <span className="gelia-tag-flujo-paso">
-                    <span className="sr-only">Lista actual</span>
-                    {etiquetaLista(listaAlmacenada)}
-                </span>
-                {listaEfectiva !== listaAlmacenada && (
-                    <span className="gelia-tag-flujo-paso">
-                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="sr-only">Lista aplicada</span>
-                        {etiquetaLista(listaEfectiva)}
-                    </span>
-                )}
-                {esCambioLista && objLista && (
-                    <span className="gelia-tag-flujo-paso gelia-tag-flujo-paso--destino">
-                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="gelia-tag-flujo-etiqueta">{etiquetaDestinoLista(solicitud, objLista)}</span>
-                        {etiquetaLista(objLista.nombre)}
-                    </span>
-                )}
-                {esCambioLista && !objLista && !solicitud.compra_en_tienda_solo_tag && (
-                    <span className="gelia-tag-flujo-paso">
-                        <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="gelia-tag-flujo-etiqueta">Mantiene lista actual</span>
-                    </span>
-                )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 empty:hidden">
-                {esTag && (
                     <EtiquetaConIcono icon={Tag} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
                         {responsableTag}
                     </EtiquetaConIcono>
-                )}
-                {objTipo && (
-                    <EtiquetaConIcono
-                        icon={iconoTipoCliente(objTipo.nombre)}
-                        className={claseEtiquetaTipoCliente(objTipo.nombre)}
-                        iconClassName="h-3 w-3"
-                        size={12}
-                    >
-                        {objTipo.nombre}
+                </span>
+                <FlechaEscalera cancelada />
+                <span className="gelia-tag-flujo-paso gelia-tag-flujo-paso--destino">
+                    <EtiquetaConIcono icon={Tag} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
+                        {efectos.tagAnterior.split(' ').slice(0, 2).join(' ')}
                     </EtiquetaConIcono>
-                )}
-                {solicitud.cliente && (
-                    <span className="gelia-tag-dato-estado" data-activo={!clienteInactivo}>
-                        <span className="gelia-tag-dato-estado-punto" aria-hidden="true" />
-                        Cliente {clienteInactivo ? 'inactivo' : 'activo'}
-                    </span>
-                )}
-                {(aplicacion === 'pendiente' || aplicacion === 'fallida') && (
-                    <EtiquetaConIcono
-                        icon={aplicacion === 'fallida' ? AlertOctagon : Clock}
-                        className={aplicacion === 'fallida' ? CHIP_ERROR : CHIP_AVISO}
-                        iconClassName="h-3 w-3"
-                        size={12}
-                    >
-                        {aplicacion === 'fallida' ? 'Aplicación fallida' : 'Aplicación pendiente'}
-                    </EtiquetaConIcono>
-                )}
-                {solicitud.compra_en_tienda && (
-                    <EtiquetaConIcono icon={Store} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
-                        Compra en tienda
-                    </EtiquetaConIcono>
-                )}
-                {solicitud.compra_en_tienda_solo_tag && (
-                    <EtiquetaConIcono icon={Tag} className={`${CHIP_INFO} normal-case tracking-normal`} iconClassName="h-3 w-3" size={12}>
-                        Compra realizada: solicitar tag
-                    </EtiquetaConIcono>
-                )}
-                {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
-                    <EtiquetaConIcono icon={Ban} className={CHIP_ERROR} iconClassName="h-3 w-3" size={12}>
-                        Cancelación solicitada
-                    </EtiquetaConIcono>
-                )}
-                {children}
+                </span>
             </div>
+        ) : (
+            <EtiquetaConIcono icon={tagRetirado ? Ban : Tag} className={tagRetirado ? CHIP_ERROR : CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
+                {tagRetirado ? `TAG se retira · ${responsableTag}` : responsableTag}
+            </EtiquetaConIcono>
+        )
+    ) : null;
+
+    const marcas = (
+        <div className="gelia-tag-operacion-marcas empty:hidden">
+            {solicitud.cliente && (
+                <span className="gelia-tag-dato-estado" data-activo={!clienteInactivo}>
+                    <span className="gelia-tag-dato-estado-punto" aria-hidden="true" />
+                    Cliente {clienteInactivo ? 'inactivo' : 'activo'}
+                </span>
+            )}
+            {(aplicacion === 'pendiente' || aplicacion === 'fallida') && (
+                <EtiquetaConIcono
+                    icon={aplicacion === 'fallida' ? AlertOctagon : Clock}
+                    className={aplicacion === 'fallida' ? CHIP_ERROR : CHIP_AVISO}
+                    iconClassName="h-3 w-3"
+                    size={12}
+                >
+                    {aplicacion === 'fallida' ? 'Aplicación fallida' : 'Aplicación pendiente'}
+                </EtiquetaConIcono>
+            )}
+            {solicitud.compra_en_tienda && (
+                <EtiquetaConIcono icon={Store} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
+                    Compra en tienda
+                </EtiquetaConIcono>
+            )}
+            {solicitud.compra_en_tienda_solo_tag && (
+                <EtiquetaConIcono icon={Tag} className={`${CHIP_INFO} normal-case tracking-normal`} iconClassName="h-3 w-3" size={12}>
+                    Compra realizada: solicitar tag
+                </EtiquetaConIcono>
+            )}
+            {solicitud.cancelacion_solicitada_at && solicitud.estado?.nombre !== 'Cancelada' && (
+                <EtiquetaConIcono icon={Ban} className={CHIP_ERROR} iconClassName="h-3 w-3" size={12}>
+                    Cancelación solicitada
+                </EtiquetaConIcono>
+            )}
+            {children}
+        </div>
+    );
+
+    return { recorrido, marcas, tag };
+};
+
+const EtiquetasOperacion = ({ solicitud, children }) => {
+    const { recorrido, marcas, tag } = piezasOperacion(solicitud, children);
+    return (
+        <div className="gelia-tag-etiquetas">
+            <BadgeProceso solicitud={solicitud} />
+            {marcas}
+            {recorrido}
+            {tag}
         </div>
     );
 };
@@ -359,7 +438,7 @@ const FeedbackYComentarios = ({ solicitud }) => {
     );
 };
 
-const obtenerListaRebajaNombre = solicitud => solicitud?.lista_rebaja?.nombre || solicitud?.listaRebaja?.nombre || null;
+const obtenerListaRegresoNombre = (solicitud) => efectosCancelacionSolicitud(solicitud).listaRegreso || null;
 
 const TiemposSolicitud = ({ solicitud }) => (
     <div className="gelia-tag-tiempos mt-1 space-y-0.5">
@@ -388,6 +467,7 @@ const ClienteSolicitud = ({ solicitud, esHeredado, copiadoId, onCopiar }) => (
             {esHeredado && <span className={CHIP_NEUTRO}><ShieldAlert className="h-3 w-3" aria-hidden="true" /> Heredado</span>}
         </div>
         <div className="line-clamp-2 text-base font-semibold break-words theme-text-main" title={solicitud.cliente?.nombre || undefined}>{solicitud.cliente?.nombre || 'Nuevo prospecto'}</div>
+        <FlujoTipoCliente solicitud={solicitud} />
     </div>
 );
 
@@ -415,15 +495,26 @@ const MotivoIncidencia = ({ motivo }) => (
     </EtiquetaConIcono>
 );
 
-const OperacionSolicitud = ({ solicitud, listas }) => (
-    <div className="gelia-tag-operacion flex flex-col">
-        <div className="gelia-tag-operacion-titulo text-sm font-semibold break-words theme-text-main">{identidadProceso(solicitud).etiqueta}</div>
-        <EtiquetasOperacion solicitud={solicitud} listas={listas}>
+const OperacionSolicitud = ({ solicitud }) => {
+    const { recorrido, marcas, tag } = piezasOperacion(
+        solicitud,
+        <>
             <ConsultasPendientes solicitud={solicitud} />
             {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
-        </EtiquetasOperacion>
-    </div>
-);
+        </>,
+    );
+
+    return (
+        <div className="gelia-tag-operacion">
+            <div className="gelia-tag-operacion-cabecera">
+                <BadgeProceso solicitud={solicitud} />
+                {marcas}
+            </div>
+            {recorrido}
+            {tag}
+        </div>
+    );
+};
 
 const EstadoVacioLista = ({ hayFiltros, puedeCrear, onLimpiar, onCrear }) => (
     <div className="gelia-tag-vacio rounded-xl border theme-border theme-surface px-6 py-10 text-center">
@@ -483,20 +574,17 @@ const MotivoCancelacionBloque = ({ solicitud }) => {
     const fechaSolicitud = solicitud.cancelacion_solicitada_at
         ? formatearTiempoRelativo(solicitud.cancelacion_solicitada_at)
         : null;
-    const listaRebajaNombre = obtenerListaRebajaNombre(solicitud);
+    const listaRegresoNombre = obtenerListaRegresoNombre(solicitud);
+    const efectos = efectosCancelacionSolicitud(solicitud);
 
     return (
         <AvisoSolicitud tono={pendiente ? 'peligro' : 'neutro'} titulo={titulo} icono={Ban} className="mt-2">
             {fechaSolicitud && pendiente && <span className="block text-xs theme-text-muted">Solicitada {fechaSolicitud}</span>}
-            {listaRebajaNombre && <span className="block text-xs theme-text-muted">Lista de rebaja: {listaRebajaNombre}</span>}
+            {efectos.cambiaLista && listaRegresoNombre && <span className="block text-xs theme-text-muted">Lista de regreso: {listaRegresoNombre}</span>}
+            {efectos.retiraTag && <span className="block text-xs theme-text-muted">TAG se retira</span>}
             <span className="block">{solicitud.motivo_cancelacion}</span>
         </AvisoSolicitud>
     );
-};
-
-const leerSnapshot = (snapshot) => {
-    if (typeof snapshot !== 'string') return snapshot;
-    try { return JSON.parse(snapshot); } catch { return null; }
 };
 
 // Resumen de la fila: el origen en mayúsculas ("SISTEMA AUTOMÁTICO:", "PAGO CONFIRMADO.") o el estado inicial
@@ -646,6 +734,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
     const accion = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-main transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
     const accionPeligro = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-peligro transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
     const vis = ACCION_VISUAL;
+    const claseMenu = (tono, extra = '') => `${tono === 'peligro' ? accionPeligro : accion}${extra ? ` ${extra}` : ''}`;
 
     return createPortal(
         <>
@@ -672,7 +761,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 )}
 
                 {can('solicitudes.reportar') && esVencimiento && !solicitud.rollback_confirmado_at && (
-                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={claseMenu(vis.rollback.tono)}>
                         <MenuIcono tono={vis.rollback.tono} icon={vis.rollback.icono} /> Confirmar reversión
                     </button>
                 )}
@@ -702,13 +791,13 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 )}
 
                 {puedeSolicitarCancelacion && (
-                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={claseMenu(vis.solicitar.tono)}>
                         <MenuIcono tono={vis.solicitar.tono} icon={vis.solicitar.icono} /> Solicitar cancelación
                     </button>
                 )}
 
                 {puedeConfirmarCancelacion && (
-                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={claseMenu(vis.cancelar.tono)}>
                         <MenuIcono tono={vis.cancelar.tono} icon={vis.cancelar.icono} /> Confirmar cancelación
                     </button>
                 )}
@@ -739,7 +828,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
                 {/* Reportar error — staff en etapas activas; vendedora dueña solo en Respondida */}
                 {puedeReportarError && !esAlertaPago && idIncorrecta && (
-                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={accionPeligro}>
+                    <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={claseMenu(vis.error.tono)}>
                         <MenuIcono tono={vis.error.tono} icon={vis.error.icono} /> Reportar error
                     </button>
                 )}
@@ -753,7 +842,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
                 {/* Eliminar */}
                 {can('solicitudes.eliminar') && (
-                    <button type="button" role="menuitem" onClick={() => eliminarSolicitud(solicitud.id)} className={`${accionPeligro} mt-1 border-t theme-border pt-2`}>
+                    <button type="button" role="menuitem" onClick={() => eliminarSolicitud(solicitud.id)} className={claseMenu(vis.eliminar.tono, 'mt-1 border-t theme-border pt-2')}>
                         <MenuIcono tono={vis.eliminar.tono} icon={vis.eliminar.icono} /> Eliminar registro
                     </button>
                 )}
@@ -798,6 +887,7 @@ export default function Index({
     filtros = {},
     metricas = null,
     resumen = null,
+    conteosTab = {},
     listas_filtro = listas,
     tipos_cliente_filtro = tipos_cliente,
     auth
@@ -824,6 +914,8 @@ export default function Index({
     const [procesandoAccion, setProcesandoAccion] = useState(false);
     const [consultando, setConsultando] = useState(false);
     const [menuExportar, setMenuExportar] = useState(false);
+    const [menuExportarPos, setMenuExportarPos] = useState({ top: 0, left: 0 });
+    const [modalDesglose, setModalDesglose] = useState(false);
     const exportarRef = useRef(null);
 
     const modalsAbiertosRef = useRef(false);
@@ -838,11 +930,13 @@ export default function Index({
         || modalEscalonamiento
         || detalleId !== null
         || modalAccion !== null
-        || menuAbierto !== null;
+        || menuAbierto !== null
+        || modalDesglose;
 
     const {
         tabActiva,
         busqueda,
+        busquedaCampo,
         tipoFecha,
         fechaInicio,
         fechaFin,
@@ -910,7 +1004,7 @@ export default function Index({
         const interval = setInterval(() => {
             if (/\/\d+\//.test(window.location.pathname)) return;
             if (modalsAbiertosRef.current) return;
-            router.reload({ only: ['solicitudes', 'metricas', 'resumen'], preserveState: true, preserveScroll: true, showProgress: false });
+            router.reload({ only: ['solicitudes', 'metricas', 'resumen', 'conteosTab'], preserveState: true, preserveScroll: true, showProgress: false });
         }, 15000);
         return () => clearInterval(interval);
     }, []);
@@ -924,22 +1018,30 @@ export default function Index({
         return () => window.removeEventListener('scroll', handleScroll, true);
     }, []);
 
+    const abrirMenuExportar = () => {
+        if (menuExportar) {
+            setMenuExportar(false);
+            return;
+        }
+        const boton = exportarRef.current;
+        if (boton) {
+            const caja = boton.getBoundingClientRect();
+            const ancho = 12 * 16;
+            setMenuExportarPos({
+                top: caja.bottom + 8,
+                left: Math.max(8, Math.min(caja.right - ancho, window.innerWidth - ancho - 8)),
+            });
+        }
+        setMenuExportar(true);
+    };
+
     useEffect(() => {
         if (!menuExportar) return undefined;
-        const cerrar = (event) => {
-            if (exportarRef.current && !exportarRef.current.contains(event.target)) {
-                setMenuExportar(false);
-            }
-        };
         const tecla = (event) => {
             if (event.key === 'Escape') setMenuExportar(false);
         };
-        document.addEventListener('mousedown', cerrar);
         document.addEventListener('keydown', tecla);
-        return () => {
-            document.removeEventListener('mousedown', cerrar);
-            document.removeEventListener('keydown', tecla);
-        };
+        return () => document.removeEventListener('keydown', tecla);
     }, [menuExportar]);
 
     // FALLBACK DE PORTAPAPELES PARA HTTP LOCALHOST
@@ -1044,7 +1146,6 @@ export default function Index({
                 <ModalAccionSolicitud accion="solicitar"
                     onClose={() => setModalCancelacion({ abierto: false, solicitud: null })}
                     solicitud={modalCancelacion.solicitud}
-                    listas={listas}
                 />
             )}
             {modalConfirmarCancelacion.abierto && (
@@ -1055,6 +1156,15 @@ export default function Index({
                 />
             )}
             {modalAccion && <ModalAccionSolicitud {...modalAccion} onClose={() => setModalAccion(null)} />}
+            {modalDesglose && resumen && (
+                <ModalDesgloseTipoCliente
+                    resumen={resumen}
+                    filtroTipoCliente={filtroTipoCliente}
+                    onFiltrarTipo={(tipoClienteId) => aplicarFiltros({ tipo_cliente_id: tipoClienteId })}
+                    onLimpiarTipo={() => aplicarFiltros({ tipo_cliente_id: '' })}
+                    onClose={() => setModalDesglose(false)}
+                />
+            )}
             {detalleId !== null && solicitudesFiltradas.find(s => s.id === detalleId) && <ModalDetalleSolicitud solicitud={solicitudesFiltradas.find(s => s.id === detalleId)} auth={auth} onClose={() => setDetalleId(null)} onMarcarLeido={marcarConsultaLeida} procesando={procesandoAccion} onBitacora={can('configuracion.ver_auditoria') ? () => { setModalBitacora({ abierto: true, solicitud: solicitudesFiltradas.find(s => s.id === detalleId) }); setDetalleId(null); } : null} />}
             <GeliaPageShell className="gelia-solicitudes-workspace gelia-tag-lista space-y-5">
                 <p className="sr-only" aria-live="polite">{copiadoId ? 'Número de cliente copiado' : ''}</p>
@@ -1076,27 +1186,45 @@ export default function Index({
                                     className={BTN_SECUNDARIO}
                                     aria-expanded={menuExportar}
                                     aria-haspopup="menu"
-                                    onClick={() => setMenuExportar((abierto) => !abierto)}
+                                    onClick={abrirMenuExportar}
                                 >
                                     Exportar
                                 </BotonCabecera>
-                                {menuExportar && (
-                                    <div className="absolute right-0 z-20 mt-2 w-48 rounded-xl border theme-border theme-surface p-1 shadow-lg" role="menu">
-                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileText}>
-                                            PDF
-                                        </OpcionExportar>
-                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileSpreadsheet}>
-                                            Excel
-                                        </OpcionExportar>
-                                        <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })} className={ITEM_EXPORTAR} role="menuitem" icon={Download}>
-                                            CSV
-                                        </OpcionExportar>
-                                        <Link href={route('reportes.solicitudes.index', exportParams)} className={ITEM_EXPORTAR} role="menuitem">
-                                            Reportes
-                                        </Link>
-                                    </div>
+                                {menuExportar && typeof document !== 'undefined' && createPortal(
+                                    <>
+                                        <div className="fixed inset-0 z-[999]" onClick={() => setMenuExportar(false)} />
+                                        <div
+                                            className="fixed z-[1000] w-48 rounded-xl border theme-border theme-surface p-1 shadow-lg"
+                                            role="menu"
+                                            style={{ top: menuExportarPos.top, left: menuExportarPos.left }}
+                                        >
+                                            <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'pdf' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileText}>
+                                                PDF
+                                            </OpcionExportar>
+                                            <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'xlsx' })} className={ITEM_EXPORTAR} role="menuitem" icon={FileSpreadsheet}>
+                                                Excel
+                                            </OpcionExportar>
+                                            <OpcionExportar href={route('reportes.solicitudes.exportar', { ...exportParams, format: 'csv' })} className={ITEM_EXPORTAR} role="menuitem" icon={Download}>
+                                                CSV
+                                            </OpcionExportar>
+                                            <Link href={route('reportes.solicitudes.index', exportParams)} className={ITEM_EXPORTAR} role="menuitem" onClick={() => setMenuExportar(false)}>
+                                                Reportes
+                                            </Link>
+                                        </div>
+                                    </>,
+                                    document.body,
                                 )}
                             </div>
+                        )}
+                        {resumen && (
+                            <BotonCabecera
+                                iconos={[Users]}
+                                onClick={() => setModalDesglose(true)}
+                                className={`${BTN_SECUNDARIO}${filtroTipoCliente ? ' border-[var(--color-primario)] text-[var(--color-primario)]' : ''}`}
+                                aria-pressed={Boolean(filtroTipoCliente)}
+                            >
+                                Tipos de cliente
+                            </BotonCabecera>
                         )}
                         {puedeVerEscalonamiento && (
                             <BotonCabecera
@@ -1125,15 +1253,14 @@ export default function Index({
                         metricas={metricas}
                         tabActiva={tabActiva}
                         onSeleccionarTab={(tab) => aplicarFiltros({ tab })}
-                        filtroTipoCliente={filtroTipoCliente}
-                        onFiltrarTipo={(tipoClienteId) => aplicarFiltros({ tipo_cliente_id: tipoClienteId })}
-                        onLimpiarTipo={() => aplicarFiltros({ tipo_cliente_id: '' })}
                     />
                 ) : metricas && <IndicadoresSolicitudes metricas={metricas} onSeleccionar={tab => aplicarFiltros({ tab })} />}
 
                 <FiltrosSolicitudes
                     tabActiva={tabActiva}
                     busqueda={busqueda}
+                    busquedaCampo={busquedaCampo}
+                    buscando={consultando}
                     tipoFecha={tipoFecha}
                     fechaInicio={fechaInicio}
                     fechaFin={fechaFin}
@@ -1144,6 +1271,7 @@ export default function Index({
                     vendedores={vendedores}
                     procesos={procesos}
                     filtrosExtra={filtrosExtra}
+                    conteosTab={conteosTab}
                     variante="tag-lista"
                     mostrarEliminadas={can('solicitudes.eliminadas')}
                     filtrosActivos={filtrosAdicionalesActivos}
@@ -1227,7 +1355,7 @@ export default function Index({
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Cliente</th>
                                     <th className="px-4 py-3 text-xs font-medium theme-text-muted">Operación</th>
                                     <th className="px-4 py-3 text-right text-xs font-medium theme-text-muted">Cotización y pago</th>
-                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Aprobación</th>
+                                    <th className="px-4 py-3 text-xs font-medium theme-text-muted">Estatus</th>
                                     <th className="px-4 py-3 text-right text-xs font-medium theme-text-muted">Acciones</th>
                                 </tr>
                             </thead>
@@ -1264,8 +1392,10 @@ export default function Index({
                                                 <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />
                                             </td>
                                             <td className="px-4 py-3 align-top">
-                                                <OperacionSolicitud solicitud={solicitud} listas={listas} />
-                                                <ResumenDetalle solicitud={solicitud} auth={auth} tono={atencionSolicitud(solicitud)} onAbrir={() => setDetalleId(solicitud.id)} />
+                                                <div className="gelia-tag-operacion-celda">
+                                                    <OperacionSolicitud solicitud={solicitud} listas={listas} />
+                                                    <ResumenDetalle solicitud={solicitud} auth={auth} tono={atencionSolicitud(solicitud)} onAbrir={() => setDetalleId(solicitud.id)} />
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3 text-right align-top">
                                                 <CotizacionSolicitud solicitud={solicitud} alinearDerecha />

@@ -179,7 +179,6 @@ class SolicitudOperativaController extends Controller
         $service->ejecutar(
             $solicitud,
             $request->motivo_cancelacion,
-            null,
             'cancelaciones_cotizaciones.solicitar_cancelacion',
             ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar', 'cancelaciones_cotizaciones.cancelar']
         );

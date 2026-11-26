@@ -7,6 +7,7 @@ use App\Models\CatalogoProceso;
 use App\Models\SolicitudTag;
 use App\Models\User;
 use App\Services\Clientes\ClasificacionComercialCliente;
+use App\Support\Solicitudes\BusquedaSolicitudTag;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -39,6 +40,40 @@ class ListarSolicitudesService
         return array_merge($normalizar($totales), ['tipos' => $tipos]);
     }
 
+    public function conteosPorTab(?User $usuario, array $filtros = []): array
+    {
+        $filtrosSinTab = $filtros;
+        unset($filtrosSinTab['tab']);
+
+        $base = SolicitudTag::query()->whereHas('proceso', fn (Builder $q) =>
+            $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO));
+        if ($usuario) {
+            $this->aplicarAislamientoDeDatos($base, $usuario);
+        }
+        $this->aplicarFiltros($base, $filtrosSinTab, $usuario);
+
+        $conteos = [];
+        foreach (['TODAS', 'PENDIENTES', 'RESPONDIDAS', 'INCORRECTAS', 'CANCELADAS'] as $tab) {
+            $query = $base->clone();
+            if ($tab !== 'TODAS') {
+                $this->aplicarFiltroTab($query, $tab, $usuario);
+            }
+            $conteos[$tab] = (int) $query->count();
+        }
+
+        if ($usuario?->can('solicitudes.eliminadas')) {
+            $papelera = SolicitudTag::onlyTrashed()->whereHas('proceso', fn (Builder $q) =>
+                $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO));
+            if ($usuario) {
+                $this->aplicarAislamientoDeDatos($papelera, $usuario);
+            }
+            $this->aplicarFiltros($papelera, $filtrosSinTab, $usuario);
+            $conteos['ELIMINADAS'] = (int) $papelera->count();
+        }
+
+        return $conteos;
+    }
+
     public function visiblePara(User $usuario, SolicitudTag $solicitud): bool
     {
         $solicitud->loadMissing('proceso');
@@ -56,6 +91,7 @@ class ListarSolicitudesService
     {
         $query = SolicitudTag::with([
             'cliente.listaDescuento',
+            'cliente.tipo',
             'vendedor',
             'departamento',
             'proceso',
@@ -225,14 +261,11 @@ class ListarSolicitudesService
         }
 
         if (!empty($filtros['q'])) {
-            $termino = trim($filtros['q']);
-            $query->where(function (Builder $q) use ($termino) {
-                $q->where('id', 'like', '%' . $termino . '%')
-                    ->orWhereHas('cliente', function (Builder $cq) use ($termino) {
-                        $cq->where('nombre', 'like', '%' . $termino . '%')
-                            ->orWhere('numero_cliente', 'like', '%' . $termino . '%');
-                    });
-            });
+            BusquedaSolicitudTag::aplicar(
+                $query,
+                (string) $filtros['q'],
+                isset($filtros['q_campo']) ? (string) $filtros['q_campo'] : null
+            );
         }
 
         if (!empty($filtros['cliente_numero']) || !empty($filtros['cliente_nombre']) || isset($filtros['es_heredado'])) {

@@ -39,6 +39,8 @@ export function calcularRangoFechas(tipo, fInicio, fFin) {
 
 // Filtros extra del listado de Solicitudes (variante tag-lista); se guardan como un mapa.
 export const FILTROS_EXTRA = ['proceso_id', 'cliente_numero', 'es_heredado', 'pago', 'consulta', 'cancelacion'];
+export const CAMPO_BUSQUEDA_DEFECTO = 'folio';
+export const PROPS_BUSQUEDA_SOLICITUD = ['solicitudes', 'resumen', 'metricas', 'filtros', 'conteosTab'];
 const extrasDesde = (filtros) => Object.fromEntries(FILTROS_EXTRA.map((clave) => [clave, filtros[clave] || '']));
 
 /**
@@ -52,6 +54,7 @@ export default function useFiltrosSolicitudesPage({
 }) {
     const [tabActiva, setTabActiva] = useState(filtros.tab || 'TODAS');
     const [busqueda, setBusqueda] = useState(filtros.q || '');
+    const [busquedaCampo, setBusquedaCampo] = useState(filtros.q_campo || '');
     const [filtroVendedor, setFiltroVendedor] = useState(filtros.vendedor_id || '');
     const [filtroMotivo, setFiltroMotivo] = useState(filtros.motivo_incorrecta || '');
     const [filtroLista, setFiltroLista] = useState(filtros.lista_id || '');
@@ -65,6 +68,7 @@ export default function useFiltrosSolicitudesPage({
     useEffect(() => {
         setTabActiva(filtros.tab || 'TODAS');
         setBusqueda(filtros.q || '');
+        setBusquedaCampo(filtros.q_campo || '');
         setFiltroVendedor(filtros.vendedor_id || '');
         setFiltroMotivo(filtros.motivo_incorrecta || '');
         setFiltroLista(filtros.lista_id || '');
@@ -77,6 +81,7 @@ export default function useFiltrosSolicitudesPage({
     }, [
         filtros.tab,
         filtros.q,
+        filtros.q_campo,
         filtros.vendedor_id,
         filtros.motivo_incorrecta,
         filtros.lista_id,
@@ -100,6 +105,7 @@ export default function useFiltrosSolicitudesPage({
             const motivo = overrides.motivo_incorrecta ?? filtroMotivo;
             const tipo = overrides.tipo_fecha ?? tipoFecha;
             const q = overrides.q !== undefined ? overrides.q : busqueda;
+            const qCampo = overrides.q_campo !== undefined ? overrides.q_campo : busquedaCampo;
             const fInicio = overrides.fecha_inicio ?? fechaInicio;
             const fFin = overrides.fecha_fin ?? fechaFin;
             const { inicioCalculado, finCalculado } = calcularRangoFechas(tipo, fInicio, fFin);
@@ -117,12 +123,13 @@ export default function useFiltrosSolicitudesPage({
                     fecha_fin: finCalculado || undefined,
                     motivo_incorrecta: motivo || undefined,
                     q: q?.trim() || undefined,
+                    q_campo: qCampo || undefined,
                     ...Object.fromEntries(FILTROS_EXTRA.map((clave) => [clave, (overrides[clave] ?? filtrosExtra[clave]) || undefined])),
                     page: overrides.page,
                 }).filter(([, v]) => v !== '' && v !== null && v !== undefined)
             );
         },
-        [tabActiva, filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, busqueda, fechaInicio, fechaFin, filtrosExtra]
+        [tabActiva, filtroLista, filtroTipoCliente, filtroTag, filtroVendedor, filtroMotivo, tipoFecha, busqueda, busquedaCampo, fechaInicio, fechaFin, filtrosExtra]
     );
 
     const sincronizarEstadoFiltros = useCallback((overrides = {}) => {
@@ -137,6 +144,7 @@ export default function useFiltrosSolicitudesPage({
         }
         if (overrides.tipo_fecha !== undefined) setTipoFecha(overrides.tipo_fecha);
         if (overrides.q !== undefined) setBusqueda(overrides.q);
+        if (overrides.q_campo !== undefined) setBusquedaCampo(overrides.q_campo || '');
         if (overrides.fecha_inicio !== undefined) setFechaInicio(overrides.fecha_inicio);
         if (overrides.fecha_fin !== undefined) setFechaFin(overrides.fecha_fin);
         const extras = FILTROS_EXTRA.filter((clave) => overrides[clave] !== undefined);
@@ -144,7 +152,7 @@ export default function useFiltrosSolicitudesPage({
     }, []);
 
     const aplicarFiltros = useCallback(
-        (overrides = {}) => {
+        (overrides = {}, visita = {}) => {
             let payload = { ...overrides };
 
             if (payload.tipo_fecha === 'PERSONALIZADO' || (payload.tipo_fecha === undefined && tipoFecha === 'PERSONALIZADO')) {
@@ -159,12 +167,16 @@ export default function useFiltrosSolicitudesPage({
             sincronizarEstadoFiltros(payload);
             onInicioConsulta?.();
 
-            router.get(rutaIndex, construirParams(payload), {
+            const opciones = {
                 preserveState: true,
                 preserveScroll: true,
                 showProgress: false,
                 onFinish: () => onFinConsulta?.(),
-            });
+            };
+            if (visita.replace) opciones.replace = true;
+            if (visita.only) opciones.only = visita.only;
+
+            router.get(rutaIndex, construirParams(payload), opciones);
         },
         [
             tipoFecha,
@@ -179,7 +191,7 @@ export default function useFiltrosSolicitudesPage({
     );
 
     const limpiarFiltrosAdicionales = useCallback(() => {
-        const nuevaTab = filtroMotivo ? 'TODAS' : tabActiva;
+        const nuevaTab = filtroMotivo || tabActiva === 'ELIMINADAS' ? 'TODAS' : tabActiva;
         aplicarFiltros({
             lista_id: '',
             tipo_cliente_id: '',
@@ -199,6 +211,7 @@ export default function useFiltrosSolicitudesPage({
     return {
         tabActiva,
         busqueda,
+        busquedaCampo,
         tipoFecha,
         fechaInicio,
         fechaFin,

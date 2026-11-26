@@ -128,7 +128,8 @@ class PedidoBmaCedisController extends Controller
             $pedido = $service->ejecutar(
                 $pedidoBma->load(['estatus', 'paqueteria', 'origen', 'cajas']),
                 Auth::id(),
-                $cajas
+                $cajas,
+                todasLasCajasPendientes: $request->boolean('todas_las_cajas_pendientes'),
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());

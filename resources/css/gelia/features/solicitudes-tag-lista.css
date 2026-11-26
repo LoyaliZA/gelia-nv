@@ -43,35 +43,279 @@
     outline-offset: -3px;
 }
 
-.gelia-tag-filtros > div:first-child {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 1rem;
+.gelia-tag-filtros-toolbar {
+    --filtro-alto: 2.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
 }
 
-.gelia-tag-filtros > div:first-child > div {
-    width: 100%;
+@media (pointer: coarse) {
+    .gelia-tag-filtros-toolbar {
+        --filtro-alto: 2.75rem;
+    }
+
+    .gelia-tag-capsula {
+        min-height: var(--filtro-alto);
+    }
+}
+
+.gelia-tag-filtros-capsulas {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow-x: auto;
+    padding: 0.125rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+.gelia-tag-capsula {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-height: 2.25rem;
+    padding: 0.25rem 0.8rem 0.25rem 0.65rem;
+    border-radius: 999px;
+    border: 1px solid var(--theme-border);
+    background: var(--theme-element-bg);
+    color: var(--theme-text-muted);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: border-color var(--tag-motion), background-color var(--tag-motion), color var(--tag-motion), box-shadow var(--tag-motion);
+}
+
+.gelia-tag-capsula svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+    stroke-width: 1.75;
+}
+
+.gelia-tag-capsula:hover {
+    color: var(--theme-text-main);
+    border-color: color-mix(in srgb, var(--color-primario) 40%, var(--theme-border));
+}
+
+.gelia-tag-capsula[data-active="true"] {
+    border-color: var(--color-primario);
+    box-shadow: 0 0 0 1px var(--color-primario);
+    background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-element-bg));
+    color: var(--theme-text-main);
+}
+
+.gelia-tag-capsula[data-active="true"] svg {
+    color: var(--color-primario);
+}
+
+.gelia-tag-capsula-conteo {
+    margin-left: 0.1rem;
+    min-width: 1.15rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--theme-text-main) 8%, var(--theme-element-bg));
+    color: var(--theme-text-main);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+}
+
+.gelia-tag-capsula[data-active="true"] .gelia-tag-capsula-conteo {
+    background: color-mix(in srgb, var(--color-primario) 16%, var(--theme-surface-solid));
+    color: var(--color-primario);
+}
+
+.gelia-tag-lista.space-y-5 > .gelia-tag-filtros {
+    margin-top: 1.75rem;
+}
+
+.gelia-tag-filtros-consulta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 28rem;
     max-width: none;
 }
 
-.gelia-tag-filtros-bar {
-    gap: 1rem;
+.gelia-tag-filtros-buscar {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1 1 16rem;
 }
 
-.gelia-tag-filtros .gelia-tag-filtros-tabs.gelia-segment {
-    background-color: var(--gelia-segment-bg);
-    border: 1px solid var(--gelia-segment-border);
-    border-radius: calc(var(--solicitudes-radius) - 2px);
+.gelia-tag-filtros-busqueda.theme-field-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    width: 100%;
+    height: var(--filtro-alto);
+    min-width: 0;
+    flex: 1 1 auto;
+    box-sizing: border-box;
+    border: 1px solid var(--theme-element-border);
+    border-radius: var(--theme-radius-input);
+    background: var(--theme-element-bg);
+}
+
+.gelia-tag-filtros-busqueda.theme-field-with-icon:focus-within {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primario) 35%, transparent);
+}
+
+.gelia-tag-filtros-busqueda > .theme-field-icon {
+    position: static;
+    transform: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    margin-left: 0.75rem;
+    flex-shrink: 0;
+    overflow: hidden;
+    line-height: 0;
+}
+
+.gelia-tag-filtros-busqueda > .theme-field-icon svg {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+}
+
+.gelia-tag-filtros-campo-wrap {
+    display: inline-grid;
+    grid-template-columns: minmax(0, max-content);
+    align-items: center;
+    flex: 0 0 auto;
+    max-width: 4.75rem;
+    min-width: 0;
+}
+
+.gelia-tag-filtros-campo-wrap::after {
+    content: attr(data-valor);
+    grid-area: 1 / 1;
+    padding: 0 1.1rem 0 0.35rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: var(--filtro-alto);
+    white-space: nowrap;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.gelia-tag-filtros-campo {
+    grid-area: 1 / 1;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: var(--filtro-alto);
+    min-height: 0;
+    padding: 0 1.1rem 0 0.35rem;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     box-shadow: none;
-    padding: 0.25rem;
+    color: var(--theme-text-main);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: var(--filtro-alto);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    field-sizing: content;
+    cursor: pointer;
+    appearance: auto;
 }
 
-html:not(.glass-active) .gelia-tag-lista .gelia-tag-filtros .gelia-tag-filtros-tabs.gelia-segment {
-    background-color: var(--theme-surface-solid);
+.gelia-tag-lista .gelia-tag-filtros-campo:focus,
+.gelia-tag-lista .gelia-tag-filtros-campo:focus-visible {
+    outline: none;
+    outline-offset: 0;
+    box-shadow: none;
 }
 
-.gelia-tag-resultados.gelia-titulo-card,
-.gelia-tag-filtros-bar.gelia-titulo-card {
+.gelia-tag-filtros-separador {
+    width: 1px;
+    height: 1.05rem;
+    margin-inline: 0.15rem 0.1rem;
+    flex-shrink: 0;
+    background: var(--theme-border);
+}
+
+.gelia-tag-filtros-busqueda.theme-field-with-icon > .theme-input {
+    display: block;
+    width: auto;
+    min-width: 12rem;
+    flex: 1 1 auto;
+    height: var(--filtro-alto);
+    min-height: 0;
+    box-sizing: border-box;
+    padding: 0 0.75rem 0 0.55rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    line-height: var(--filtro-alto);
+}
+
+.gelia-tag-lista .gelia-tag-filtros-busqueda.theme-field-with-icon > .theme-input:focus,
+.gelia-tag-lista .gelia-tag-filtros-busqueda.theme-field-with-icon > .theme-input:focus-visible {
+    outline: none;
+    outline-offset: 0;
+    box-shadow: none;
+}
+
+.gelia-tag-filtros-busqueda > .gelia-tag-filtros-busqueda-estado {
+    position: static;
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+    transform: none;
+    color: var(--theme-text-muted);
+    pointer-events: none;
+    animation: gelia-tag-spin 0.8s linear infinite;
+}
+
+@keyframes gelia-tag-spin {
+    to { transform: rotate(360deg); }
+}
+
+.gelia-tag-filtros-toolbar :is(input, select) {
+    height: var(--filtro-alto);
+    min-height: var(--filtro-alto);
+}
+
+.gelia-tag-filtros .gelia-tag-filtros-accion {
+    height: var(--filtro-alto);
+    min-height: var(--filtro-alto);
+    padding-block: 0;
+    box-sizing: border-box;
+}
+
+@media (max-width: 640px) {
+    .gelia-tag-filtros-capsulas {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 0.125rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .gelia-tag-filtros-consulta {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+}
+
+.gelia-tag-resultados.gelia-titulo-card {
     box-shadow: var(--theme-shadow-card);
 }
 
@@ -347,13 +591,11 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
     color: color-mix(in srgb, var(--tag-msg-tono) 70%, var(--theme-text-main));
 }
 
-/* Equilibrio de pesos: con solo 400/700 disponibles, el cliente conserva la negrita y el título de la operación pasa a regular. */
 .gelia-tag-listado .gelia-tag-operacion-titulo {
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: var(--theme-text-muted);
 }
 
 /* Fechas: una línea por fecha. En columnas angostas el rótulo queda solo para lectores de pantalla (el icono y el tooltip lo explican). */
@@ -369,49 +611,148 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
     clip-path: inset(50%);
 }
 
-/* Operación: más aire entre título, listas, etiquetas y mensaje; el flujo de listas va en su propia línea. */
+.gelia-tag-operacion-celda {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
 .gelia-tag-operacion,
 .gelia-tag-etiquetas {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.625rem;
+    min-width: 0;
+}
+
+.gelia-tag-operacion-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.375rem 0.75rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.gelia-tag-operacion-cabecera .gelia-tag-operacion-titulo {
+    margin: 0;
+}
+
+.gelia-tag-operacion-cabecera .gelia-tag-operacion-marcas {
+    justify-content: flex-end;
+}
+
+.gelia-tag-operacion-recorrido {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
+}
+
+.gelia-tag-proceso-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.55rem;
+    border-radius: 0.375rem;
+    border: 1px solid color-mix(in srgb, var(--proceso-color) 35%, var(--theme-border));
+    background: color-mix(in srgb, var(--proceso-color) 12%, var(--theme-surface-solid));
+    color: color-mix(in srgb, var(--proceso-color) 78%, var(--theme-text-main));
+    white-space: nowrap;
+}
+
+.gelia-tag-cliente-tipo {
+    margin-top: 0.5rem;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.gelia-tag-cliente-tipo .gelia-tag-flujo {
+    flex-wrap: wrap;
+}
+
+.gelia-tag-operacion-marcas {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.gelia-tag-operacion-celda .gelia-tag-resumen {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
     gap: 0.5rem;
+    margin-top: 0;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--theme-border);
 }
 
 .gelia-tag-flujo {
-    display: inline-flex;
-    flex-wrap: wrap;
+    display: flex;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 0.375rem 0.625rem;
-    max-width: 100%;
-    padding: 0.25rem 0.625rem;
+    gap: 0.5rem;
+    width: max-content;
+    max-width: min(100%, 22rem);
+    min-width: 0;
+    padding: 0.3rem 0.5rem;
     border-radius: 0.625rem;
     border: 1px solid var(--theme-border);
     background: color-mix(in srgb, var(--theme-text-main) 4%, transparent);
 }
 
-.gelia-tag-flujo-paso--destino .gelia-tag-flujo-etiqueta,
-.gelia-tag-flujo-paso--destino .gelia-tag-flujo-flecha {
-    color: var(--color-primario);
-}
-
 .gelia-tag-flujo-paso {
     display: inline-flex;
-    flex-wrap: wrap;
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
     align-items: center;
+    min-width: 0;
     gap: 0.25rem 0.5rem;
 }
 
-.gelia-tag-flujo-etiqueta,
-.gelia-tag-flujo-flecha {
-    color: color-mix(in srgb, var(--theme-text-muted) 55%, var(--theme-text-main));
+.gelia-tag-flujo-paso > * {
+    min-width: 0;
+    max-width: 100%;
 }
 
-.gelia-tag-flujo-etiqueta {
-    font-size: 0.75rem;
-    font-weight: 600;
+.gelia-tag-flujo-escalera {
+    display: inline-flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.05rem;
+    color: var(--color-exito);
+}
+
+.gelia-tag-flujo-escalera-texto {
+    font-size: 0.5625rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.gelia-tag-flujo-escalera[data-tono="aviso"] {
+    color: var(--color-aviso);
+}
+
+.gelia-tag-flujo-escalera[data-tono="peligro"] {
+    color: var(--color-peligro);
 }
 
 .gelia-tag-flujo-flecha {
-    width: 1rem;
-    height: 1rem;
+    width: 1.1rem;
+    height: 1.1rem;
     flex-shrink: 0;
 }
 
@@ -567,10 +908,6 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
 .gelia-tag-card-cliente .line-clamp-2 {
     font-size: 1rem;
     line-height: 1.35;
-}
-
-.gelia-tag-card .gelia-tag-operacion-titulo {
-    color: color-mix(in srgb, var(--theme-text-main) 82%, var(--theme-text-muted));
 }
 
 .gelia-tag-card-pago {
@@ -730,6 +1067,7 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
 .gelia-tag-menu-icono[data-tono="info"] { --menu-tono: var(--color-info); }
 .gelia-tag-menu-icono[data-tono="peligro"] { --menu-tono: var(--color-peligro); }
 .gelia-tag-menu-icono[data-tono="neutro"] { --menu-tono: var(--theme-text-muted); }
+.gelia-tag-menu-icono[data-tono="primario"] { --menu-tono: var(--color-primario); }
 
 @media (pointer: coarse) {
     .gelia-tag-detail-link,
@@ -811,6 +1149,11 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
 .gelia-tag-lista-overlay :is(input, select, textarea) {
     font-weight: 400;
     min-height: 2.75rem;
+}
+
+.gelia-tag-lista .gelia-tag-filtros-toolbar :is(input, select) {
+    height: var(--filtro-alto);
+    min-height: var(--filtro-alto);
 }
 
 .gelia-tag-lista-overlay :is(input[type="checkbox"], input[type="radio"]) {
@@ -998,6 +1341,10 @@ html:not(.glass-active) .gelia-tag-lista .gelia-tag-resultados-tipo {
 
 .gelia-tag-menu {
     animation: gelia-tag-dialog-in 140ms ease-out;
+}
+
+.gelia-tag-filtros-panel {
+    background-color: var(--theme-surface-solid);
 }
 
 .gelia-tag-filtros-panel,
@@ -1215,6 +1562,41 @@ to {
     margin-top: 0.125rem;
 }
 
+.gelia-aviso-solicitud-texto .gelia-tag-cancel-preview {
+    white-space: normal;
+}
+
+.gelia-tag-cancel-preview {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.gelia-tag-cancel-preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+
+.gelia-tag-cancel-preview-label {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.gelia-tag-cancel-preview-flujo {
+    margin: 0;
+}
+
+.gelia-tag-cancel-preview-monto {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
 .gelia-aviso-solicitud-texto > * + * {
     margin-top: 0.5rem;
 }
@@ -1277,15 +1659,19 @@ to {
     height: 2.5rem;
     flex-shrink: 0;
     border-radius: 0.75rem;
-    border: 1px solid color-mix(in srgb, var(--kpi-tono) 30%, transparent);
-    background: color-mix(in srgb, var(--kpi-tono) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--kpi-tono) 30%, var(--theme-surface-solid));
+    background: color-mix(in srgb, var(--kpi-tono) 12%, var(--theme-surface-solid));
     color: var(--kpi-tono);
 }
 
 .gelia-tag-kpi[data-active="true"] {
-    background: color-mix(in srgb, var(--kpi-tono) 10%, transparent);
+    background: color-mix(in srgb, var(--kpi-tono) 16%, var(--theme-surface-solid));
     border-color: color-mix(in srgb, var(--kpi-tono) 55%, var(--theme-border));
     box-shadow: inset 0 -3px 0 var(--kpi-tono);
+}
+
+.gelia-tag-lista .gelia-solicitudes-indicador[data-active="true"]:hover {
+    background: color-mix(in srgb, var(--kpi-tono) 20%, var(--theme-surface-solid));
 }
 
 .gelia-tag-kpi[data-active="true"] .gelia-tag-kpi-icono {
