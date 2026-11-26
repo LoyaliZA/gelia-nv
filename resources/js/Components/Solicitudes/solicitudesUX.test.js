@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ModalAccionSolicitud from '@/Pages/Solicitudes/Partials/ModalAccionSolicitud';
 import FiltrosSolicitudes from '@/Components/Filtros/FiltrosSolicitudes';
 import { eventosHistorial, leerSnapshotSeguro } from '@/Pages/Solicitudes/Partials/solicitudHistorial';
+import { ACCION_VISUAL, estiloEstadoSolicitud, identidadProceso } from '@/Pages/Solicitudes/Partials/solicitudesStyles';
 
 let root, container;
 const solicitud = { id: 42, monto_cotizado: 3500, catalogo_lista_descuento_id: 9, proceso: { nombre: 'TAG y cambio de lista' }, cliente: { nombre: 'Cliente', lista_descuento: { monto_requerido: 3000 } }, lista_descuento: { monto_requerido: 5000 } };
@@ -24,6 +25,29 @@ beforeEach(() => {
     container = document.createElement('div'); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+describe('solicitud visual identity', () => {
+    it('gives each process its own icon key and keeps status tones off the process color', () => {
+        expect(identidadProceso({ proceso: { nombre: 'ASIGNAR TAG' } }).clave).toBe('tag');
+        expect(identidadProceso({ proceso: { nombre: 'CAMBIO DE LISTA' } }).clave).toBe('lista');
+        expect(identidadProceso({ proceso: { nombre: 'TAG y cambio de lista' } }).clave).toBe('tag-lista');
+        expect(identidadProceso({ compra_en_tienda: true }).clave).toBe('tienda');
+        expect(estiloEstadoSolicitud('respondida').tono).toBe('exito');
+        expect(estiloEstadoSolicitud('incorrecta').tono).toBe('peligro');
+        expect(estiloEstadoSolicitud(undefined).tono).toBe('aviso');
+        expect(ACCION_VISUAL.aprobar.tono).toBe('exito');
+        expect(ACCION_VISUAL.pago.tono).toBe('info');
+        expect(ACCION_VISUAL.eliminar.tono).toBe('peligro');
+    });
+
+    it('renders the action modal with the flow header and a tonal notice', async () => {
+        await act(() => root.render(React.createElement(ModalAccionSolicitud, { accion: 'pago', solicitud, onClose: vi.fn() })));
+        expect(document.querySelector('h2.gelia-solicitudes-titulo')?.textContent).toBe('Confirmar pago');
+        expect(document.querySelector('.gelia-flujo-icono')?.getAttribute('data-tono')).toBe('info');
+        expect(document.querySelector('.gelia-aviso-solicitud')?.getAttribute('data-tono')).toBe('info');
+        expect(document.querySelector('[data-dialog-close]')?.getAttribute('aria-label')).toBe('Cerrar acción');
+    });
+});
 
 describe('Tag and Lista action forms', () => {
     it('keeps payment data and focuses the error when saving fails, and closes only after success', async () => {

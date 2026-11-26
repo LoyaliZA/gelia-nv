@@ -18,6 +18,9 @@ class ActualizarGuiaPedidoBmaService
     public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
     {
         \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+        if (\App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::aplica($pedido)) {
+            throw new \RuntimeException('Confirme el rastreo y los PDFs por caja con Asignar.');
+        }
 
         $guia = trim($numeroRastreo);
 

@@ -8,10 +8,10 @@ import React, { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, Link, router } from '@inertiajs/react';
 import {
-    Clock, Plus, MoreVertical, Edit2, CheckCircle2, AlertOctagon, Sparkles,
-    History, CheckSquare, CreditCard, User, Copy, Check, Tag, TrendingUp, ShieldAlert,
-    ChevronLeft, ChevronRight, Trash2, FileImage, X, MessageSquare, AlertTriangle, Eye, Ban, XCircle,
-    FileSpreadsheet, FileText, FolderOpen, Download, Calculator, ChevronDown, ArrowRight, Store, Info
+    Clock, Plus, MoreVertical, CheckCircle2, AlertOctagon, Sparkles,
+    History, CheckSquare, CreditCard, User, Copy, Check, Tag, ShieldAlert,
+    ChevronLeft, ChevronRight, FileImage, MessageSquare, AlertTriangle, Eye, Ban,
+    FileSpreadsheet, FileText, Download, Calculator, ChevronDown, ArrowRight, Store, Info
 } from 'lucide-react';
 import AppLayout from '../../Layouts/AppLayout';
 import GeliaLoader from '../../Components/GeliaLoader';
@@ -28,7 +28,17 @@ import useFiltrosSolicitudesPage from '@/hooks/useFiltrosSolicitudesPage';
 import { geliaCardClass, GELIA_ESTADO_VIVO_TONO, THEME_BTN_PRIMARY } from '../../utils/geliaTheme';
 import useIconoHover from '@/hooks/useIconoHover';
 import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
-import { badgeClaseEstadoSolicitud, CHIP_NEUTRO, claseEtiquetaLista, claseEtiquetaTipoCliente, esListaDiamante, iconoTipoCliente } from './Partials/solicitudesStyles';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
+import {
+    ACCION_VISUAL,
+    CHIP_NEUTRO,
+    claseEtiquetaLista,
+    claseEtiquetaTipoCliente,
+    esListaDiamante,
+    estiloEstadoSolicitud,
+    iconoTipoCliente,
+    identidadProceso,
+} from './Partials/solicitudesStyles';
 import { puedeEmitirConsultaSolicitud, puedeResponderConsultaSolicitud } from '../../utils/permisos';
 import { idEstadoPorNombre } from '../Facturas/Partials/facturasFiltros';
 
@@ -85,6 +95,31 @@ function OpcionExportar({ as: Tag = 'a', icon, children, ...props }) {
 const CHIP_AVISO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.aviso}`;
 const CHIP_ERROR = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.error}`;
 const CHIP_INFO = `gelia-estado-vivo gelia-estado-vivo--compacto gap-1 text-xs font-semibold ${GELIA_ESTADO_VIVO_TONO.info}`;
+
+function procesoEstilo(solicitud) {
+    return { '--proceso-color': identidadProceso(solicitud).color };
+}
+
+function EmblemaProceso({ solicitud }) {
+    const id = identidadProceso(solicitud);
+    const Icono = id.icono;
+    return (
+        <span className="gelia-proceso-emblema" title={id.etiqueta}>
+            <span className="gelia-icon-box gelia-proceso-icono" aria-hidden="true">
+                <Icono className="h-5 w-5" />
+            </span>
+            <span className="sr-only">{id.etiqueta}</span>
+        </span>
+    );
+}
+
+function MenuIcono({ tono, icon: Icono }) {
+    return (
+        <span className="gelia-tag-menu-icono" data-tono={tono} aria-hidden="true">
+            <Icono className="h-3.5 w-3.5" />
+        </span>
+    );
+}
 
 // Función para calcular tiempo relativo y formatear lecturas de marcas de tiempo
 // `compacto` acorta el texto para columnas angostas ("Hoy, 9:00 a.m." en vez de "Hoy a las 9:00 a.m.").
@@ -164,13 +199,13 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
         <div className="gelia-tag-etiquetas flex flex-col items-start">
             <div className="gelia-tag-flujo">
                 <span className="gelia-tag-flujo-paso">
-                    <span className="gelia-tag-flujo-etiqueta">Lista actual</span>
+                    <span className="sr-only">Lista actual</span>
                     {etiquetaLista(listaAlmacenada)}
                 </span>
                 {listaEfectiva !== listaAlmacenada && (
                     <span className="gelia-tag-flujo-paso">
                         <ArrowRight className="gelia-tag-flujo-flecha" aria-hidden="true" />
-                        <span className="gelia-tag-flujo-etiqueta">Lista aplicada</span>
+                        <span className="sr-only">Lista aplicada</span>
                         {etiquetaLista(listaEfectiva)}
                     </span>
                 )}
@@ -191,7 +226,7 @@ const EtiquetasOperacion = ({ solicitud, children }) => {
             <div className="flex flex-wrap items-center gap-2 empty:hidden">
                 {esTag && (
                     <EtiquetaConIcono icon={Tag} className={CHIP_NEUTRO} iconClassName="h-3 w-3" size={12}>
-                        TAG: {responsableTag}
+                        {responsableTag}
                     </EtiquetaConIcono>
                 )}
                 {objTipo && (
@@ -382,7 +417,7 @@ const MotivoIncidencia = ({ motivo }) => (
 
 const OperacionSolicitud = ({ solicitud, listas }) => (
     <div className="gelia-tag-operacion flex flex-col">
-        <div className="gelia-tag-operacion-titulo text-sm font-semibold break-words theme-text-main">{solicitud.proceso?.nombre || ''}</div>
+        <div className="gelia-tag-operacion-titulo text-sm font-semibold break-words theme-text-main">{identidadProceso(solicitud).etiqueta}</div>
         <EtiquetasOperacion solicitud={solicitud} listas={listas}>
             <ConsultasPendientes solicitud={solicitud} />
             {solicitud.motivo_incorrecta && <MotivoIncidencia motivo={solicitud.motivo_incorrecta} />}
@@ -391,11 +426,14 @@ const OperacionSolicitud = ({ solicitud, listas }) => (
 );
 
 const EstadoVacioLista = ({ hayFiltros, puedeCrear, onLimpiar, onCrear }) => (
-    <div className="rounded-xl border theme-border theme-surface px-6 py-10 text-center">
+    <div className="gelia-tag-vacio rounded-xl border theme-border theme-surface px-6 py-10 text-center">
+        <span className="gelia-icon-box gelia-tag-vacio-icono" aria-hidden="true">
+            {hayFiltros ? <FileText className="h-8 w-8" /> : <Plus className="h-8 w-8" />}
+        </span>
         <p className="m-0 text-sm theme-text-main">
             {hayFiltros ? 'Ninguna solicitud coincide con estos filtros.' : 'Aún no hay solicitudes.'}
         </p>
-        <div className="mt-4 flex justify-center">
+        <div className="mt-2 flex justify-center">
             {hayFiltros ? (
                 <button type="button" onClick={onLimpiar} className={BTN_SECUNDARIO}>Limpiar filtros</button>
             ) : puedeCrear ? (
@@ -510,7 +548,13 @@ const ResumenDetalle = ({ solicitud, auth, onAbrir, tono }) => {
 const ModalDetalleSolicitud = ({ solicitud, auth, onClose, onMarcarLeido, procesando, onBitacora }) => (
     <SolicitudDialog onClose={onClose} title={`Detalle de FOL-${solicitud.id}`} className="gelia-tag-lista-overlay">
         <div className="gelia-modal-shell gelia-tag-detalle w-full max-w-3xl">
-            <header className="gelia-workflow-header"><div><h2 className="m-0 theme-text-main">Detalle de la solicitud</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.proceso?.nombre}</p></div><button type="button" data-dialog-close className="gelia-workflow-close" aria-label="Cerrar detalle"><X className="w-5 h-5" aria-hidden="true" /></button></header>
+            <CabeceraFlujoSolicitud
+                icono={identidadProceso(solicitud).icono}
+                tono="neutro"
+                titulo="Detalle de la solicitud"
+                subtitulo={`FOL-${solicitud.id} · ${solicitud.proceso?.nombre || 'Solicitud'}`}
+                closeLabel="Cerrar detalle"
+            />
             <div className="gelia-modal-body p-5 sm:p-6 space-y-6">
                 <dl className="gelia-respuesta-contexto"><div><dt>Cliente</dt><dd>{solicitud.cliente?.nombre || 'Nuevo prospecto'} · {solicitud.cliente?.numero_cliente || 'Sin número'}</dd></div><div><dt>Responsable</dt><dd>{solicitud.vendedor?.name || 'Sin asignar'}</dd></div><div><dt>Estado</dt><dd>{solicitud.estado?.nombre || 'Pendiente'}</dd></div><div><dt>Cotización</dt><dd>{new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(solicitud.monto_cotizado || 0)}</dd></div></dl>
                 <EtiquetasOperacion solicitud={solicitud} />
@@ -601,6 +645,7 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
     const accion = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-main transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
     const accionPeligro = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm theme-text-peligro transition-colors duration-200 hover:bg-black/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)] dark:hover:bg-white/5';
+    const vis = ACCION_VISUAL;
 
     return createPortal(
         <>
@@ -610,13 +655,13 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                 {/* Confirmar Cambio de Lista (Solo si hay alerta) */}
                 {esAlertaPago && can('solicitudes.confirmar_cambio_lista') && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarCambioLista(solicitud.id); }} className={accion}>
-                        <TrendingUp className="h-4 w-4" aria-hidden="true" /> Confirmar ajuste
+                        <MenuIcono tono={vis.lista.tono} icon={vis.lista.icono} /> Confirmar ajuste
                     </button>
                 )}
 
                 {solicitud.vendedor_id === auth.user.id && solicitud.estado?.nombre === 'Incorrecta' && !esAlertaPago && !esVencimiento && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalForm({ abierto: true, modoEdicion: true, solicitud }); }} className={accion}>
-                        <Edit2 className="h-4 w-4" aria-hidden="true" /> Reparar solicitud
+                        <MenuIcono tono={vis.corregir.tono} icon={vis.corregir.icono} /> Reparar solicitud
                     </button>
                 )}
 
@@ -628,19 +673,19 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
 
                 {can('solicitudes.reportar') && esVencimiento && !solicitud.rollback_confirmado_at && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); confirmarRollback(solicitud.id); }} className={accionPeligro}>
-                        <ShieldAlert className="h-4 w-4" aria-hidden="true" /> Confirmar reversión
+                        <MenuIcono tono={vis.rollback.tono} icon={vis.rollback.icono} /> Confirmar reversión
                     </button>
                 )}
 
                 {puedeConsultar && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalConsulta({ abierto: true, solicitud }); }} className={accion}>
-                        <MessageSquare className="h-4 w-4" aria-hidden="true" /> Consultar TAG o lista
+                        <MenuIcono tono={vis.consultar.tono} icon={vis.consultar.icono} /> Consultar TAG o lista
                     </button>
                 )}
 
                 {puedeResponderConsultaSolicitud(auth) && consultaPendiente && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuestaConsulta({ abierto: true, solicitud, consulta: consultaPendiente }); }} className={accion}>
-                        <MessageSquare className="h-4 w-4" aria-hidden="true" /> Responder consulta
+                        <MenuIcono tono={vis.responder.tono} icon={vis.responder.icono} /> Responder consulta
                     </button>
                 )}
 
@@ -652,19 +697,19 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && solicitud.estado?.nombre === 'Respondida'
                     && !esAlertaPago && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalPago(solicitud); }} className={accion}>
-                        <CreditCard className="h-4 w-4" aria-hidden="true" /> Confirmar pago
+                        <MenuIcono tono={vis.pago.tono} icon={vis.pago.icono} /> Confirmar pago
                     </button>
                 )}
 
                 {puedeSolicitarCancelacion && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalCancelacion(solicitud); }} className={accionPeligro}>
-                        <Ban className="h-4 w-4" aria-hidden="true" /> Solicitar cancelación
+                        <MenuIcono tono={vis.solicitar.tono} icon={vis.solicitar.icono} /> Solicitar cancelación
                     </button>
                 )}
 
                 {puedeConfirmarCancelacion && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); abrirModalConfirmarCancelacion(solicitud); }} className={accionPeligro}>
-                        <XCircle className="h-4 w-4" aria-hidden="true" /> Confirmar cancelación
+                        <MenuIcono tono={vis.cancelar.tono} icon={vis.cancelar.icono} /> Confirmar cancelación
                     </button>
                 )}
 
@@ -675,41 +720,41 @@ const MenuAccionesPortal = ({ menuAbierto, menuSolicitud, menuPos, setMenuAbiert
                     && !esAlertaPago
                     && idVerificada && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada }); }} className={accion}>
-                        <CheckSquare className="h-4 w-4" aria-hidden="true" /> Verificado
+                        <MenuIcono tono={vis.verificar.tono} icon={vis.verificar.icono} /> Verificado
                     </button>
                 )}
 
                 {/* Aprobar (Encargada) — flujos tienda: marca concluida para vendedora, sigue pendiente de verificar */}
                 {can('solicitudes.reportar') && !esAlertaPago && !esCancelada && solicitud.estado?.nombre === 'Pendiente' && idRespondida && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Aprobar proceso
+                        <MenuIcono tono={vis.aprobar.tono} icon={vis.aprobar.icono} /> Aprobar proceso
                     </button>
                 )}
 
                 {puedeCorregirRespuesta && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida }); }} className={accion}>
-                        <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> Corregir respuesta
+                        <MenuIcono tono={vis.aprobar.tono} icon={vis.aprobar.icono} /> Corregir respuesta
                     </button>
                 )}
 
                 {/* Reportar error — staff en etapas activas; vendedora dueña solo en Respondida */}
                 {puedeReportarError && !esAlertaPago && idIncorrecta && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalRespuesta({ abierto: true, solicitud, estadoId: idIncorrecta }); }} className={accionPeligro}>
-                        <AlertOctagon className="h-4 w-4" aria-hidden="true" /> Reportar error
+                        <MenuIcono tono={vis.error.tono} icon={vis.error.icono} /> Reportar error
                     </button>
                 )}
 
                 {/* Bitácora */}
                 {can('configuracion.ver_auditoria') && (
                     <button type="button" role="menuitem" onClick={() => { setMenuAbierto(null); setModalBitacora({ abierto: true, solicitud }); }} className={`${accion} mt-1 border-t theme-border pt-2`}>
-                        <History className="h-4 w-4" aria-hidden="true" /> Ver bitácora
+                        <MenuIcono tono={vis.bitacora.tono} icon={vis.bitacora.icono} /> Ver bitácora
                     </button>
                 )}
 
                 {/* Eliminar */}
                 {can('solicitudes.eliminar') && (
                     <button type="button" role="menuitem" onClick={() => eliminarSolicitud(solicitud.id)} className={`${accionPeligro} mt-1 border-t theme-border pt-2`}>
-                        <Trash2 className="h-4 w-4" aria-hidden="true" /> Eliminar registro
+                        <MenuIcono tono={vis.eliminar.tono} icon={vis.eliminar.icono} /> Eliminar registro
                     </button>
                 )}
             </div>
@@ -822,19 +867,33 @@ export default function Index({
 
     const accionPrincipal = (solicitud) => {
         const ultima = [...(solicitud.auditorias || [])].sort((a, b) => b.id - a.id).find(a => !/AUTOMÁTICAMENTE|SISTEMA AUTOMÁTICO/i.test(a.motivo_reporte || ''));
-        if (/ALERTA DE PAGO/i.test(ultima?.motivo_reporte || '')) return null;
+        const esAlertaPago = /ALERTA DE PAGO/i.test(ultima?.motivo_reporte || '');
         const consulta = solicitud.consultas?.find(c => c.estado === 'pendiente');
-        let label, ejecutar;
-        if (consulta && puedeResponderConsultaSolicitud(auth)) {
-            label = 'Responder consulta'; ejecutar = () => setModalRespuestaConsulta({ abierto: true, solicitud, consulta });
+        const tienda = solicitud.compra_en_tienda || solicitud.compra_en_tienda_solo_tag;
+        let label;
+        let ejecutar;
+        let visual;
+        if (esAlertaPago && can('solicitudes.confirmar_cambio_lista')) {
+            visual = ACCION_VISUAL.lista; label = 'Confirmar ajuste'; ejecutar = () => setModalAccion({ accion: 'lista', solicitud });
+        } else if (consulta && puedeResponderConsultaSolicitud(auth)) {
+            visual = ACCION_VISUAL.responder; label = 'Responder consulta'; ejecutar = () => setModalRespuestaConsulta({ abierto: true, solicitud, consulta });
         } else if (solicitud.estado?.nombre === 'Pendiente' && can('solicitudes.reportar') && idRespondida) {
-            label = 'Aprobar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida });
+            visual = ACCION_VISUAL.aprobar; label = 'Aprobar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idRespondida });
         } else if (solicitud.estado?.nombre === 'Incorrecta' && Number(solicitud.vendedor_id) === Number(auth?.user?.id) && solicitud.motivo_incorrecta !== 'vencimiento_pago') {
-            label = 'Corregir'; ejecutar = () => setModalForm({ abierto: true, modoEdicion: true, solicitud });
+            visual = ACCION_VISUAL.corregir; label = 'Corregir'; ejecutar = () => setModalForm({ abierto: true, modoEdicion: true, solicitud });
         } else if (solicitud.estado?.nombre === 'Respondida' && solicitud.pago_confirmado && can('solicitudes.verificar') && idVerificada) {
-            label = 'Verificar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada });
+            visual = ACCION_VISUAL.verificar; label = 'Verificar'; ejecutar = () => setModalRespuesta({ abierto: true, solicitud, estadoId: idVerificada });
+        } else if ((can('solicitudes.confirmar_pago') || Number(solicitud.vendedor_id) === Number(auth?.user?.id))
+            && !solicitud.pago_confirmado && !tienda && solicitud.estado?.nombre === 'Respondida' && !esAlertaPago) {
+            visual = ACCION_VISUAL.pago; label = 'Confirmar pago'; ejecutar = () => setModalPago({ abierto: true, solicitud });
         }
-        return label ? <button type="button" className="gelia-tag-quick-action" onClick={ejecutar}>{label}</button> : null;
+        if (!label || !visual) return null;
+        const Icono = visual.icono;
+        return (
+            <button type="button" className="gelia-tag-quick-action" data-tono={visual.tono} onClick={ejecutar}>
+                <Icono className="h-4 w-4 shrink-0" aria-hidden="true" />{label}
+            </button>
+        );
     };
 
     const eliminarSolicitud = (id) => { setMenuAbierto(null); setModalAccion({ accion: 'eliminar', solicitud: menuSolicitud }); };
@@ -923,16 +982,6 @@ export default function Index({
         proceso_id: '', cliente_numero: '', es_heredado: '', pago: '', consulta: '', cancelacion: '',
     });
 
-    const obtenerEstiloEstado = (nombreEstado) => {
-        switch (nombreEstado?.toLowerCase()) {
-            case 'respondida': return { clase: badgeClaseEstadoSolicitud('respondida'), icon: CheckCircle2, label: 'Aprobado' };
-            case 'incorrecta': return { clase: badgeClaseEstadoSolicitud('incorrecta'), icon: AlertOctagon, label: 'Reporte' };
-            case 'verificada': return { clase: badgeClaseEstadoSolicitud('verificada'), icon: CheckSquare, label: 'Verificada' };
-            case 'cancelada': return { clase: badgeClaseEstadoSolicitud('cancelada'), icon: XCircle, label: 'Cancelada' };
-            default: return { clase: badgeClaseEstadoSolicitud('revision'), icon: Clock, label: 'Pendiente' };
-        }
-    };
-
     // Solo presentación: tinte de fila a partir de banderas ya existentes.
     const atencionSolicitud = (solicitud) => {
         const estado = solicitud.estado?.nombre;
@@ -1011,8 +1060,13 @@ export default function Index({
                 <p className="sr-only" aria-live="polite">{copiadoId ? 'Número de cliente copiado' : ''}</p>
                 <header className={geliaCardClass('gelia-solicitudes-header')}>
                     <div className="gelia-solicitudes-header-copy">
-                        <h1 className="m-0 text-2xl font-semibold theme-text-main text-balance">Solicitudes</h1>
-                        <p className="m-0 mt-1 text-sm theme-text-muted">Gestiona solicitudes de TAG y cambios de lista</p>
+                        <span className="gelia-icon-box gelia-solicitudes-header-icono" aria-hidden="true">
+                            <FileText className="h-6 w-6" />
+                        </span>
+                        <div className="min-w-0">
+                            <h1 className="gelia-solicitudes-titulo m-0 text-balance">Solicitudes_</h1>
+                            <p className="m-0 mt-1 text-sm theme-text-muted">Gestiona solicitudes de TAG y cambios de lista</p>
+                        </div>
                     </div>
                     <div className="gelia-solicitudes-header-actions">
                         {puedeExportar && (
@@ -1111,12 +1165,14 @@ export default function Index({
                             <EstadoVacioLista hayFiltros={hayFiltros} puedeCrear={can('solicitudes.crear')} onLimpiar={limpiarConsulta} onCrear={() => setModalForm({ abierto: true, modoEdicion: false, solicitud: null })} />
                         ) : (
                             solicitudesFiltradas.map((solicitud) => {
-                                const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
+                                const estatus = estiloEstadoSolicitud(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
                                 return (
-                                    <article key={solicitud.id} className="gelia-tag-card rounded-xl border theme-border theme-surface" data-atencion={atencionSolicitud(solicitud)}>
+                                    <article key={solicitud.id} className="gelia-tag-card rounded-xl border theme-border theme-surface" data-atencion={atencionSolicitud(solicitud)} data-proceso={identidadProceso(solicitud).clave} style={procesoEstilo(solicitud)}>
+                                        <span className="gelia-proceso-barra" aria-hidden="true" />
                                         <div className="gelia-tag-card-main">
                                             <div className="gelia-tag-card-id">
                                                 <div className="gelia-tag-card-folio min-w-0">
+                                                    <EmblemaProceso solicitud={solicitud} />
                                                     <div className="gelia-tag-folio text-sm font-semibold tabular-nums theme-text-main">FOL-{solicitud.id}</div>
                                                 </div>
                                                 <div className="gelia-tag-card-cliente">
@@ -1158,7 +1214,7 @@ export default function Index({
                     <div className="gelia-tag-listado-tabla overflow-hidden rounded-xl border theme-border theme-surface">
                         <table className="gelia-tag-table w-full table-fixed border-collapse text-left">
                             <colgroup>
-                                <col className="w-44" />
+                                <col className="w-52" />
                                 <col className="w-[16%]" />
                                 <col />
                                 <col className="w-[9.5rem]" />
@@ -1189,15 +1245,20 @@ export default function Index({
                                         </td>
                                     </tr>
                                 ) : solicitudesFiltradas.map((solicitud) => {
-                                    const estatus = obtenerEstiloEstado(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
+                                    const estatus = estiloEstadoSolicitud(solicitud.estado?.nombre); const StatusIcon = estatus.icon; const esHeredado = solicitud.cliente?.es_heredado;
                                     return (
-                                        <tr key={solicitud.id} className="gelia-tag-fila border-b theme-border transition-colors duration-200" data-atencion={atencionSolicitud(solicitud)}>
+                                        <tr key={solicitud.id} className="gelia-tag-fila border-b theme-border transition-colors duration-200" data-atencion={atencionSolicitud(solicitud)} data-proceso={identidadProceso(solicitud).clave} style={procesoEstilo(solicitud)}>
                                             <td className="px-4 py-3 align-top">
-                                                <div className="text-sm font-semibold tabular-nums theme-text-main">FOL-{solicitud.id}</div>
-                                                <div className="mt-1 text-xs theme-text-muted">
-                                                    <User className="mr-1 inline h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
+                                                <div className="flex items-start gap-2">
+                                                    <EmblemaProceso solicitud={solicitud} />
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-semibold tabular-nums theme-text-main">FOL-{solicitud.id}</div>
+                                                        <div className="mt-1 text-xs theme-text-muted">
+                                                            <User className="mr-1 inline h-3 w-3" aria-hidden="true" /> {solicitud.vendedor?.name}
+                                                        </div>
+                                                        <TiemposSolicitud solicitud={solicitud} />
+                                                    </div>
                                                 </div>
-                                                <TiemposSolicitud solicitud={solicitud} />
                                             </td>
                                             <td className="px-4 py-3 align-top">
                                                 <ClienteSolicitud solicitud={solicitud} esHeredado={esHeredado} copiadoId={copiadoId} onCopiar={copiarAlPortapapeles} />

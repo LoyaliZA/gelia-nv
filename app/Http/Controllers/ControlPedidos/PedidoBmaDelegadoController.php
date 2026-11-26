@@ -111,7 +111,13 @@ class PedidoBmaDelegadoController extends Controller
         GestionarGuiaPdfPedidoBmaService $service
     ): RedirectResponse {
         try {
-            $service->subir($pedidoBma->load('estatus'), $request->file('guia_pdf'), Auth::id());
+            $service->subir(
+                $pedidoBma->load('estatus'),
+                $request->file('guia_pdf'),
+                Auth::id(),
+                $request->filled('caja_id') ? $request->integer('caja_id') : null,
+                $request->filled('guia_general_id') ? $request->integer('guia_general_id') : null,
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }
@@ -120,11 +126,13 @@ class PedidoBmaDelegadoController extends Controller
     }
 
     public function eliminarGuiaPdf(
+        Request $request,
         PedidoBma $pedidoBma,
         GestionarGuiaPdfPedidoBmaService $service
     ): RedirectResponse {
+        $datos = $request->validate(['caja_id' => ['nullable', 'integer', 'min:1']]);
         try {
-            $service->eliminar($pedidoBma->load('estatus'), Auth::id());
+            $service->eliminar($pedidoBma->load('estatus'), Auth::id(), $datos['caja_id'] ?? null);
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
         }

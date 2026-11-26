@@ -9,6 +9,8 @@ use App\Services\PuntoVenta\Resguardos\CrearRecepcionEsperadaPdvService;
 use Illuminate\Support\Facades\DB;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
+use Illuminate\Support\Facades\Storage;
 
 class MarcarEnviadoPedidoBmaService
 {
@@ -77,7 +79,18 @@ class MarcarEnviadoPedidoBmaService
         }
 
         \App\Support\ControlPedidos\Nacional\BarreraCreditoNacional::assertPuedeSalir($pedido);
-        $this->assertGuiaVigente($pedido, $cajasSeleccion);
+        $porCaja = GuiasPdfPorCaja::aplica($pedido);
+        if ($porCaja) {
+            $pendientes = GuiasPdfPorCaja::pendientes($pedido);
+            $confirmadas = GuiasPdfPorCaja::vigentes($pedido)->where('relacion_tipo', GuiasPdfPorCaja::CONFIRMADA)
+                ->whereIn('pedido_bma_caja_id', $pendientes->pluck('id'));
+            if ($pendientes->isEmpty() || GuiasPdfPorCaja::faltantes($pendientes, $confirmadas) > 0
+                || $confirmadas->contains(fn ($doc) => ! Storage::disk($doc->discoArchivo())->exists($doc->ruta_archivo))) {
+                throw new \RuntimeException('Delegado debe confirmar un PDF de guía vigente por cada caja pendiente.');
+            }
+        } else {
+            $this->assertGuiaVigente($pedido, $cajasSeleccion);
+        }
 
         $cajas = $pedido->cajas
             ->filter(fn (PedidoBmaCaja $c) => $c->estaActiva())
@@ -101,7 +114,7 @@ class MarcarEnviadoPedidoBmaService
                     throw new \InvalidArgumentException('Cada envío seleccionado debe indicar su id.');
                 }
                 $idsMarcar[] = $id;
-                if (isset($row['numero_rastreo']) && trim((string) $row['numero_rastreo']) !== '') {
+                if (! $porCaja && isset($row['numero_rastreo']) && trim((string) $row['numero_rastreo']) !== '') {
                     $rastreos[$id] = trim((string) $row['numero_rastreo']);
                 }
             }
@@ -115,7 +128,7 @@ class MarcarEnviadoPedidoBmaService
             }
         }
 
-        return DB::transaction(function () use ($pedido, $usuarioId, $idsMarcar, $rastreos, $cajas) {
+        return DB::transaction(function () use ($pedido, $usuarioId, $idsMarcar, $rastreos, $cajas, $porCaja) {
             foreach ($idsMarcar as $id) {
                 $caja = $cajas->firstWhere('id', $id) ?? PedidoBmaCaja::query()->find($id);
                 if (! $caja || (int) $caja->pedido_bma_id !== (int) $pedido->id) {
@@ -129,7 +142,9 @@ class MarcarEnviadoPedidoBmaService
                     'recolectada_at' => now(),
                     'recolectada_por_id' => $usuarioId,
                 ];
-                if (isset($rastreos[$id])) {
+                if ($porCaja) {
+                    $attrs['numero_rastreo'] = $pedido->numero_rastreo;
+                } elseif (isset($rastreos[$id])) {
                     $attrs['numero_rastreo'] = $rastreos[$id];
                 } elseif (! filled($caja->numero_rastreo) && filled($pedido->numero_rastreo)) {
                     $attrs['numero_rastreo'] = $pedido->numero_rastreo;

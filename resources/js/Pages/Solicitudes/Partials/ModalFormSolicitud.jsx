@@ -3,7 +3,8 @@ import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useEffect, useState, useRef } from 'react';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
-import { X, Sparkles, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown } from 'lucide-react';
+import { Sparkles, CreditCard, FileSignature, TrendingUp, Send, AlertTriangle, Users, MessageSquare, CheckCircle2, Circle, FileText, Calendar, Landmark, Hash, Store, Tag, FileSpreadsheet, Upload, Trash2, Download, ChevronDown, Pencil } from 'lucide-react';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
 import CampoBusqueda from '@/Components/CampoBusqueda';
 import { THEME_INPUT, THEME_SELECT, THEME_TEXTAREA, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import {
@@ -343,10 +344,14 @@ export default function ModalFormSolicitud({ onClose, procesos, listas, tiposCli
     return (
         <SolicitudDialog className="gelia-tag-lista-overlay" onClose={onClose} busy={processing} title={modoEdicion ? 'Corregir solicitud' : 'Nueva solicitud'} dirty={isDirty}>
             <form onSubmit={guardarSolicitud} className="gelia-modal-shell gelia-tag-form w-full max-w-4xl">
-                <header className="gelia-workflow-header">
-                    <div><h2 className="m-0 theme-text-main">{modoEdicion ? 'Corregir solicitud' : 'Nueva solicitud'}</h2><p className="m-0 mt-1 text-sm theme-text-muted">Registra los datos del cliente y el cambio que necesitas.</p></div>
-                    <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar registro"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={modoEdicion ? Pencil : FileSignature}
+                    tono={modoEdicion ? 'aviso' : 'primario'}
+                    titulo={modoEdicion ? 'Corregir solicitud' : 'Nueva solicitud'}
+                    subtitulo="Registra los datos del cliente y el cambio que necesitas."
+                    closeLabel="Cerrar registro"
+                    disabled={processing}
+                />
                 <div className="gelia-modal-body p-5 sm:p-6">
                 {Object.keys(errors).length > 0 && <AvisoSolicitud tono="peligro" titulo="Revisa estos datos antes de enviar" anunciar className="mb-5">{Object.entries(errors).map(([key, error]) => <p key={key} className="m-0">{error}</p>)}</AvisoSolicitud>}
                 {alertaHeredado && (

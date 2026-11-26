@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\ControlPedidos;
 
+use App\Events\PedidoBmaActualizado;
 use App\Models\Almacen;
 use App\Models\Cliente;
 use App\Models\ClienteDireccion;
@@ -28,11 +29,13 @@ use App\Services\ControlPedidos\Nacional\CambiarPaqueteriaNacional;
 use App\Services\ControlPedidos\NotificarPedidoBmaService;
 use App\Services\SaldosAFavor\RegistrarPagoPedidoBmaService;
 use App\Support\ControlPedidos\RevisionCapturaPedido;
+use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
@@ -431,43 +434,217 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertSame('0.00', number_format((float) $actual->costo_seguro, 2, '.', ''));
     }
 
-    public function test_la_guia_del_delegado_a_nivel_pedido_cubre_la_caja_y_la_salida_concluye(): void
+    public function test_delegado_confirma_tres_pdfs_con_un_rastreo_y_cedis_recolecta_parcialmente(): void
     {
-        $salida = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
-            'numero_rastreo' => 'DEL-1',
-            'empacado_at' => now(),
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA, [
+            'empacado_at' => now(), 'pago_validado_at' => now(),
         ]);
-        $caja = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1]);
-        $this->guia($salida, 'guias/del-1.pdf', 'del-1.pdf');
+        $pedido->documentos()->create([
+            'tipo' => PedidoBmaDocumento::TIPO_REMISION, 'activo' => true,
+            'ruta_archivo' => 'remision.pdf', 'nombre_original' => 'remision.pdf',
+        ]);
+        $cajas = collect([1, 2, 3])->map(fn ($orden) => $this->caja($pedido, ['orden' => $orden, 'peso_real_kg' => 1]));
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.delegado', 'web'));
+        $cedis = User::factory()->create();
+        foreach (['control_pedidos.cedis', 'control_pedidos.cedis.ver_todos', 'control_pedidos.cedis.enviar'] as $permiso) {
+            $cedis->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
+        }
+        $carga = route('control_pedidos.delegado.guia_pdf.store', $pedido);
+        $asignar = route('control_pedidos.delegado.asignar_guia', $pedido);
+        $listado = route('control_pedidos.cedis.listado', ['q' => $pedido->folio]);
+        $salida = route('control_pedidos.cedis.marcar_enviado', $pedido);
+        $datos = ['numero_rastreo' => 'COMPARTIDO-1'];
+        Event::fake([PedidoBmaActualizado::class]);
 
-        $enviado = app(MarcarEnviadoPedidoBmaService::class)->ejecutar($salida->fresh(), $this->usuario->id);
+        $this->actingAs($cedis)->post($carga, ['caja_id' => $cajas[0]->id])->assertForbidden();
+        foreach ($cajas->take(2) as $caja) {
+            $this->actingAs($this->usuario)->post($carga, [
+                'caja_id' => $caja->id,
+                'guia_pdf' => UploadedFile::fake()->create("guia-{$caja->orden}.pdf", 1, 'application/pdf'),
+            ])->assertSessionHas('success');
+        }
+        $avances = $pedido->documentos()->where('tipo', 'guia')->get();
+        $this->assertCount(2, $avances);
+        $this->assertSame([GuiasPdfPorCaja::AVANCE], $avances->pluck('relacion_tipo')->unique()->values()->all());
+        $this->actingAs($this->usuario)->post($asignar, $datos)->assertSessionHas('error');
+        $this->assertNull($pedido->fresh()->numero_rastreo);
+        Event::assertNotDispatched(PedidoBmaActualizado::class);
+        $this->actingAs($cedis)->getJson($listado)
+            ->assertJsonPath('pedidos.data.0.faltan_guias_por_caja', 3)
+            ->assertJsonMissing(['relacion_tipo' => GuiasPdfPorCaja::AVANCE]);
+        $this->get($avances->first()->url)->assertForbidden();
+        $this->actingAs($this->usuario)->get($avances->first()->url)->assertOk();
+        $docs = $this->getJson(route('control_pedidos.delegado.listado', ['q' => $pedido->folio]))
+            ->assertOk()->json('pedidos.data.0.documentos', []);
+        $this->assertCount(2, array_filter($docs, fn ($doc) => $doc['tipo'] === 'guia'));
 
-        $this->assertSame(CatalogoEstatusPedido::FASE_ENVIADO, $enviado->estatus->fase_ciclo);
-        $caja = $caja->fresh();
-        $this->assertSame(PedidoBmaCaja::ESTATUS_RECOLECTADA, $caja->estatus_recoleccion);
-        $this->assertSame('DEL-1', $caja->numero_rastreo);
+        $this->guardarPdfCaja($pedido, $cajas[2]);
+        $this->post($asignar, $datos)->assertSessionHas('success');
+        $this->post($asignar, $datos)->assertSessionHas('success');
+        $this->assertSame(1, $pedido->historial()->where('accion', 'asignacion_guia')->count());
+        app(NotificarPedidoBmaService::class)->shouldHaveReceived('ejecutar')->withArgs(
+            fn ($p, $tipo) => $p->id === $pedido->id && $tipo === 'pedido_guia_asignada'
+        )->once();
+        Event::assertDispatchedTimes(PedidoBmaActualizado::class, 1);
+
+        $confirmadas = $pedido->documentos()->where('relacion_tipo', GuiasPdfPorCaja::CONFIRMADA)->orderBy('orden')->get();
+        $this->assertSame($cajas->pluck('id')->all(), $confirmadas->pluck('pedido_bma_caja_id')->all());
+        $this->actingAs($cedis)->getJson($listado)
+            ->assertJsonPath('pedidos.data.0.numero_rastreo', 'COMPARTIDO-1')
+            ->assertJsonPath('pedidos.data.0.faltan_guias_por_caja', 0);
+        foreach ($confirmadas as $documento) {
+            $this->get($documento->url)->assertOk();
+        }
+
+        $this->actingAs($this->usuario)->delete(route('control_pedidos.delegado.guia_pdf.destroy', $pedido), ['caja_id' => $cajas[1]->id])
+            ->assertSessionHas('success');
+        $this->actingAs($cedis)->post($salida, ['cajas' => [['id' => $cajas[0]->id]]])->assertSessionHas('error');
+        $this->assertFalse($cajas[0]->fresh()->estaRecolectada());
+        $this->guardarPdfCaja($pedido, $cajas[1]);
+        $this->actingAs($this->usuario)->post($asignar, $datos)->assertSessionHas('success');
+
+        $this->actingAs($cedis)->post($salida, ['cajas' => [['id' => $cajas[0]->id, 'numero_rastreo' => 'IGNORAR']]])->assertSessionHas('success');
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $pedido->fresh('estatus')->estatus->fase_ciclo);
+        $this->assertSame('COMPARTIDO-1', $cajas[0]->fresh()->numero_rastreo);
+        $this->post($salida, ['cajas' => [['id' => $cajas[1]->id], ['id' => $cajas[2]->id]]])->assertSessionHas('success');
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENVIADO, $pedido->fresh('estatus')->estatus->fase_ciclo);
+        $this->assertSame(['COMPARTIDO-1', 'COMPARTIDO-1', 'COMPARTIDO-1'], $pedido->cajas()->pluck('numero_rastreo')->all());
     }
 
-    public function test_la_guia_de_caja_que_llega_en_la_misma_peticion_cuenta_y_solo_se_revisan_las_cajas_que_salen(): void
+    public function test_un_pdf_general_requiere_vincularse_y_confirmarse_para_despachar_una_caja(): void
     {
-        $salida = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
-            'numero_rastreo' => 'DEL-2',
-            'empacado_at' => now(),
+        Storage::fake('public');
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, [
+            'numero_rastreo' => 'LEGADO-1', 'empacado_at' => now(),
         ]);
-        $primera = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1, 'orden' => 1]);
-        $segunda = $this->caja($salida, ['numero_rastreo' => null, 'peso_real_kg' => 1, 'orden' => 2]);
-        $this->guia($salida, 'guias/del-2.pdf', 'del-2.pdf');
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1]);
+        $general = $this->guia($pedido, 'guias/general.pdf', 'general.pdf');
+        Storage::disk('public')->put($general->ruta_archivo, 'PDF');
+        $enviar = fn () => app(MarcarEnviadoPedidoBmaService::class)->ejecutar($pedido->fresh(), $this->usuario->id);
+        $this->assertStringContainsString('confirmar', $this->rechazo($enviar)->getMessage());
+        app(GestionarGuiaPdfPedidoBmaService::class)->subir($pedido, null, $this->usuario->id, $caja->id, $general->id);
+        $this->assertStringContainsString('confirmar', $this->rechazo($enviar)->getMessage());
+        $this->assertFalse($general->fresh()->activo);
+        Storage::disk('public')->assertExists($general->ruta_archivo);
+        app(AsignarGuiaPedidoBmaService::class)->ejecutar($pedido, 'LEGADO-1', $this->usuario->id);
+        $this->assertSame(CatalogoEstatusPedido::FASE_ENVIADO, $enviar()->estatus->fase_ciclo);
+        $this->assertSame('LEGADO-1', $caja->fresh()->numero_rastreo);
+    }
 
-        $parcial = app(MarcarEnviadoPedidoBmaService::class)->ejecutar(
-            $salida->fresh(),
+    public function test_reemplazo_por_caja_preserva_los_otros_pdfs_y_rechaza_cajas_no_editables(): void
+    {
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS);
+        $primera = $this->caja($pedido, ['peso_real_kg' => 1, 'orden' => 1]);
+        $segunda = $this->caja($pedido, ['peso_real_kg' => 1, 'orden' => 2]);
+        $ajena = $this->caja($this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS), ['peso_real_kg' => 1]);
+        $retirada = $this->caja($pedido, ['estado_operativo' => PedidoBmaCaja::ESTADO_RETIRADA, 'peso_real_kg' => 1]);
+        $recolectada = $this->caja($pedido, ['estatus_recoleccion' => PedidoBmaCaja::ESTATUS_RECOLECTADA, 'peso_real_kg' => 1]);
+        foreach ([$ajena, $retirada, $recolectada] as $noEditable) {
+            $this->assertNotNull($this->rechazo(fn () => $this->guardarPdfCaja($pedido, $noEditable)));
+        }
+        $original = $this->guardarPdfCaja($pedido, $primera);
+        $otro = $this->guardarPdfCaja($pedido, $segunda);
+        $reemplazo = $this->guardarPdfCaja($pedido, $primera);
+        $this->assertSame($original->id, $reemplazo->reemplaza_documento_id);
+        $this->assertFalse($original->fresh()->activo);
+        $this->assertSame($otro->id, $segunda->documentos()->vigente()->sole()->id);
+        Storage::disk('local')->assertExists($original->ruta_archivo);
+
+        $archivos = Storage::disk('local');
+        $almacenFallido = \Mockery::mock(\Illuminate\Filesystem\FilesystemAdapter::class);
+        $almacenFallido->shouldReceive('putFileAs')->once()->andReturn(false);
+        Storage::shouldReceive('disk')->with('local')->andReturn($almacenFallido);
+        $this->assertNotNull($this->rechazo(fn () => $this->guardarPdfCaja($pedido, $primera)));
+        $this->assertSame($reemplazo->id, $primera->documentos()->vigente()->sole()->id);
+        $archivos->assertExists([$reemplazo->ruta_archivo, $otro->ruta_archivo]);
+    }
+
+    public function test_guia_antes_de_empacar_y_guia_asegurada_conservan_la_fase(): void
+    {
+        Storage::fake('local');
+        Storage::fake('public');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS);
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1]);
+        $this->guardarPdfCaja($pedido, $caja);
+        $asignado = app(AsignarGuiaPedidoBmaService::class)->ejecutar($pedido, 'ANTES-1', $this->usuario->id);
+        $this->assertSame(CatalogoEstatusPedido::FASE_EN_CEDIS, $asignado->estatus->fase_ciclo);
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, \App\Support\ControlPedidos\MaquinaEstadosPedidoBma::faseDestinoEmpaque($asignado));
+
+        $asegurado = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA, ['aplica_seguro' => true, 'empacado_at' => now()]);
+        $this->caja($asegurado, ['peso_real_kg' => 1]);
+        $asignado = app(AsignarGuiaPedidoBmaService::class)->ejecutar($asegurado, 'SEGURO-1', $this->usuario->id);
+        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $asignado->estatus->fase_ciclo);
+        $conPdf = app(GestionarGuiaPdfPedidoBmaService::class)->subir($asignado, UploadedFile::fake()->create('seguro.pdf', 1, 'application/pdf'), $this->usuario->id);
+        $this->assertNull($conPdf->documentos->sole()->pedido_bma_caja_id);
+        $this->assertSame('public', $conPdf->documentos->sole()->discoArchivo());
+    }
+
+    public function test_la_importacion_y_la_correccion_general_no_confirman_avances_por_caja(): void
+    {
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA, ['empacado_at' => now()]);
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1]);
+        $avance = $this->guardarPdfCaja($pedido, $caja);
+        Storage::disk('local')->put('guias.csv', "ID_Pedido,Guia_Rastreo\n{$pedido->id},NO-PUBLICAR\n");
+        $resultado = app(\App\Services\ControlPedidos\ImportarGuiasPedidoService::class)
+            ->ejecutar(Storage::disk('local')->path('guias.csv'), $this->usuario->id);
+        $this->assertSame(0, $resultado['actualizados']);
+        $this->assertSame(1, $resultado['omitidos']);
+        $this->assertNull($pedido->fresh()->numero_rastreo);
+        $this->assertSame(GuiasPdfPorCaja::AVANCE, $avance->fresh()->relacion_tipo);
+        $error = $this->rechazo(fn () => app(\App\Services\ControlPedidos\ActualizarGuiaPedidoBmaService::class)
+            ->ejecutar($pedido, 'NO-PUBLICAR', $this->usuario->id));
+        $this->assertStringContainsString('Asignar', $error->getMessage());
+    }
+
+    public function test_un_cambio_de_direccion_invalida_el_avance_sin_adelantar_el_empaque(): void
+    {
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_EN_CEDIS);
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1]);
+        $avance = $this->guardarPdfCaja($pedido, $caja);
+        $actual = app(InvalidarGuiaPorCambioDireccion::class)->ejecutar($pedido, $this->usuario->id, 'Domicilio corregido');
+        $this->assertSame(CatalogoEstatusPedido::FASE_EN_CEDIS, $actual->estatus->fase_ciclo);
+        $this->assertNull($actual->empacado_at);
+        $this->assertFalse($avance->fresh()->activo);
+        $this->assertNotNull($this->rechazo(fn () => app(AsignarGuiaPedidoBmaService::class)
+            ->ejecutar($actual, 'NUEVA-1', $this->usuario->id)));
+        Storage::disk('local')->assertExists($avance->ruta_archivo);
+    }
+
+    public function test_cambiar_rastreo_desde_asignar_requiere_pdfs_nuevos_y_conserva_el_aviso_de_correccion(): void
+    {
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA, ['empacado_at' => now()]);
+        $caja = $this->caja($pedido, ['peso_real_kg' => 1]);
+        $this->guardarPdfCaja($pedido, $caja);
+        $asignar = app(AsignarGuiaPedidoBmaService::class);
+        $asignar->ejecutar($pedido, 'ANTERIOR-1', $this->usuario->id);
+        $this->assertNotNull($this->rechazo(fn () => $asignar->ejecutar($pedido, 'CORREGIDO-1', $this->usuario->id)));
+        $this->guardarPdfCaja($pedido, $caja);
+        $actual = $asignar->ejecutar($pedido, 'CORREGIDO-1', $this->usuario->id);
+        $this->assertSame('CORREGIDO-1', $actual->numero_rastreo);
+        $this->assertTrue($actual->guia_retraso);
+        $this->assertSame($this->usuario->id, $actual->guia_corregida_por_id);
+        app(NotificarPedidoBmaService::class)->shouldHaveReceived('ejecutar')->withArgs(
+            fn ($p, $tipo, $texto, $permisos) => $p->id === $pedido->id && $tipo === 'pedido_guia_retraso'
+                && $permisos === ['control_pedidos.cedis', 'control_pedidos.auditar']
+        )->once();
+    }
+
+    private function guardarPdfCaja(PedidoBma $pedido, PedidoBmaCaja $caja): PedidoBmaDocumento
+    {
+        app(GestionarGuiaPdfPedidoBmaService::class)->subir(
+            $pedido,
+            UploadedFile::fake()->create("guia-{$caja->orden}.pdf", 1, 'application/pdf'),
             $this->usuario->id,
-            [['id' => $primera->id, 'numero_rastreo' => 'CAJ-A']],
+            $caja->id,
         );
 
-        $this->assertSame(CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO, $parcial->estatus->fase_ciclo);
-        $this->assertSame(PedidoBmaCaja::ESTATUS_RECOLECTADA, $primera->fresh()->estatus_recoleccion);
-        $this->assertSame('CAJ-A', $primera->fresh()->numero_rastreo);
-        $this->assertSame(PedidoBmaCaja::ESTATUS_PENDIENTE, $segunda->fresh()->estatus_recoleccion);
+        return $caja->documentos()->vigente()->sole();
     }
 
     public function test_credito_bloqueado_no_remisiona_ni_guia_ni_sale_ni_acepta_transferencia(): void

@@ -128,6 +128,15 @@ export default function ModalDetalleCedis({
         }
     }, [abierto, pedidoInicial?.id]);
 
+    useEffect(() => {
+        if (!abierto || !pedidoInicial?.guias_pdf_por_caja) return;
+        setPedido(pedidoInicial);
+        setDocPreview((actual) => {
+            if (!actual || actual.tipo !== 'guia') return actual;
+            return (pedidoInicial.documentos || []).some((doc) => doc.id === actual.id) ? actual : null;
+        });
+    }, [abierto, pedidoInicial]);
+
     const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose, bloqueado: procesando });
 
     if (!abierto || !pedido) return null;
@@ -171,7 +180,11 @@ export default function ModalDetalleCedis({
         (d) => d.relacion_tipo === 'revision_general' || !d.relacion_tipo,
     );
     const evidenciasEnvio = evidenciasCondicion.filter((d) => d.relacion_tipo === 'envio_caja');
-    const cajasOrdenadas = [...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const guiasPorCaja = Boolean(pedido.guias_pdf_por_caja);
+    const faltanGuias = guiasPorCaja && (pedido.faltan_guias_por_caja > 0 || !pedido.numero_rastreo);
+    const cajasOrdenadas = [...(pedido.cajas || [])]
+        .filter((c) => !guiasPorCaja || !['retirada', 'cancelada'].includes(c.estado_operativo))
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
     const etiquetaEnvioDoc = (doc) => {
         const idx = cajasOrdenadas.findIndex((c) => String(c.id) === String(doc.relacion_id));
         if (idx >= 0) return `Envío ${idx + 1}`;
@@ -213,6 +226,10 @@ export default function ModalDetalleCedis({
 
     const payloadCajasEnviar = () => {
         if (cajasOrdenadas.length === 0) return undefined;
+        if (guiasPorCaja) {
+            const ids = !idsSeleccionados.length && cajasPendientes.length === 1 ? [cajasPendientes[0].id] : idsSeleccionados;
+            return ids.map((id) => ({ id }));
+        }
         if (cajasPendientes.length === 1 && idsSeleccionados.length === 0) {
             const c = cajasPendientes[0];
             const guia = (guiasEnvio[c.id] || '').trim();
@@ -258,7 +275,11 @@ export default function ModalDetalleCedis({
                 ...(cajas ? { cajas } : {}),
             }, {
                 preserveScroll: true,
-                onSuccess: () => {
+                onSuccess: (page) => {
+                    if (guiasPorCaja && page?.props?.flash?.error) {
+                        setAlerta({ abierto: true, tipo: 'error', titulo: 'Salida pendiente', mensaje: page.props.flash.error });
+                        return;
+                    }
                     const completo = cajasOrdenadas.length === 0 || seleccionCompletaPendientes
                         || (cajasPendientes.length <= 1);
                     setAlerta({
@@ -491,7 +512,9 @@ export default function ModalDetalleCedis({
                                 </AvisoOperativoPedido>
                                 )}
                                 {mostrarGuia && !recolectaSucursal && !esperaIntegracion && (
-                                    <SeccionGuiaRastreo pedido={pedido} onVerPdf={setDocPreview} />
+                                    <SeccionGuiaRastreo pedido={guiasPorCaja
+                                        ? { ...pedido, documentos: (pedido.documentos || []).filter((doc) => doc.tipo !== 'guia') }
+                                        : pedido} onVerPdf={setDocPreview} />
                                 )}
                             </div>
                         </section>
@@ -911,6 +934,10 @@ export default function ModalDetalleCedis({
                                     </div>
                                     {cajasOrdenadas.map((c, idx) => {
                                         const pendiente = (c.estatus_recoleccion || 'pendiente') === 'pendiente';
+                                        const pdfCaja = guiasPorCaja && (pedido.documentos || []).find(
+                                            (doc) => doc.relacion_tipo === 'guia_caja_confirmada' && doc.activo
+                                                && Number(doc.pedido_bma_caja_id) === Number(c.id),
+                                        );
                                         const evidenciasCaja = evidenciasEnvio.filter(
                                             (d) => String(d.relacion_id) === String(c.id),
                                         );
@@ -945,11 +972,17 @@ export default function ModalDetalleCedis({
                                                             {c.peso_real_kg != null ? ` · real ${c.peso_real_kg} kg` : ''}
                                                             {c.peso_cobrado_kg != null ? ` · cobrado ${c.peso_cobrado_kg} kg` : ''}
                                                         </p>
-                                                        {(c.numero_rastreo || pedido.numero_rastreo) && (
+                                                        {!guiasPorCaja && (c.numero_rastreo || pedido.numero_rastreo) && (
                                                             <p className="text-xs font-bold theme-text-muted m-0 mt-0.5">
                                                                 Guía: {c.numero_rastreo || pedido.numero_rastreo}
                                                             </p>
                                                         )}
+                                                        {guiasPorCaja && (pdfCaja ? (
+                                                            <button type="button" className={`${BTN_SECONDARY} mt-2 min-h-[44px] px-3 text-xs`}
+                                                                onClick={() => setDocPreview(pdfCaja)} aria-label={`Ver PDF de la caja ${idx + 1}`}>
+                                                                Ver guía PDF
+                                                            </button>
+                                                        ) : <p className="text-xs theme-text-muted m-0">Guía pendiente de asignación</p>)}
                                                         {evidenciasCaja.length > 0 && (
                                                             <div className="flex flex-wrap gap-2 mt-2">
                                                                 {evidenciasCaja.map((d) => (
@@ -961,7 +994,7 @@ export default function ModalDetalleCedis({
                                                                 ))}
                                                             </div>
                                                         )}
-                                                        {puedeMarcarEnviado && pendiente && (
+                                                        {!guiasPorCaja && puedeMarcarEnviado && pendiente && (
                                                             <input
                                                                 type="text"
                                                                 className="mt-2 w-full text-xs font-bold rounded-lg border theme-border theme-element px-2 py-1.5 outline-none"
@@ -1100,7 +1133,7 @@ export default function ModalDetalleCedis({
                             <button
                                 type="button"
                                 onClick={() => setConfirmacion('enviar')}
-                                disabled={procesando || (cajasPendientes.length > 1 && idsSeleccionados.length === 0)}
+                                disabled={procesando || faltanGuias || (cajasPendientes.length > 1 && idsSeleccionados.length === 0)}
                                 className={`${BTN_PRIMARY} flex items-center justify-center gap-2 outline-none disabled:opacity-50 min-h-[44px] w-full sm:w-auto sm:ml-auto`}
                             >
                                 <Truck className="w-4 h-4" /> {etiquetaBotonEnviar}

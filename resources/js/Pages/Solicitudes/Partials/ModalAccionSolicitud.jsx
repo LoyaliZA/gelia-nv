@@ -1,10 +1,12 @@
 import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import React from 'react';
 import { useForm } from '@inertiajs/react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
 import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import { listaVisibleEnSolicitudes } from '../../../utils/escalonamiento';
+import { ACCION_VISUAL } from './solicitudesStyles';
 
 const ACCIONES = {
     pago: { titulo: 'Confirmar pago', ruta: 'solicitudes.confirmar_pago', boton: 'Confirmar pago', texto: 'Registra el monto final cobrado. Si no alcanza el nivel de lista, supervisión recibirá una alerta.' },
@@ -46,13 +48,18 @@ export default function ModalAccionSolicitud({ accion, solicitud, listas = [], o
         guardar(route(config.ruta, solicitud.id), { preserveScroll: true, onSuccess: onClose, onFinish: () => onProcesando?.(false) });
     };
     const listaRebaja = (solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre;
+    const visual = ACCION_VISUAL[accion] || ACCION_VISUAL.crear;
     return (
         <SolicitudDialog title={config.titulo} onClose={onClose} busy={processing} dirty={isDirty} className="gelia-tag-lista-overlay">
             <form onSubmit={enviar} className="gelia-modal-shell gelia-tag-accion w-full max-w-lg">
-                <header className="gelia-workflow-header">
-                    <div><h2 className="m-0 theme-text-main">{config.titulo}</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.cliente?.nombre || 'Cliente'}</p></div>
-                    <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar acción"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={visual.icono}
+                    tono={visual.tono}
+                    titulo={config.titulo}
+                    subtitulo={`FOL-${solicitud.id} · ${solicitud.cliente?.nombre || 'Cliente'}`}
+                    closeLabel="Cerrar acción"
+                    disabled={processing}
+                />
                 <div className="gelia-modal-body p-5 sm:p-6 space-y-5">
                     <AvisoSolicitud tono={AVISO_ACCION[accion]?.tono} titulo={AVISO_ACCION[accion]?.titulo}>{config.texto}</AvisoSolicitud>
                     {accion === 'cancelar' && <AvisoSolicitud tono="neutro" titulo="Motivo de cancelación">{solicitud.motivo_cancelacion || 'Sin motivo registrado.'}{listaRebaja && <span className="block text-sm theme-text-muted">Lista de rebaja: {listaRebaja}</span>}</AvisoSolicitud>}

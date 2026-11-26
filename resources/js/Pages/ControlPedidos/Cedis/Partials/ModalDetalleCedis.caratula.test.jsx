@@ -6,7 +6,7 @@ import ModalDetalleCedis from './ModalDetalleCedis';
 
 vi.mock('@inertiajs/react', () => ({
     router: { reload: vi.fn(), post: vi.fn() },
-    usePage: () => ({ props: { auth: { user: { permissions: ['control_pedidos.cedis'], roles: [] } } } }),
+    usePage: () => ({ props: { auth: { user: { permissions: ['control_pedidos.cedis', 'control_pedidos.cedis.enviar'], roles: [] } } } }),
 }));
 vi.mock('../../../Activos/Partials/useDispositivoCampo', () => ({ default: () => ({ esCampo: false }) }));
 vi.mock('../../Partials/ConsultaSolicitudTienda', () => ({ default: () => null }));
@@ -75,4 +75,40 @@ it('en un pedido que no es municipal no ofrece carátula de consignatario', asyn
     expect(document.body.textContent).not.toContain('Ver carátula con identificación');
     expect(document.body.textContent).not.toContain('Ver carátula sin identificación');
     expect(document.body.textContent).not.toContain('Consignatario');
+});
+
+it('refleja las guías confirmadas al actualizar el mismo detalle y conserva la selección de caja', async () => {
+    const pedido = {
+        id: 42,
+        folio: 'NAC-42',
+        numero_rastreo: '7845210030',
+        guias_pdf_por_caja: true,
+        faltan_guias_por_caja: 1,
+        estatus: { fase_ciclo: 'PENDIENTE_DE_ENVIO' },
+        solicitud_preparacion: { modalidad_entrega: 'nacional' },
+        cajas: [1, 2].map((id) => ({ id, orden: id, estatus_recoleccion: 'pendiente' })),
+        documentos: [],
+    };
+    await montar(pedido);
+    const caja = () => document.querySelector('input[aria-label="Recolectar envío 1"]');
+    const enviar = () => [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Marcar recolectadas'));
+    await act(() => caja().click());
+    expect(caja().checked).toBe(true);
+    expect(enviar().disabled).toBe(true);
+    expect(document.querySelector('button[aria-label="Ver PDF de la caja 1"]')).toBeNull();
+
+    const confirmado = {
+        ...pedido,
+        faltan_guias_por_caja: 0,
+        documentos: [1, 2].map((id) => ({
+            id, pedido_bma_caja_id: id, tipo: 'guia', activo: true,
+            relacion_tipo: 'guia_caja_confirmada', url: `/guia/${id}`,
+        })),
+    };
+    await act(() => root.render(<ModalDetalleCedis abierto pedido={confirmado} onClose={() => {}} />));
+    expect(caja().checked).toBe(true);
+    expect(enviar().disabled).toBe(false);
+    expect(document.querySelector('button[aria-label="Ver PDF de la caja 1"]')).not.toBeNull();
+    expect(document.querySelector('button[aria-label="Ver PDF de la caja 2"]')).not.toBeNull();
+    expect(document.querySelector('input[placeholder*="Guía de este envío"]')).toBeNull();
 });

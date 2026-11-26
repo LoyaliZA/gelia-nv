@@ -39,7 +39,7 @@ function CeldaKpi({ etiqueta, valor, numero, icono: Icono, tono, tab, activo, se
 
     return (
         <div role="listitem" className="contents">
-        <Tag className={`gelia-solicitudes-indicador gelia-tag-kpi ${Tag === 'button' ? FOCUS_TIPO : ''}`} data-tone={apagado ? 'neutro' : tono} data-active={activo || undefined} {...botonProps}>
+        <Tag className={`gelia-solicitudes-indicador gelia-tag-kpi ${Tag === 'button' ? FOCUS_TIPO : ''}`} data-tone={apagado ? 'neutro' : tono} data-active={seleccionado || undefined} {...botonProps}>
             <span className="gelia-tag-kpi-icono" aria-hidden="true"><Icono className="h-5 w-5" /></span>
             <span className="min-w-0 text-left">
                 <span className="block text-xs font-medium theme-text-muted">{etiqueta}</span>

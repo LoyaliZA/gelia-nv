@@ -1,4 +1,26 @@
-import { RotateCcw, UserCheck, UserPlus, Users } from 'lucide-react';
+import {
+    AlertOctagon,
+    Ban,
+    CheckCircle2,
+    CheckSquare,
+    Clock,
+    CreditCard,
+    Edit2,
+    FileText,
+    History,
+    MessageSquare,
+    RotateCcw,
+    ShieldAlert,
+    Sparkles,
+    Store,
+    Tag,
+    Trash2,
+    TrendingUp,
+    UserCheck,
+    UserPlus,
+    Users,
+    XCircle,
+} from 'lucide-react';
 import { GELIA_ESTADO_VIVO_TONO } from '@/utils/geliaTheme';
 
 const BADGE_BASE = 'gelia-estado-vivo gelia-estado-vivo--compacto text-xs font-semibold';
@@ -22,6 +44,73 @@ export function badgeClaseEstadoSolicitud(nombreEstado) {
     const key = nombreEstado?.toLowerCase();
     return ESTADO_SOLICITUD_BADGE_MAP[key] ?? ESTADO_SOLICITUD_BADGE.revision;
 }
+
+/** Paleta GELIA (misma que Listados) para procesos que no tienen token semántico. */
+export const GELIA_PALETTE_SOLICITUD = {
+    // ponytail: style-exception morado de Listados para cambio de lista
+    purple: '#a855f7',
+    // ponytail: style-exception índigo de Listados para TAG + lista
+    indigo: '#6366f1',
+};
+
+const PROCESO_TAG = { clave: 'tag', icono: Tag, color: 'var(--color-aviso)', etiqueta: 'Asignar TAG' };
+const PROCESO_LISTA = { clave: 'lista', icono: TrendingUp, color: GELIA_PALETTE_SOLICITUD.purple, etiqueta: 'Cambio de lista' };
+const PROCESO_TAG_LISTA = { clave: 'tag-lista', icono: Sparkles, color: GELIA_PALETTE_SOLICITUD.indigo, etiqueta: 'TAG y cambio de lista' };
+const PROCESO_TIENDA = { clave: 'tienda', icono: Store, color: 'var(--color-info)', etiqueta: 'Compra en tienda' };
+const PROCESO_OTRO = { clave: 'otro', icono: FileText, color: 'var(--color-primario)', etiqueta: 'Solicitud' };
+
+/** Identidad gráfica del proceso: un color y un icono por tipo. El estado no reutiliza este color. */
+export function identidadProceso(solicitud) {
+    const nombre = (solicitud?.proceso?.nombre || '').toUpperCase();
+    const etiqueta = (solicitud?.proceso?.nombre || '').trim();
+    if (nombre.includes('TAG') && nombre.includes('LISTA')) {
+        return { ...PROCESO_TAG_LISTA, etiqueta: etiqueta || PROCESO_TAG_LISTA.etiqueta };
+    }
+    if (nombre.includes('LISTA')) {
+        return { ...PROCESO_LISTA, etiqueta: etiqueta || PROCESO_LISTA.etiqueta };
+    }
+    if (nombre.includes('TAG')) {
+        return { ...PROCESO_TAG, etiqueta: etiqueta || PROCESO_TAG.etiqueta };
+    }
+    if (solicitud?.compra_en_tienda || solicitud?.compra_en_tienda_solo_tag) {
+        return PROCESO_TIENDA;
+    }
+    return { ...PROCESO_OTRO, etiqueta: etiqueta || PROCESO_OTRO.etiqueta };
+}
+
+const ESTILO_ESTADO = {
+    respondida: { clase: ESTADO_SOLICITUD_BADGE.respondida, icon: CheckCircle2, label: 'Aprobado', tono: 'exito' },
+    incorrecta: { clase: ESTADO_SOLICITUD_BADGE.incorrecta, icon: AlertOctagon, label: 'Reporte', tono: 'peligro' },
+    verificada: { clase: ESTADO_SOLICITUD_BADGE.verificada, icon: CheckSquare, label: 'Verificada', tono: 'info' },
+    cancelada: { clase: ESTADO_SOLICITUD_BADGE.cancelada, icon: XCircle, label: 'Cancelada', tono: 'neutro' },
+};
+
+export function estiloEstadoSolicitud(nombreEstado) {
+    return ESTILO_ESTADO[nombreEstado?.toLowerCase()] ?? {
+        clase: ESTADO_SOLICITUD_BADGE.revision,
+        icon: Clock,
+        label: 'Pendiente',
+        tono: 'aviso',
+    };
+}
+
+export const ACCION_VISUAL = {
+    aprobar: { icono: CheckCircle2, tono: 'exito' },
+    verificar: { icono: CheckSquare, tono: 'info' },
+    corregir: { icono: Edit2, tono: 'aviso' },
+    responder: { icono: MessageSquare, tono: 'aviso' },
+    consultar: { icono: MessageSquare, tono: 'aviso' },
+    pago: { icono: CreditCard, tono: 'info' },
+    lista: { icono: TrendingUp, tono: 'info' },
+    rollback: { icono: ShieldAlert, tono: 'peligro' },
+    error: { icono: AlertOctagon, tono: 'peligro' },
+    solicitar: { icono: Ban, tono: 'peligro' },
+    cancelar: { icono: XCircle, tono: 'peligro' },
+    eliminar: { icono: Trash2, tono: 'peligro' },
+    bitacora: { icono: History, tono: 'neutro' },
+    crear: { icono: FileText, tono: 'primario' },
+    detalle: { icono: FileText, tono: 'neutro' },
+};
 
 const ETIQUETA_BASE = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold';
 

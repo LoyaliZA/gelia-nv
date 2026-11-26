@@ -2,9 +2,12 @@
 
 namespace App\Services\ControlPedidos;
 
+use App\Events\PedidoBmaActualizado;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\InstruccionEntrega;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
@@ -20,6 +23,18 @@ class AsignarGuiaPedidoBmaService
     public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
     {
         $guia = trim($numeroRastreo);
+
+        if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
+            return DB::transaction(fn () => $this->asignar(
+                PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id), $guia, $usuarioId
+            ));
+        }
+
+        return $this->asignar($pedido, $guia, $usuarioId);
+    }
+
+    private function asignar(PedidoBma $pedido, string $guia, int $usuarioId): PedidoBma
+    {
 
         if ($guia === '') {
             throw new \InvalidArgumentException('El número de guía es obligatorio.');
@@ -50,23 +65,37 @@ class AsignarGuiaPedidoBmaService
 
         $this->assertCajasConPeso($pedido);
 
-        if (!$pedido->puedeAsignarGuia()) {
+        $porCaja = GuiasPdfPorCaja::aplica($pedido);
+        $fase = $pedido->estatus?->fase_ciclo;
+        $puedeConfirmar = $porCaja && in_array($fase, [
+            CatalogoEstatusPedido::FASE_EN_CEDIS,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
+            CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO,
+        ], true);
+
+        if (! $puedeConfirmar && ! $pedido->puedeAsignarGuia()) {
             throw new \RuntimeException('El pedido no está pendiente de guía.');
         }
 
-        $fase = $pedido->estatus?->fase_ciclo;
         $yaEmpacado = $fase === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
             || $pedido->empacado_at !== null;
 
-        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado) {
-            if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
-                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
-                \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
+        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado, $porCaja) {
+            if ($porCaja && ! $this->confirmarPdfs($pedido, $guia)) {
+                return $pedido;
             }
 
             $estatusAnterior = $pedido->estatus;
+            $rastreoAnterior = $pedido->numero_rastreo;
+            $corrigeRastreo = $porCaja && filled($rastreoAnterior) && $rastreoAnterior !== $guia
+                && $estatusAnterior?->fase_ciclo === CatalogoEstatusPedido::FASE_PENDIENTE_DE_ENVIO;
+            $attrsCorreccion = $corrigeRastreo ? [
+                'guia_retraso' => true,
+                'guia_corregida_at' => now(),
+                'guia_corregida_por_id' => $usuarioId,
+            ] : [];
 
-            $attrsCola = $this->attrsTrasCorregirGuia($pedido, ['numero_rastreo'], $usuarioId);
+            $attrsCola = $this->attrsTrasCorregirGuia($pedido, $porCaja ? ['numero_rastreo', 'guia_pdf'] : ['numero_rastreo'], $usuarioId);
 
             if ($yaEmpacado) {
                 $faseDestino = MaquinaEstadosPedidoBma::faseDestinoTrasAsignarGuia();
@@ -81,24 +110,32 @@ class AsignarGuiaPedidoBmaService
                     'numero_rastreo' => $guia,
                     'guia_subida_at' => now(),
                     'catalogo_estatus_pedido_id' => $estatusPendienteEnvio->id,
-                ], $attrsCola));
+                ], $attrsCola, $attrsCorreccion));
+
+                if ($porCaja && ! $pedido->wasChanged()) {
+                    PedidoBmaActualizado::dispatch($pedido->id, 'actualizado');
+                }
 
                 $this->historialService->registrarTransicion(
                     $pedido->id,
                     $usuarioId,
                     $estatusAnterior,
                     $estatusPendienteEnvio,
-                    "Guía de rastreo asignada: {$guia}. Pendiente de recolección.",
-                    AccionesHistorialPedidoBma::ASIGNACION_GUIA
+                    $corrigeRastreo
+                        ? "Guía de rastreo corregida (provoca retraso): {$rastreoAnterior} → {$guia}"
+                        : "Guía de rastreo asignada: {$guia}. Pendiente de recolección.",
+                    $corrigeRastreo ? AccionesHistorialPedidoBma::ACTUALIZAR_GUIA : AccionesHistorialPedidoBma::ASIGNACION_GUIA
                 );
 
                 $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
 
                 $this->notificarService->ejecutar(
                     $pedido,
-                    'pedido_guia_asignada',
-                    "Guía de rastreo asignada: {$guia}",
-                    ['control_pedidos.cedis'],
+                    $corrigeRastreo ? 'pedido_guia_retraso' : 'pedido_guia_asignada',
+                    $corrigeRastreo
+                        ? "La guía del pedido fue corregida y provoca un retraso. Anterior: {$rastreoAnterior}. Nueva: {$guia}."
+                        : "Guía de rastreo asignada: {$guia}",
+                    $corrigeRastreo ? ['control_pedidos.cedis', 'control_pedidos.auditar'] : ['control_pedidos.cedis'],
                     $usuarioId,
                     false,
                     ['url' => '/control-pedidos/cedis?tab=PENDIENTES_ENVIO&q='.urlencode((string) ($pedido->folio_remision ?: $pedido->folio ?: $pedido->id))]
@@ -112,6 +149,10 @@ class AsignarGuiaPedidoBmaService
                 'guia_subida_at' => now(),
             ], $attrsCola));
 
+            if ($porCaja && ! $pedido->wasChanged()) {
+                PedidoBmaActualizado::dispatch($pedido->id, 'actualizado');
+            }
+
             $this->historialService->ejecutar(
                 $pedido->id,
                 $usuarioId,
@@ -123,6 +164,37 @@ class AsignarGuiaPedidoBmaService
 
             return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
         });
+    }
+
+    private function confirmarPdfs(PedidoBma $pedido, string $rastreo): bool
+    {
+        $pendientes = GuiasPdfPorCaja::pendientes($pedido);
+        $guias = GuiasPdfPorCaja::vigentes($pedido)->whereIn('pedido_bma_caja_id', $pendientes->pluck('id'));
+        if ($pendientes->isEmpty() || GuiasPdfPorCaja::faltantes($pendientes, $guias) > 0
+            || $guias->contains(fn ($doc) => ! Storage::disk($doc->discoArchivo())->exists($doc->ruta_archivo))) {
+            throw new \RuntimeException('Adjunte un PDF de guía vigente por cada caja pendiente antes de asignar.');
+        }
+
+        $avances = $guias->where('relacion_tipo', GuiasPdfPorCaja::AVANCE);
+        if ($rastreo !== $pedido->numero_rastreo && filled($pedido->numero_rastreo)) {
+            if ($pedido->guiaSoloLecturaHastaEmpaque()) {
+                throw new \RuntimeException('El rastreo asignado queda fijo hasta que se confirme el empaque.');
+            }
+            if ($pedido->cajas->contains(fn ($caja) => $caja->estaRecolectada())) {
+                throw new \RuntimeException('El rastreo compartido queda fijo después de recolectar una caja.');
+            }
+            if ($avances->count() !== $guias->count()) {
+                throw new \RuntimeException('Adjunte los PDFs correspondientes al nuevo rastreo antes de asignarlo.');
+            }
+        }
+        if ($avances->isEmpty() && $rastreo === $pedido->numero_rastreo) {
+            return false;
+        }
+
+        $pedido->documentos()->whereIn('id', $avances->pluck('id'))
+            ->update(['relacion_tipo' => GuiasPdfPorCaja::CONFIRMADA]);
+
+        return true;
     }
 
     /** @param  list<string>  $camposResueltos */
