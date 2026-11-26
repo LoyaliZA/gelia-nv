@@ -26,7 +26,7 @@ class EliminarPedidoBmaService
             $this->safPedido->liberarReservasPendientes($pedido, Auth::id());
 
             foreach ($pedido->documentos as $documento) {
-                Storage::disk('public')->delete($documento->ruta_archivo);
+                Storage::disk($documento->discoArchivo())->delete($documento->ruta_archivo);
             }
 
             // El pedido solo se oculta; sin esto la tarea sigue en Preparación en tienda como fila vacía.

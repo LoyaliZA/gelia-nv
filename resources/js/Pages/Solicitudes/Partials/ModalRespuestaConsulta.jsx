@@ -2,8 +2,9 @@ import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import React from 'react';
 import { useForm } from '@inertiajs/react';
-import { CheckCircle2, Loader2, Send, X, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquare, Send, XCircle } from 'lucide-react';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
 import AdjuntoRespuesta, { useAdjuntoRespuesta } from '@/Components/Solicitudes/AdjuntoRespuesta';
 
 export default function ModalRespuestaConsulta({ onClose, solicitud, consulta }) {
@@ -22,10 +23,14 @@ export default function ModalRespuestaConsulta({ onClose, solicitud, consulta })
     return (
         <SolicitudDialog className="gelia-tag-lista-overlay" title="Responder consulta de TAG y lista" onClose={onClose} busy={busy} dirty={isDirty}>
             <form onSubmit={enviar} onPaste={attachment.onPaste} className="gelia-modal-shell gelia-respuesta-comercial w-full max-w-2xl">
-                <header className="gelia-workflow-header">
-                    <div><h2 className="theme-text-main m-0">Responder consulta</h2><p className="text-sm theme-text-muted mt-1 mb-0">FOL-{solicitud.id} · {temas}</p></div>
-                    <button type="button" data-dialog-close disabled={busy} className="gelia-workflow-close" aria-label="Cerrar consulta"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={MessageSquare}
+                    tono="aviso"
+                    titulo="Responder consulta"
+                    subtitulo={`FOL-${solicitud.id} · ${temas || 'Consulta'}`}
+                    closeLabel="Cerrar consulta"
+                    disabled={busy}
+                />
                 <div className="gelia-modal-body p-5 space-y-5">
                     <div className="gelia-respuesta-nota">
                         <p className="text-sm font-medium theme-text-main m-0">{solicitud.cliente?.nombre || 'Cliente'} · {consulta.vendedor?.name || solicitud.vendedor?.name || 'Ventas'}</p>

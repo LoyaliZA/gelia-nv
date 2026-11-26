@@ -10,6 +10,7 @@ export default function CampoBusqueda({
     wrapperClassName = '',
     iconClassName = 'theme-field-icon',
     icono = null,
+    leading = null,
     suffix = null,
     ...inputProps
 }) {
@@ -28,6 +29,7 @@ export default function CampoBusqueda({
                     />
                 </span>
             )}
+            {leading}
             <input
                 type={type}
                 {...rest}

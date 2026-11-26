@@ -16,6 +16,7 @@ use App\Http\Middleware\FijarAlcanceDemo;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\LogApiRequest;
 use App\Http\Middleware\RequireJsonAccept;
+use App\Http\Middleware\ResponderJsonMovil;
 use App\Http\Middleware\RestrictFormHostname;
 use App\Support\FormPublicUrl;
 use Illuminate\Auth\AuthenticationException;
@@ -87,6 +88,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.mobile' => AuthenticateMobileUser::class,
             'mobile.pdv' => EnsureMobilePuntoVenta::class,
             'mobile.sync' => EnsureMobileSyncScope::class,
+            'mobile.json' => ResponderJsonMovil::class,
             'webauthn.enabled' => EnsureWebAuthnEnabled::class,
             'pdv.piso' => AsegurarSucursalActivaPdv::class,
             'pdv.modulo' => AsegurarModuloPuntoVenta::class,

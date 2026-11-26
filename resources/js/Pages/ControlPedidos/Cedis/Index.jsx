@@ -109,10 +109,23 @@ export default function Index({
         return () => { lecturaDisponibilidadRef.current++; };
     }, [disponibilidad.abierto, disponibilidad.pedido?.id]);
 
+    const detalleGuias = modalDetalle.abierto && modalDetalle.pedido?.guias_pdf_por_caja ? modalDetalle.pedido : null;
+    const recargarDetalleGuias = async (pedido) => {
+        const { data } = await axios.get(route('control_pedidos.cedis.listado'), {
+            params: { q: pedido.folio, tab: 'TODOS' }, headers: { Accept: 'application/json' },
+        });
+        const actualizado = (data.pedidos?.data || []).find((fila) => fila.id === pedido.id);
+        if (actualizado) {
+            setModalDetalle((actual) => actual.abierto && actual.pedido?.id === pedido.id
+                ? { ...actual, pedido: actualizado } : actual);
+        }
+        return actualizado;
+    };
+
     // La misma suscripción actualiza el pedido abierto o la bandeja, nunca ambos a la vez.
     useActualizacionesPedidos({
-        pedidoId: disponibilidad.abierto ? disponibilidad.pedido?.id : null,
-        intervaloRespaldo: disponibilidad.abierto ? 15000 : 0,
+        pedidoId: disponibilidad.abierto ? disponibilidad.pedido?.id : detalleGuias?.id,
+        intervaloRespaldo: disponibilidad.abierto || detalleGuias ? 15000 : 0,
         respaldoAunqueSuscrito: disponibilidad.abierto,
         onActualizar: async () => {
             if (disponibilidad.abierto) {
@@ -128,10 +141,11 @@ export default function Index({
                 if (lectura) consultaAccesibleRef.current = true;
                 return lectura;
             }
+            if (detalleGuias) return recargarDetalleGuias(detalleGuias);
             return tabActiva === 'LIBERACIONES' ? router.reload({ only: ['liberaciones', 'metricas'] }) : cargar(params({ page: pedidosVista?.current_page || 1 }), { silencioso: true });
         },
         // Con la consulta abierta la lectura solo fusiona datos operativos; la captura vive en el panel y no se pausa.
-        pausado: disponibilidad.abierto ? false : (modalAbierto || cargando),
+        pausado: disponibilidad.abierto || detalleGuias ? false : (modalAbierto || cargando),
     });
 
 
@@ -254,7 +268,10 @@ export default function Index({
             <ModalDetalleCedis
                 abierto={modalDetalle.abierto}
                 pedido={modalDetalle.pedido}
-                onClose={() => setModalDetalle({ abierto: false, pedido: null })}
+                onClose={() => {
+                    setModalDetalle({ abierto: false, pedido: null });
+                    if (detalleGuias) onActualizar();
+                }}
                 onReportarErrorDatos={abrirErrorDatos}
                 onMarcarApartado={abrirApartado}
             />

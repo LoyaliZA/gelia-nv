@@ -58,6 +58,11 @@ class ListarPedidosCedisService
             $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
             $pedido->setAttribute('caratula_municipal', \App\Support\ControlPedidos\Municipal\PresentadorCaratulaMunicipalCedis::para($pedido));
 
+            \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::presentarEnCedis($pedido);
+            foreach ($pedido->complementos as $complemento) {
+                \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::presentarEnCedis($complemento);
+            }
+
             return BitacoraCedis::presentar($pedido, $usuario);
         };
 

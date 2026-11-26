@@ -3,7 +3,8 @@ import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React from 'react';
 import { useForm } from '@inertiajs/react';
-import { X, MessageSquare, Tag, TrendingUp, Send } from 'lucide-react';
+import { MessageSquare, Tag, TrendingUp, Send } from 'lucide-react';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
 
 export default function ModalConsultaSolicitud({ onClose, solicitud }) {
     const { data, setData, post, processing, isDirty, errors, setError, clearErrors } = useForm({
@@ -31,10 +32,14 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
     return (
         <SolicitudDialog className="gelia-tag-lista-overlay" onClose={onClose} busy={processing} title="Consultar TAG y lista" dirty={isDirty}>
             <form onSubmit={enviar} className="gelia-modal-shell w-full max-w-xl">
-                <header className="gelia-workflow-header">
-                    <div><h2 className="m-0 theme-text-main">Consultar TAG y lista</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.cliente?.nombre}</p></div>
-                    <button type="button" data-dialog-close disabled={processing} className="gelia-workflow-close" aria-label="Cerrar consulta"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={MessageSquare}
+                    tono="aviso"
+                    titulo="Consultar TAG y lista"
+                    subtitulo={`FOL-${solicitud.id} · ${solicitud.cliente?.nombre || 'Cliente'}`}
+                    closeLabel="Cerrar consulta"
+                    disabled={processing}
+                />
                 <div className="gelia-modal-body p-5 sm:p-6 space-y-5">
                     <AvisoSolicitud tono="info" titulo="Consulta a supervisión">Selecciona qué deseas verificar antes de confirmar el pago.</AvisoSolicitud>
 
@@ -43,7 +48,7 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
                         <Tag className="w-5 h-5 theme-text-aviso" aria-hidden="true" />
                         <div>
                             <p className="text-sm font-medium  theme-text-main">TAG del cliente</p>
-                            <p className="text-[10px] font-bold theme-text-muted">Verificar vendedora asignada al tag</p>
+                            <p className="text-xs font-medium theme-text-muted">Verificar responsable del TAG</p>
                         </div>
                     </label>
 
@@ -52,7 +57,7 @@ export default function ModalConsultaSolicitud({ onClose, solicitud }) {
                         <TrendingUp className="w-5 h-5 theme-text-info" aria-hidden="true" />
                         <div>
                             <p className="text-sm font-medium  theme-text-main">Lista del cliente</p>
-                            <p className="text-[10px] font-bold theme-text-muted">Verificar lista de descuento actual</p>
+                            <p className="text-xs font-medium theme-text-muted">Verificar lista de descuento actual</p>
                         </div>
                     </label>
 

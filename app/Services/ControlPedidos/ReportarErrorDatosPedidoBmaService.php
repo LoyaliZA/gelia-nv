@@ -4,6 +4,7 @@ namespace App\Services\ControlPedidos;
 
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Models\ControlPedidos\PedidoBmaError;
 use App\Support\ControlPedidos\CamposIncorrectosPedidoBma;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\SnapshotHistorialPedidoBma;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
 
 class ReportarErrorDatosPedidoBmaService
 {
@@ -24,6 +26,17 @@ class ReportarErrorDatosPedidoBmaService
      * @param  list<string>  $campos
      */
     public function ejecutar(PedidoBma $pedido, int $usuarioId, array $campos, string $detalle = ''): PedidoBma
+    {
+        if (GuiasPdfPorCaja::aplica($pedido)) {
+            return DB::transaction(fn () => $this->reportar(
+                PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id), $usuarioId, $campos, $detalle
+            ));
+        }
+
+        return $this->reportar($pedido, $usuarioId, $campos, $detalle);
+    }
+
+    private function reportar(PedidoBma $pedido, int $usuarioId, array $campos, string $detalle): PedidoBma
     {
         $pedido->loadMissing('origen');
         $campos = CamposIncorrectosPedidoBma::filtrarParaPedido($campos, $pedido);
@@ -71,11 +84,16 @@ class ReportarErrorDatosPedidoBmaService
             $faseDestino = CatalogoEstatusPedido::FASE_EN_CEDIS;
         }
 
-        $teniaGuia = ! empty($pedido->numero_rastreo)
-            || $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_GUIA)->exists();
+        $porCaja = GuiasPdfPorCaja::aplica($pedido);
+        $guiasDelPedido = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_GUIA);
+        $teniaGuia = filled($pedido->numero_rastreo)
+            || ($porCaja ? (clone $guiasDelPedido)->vigente()->where('relacion_tipo', GuiasPdfPorCaja::CONFIRMADA)->exists()
+                : $guiasDelPedido->exists());
+        $invalidaGuia = CamposIncorrectosPedidoBma::invalidanGuia($campos)
+            && ($teniaGuia || ($porCaja && (clone $guiasDelPedido)->vigente()->exists()));
 
         return DB::transaction(function () use (
-            $pedido, $usuarioId, $campos, $detalle, $duenoActivo, $destino, $faseDestino, $teniaGuia
+            $pedido, $usuarioId, $campos, $detalle, $duenoActivo, $destino, $faseDestino, $teniaGuia, $porCaja, $invalidaGuia
         ) {
             $estatusAnterior = $pedido->estatus;
             MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
@@ -116,16 +134,24 @@ class ReportarErrorDatosPedidoBmaService
                 $attrs['incidencia_empaque_por_id'] = $usuarioId;
             }
 
-            $invalidaGuia = CamposIncorrectosPedidoBma::invalidanGuia($campos) && $teniaGuia;
             if ($invalidaGuia) {
                 $guias = $pedido->documentos()->where('tipo', PedidoBmaDocumento::TIPO_GUIA)->get();
+                $recolectadas = $porCaja ? $pedido->cajas()->where('estatus_recoleccion', PedidoBmaCaja::ESTATUS_RECOLECTADA)->pluck('id') : collect();
                 foreach ($guias as $guia) {
+                    if ($porCaja && (! $guia->activo || $recolectadas->contains($guia->pedido_bma_caja_id))) {
+                        continue;
+                    }
+                    if ($porCaja) {
+                        $guia->fill(['activo' => false, 'sustituido_at' => now(), 'sustituido_por_id' => $usuarioId]);
+                    }
                     $guia->update([
                         'nombre_original' => '[INVALIDADA] '.($guia->nombre_original ?? 'guia.pdf'),
                     ]);
                 }
-                $attrs['numero_rastreo'] = null;
-                $attrs['guia_subida_at'] = null;
+                if (! $porCaja || $recolectadas->isEmpty()) {
+                    $attrs['numero_rastreo'] = null;
+                    $attrs['guia_subida_at'] = null;
+                }
                 $attrs['guia_corregida_at'] = null;
                 $attrs['guia_corregida_por_id'] = null;
             }

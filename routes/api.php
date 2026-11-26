@@ -62,6 +62,19 @@ Route::prefix('v1')->group(function () {
         Route::delete('/{passkey}', [PasskeyController::class, 'destroy'])->where('passkey', '.*');
     });
 
+    // Espejo móvil de las rutas web de Punto de Venta y Gestión de pedidos (docs/ai/API_MOVIL.md).
+    // Va antes del grupo siguiente para que las rutas estáticas ganen a las paramétricas.
+    Route::middleware([
+        'require.json',
+        'auth:sanctum',
+        'api.mobile',
+        'throttle:api-mobile',
+        'mobile.json',
+    ])->group(function () {
+        require __DIR__.'/api/mobile-punto-venta.php';
+        require __DIR__.'/api/mobile-control-pedidos.php';
+    });
+
     Route::prefix('mobile')->middleware([
         'require.json',
         'auth:sanctum',

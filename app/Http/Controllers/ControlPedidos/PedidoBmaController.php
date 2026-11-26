@@ -1599,7 +1599,12 @@ class PedidoBmaController extends Controller
             abort(404);
         }
 
-        if (! Storage::disk('public')->exists($documento->ruta_archivo)) {
+        if ($documento->relacion_tipo === \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::AVANCE) {
+            abort_unless(Auth::user()->can('control_pedidos.delegado'), 403);
+        }
+
+        $disco = $documento->discoArchivo();
+        if (! Storage::disk($disco)->exists($documento->ruta_archivo)) {
             abort(404, 'Archivo no encontrado.');
         }
 
@@ -1607,7 +1612,7 @@ class PedidoBmaController extends Controller
         $nombre = $documento->nombre_original ?: basename($documento->ruta_archivo);
 
         return app(\App\Services\ControlPedidos\ServirArchivoPedidoService::class)->responder(
-            request(), 'public', $documento->ruta_archivo, $nombre, $mime
+            request(), $disco, $documento->ruta_archivo, $nombre, $mime
         );
     }
 

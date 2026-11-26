@@ -8,7 +8,7 @@
 - [verificado] Delegado tiene bandeja por permiso/fase, sin filtro de departamento: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:20`.
 - [verificado] La cola excluye municipales con recorrido físico (sin guía ni rastreo): `app/Services/ControlPedidos/ListarPedidosDelegadoService.php:94`.
 - [verificado] Asignar guía a pedido aún sin empaque guarda rastreo sin avanzar fase: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:95`.
-- [verificado] Importación aplica el servicio individual; errores de una fila se cuentan como omitidos: `app/Services/ControlPedidos/ImportarGuiasPedidoService.php:60`.
+- [verificado] Nacional 2.0 sin seguro gestionado por Delegado guarda un PDF por caja activa como avance. **Asignar** confirma los PDFs y el rastreo general. La importación remite esos pedidos al detalle; en los demás aplica el servicio individual.
 
 ## Reglas que no se rompen
 - [verificado] Resguardo y PAQ. PENDIENTE no admiten guía hasta resolver sus condiciones: `app/Services/ControlPedidos/AsignarGuiaPedidoBmaService.php:31`.
@@ -29,4 +29,4 @@
 - [inferido] Un archivo importado puede quedar aplicado parcialmente; revisar contadores/errores antes de reintentar el lote: `app/Services/ControlPedidos/ImportarGuiasPedidoService.php:27` y `:63`.
 - [verificado] No confundir las fases de guía propia del cliente con la cola normal de Delegado: `app/Support/ControlPedidos/MaquinaEstadosPedidoBma.php:213`.
 
-- Última verificación: 2026-11-20, working tree, sin commit.
+- Última verificación: 2026-11-26, árbol de trabajo sobre c0593554.

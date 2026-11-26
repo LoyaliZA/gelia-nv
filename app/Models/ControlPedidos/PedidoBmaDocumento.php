@@ -97,6 +97,13 @@ class PedidoBmaDocumento extends Model
         return $query->where('activo', false);
     }
 
+    public function discoArchivo(): string
+    {
+        return str_starts_with((string) $this->ruta_archivo, \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::DIRECTORIO)
+            ? 'local'
+            : 'public';
+    }
+
     /** URL autenticada (gate VisibilidadPedidoBma); fallback público solo si falta id. */
     public function getUrlAttribute(): string
     {

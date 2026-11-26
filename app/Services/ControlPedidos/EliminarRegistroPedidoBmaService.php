@@ -37,7 +37,7 @@ class EliminarRegistroPedidoBmaService
             $this->safPedido->liberarReservasPendientes($pedido, $usuarioId);
 
             foreach ($pedido->documentos as $documento) {
-                Storage::disk('public')->delete($documento->ruta_archivo);
+                Storage::disk($documento->discoArchivo())->delete($documento->ruta_archivo);
             }
 
             $pedido->update([

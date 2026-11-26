@@ -14,7 +14,9 @@ class SubirGuiaPdfPedidoBmaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'guia_pdf' => ['required', 'file', 'mimes:pdf', 'max:10240'],
+            'guia_pdf' => ['required_without:guia_general_id', 'prohibits:guia_general_id', 'file', 'mimes:pdf', 'max:10240'],
+            'caja_id' => ['nullable', 'integer', 'min:1'],
+            'guia_general_id' => ['nullable', 'integer', 'min:1', 'required_without:guia_pdf'],
         ];
     }
 

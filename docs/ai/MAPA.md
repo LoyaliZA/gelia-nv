@@ -11,6 +11,7 @@
 - [Direcciones](modulos/DIRECCIONES.md): catálogo, solicitudes y snapshot del pedido.
 - [Cancelación y seguimiento](modulos/CANCELACION_SEGUIMIENTO.md): liberaciones, eliminación y tareas programadas.
 
+- [API móvil](API_MOVIL.md): espejo de rutas de PDV y pedidos para la app móvil, permisos y paridad.
 - [Invariantes](INVARIANTES.md) · [Glosario](GLOSARIO.md) · [Pruebas](PRUEBAS.md) · [Estado](ESTADO.md).
 - [verificado] Entrada de rutas del área: `routes/web/modules/control-pedidos/index.php:3`.
 - [verificado] M-02 P0 convierte el mismo `PedidoBma` de Tienda a Municipal solo antes del primer cierre; la consulta heredada abierta sigue bloqueando exhibiciones: `modulos/ENVIO_MUNICIPAL.md`.

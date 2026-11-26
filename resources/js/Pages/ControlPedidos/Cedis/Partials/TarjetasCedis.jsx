@@ -101,6 +101,8 @@ function TarjetaPedido({
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
+    const guiasPorCaja = Boolean(pedido.guias_pdf_por_caja);
+    const faltanGuias = guiasPorCaja && (pedido.faltan_guias_por_caja > 0 || !pedido.numero_rastreo);
     const requiereLogistica = municipal ? false : pedidoRequiereLogistica(pedido);
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const preparacion = pedido.tarea_preparacion_vigente || pedido.tarea_preparacion_respondida || pedido.tarea_preparacion;
@@ -278,7 +280,10 @@ function TarjetaPedido({
                         Liberar integración
                     </button>
                 )}
-                {puedeMarcarEnviado && (
+                {puedeMarcarEnviado && faltanGuias && (
+                    <p className="text-xs theme-text-muted m-0">Guías pendientes de asignación: {pedido.faltan_guias_por_caja}</p>
+                )}
+                {puedeMarcarEnviado && !faltanGuias && (
                     <button
                         type="button"
                         onClick={() => (requiereSeleccionEnvios
@@ -287,7 +292,7 @@ function TarjetaPedido({
                         className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
                     >
                         <Truck className="w-4 h-4" />
-                        {requiereSeleccionEnvios ? 'Elegir envíos a recolectar' : etiquetaMarcarEnviado(pedido)}
+                        {requiereSeleccionEnvios && !guiasPorCaja ? 'Elegir envíos a recolectar' : etiquetaMarcarEnviado(pedido)}
                     </button>
                 )}
                 {puedeReabrirEnvio && (
@@ -309,7 +314,7 @@ function TarjetaPedido({
                     {(pendientePesaje || municipal) && pdfPedido && (
                         <BotonAccionCubico icon={FileText} label="PDF pedido" onClick={() => onVerDocumento(pdfPedido)} conLabel />
                     )}
-                    {esEmpacado && tieneGuiaPdf && !recolectaSucursal && !esperaIntegracion && (
+                    {esEmpacado && tieneGuiaPdf && !guiasPorCaja && !recolectaSucursal && !esperaIntegracion && (
                         <div className="col-span-2 sm:col-span-1 [&_button]:w-full [&_button]:min-h-[44px]">
                             <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[44px]" />
                         </div>

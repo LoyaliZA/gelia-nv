@@ -69,7 +69,6 @@ class CancelacionCotizacionMobileController extends Controller
         $cancelar->ejecutar(
             $solicitud,
             $datos['motivo_cancelacion'],
-            null,
             'cancelaciones_cotizaciones.solicitar_cancelacion',
             ['cancelaciones_cotizaciones.verificar', 'cancelaciones_cotizaciones.reportar', 'cancelaciones_cotizaciones.cancelar'],
         );

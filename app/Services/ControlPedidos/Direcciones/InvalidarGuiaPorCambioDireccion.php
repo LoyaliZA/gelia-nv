@@ -23,6 +23,10 @@ class InvalidarGuiaPorCambioDireccion
     public function ejecutar(PedidoBma $pedido, int $usuarioId, string $motivo): PedidoBma
     {
         return DB::transaction(function () use ($pedido, $usuarioId, $motivo) {
+            $porCaja = \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::aplica($pedido);
+            if ($porCaja) {
+                $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
+            }
             $estatusAnterior = $pedido->estatus;
             $rastreoAnterior = $pedido->numero_rastreo;
 
@@ -52,12 +56,12 @@ class InvalidarGuiaPorCambioDireccion
                 }
             }
 
-            MaquinaEstadosPedidoBma::assertTransicion(
-                $estatusAnterior?->fase_ciclo,
-                CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
-            );
-            $estatusNuevo = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA)
-                ?? $estatusAnterior;
+            $faseDestino = $porCaja && $pedido->empacado_at === null && $estatusAnterior?->fase_ciclo === CatalogoEstatusPedido::FASE_EN_CEDIS
+                ? CatalogoEstatusPedido::FASE_EN_CEDIS
+                : CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA;
+            MaquinaEstadosPedidoBma::assertTransicion($estatusAnterior?->fase_ciclo, $faseDestino);
+            $estatusNuevo = CatalogoEstatusPedido::porFase($faseDestino) ?? $estatusAnterior;
+            $mantenerRastreo = $porCaja && $cajas->contains(fn (PedidoBmaCaja $caja) => $caja->estaRecolectada());
 
             $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
             $json['invalidacion_guia'] = [
@@ -67,8 +71,8 @@ class InvalidarGuiaPorCambioDireccion
                 'cancelacion_paqueteria_confirmada' => false,
             ];
             $pedido->update([
-                'numero_rastreo' => null,
-                'guia_subida_at' => null,
+                'numero_rastreo' => $mantenerRastreo ? $rastreoAnterior : null,
+                'guia_subida_at' => $mantenerRastreo ? $pedido->guia_subida_at : null,
                 'catalogo_estatus_pedido_id' => $estatusNuevo->id,
                 'solicitud_preparacion_json' => $json,
             ]);
