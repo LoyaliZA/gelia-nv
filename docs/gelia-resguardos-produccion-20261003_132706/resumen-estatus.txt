@@ -1,0 +1,23 @@
+estado	resguardos
+en_custodia	22
+entregado	2858
+concepto	total
+bultos	2914
+eventos	11526
+entregas	2858
+evidencias	11474
+archivos_empaquetados	11474
+archivos_faltantes	0
+nombres_sin_cuenta\t12
+sin_cuenta	1	ALEJANDRO DE LOS SANTOS MARIANA
+sin_cuenta	3	COLMENARES PEREZ JOSE FRANCISCO
+sin_cuenta	1	ESCALANTE HENRI LUIS Y/O ALAMILLA MARIBEL
+sin_cuenta	1	FRAGOSO HERNANDEZ JOSE EMANUEL
+sin_cuenta	1	HERNANDEZ BAUTISTA ELIEZER
+sin_cuenta	1	HERNANDEZ MONTEJO ISRAEL
+sin_cuenta	1	HUB CETZAL CUPIL JUAN CARLOS
+sin_cuenta	1	HUB COLORADO PEREZ MAYRA SELENE
+sin_cuenta	1	HUB HERNANDEZ RUIZ BULMARO
+sin_cuenta	2	HUB MARTINEZ CEBALLOS TANIA
+sin_cuenta	2	HUB MENA SANCHEZ KEVIN
+sin_cuenta	1	LOPEZ HERRERA ERIKA MALLELY
