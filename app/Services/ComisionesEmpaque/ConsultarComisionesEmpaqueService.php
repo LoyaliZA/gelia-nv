@@ -2,7 +2,9 @@
 
 namespace App\Services\ComisionesEmpaque;
 
+use App\Jobs\ComisionesEmpaque\ProcesarCambiosComisionesEmpaque;
 use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
+use App\Models\ComisionesEmpaque\AuditoriaComisionEmpaque;
 use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ComisionesEmpaque\CorteComisionEmpaque;
 use App\Models\ComisionesEmpaque\ParticipanteComisionEmpaque;
@@ -13,14 +15,18 @@ use App\Models\User;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ConsultarComisionesEmpaqueService
 {
+    private const CAMPOS_RELACIONADOS = ['id', 'folio_pedido', 'folio_remision', 'situacion', 'clave_origen', 'cantidad_origen', 'empacado_at'];
+
     public function __construct(private AlcanceAreaComisionEmpaque $alcance) {}
 
     /** @return array<string, mixed> */
-    public function resumen(?User $usuario, ?Request $request = null, ?array $estado = null): array
+    public function resumen(?User $usuario, ?Request $request = null, ?array $estado = null, bool $incluirSaldoConfirmado = true): array
     {
         if ($this->alcance->ids($usuario) === []) {
             return [
@@ -40,24 +46,25 @@ class ConsultarComisionesEmpaqueService
         $contexto = new Request($request?->only(['area_id', 'desde', 'hasta', 'buscar', 'cliente', 'remision', 'pedido', 'empacador', 'empacador_id', 'empacador_nombre']) ?? []);
         $base = $this->filtrar($contexto, $usuario);
 
-        $elegibles = (clone $base)->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->whereNull('corte_id');
+        $elegibles = (clone $base)->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->whereNull('corte_id')->where('incorporacion_tardia', false);
         $cajas = UnidadLineaComisionEmpaque::query()->where('es_bolsa', false);
-        $validas = [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE];
+        $validas = (clone $base)->where(fn ($q) => $q->where('situacion', UnidadComisionEmpaque::EN_CORTE)
+            ->orWhere(fn ($elegible) => $elegible->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->where('incorporacion_tardia', false)));
         $excluidas = [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA];
-        $importeValido = (int) (clone $base)->whereIn('situacion', $validas)->sum('importe_centavos');
-        $porPagar = AsignacionComisionEmpaque::query()->whereHas('corte', function ($q) use ($usuario, $request) {
+        $importeValido = (int) (clone $validas)->sum('importe_centavos');
+        $porPagar = $incluirSaldoConfirmado ? AsignacionComisionEmpaque::query()->whereHas('corte', function ($q) use ($usuario, $request) {
             if ($request?->filled('area_id')) {
                 $q->where('area_id', (int) $request->input('area_id'));
             }
             $q->where('estado', CorteComisionEmpaque::CONFIRMADO);
             $this->alcance->aplicar($q, $usuario);
-        })->get()->sum(fn (AsignacionComisionEmpaque $a) => max(0, $a->pendienteCentavos()));
+        })->with('ajustes')->get()->sum(fn (AsignacionComisionEmpaque $a) => max(0, $a->pendienteCentavos())) : null;
 
         return [
             'listo' => (bool) $listo,
             'total_registros' => (clone $base)->count(),
             'revisados' => (clone $base)->whereIn('situacion', [UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::EN_CORTE, UnidadComisionEmpaque::LIQUIDADA_FUERA])->count(),
-            'cajas_elegibles' => (int) (clone $base)->whereIn('situacion', $validas)->sum('cantidad_comisionable'),
+            'cajas_elegibles' => (int) (clone $validas)->sum('cantidad_comisionable'),
             'cajas_registradas' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->select('id'))->sum('cantidad'),
             'cajas_pendientes' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->select('id'))->sum('cantidad'),
             'cajas_excluidas' => (int) (clone $cajas)->whereIn('unidad_id', (clone $base)->whereIn('situacion', $excluidas)->select('id'))->sum('cantidad'),
@@ -68,7 +75,7 @@ class ConsultarComisionesEmpaqueService
             'importe_valido' => DineroComisionEmpaque::texto($importeValido),
             'importe_por_cortar' => DineroComisionEmpaque::texto((int) (clone $elegibles)->sum('importe_centavos')),
             'importe_constancia' => DineroComisionEmpaque::texto((int) (clone $base)->where('liquidacion', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)->sum('importe_centavos')),
-            'importe_confirmado_por_pagar' => DineroComisionEmpaque::texto((int) $porPagar),
+            'importe_confirmado_por_pagar' => $porPagar === null ? null : DineroComisionEmpaque::texto((int) $porPagar),
             'por_revisar' => (clone $base)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->count(),
             'mensaje' => $mensaje,
         ];
@@ -81,8 +88,10 @@ class ConsultarComisionesEmpaqueService
         $ahora = now();
         $rangoVencido = $config->fecha_fin && $ahora->gt(DineroComisionEmpaque::finDia($config->fecha_fin->toDateString(), $config->zona_horaria));
         $latido = (int) Cache::get('comisiones-empaque:worker-activo');
-        $porArea = $areas->map(function ($area) use ($config, $latido, $ahora) {
-            $consulta = SincronizacionComisionEmpaque::query()->whereJsonContains('area_ids', $area->id);
+        $rangoPendiente = $config->version_rango !== $config->version_reconciliada;
+        $porArea = $areas->map(function ($area) use ($config, $latido, $ahora, $rangoPendiente) {
+            $consulta = SincronizacionComisionEmpaque::query()->whereJsonContains('area_ids', $area->id)
+                ->when($rangoPendiente, fn ($q) => $q->where('version_rango', $config->version_rango));
             $ultima = (clone $consulta)->latest('id')->first();
             $exitosa = (clone $consulta)->where('estado', 'ok')->latest('id')->first();
             $fecha = fn ($momento) => $momento?->copy()->timezone($config->zona_horaria)->format('Y-m-d H:i');
@@ -101,34 +110,61 @@ class ConsultarComisionesEmpaqueService
                 'revision' => Cache::get('comisiones-empaque:revision:'.$area->id),
             ];
         })->values();
-        $automatizadas = $areas->where('sistema', true)->count();
-        $listo = $config->fecha_inicio !== null && $porArea->isNotEmpty() && $porArea->every(fn ($area) => $area['ultima_exitosa_at']);
+        $automatizadas = $areas->where('sistema', true);
+        $activo = $automatizadas->isNotEmpty() && $porArea->where('automatico_reciente', true)->count() === $automatizadas->count();
+        $listo = $config->fecha_inicio !== null && ! $rangoPendiente && $porArea->isNotEmpty()
+            && $porArea->every(fn ($area) => $area['ultima_exitosa_at']);
         $estado = match (true) {
             $porArea->isEmpty() || $config->fecha_inicio === null => 'omitida',
-            $rangoVencido => 'rango_vencido',
             $porArea->contains('estado', 'error') => 'error',
             $porArea->contains('estado', 'en_curso') => 'en_curso',
-            $automatizadas > 0 && $porArea->where('automatico_reciente', true)->count() < $automatizadas => 'sin_actividad',
-            $listo => 'ok',
-            default => 'pendiente',
+            $rangoVencido => 'rango_vencido',
+            ! $listo => 'pendiente',
+            $this->hayCambiosPendientes($config, $automatizadas->modelKeys()) => 'cambios_pendientes',
+            $automatizadas->isNotEmpty() && ! $activo => 'sin_actividad',
+            default => 'ok',
         };
+        $facultades = collect(['configurar', 'capturar', 'clasificar', 'confirmar_cortes', 'registrar_pagos', 'ajustar', 'exportar', 'ver_todas'])
+            ->map(fn ($facultad) => $usuario?->can('gestion_interna.comisiones_empaque.'.$facultad))->all();
 
         return [
             'estado' => $estado,
             'listo' => $listo,
             'finalizado_at' => $listo ? $porArea->min('ultima_exitosa_at') : null,
-            'automatizacion_reciente' => $automatizadas > 0 && $porArea->where('automatico_reciente', true)->count() === $automatizadas,
-            'revision' => hash('sha256', json_encode($porArea->pluck('revision')->all())),
+            'automatizacion_reciente' => $activo,
+            'contexto' => hash('sha256', json_encode([$usuario?->id, $this->alcance->ids($usuario), $facultades, $usuario?->can('control_pedidos.cedis'), $usuario?->can('control_pedidos.tienda.ver')])),
+            'revision' => hash('sha256', json_encode([$porArea->pluck('revision', 'id')->all(), $config->version_rango, AuditoriaComisionEmpaque::query()->max('id')])),
             'areas' => $porArea->map(fn ($area) => array_diff_key($area, ['revision' => true]))->all(),
             'mensaje' => match ($estado) {
                 'rango_vencido' => 'La fecha final impide incorporar empaques nuevos. Revise el rango en Configuración.',
                 'error' => 'La actualización quedó incompleta. Puede reintentar.',
                 'omitida' => $areas->isEmpty() ? 'No tienes áreas asignadas.' : 'Defina el inicio de sincronización en Configuración.',
                 'sin_actividad' => 'Sin actividad automática reciente.',
-                'pendiente' => 'Pendiente de primera actualización.',
+                'pendiente' => 'Pendiente de primera sincronización del rango autorizado.',
+                'cambios_pendientes' => 'Hay cambios de origen por procesar.',
                 default => null,
             },
         ];
+    }
+
+    private function hayCambiosPendientes(ConfiguracionComisionEmpaque $config, array $areas): bool
+    {
+        if ($areas === []) {
+            return false;
+        }
+
+        $inicio = DineroComisionEmpaque::inicioDia($config->fecha_inicio->toDateString(), $config->zona_horaria);
+        $fin = $config->fecha_fin ? DineroComisionEmpaque::finDia($config->fecha_fin->toDateString(), $config->zona_horaria) : null;
+        $sincronizar = app(SincronizarComisionesEmpaqueService::class);
+
+        foreach (DB::table('comisiones_empaque_cambios_fuente')->lazyById(500)->chunk(500) as $lote) {
+            $pedidos = ProcesarCambiosComisionesEmpaque::pedidos(collect($lote));
+            if ($pedidos !== [] && $sincronizar->pedidosEnIntervalo($inicio, $fin, $areas, $pedidos)->isNotEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function unidades(Request $request, ?User $usuario)
@@ -138,7 +174,27 @@ class ConsultarComisionesEmpaqueService
 
         $pagina = $query->orderByDesc('empacado_at')->orderByDesc('id')->paginate(25)->withQueryString();
         $zona = ConfiguracionComisionEmpaque::actual()->zona_horaria;
-        $pagina->through(fn (UnidadComisionEmpaque $u) => $this->fila($u, $zona));
+        $idsRelacionados = $pagina->getCollection()->flatMap(fn ($unidad) => $unidad->duplicados_relacionados ?? [])->unique();
+        $relacionados = $idsRelacionados->isEmpty() ? collect() : UnidadComisionEmpaque::query()
+            ->whereIn('id', $idsRelacionados)
+            ->tap(fn ($q) => $this->alcance->aplicar($q, $usuario))
+            ->get(self::CAMPOS_RELACIONADOS)->keyBy('id');
+        $tardias = $pagina->getCollection()->filter(fn ($unidad) => $unidad->incorporacion_tardia && ! $unidad->corte_id);
+        $cortesOriginales = $tardias->isEmpty() ? collect() : CorteComisionEmpaque::query()
+            ->whereIn('area_id', $tardias->pluck('area_id')->unique())
+            ->where('estado', CorteComisionEmpaque::CONFIRMADO)
+            ->where('limite_hasta', '>=', $tardias->min('empacado_at'))
+            ->where('limite_desde', '<=', $tardias->max('empacado_at'))
+            ->get(['id', 'area_id', 'folio', 'limite_desde', 'limite_hasta'])->groupBy('area_id');
+        $pagina->through(function (UnidadComisionEmpaque $u) use ($zona, $cortesOriginales, $relacionados) {
+            $corte = $u->incorporacion_tardia ? $cortesOriginales->get($u->area_id)?->first(
+                fn ($c) => $u->empacado_at->betweenIncluded($c->limite_desde, $c->limite_hasta)
+            ) : null;
+
+            $coincidencias = $relacionados->only($u->duplicados_relacionados ?? []);
+
+            return $this->fila($u, $zona, $coincidencias) + ['corte_original' => $corte?->folio, 'corte_original_id' => $corte?->id];
+        });
 
         return [$pagina, $totales];
     }
@@ -149,7 +205,7 @@ class ConsultarComisionesEmpaqueService
         $registros = (clone $query)->count();
         $sinImporte = (clone $query)->whereNull('importe_centavos')->count();
         $fondo = (clone $query)->where('situacion', UnidadComisionEmpaque::ELEGIBLE)->whereNull('corte_id')
-            ->where('liquidacion', '!=', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA);
+            ->where('liquidacion', '!=', UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA)->where('incorporacion_tardia', false);
         $cajas = (int) (clone $fondo)->sum('cantidad_comisionable');
         $importe = (int) (clone $fondo)->sum('importe_centavos');
 
@@ -206,7 +262,9 @@ class ConsultarComisionesEmpaqueService
                 ? $q->whereNull('empacador_nombre')->orWhere('empacador_nombre', '')
                 : $q->where('empacador_nombre', $nombre));
         }
-        if ($request->input('vista') === 'excluidos') {
+        if ($request->input('vista') === 'tardias') {
+            $query->where('incorporacion_tardia', true)->whereNull('corte_id');
+        } elseif ($request->input('vista') === 'excluidos') {
             $query->whereIn('situacion', [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA]);
         } elseif ($request->input('vista') === 'pendientes') {
             $query->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR);
@@ -221,7 +279,7 @@ class ConsultarComisionesEmpaqueService
     }
 
     /** @return array<string, mixed> */
-    public function fila(UnidadComisionEmpaque $u, ?string $zona = null): array
+    public function fila(UnidadComisionEmpaque $u, ?string $zona = null, ?Collection $relacionados = null): array
     {
         $zona ??= config('app.timezone');
         $cajas = $u->lineas->where('es_bolsa', false)->sum('cantidad');
@@ -241,6 +299,8 @@ class ConsultarComisionesEmpaqueService
         if ($remisiones === [] && $u->folio_remision) {
             $remisiones = [$u->folio_remision];
         }
+        $relacionados ??= $u->duplicados_relacionados ? UnidadComisionEmpaque::query()
+            ->whereIn('id', $u->duplicados_relacionados)->get(self::CAMPOS_RELACIONADOS) : collect();
 
         return [
             'id' => $u->id,
@@ -253,7 +313,10 @@ class ConsultarComisionesEmpaqueService
             'incidencias' => $u->relationLoaded('incidencias') ? $u->incidencias->sortByDesc('id')->map(fn ($i) => [
                 'id' => $i->id,
                 'estado' => $i->estado,
-                'motivo' => $i->motivo,
+                'motivo' => $i->tipo === 'incorporacion_tardia' && $i->estado === 'pendiente'
+                    ? ValorarUnidadComisionEmpaque::MOTIVO_TARDIA : $i->motivo,
+                'corte_original_id' => $i->tipo === 'incorporacion_tardia' ? ($i->datos['corte_original_id'] ?? null) : null,
+                'folio_corte_original' => $i->tipo === 'incorporacion_tardia' ? ($i->datos['folio_corte_original'] ?? null) : null,
                 'responsable' => $i->responsable?->name,
                 'fecha' => ($i->resuelta_at ?? $i->created_at)?->format('Y-m-d H:i'),
             ])->values()->all() : [],
@@ -289,10 +352,7 @@ class ConsultarComisionesEmpaqueService
             'pedido_bma_id' => $u->pedido_bma_id,
             'posible_duplicado' => (bool) $u->posible_duplicado,
             'referencia' => $u->logistica['referencia'] ?? null,
-            'relacionados' => UnidadComisionEmpaque::query()
-                ->whereIn('id', $u->duplicados_relacionados ?: [])
-                ->get(['id', 'folio_pedido', 'folio_remision', 'situacion', 'clave_origen', 'cantidad_origen', 'empacado_at'])
-                ->map(function (UnidadComisionEmpaque $rel) use ($u, $zona) {
+            'relacionados' => $relacionados->map(function (UnidadComisionEmpaque $rel) use ($u, $zona) {
                     $criterio = collect($u->logistica['coincidencias'] ?? [])->firstWhere('id', $rel->id);
 
                     return [
@@ -371,26 +431,21 @@ class ConsultarComisionesEmpaqueService
         })->values())->sortBy([['area', 'asc'], ['nombre', 'asc']])->values()->all();
     }
 
-    public function saldos(?User $usuario, ?int $areaId = null): array
+    public function saldos(?User $usuario, ?int $areaId = null, bool $soloDetallePendiente = false): array
     {
-        $participantes = ParticipanteComisionEmpaque::query()->orderBy('nombre')->get();
+        $porParticipante = AsignacionComisionEmpaque::query()->with(['corte.area', 'ajustes'])
+            ->whereHas('corte', function ($q) use ($usuario, $areaId) {
+                $q->when($areaId, fn ($cortes) => $cortes->where('area_id', $areaId))
+                    ->where('estado', CorteComisionEmpaque::CONFIRMADO);
+                $this->alcance->aplicar($q, $usuario);
+            })->get()->groupBy('participante_id');
+        $acotarParticipantes = $areaId || $soloDetallePendiente || $this->alcance->ids($usuario) !== null;
+        $participantes = ParticipanteComisionEmpaque::query()->orderBy('nombre')
+            ->when($acotarParticipantes, fn ($q) => $q->whereIntegerInRaw('id', $porParticipante->keys()->all()))->get();
+
         $filas = [];
         foreach ($participantes as $participante) {
-            $asignaciones = AsignacionComisionEmpaque::query()
-                ->with(['corte.area', 'ajustes'])
-                ->where('participante_id', $participante->id)
-                ->whereHas('corte', function ($q) use ($usuario, $areaId) {
-                    if ($areaId) {
-                        $q->where('area_id', $areaId);
-                    }
-                    $q->where('estado', CorteComisionEmpaque::CONFIRMADO);
-                    $this->alcance->aplicar($q, $usuario);
-                })
-                ->get();
-
-            if ($areaId && $asignaciones->isEmpty()) {
-                continue;
-            }
+            $asignaciones = $porParticipante->get($participante->id, collect());
             $reconocido = 0;
             $pagado = 0;
             $pendiente = 0;
@@ -400,6 +455,9 @@ class ConsultarComisionesEmpaqueService
                 $pagado += (int) $asignacion->pagado_centavos;
                 $pend = $asignacion->pendienteCentavos();
                 $pendiente += max(0, $pend);
+                if ($soloDetallePendiente && $pend <= 0) {
+                    continue;
+                }
                 $detalle[] = [
                     'id' => $asignacion->id,
                     'folio' => $asignacion->corte?->folio,

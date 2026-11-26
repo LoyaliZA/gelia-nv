@@ -10,7 +10,7 @@ class ConfiguracionComisionEmpaque extends Model
 
     protected $fillable = ['fecha_inicio', 'fecha_fin', 'zona_horaria'];
 
-    protected $casts = ['fecha_inicio' => 'date', 'fecha_fin' => 'date'];
+    protected $casts = ['fecha_inicio' => 'date', 'fecha_fin' => 'date', 'version_rango' => 'integer', 'version_reconciliada' => 'integer'];
 
     public static function actual(): self
     {

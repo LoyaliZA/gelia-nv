@@ -7,11 +7,155 @@ export function dinero(valor) {
     return Number(valor).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
 }
 
-export function ir(params) {
+const PROPS = [
+    'tab', 'puede', 'areas', 'fecha_inicio', 'fecha_fin', 'sincronizacion', 'filtros', 'sin_areas',
+    'periodos_opciones', 'carga_revision', 'captura_nombre', 'resumen', 'situaciones', 'motivos_comerciales',
+    'tipos_caja', 'paqueterias', 'acumulado', 'totales', 'preview', 'cortes', 'corte', 'productividad',
+    'saldos', 'tarifas', 'repartos', 'alcances', 'equipo', 'periodos', 'flash',
+];
+const ETIQUETA_CACHE = 'comisiones-empaque';
+const precargas = new Map();
+const oyentes = new Set();
+let turno = 0;
+let epocaPrecarga = 0;
+let precargaSuspendida = false;
+let cancelarLectura;
+let lecturaBloqueada = false;
+let confirmarLectura;
+const publicar = (estado) => oyentes.forEach((oyente) => oyente(estado));
+let reportarErrorLectura;
+const errorSilencioso = () => { reportarErrorLectura?.mostrar(); return false; };
+const errorDeRed = (error) => {
+    if (!error?.url || error.url === reportarErrorLectura?.url) reportarErrorLectura?.mostrar();
+    return false;
+};
+
+export function observarConsultas(oyente) {
+    oyentes.add(oyente);
+    return () => oyentes.delete(oyente);
+}
+
+export function confirmarAntesDeConsultar(confirmar) {
+    confirmarLectura = confirmar;
+    return () => { confirmarLectura = null; };
+}
+
+export function bloquearConsultas(bloqueo) {
+    lecturaBloqueada = bloqueo;
+}
+
+function consulta(params, identidad, only = PROPS) {
     const actual = new URL(window.location.href).searchParams;
-    const contexto = Object.fromEntries(['area_id', 'periodo_id', 'desde', 'hasta'].filter((clave) => actual.has(clave)).map((clave) => [clave, actual.get(clave)]));
-    const query = { ...contexto, ...params };
-    router.get(route('gestion_interna.comisiones_empaque.index'), query, { preserveState: false, preserveScroll: true });
+    const claves = ['area_id', 'periodo_id', 'desde', 'hasta'];
+    const contexto = Object.fromEntries(claves.filter((clave) => actual.has(clave)).map((clave) => [clave, actual.get(clave)]));
+    const datos = { ...contexto, ...params };
+    const query = Object.fromEntries(Object.entries(datos).filter(([, valor]) => valor !== undefined && valor !== null && valor !== '').sort(([a], [b]) => a.localeCompare(b)));
+    const url = route('gestion_interna.comisiones_empaque.index');
+    const options = {
+        preserveState: true,
+        preserveScroll: true,
+        showProgress: false,
+        only,
+        headers: identidad ? { 'X-Gelia-Comisiones-Contexto': `${identidad}/${epocaPrecarga}` } : {},
+        onHttpException: errorSilencioso,
+        onNetworkError: errorDeRed,
+    };
+
+    return { url, query, options, clave: JSON.stringify([epocaPrecarga, identidad, query]), epoca: epocaPrecarga };
+}
+
+export function invalidarPrecargas() {
+    epocaPrecarga++;
+    router.flushByCacheTags?.(ETIQUETA_CACHE);
+}
+
+export function cancelarConsulta() {
+    turno++;
+    cancelarLectura?.();
+    cancelarLectura = null;
+    reportarErrorLectura = null;
+    publicar(null);
+}
+
+export function precargarComisiones(params, identidad) {
+    if (!identidad || lecturaBloqueada || precargaSuspendida || !router.prefetch
+        || !['periodos', 'productividad'].includes(params.tab)) return;
+    const { url, query, options, clave, epoca } = consulta(params, identidad);
+    const visita = { ...options, data: query };
+    if (precargas.size >= 2 || precargas.has(clave) || router.getCached?.(url, visita)) return;
+
+    let resolver;
+    const espera = new Promise((resolve) => { resolver = resolve; });
+    const terminar = (disponible) => {
+        window.clearTimeout(limite);
+        precargas.delete(clave);
+        resolver(disponible);
+    };
+    const limite = window.setTimeout(() => {
+        precargaSuspendida = true;
+        terminar(false);
+    }, 5000);
+    precargas.set(clave, espera);
+    router.prefetch(url, {
+        ...visita,
+        onPrefetched: (respuesta) => {
+            const vigente = epoca === epocaPrecarga && respuesta.status < 400;
+            if (!vigente) router.flush?.(url, visita);
+            terminar(vigente);
+        },
+    }, { cacheFor: '30s', cacheTags: ETIQUETA_CACHE });
+}
+
+export function ir(params, { identidad, only, replace = false, onSuccess } = {}) {
+    if (lecturaBloqueada || confirmarLectura?.() === false) return;
+    const { url, query, options, clave, epoca } = consulta(params, identidad, only);
+    const intento = ++turno;
+    cancelarLectura?.();
+    cancelarLectura = null;
+
+    const reintentar = () => ir(params, { identidad, only, replace, onSuccess });
+    const fallo = () => {
+        if (turno === intento) publicar({ error: true, reintentar });
+    };
+    const leer = (puedeUsarPrecarga = true) => {
+        if (turno !== intento || lecturaBloqueada) return;
+        let aceptada = false;
+        const opcionDeCache = puedeUsarPrecarga && epoca === epocaPrecarga && !precargaSuspendida;
+        reportarErrorLectura = { mostrar: fallo, url: null };
+        const completar = () => {
+            if (turno !== intento) return;
+            cancelarLectura = null;
+            reportarErrorLectura = null;
+            publicar(null);
+        };
+        router.get(url, query, {
+            ...options, replace, headers: opcionDeCache ? options.headers : {},
+            onBefore: (visita) => {
+                aceptada = turno === intento;
+                if (aceptada) reportarErrorLectura.url = visita.url?.href;
+                return aceptada;
+            },
+            onCancelToken: (token) => { cancelarLectura = token.cancel; },
+            onSuccess: (page) => {
+                completar();
+                if (turno === intento) onSuccess?.(page);
+            },
+            onError: fallo,
+            onFinish: (visit) => {
+                if (visit.cancelled || visit.interrupted) completar();
+                else if (turno === intento) {
+                    cancelarLectura = null;
+                    reportarErrorLectura = null;
+                }
+            },
+        });
+        if (!aceptada) completar();
+    };
+
+    publicar({ tab: query.tab, pendiente: true, reintentar });
+    const pendiente = precargas.get(clave);
+    if (pendiente) pendiente.then(leer);
+    else leer();
 }
 
 export function momentoLegible(valor) {

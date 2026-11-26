@@ -2,6 +2,7 @@
 
 namespace App\Jobs\ComisionesEmpaque;
 
+use App\Models\ComisionesEmpaque\ConfiguracionComisionEmpaque;
 use App\Models\ControlPedidos\OperacionEmpaqueMiembro;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaCajaRemision;
@@ -27,18 +28,54 @@ class ProcesarCambiosComisionesEmpaque implements ShouldBeUnique, ShouldQueue
 
     public function handle(SincronizarComisionesEmpaqueService $sincronizar): void
     {
-        $cambios = DB::table('comisiones_empaque_cambios_fuente')->orderBy('id')->limit(500)->get();
-        if ($cambios->isNotEmpty()) {
+        Cache::put('comisiones-empaque:worker-activo', now()->timestamp, 240);
+        $config = ConfiguracionComisionEmpaque::actual();
+        if (! $config->fecha_inicio) {
+            return;
+        }
+
+        if ($config->version_rango !== $config->version_reconciliada) {
+            $resultado = $sincronizar->ejecutar(null, automatica: true, versionRango: (int) $config->version_rango);
+            if ($resultado->estado === 'error') {
+                throw new RuntimeException($resultado->mensaje);
+            }
+            if ($resultado->estado !== 'ok' || ! ConfiguracionComisionEmpaque::query()->whereKey($config->id)
+                ->where('version_rango', $config->version_rango)->update(['version_reconciliada' => $config->version_rango])) {
+                return;
+            }
+        }
+
+        // Acotar cada ejecución. El scheduler continúa si llegan más lotes.
+        for ($lote = 0; $lote < 10; $lote++) {
+            $cambios = DB::table('comisiones_empaque_cambios_fuente')->orderBy('id')->limit(500)->get();
+            if ($cambios->isEmpty()) {
+                return;
+            }
+
             $resultado = $sincronizar->ejecutar(null, pedidos: self::pedidos($cambios), automatica: true);
             if ($resultado->estado === 'error') {
                 throw new RuntimeException($resultado->mensaje);
             }
+            if ($resultado->estado !== 'ok') {
+                return;
+            }
 
-            // Retirar solo mensajes de la cola de origen ya procesados. Los
-            // mensajes escritos mientras se ejecutaba el trabajo siguen en cola.
-            DB::table('comisiones_empaque_cambios_fuente')->whereIn('id', $cambios->pluck('id'))->delete();
+            // Acreditar el lote solo si sigue vigente el rango con que se inició.
+            $retirado = DB::transaction(function () use ($config, $cambios) {
+                $actual = ConfiguracionComisionEmpaque::query()->lockForUpdate()->findOrFail($config->id);
+                if ($actual->version_rango !== $config->version_rango) {
+                    return false;
+                }
+
+                DB::table('comisiones_empaque_cambios_fuente')->whereIn('id', $cambios->pluck('id'))->delete();
+
+                return true;
+            });
+            if (! $retirado) {
+                return;
+            }
+            Cache::put('comisiones-empaque:worker-activo', now()->timestamp, 240);
         }
-        Cache::put('comisiones-empaque:worker-activo', now()->timestamp, 240);
     }
 
     /** @return list<int> */

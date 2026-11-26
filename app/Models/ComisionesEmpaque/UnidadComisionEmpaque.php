@@ -132,7 +132,10 @@ class UnidadComisionEmpaque extends Model
 
     public function versionRevision(): string
     {
-        $auditoria = $this->getAttributes()['auditorias_max_id'] ?? $this->auditorias()->max('id');
+        $atributos = $this->getAttributes();
+        $auditoria = array_key_exists('auditorias_max_id', $atributos)
+            ? $atributos['auditorias_max_id']
+            : $this->auditorias()->max('id');
 
         return hash('sha256', json_encode([
             $auditoria, $this->area_id, $this->huella, $this->logistica['huella_comercial'] ?? null,

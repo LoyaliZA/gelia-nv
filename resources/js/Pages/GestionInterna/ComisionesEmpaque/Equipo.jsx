@@ -1,6 +1,7 @@
-import { router, useForm } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import BuscarUsuario from './BuscarUsuario';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 
 const dinero = (n) => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
@@ -10,15 +11,7 @@ export default function Equipo({ equipo, areaId, puede, acumulado = '0.00', hist
     const form = useForm({ area_id: areaId, reparto_id: equipo?.version || 0, motivo: '', lineas: (equipo?.lineas || []).map((l) => ({ user_id: l.user_id, nombre: l.nombre, porcentaje: l.porcentaje, encargado: !!l.encargado })) });
     const lineas = editando ? form.data.lineas : equipo?.lineas || [];
     const total = lineas.reduce((sum, l) => sum + Math.round(Number(l.porcentaje || 0) * 100), 0);
-    useEffect(() => {
-        if (!editando || !form.isDirty) return undefined;
-        const advertir = (e) => { e.preventDefault(); e.returnValue = ''; };
-        window.addEventListener('beforeunload', advertir);
-        const salir = router.on?.('before', (event) => {
-            if (event.detail.visit.method === 'get' && !window.confirm('Hay cambios en el equipo sin guardar. ¿Descartarlos?')) event.preventDefault();
-        });
-        return () => { window.removeEventListener('beforeunload', advertir); salir?.(); };
-    }, [editando, form.isDirty]);
+    useProtegerEdicion(editando && (form.isDirty || form.processing));
     function editar() {
         form.setData({ area_id: areaId, reparto_id: equipo?.version || 0, motivo: '', lineas: (equipo?.lineas || []).map((l) => ({ user_id: l.user_id, nombre: l.nombre, porcentaje: l.porcentaje, encargado: !!l.encargado })) });
         setEditando(true);

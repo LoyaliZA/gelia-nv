@@ -7,6 +7,7 @@ use App\Models\ComisionesEmpaque\AsignacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\AuditoriaComisionEmpaque;
 use App\Models\ComisionesEmpaque\PagoAplicacionComisionEmpaque;
 use App\Models\ComisionesEmpaque\PagoComisionEmpaque;
+use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\User;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use Illuminate\Database\QueryException;
@@ -167,6 +168,10 @@ class RegistrarPagoComisionEmpaqueService
             }
 
             $aplicar = (bool) ($datos['aplicar_en_saldo'] ?? false);
+            if ($aplicar && ! empty($datos['unidad_id']) && UnidadComisionEmpaque::query()
+                ->whereKey($datos['unidad_id'])->where('incorporacion_tardia', true)->whereNull('corte_id')->exists()) {
+                throw ValidationException::withMessages(['unidad_id' => ValorarUnidadComisionEmpaque::MOTIVO_TARDIA]);
+            }
             if ($aplicar && $asignacion && $centavos < 0 && $asignacion->pendienteCentavos() + $centavos < 0) {
                 throw ValidationException::withMessages([
                     'importe' => 'El ajuste negativo dejaría el pendiente por debajo de cero. Reduzca el importe o no lo aplique al saldo.',

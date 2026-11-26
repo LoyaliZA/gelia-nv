@@ -1,16 +1,19 @@
 import { useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
+import GeliaPaginacion from '@/Components/GeliaPaginacion';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 import { BOTON_FILTRO, ErroresFormulario, dinero, ir } from './compartido';
 
 export function Preparar({ areas, filtros, preview: calculo, puede }) {
-    const [preview] = useState(calculo);
+    const [preview, setPreview] = useState(calculo);
     const [area, setArea] = useState(filtros.area_id || areas[0]?.id || '');
     const [desde, setDesde] = useState(filtros.limite_desde || filtros.desde || '');
     const [hasta, setHasta] = useState(filtros.limite_hasta || filtros.hasta || '');
-    const [tardias, setTardias] = useState(!!Number(filtros.incluir_tardias || 0));
+    const tardias = false;
     const calculoVigente = String(area) === String(filtros.area_id) && desde === filtros.limite_desde && hasta === filtros.limite_hasta && tardias === !!Number(filtros.incluir_tardias || 0);
     const form = useForm({});
+    useProtegerEdicion(form.processing);
     const retorno = {
         area_id: area, periodo_id: filtros.periodo_id, desde, hasta,
         limite_desde: desde, limite_hasta: hasta, incluir_tardias: tardias ? 1 : 0, retorno_corte: 1,
@@ -18,7 +21,10 @@ export function Preparar({ areas, filtros, preview: calculo, puede }) {
 
     function ver(e) {
         e.preventDefault();
-        ir({ tab: 'preparar', area_id: area, limite_desde: desde, limite_hasta: hasta, incluir_tardias: tardias ? 1 : 0 });
+        ir({
+            tab: 'preparar', area_id: area, limite_desde: desde, limite_hasta: hasta,
+            periodo_id: String(area) === String(filtros.area_id) && desde === filtros.desde && hasta === filtros.hasta ? filtros.periodo_id : undefined,
+        }, { onSuccess: (pagina) => { setPreview(pagina.props.preview); form.clearErrors?.(); } });
     }
 
     return (
@@ -29,7 +35,7 @@ export function Preparar({ areas, filtros, preview: calculo, puede }) {
                     <label><span className={THEME_LABEL}>Área</span>
                         <select className={THEME_INPUT} value={area} onChange={(e) => setArea(e.target.value)}>{areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select>
                     </label>
-                    <label className="flex items-end gap-2 text-sm"><input type="checkbox" checked={tardias} onChange={(e) => setTardias(e.target.checked)} /> Incluir incorporaciones tardías anteriores al inicio</label>
+                    <button type="button" className={BOTON_FILTRO} onClick={() => ir({ ...retorno, tab: 'acumulado', vista: 'tardias', retorno_periodo_id: filtros.periodo_id, periodo_id: undefined, desde: undefined, hasta: undefined })}>Revisar incorporaciones tardías</button>
                     <label><span className={THEME_LABEL}>Desde</span><input className={THEME_INPUT} type="date" required value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
                     <label><span className={THEME_LABEL}>Hasta</span><input className={THEME_INPUT} type="date" required value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
                     <button className={THEME_BTN_SECONDARY} type="submit">Revisar cálculo</button>
@@ -92,7 +98,7 @@ export function Preparar({ areas, filtros, preview: calculo, puede }) {
     );
 }
 
-export function Cortes({ cortes, corte, puede }) {
+export function Cortes({ cortes, corte, puede, filtros }) {
     return (
         <div className="space-y-4">
             <div className={geliaCardClass('overflow-x-auto')}>
@@ -102,7 +108,7 @@ export function Cortes({ cortes, corte, puede }) {
                         {(cortes?.data || []).length === 0 && <tr><td colSpan={9} className="p-6 theme-text-muted">Todavía no hay cortes.</td></tr>}
                         {(cortes?.data || []).map((c) => (
                             <tr key={c.id} className="border-t theme-border">
-                                <td className="p-2"><button type="button" className="theme-text-primario" onClick={() => ir({ tab: 'cortes', corte: c.id })}>{c.folio}</button>{c.provisional && <span className="block text-xs">Provisional</span>}</td>
+                                <td className="p-2"><button type="button" className="theme-text-primario" onClick={() => ir({ ...filtros, tab: 'cortes', corte: c.id, page: cortes?.current_page })}>{c.folio}</button>{c.provisional && <span className="block text-xs">Provisional</span>}</td>
                                 <td className="p-2">{c.area}</td>
                                 <td className="p-2">{c.desde} a {c.hasta}</td>
                                 <td className="p-2">{c.cajas}</td>
@@ -115,6 +121,7 @@ export function Cortes({ cortes, corte, puede }) {
                         ))}
                     </tbody>
                 </table>
+                {cortes?.total > 0 && <GeliaPaginacion embedded paginator={cortes} onIrAPagina={(page) => ir({ ...filtros, tab: 'cortes', page })} />}
             </div>
             {corte && (
                 <section className={geliaCardClass('p-4 space-y-3')}>
@@ -137,12 +144,13 @@ export function Cortes({ cortes, corte, puede }) {
 
 export function Pagos({ saldos, puede, areaId }) {
     const [id, setId] = useState(saldos[0]?.id || '');
-    const persona = useMemo(() => saldos.find((s) => String(s.id) === String(id)), [saldos, id]);
+    const persona = useMemo(() => saldos.find((s) => String(s.id) === String(id)) || saldos[0], [saldos, id]);
     const [seleccion, setSeleccion] = useState({});
     const nuevaClave = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const [clave, setClave] = useState(nuevaClave);
-    useEffect(() => { setClave(nuevaClave()); }, [id]);
+    useEffect(() => { setClave(nuevaClave()); }, [persona?.id]);
     const form = useForm({ fecha_pago: '', referencia: '', medio: '', observaciones: '' });
+    useProtegerEdicion(form.isDirty || form.processing || Object.values(seleccion).some(Boolean));
     const aPagar = persona ? persona.asignaciones.filter((a) => seleccion[a.id]).reduce((n, a) => n + Number(seleccion[a.id] || 0), 0) : 0;
     const pendiente = persona ? Number(persona.pendiente) : 0;
 
@@ -151,7 +159,13 @@ export function Pagos({ saldos, puede, areaId }) {
             {puede.exportar && <a className={THEME_BTN_SECONDARY} href={route('gestion_interna.comisiones_empaque.exportar.pagos', areaId ? { area_id: areaId } : {})}>Exportar pagos y saldos</a>}
             {saldos.length === 0 && <p className="theme-text-muted">No hay cortes confirmados con saldo en esta área. Cierre un periodo para calcular las comisiones por pagar.</p>}
             <label className="block max-w-md"><span className={THEME_LABEL}>Participante</span>
-                <select className={THEME_INPUT} value={id} onChange={(e) => { setId(e.target.value); setSeleccion({}); }}>
+                <select className={THEME_INPUT} value={persona?.id || ''} disabled={form.processing} onChange={(e) => {
+                    if ((form.isDirty || Object.keys(seleccion).length) && !window.confirm('¿Descartar los datos de este pago?')) return;
+                    setId(e.target.value);
+                    setSeleccion({});
+                    form.reset();
+                    form.clearErrors?.();
+                }}>
                     {saldos.map((s) => <option key={s.id} value={s.id}>{s.nombre}{s.activo ? '' : ' (inactivo)'}</option>)}
                 </select>
             </label>

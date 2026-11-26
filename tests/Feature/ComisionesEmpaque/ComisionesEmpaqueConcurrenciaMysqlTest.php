@@ -46,6 +46,11 @@ class ComisionesEmpaqueConcurrenciaMysqlTest extends TestCase
         $this->assertSame(0, $this->carrera('sincronizar'));
     }
 
+    public function test_empaque_confirmado_despues_de_comprobar_fuentes_queda_como_tardio_una_sola_vez(): void
+    {
+        $this->assertSame(0, $this->carrera('empaque-durante-cierre'));
+    }
+
     private function carrera(string $caso): int
     {
         $proceso = proc_open(

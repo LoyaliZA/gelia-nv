@@ -22,6 +22,7 @@ use Illuminate\Support\Enumerable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 class SincronizarComisionesEmpaqueService
@@ -31,7 +32,7 @@ class SincronizarComisionesEmpaqueService
         private GestionarUnidadComisionEmpaqueService $gestionar,
     ) {}
 
-    public function ejecutar(?User $responsable, ?array $areasAutorizadas = null, ?array $pedidos = null, ?array $intervalo = null, bool $automatica = false): SincronizacionComisionEmpaque
+    public function ejecutar(?User $responsable, ?array $areasAutorizadas = null, ?array $pedidos = null, ?array $intervalo = null, bool $automatica = false, ?int $versionRango = null): SincronizacionComisionEmpaque
     {
         $sync = SincronizacionComisionEmpaque::query()->create([
             'estado' => 'en_curso',
@@ -39,8 +40,10 @@ class SincronizarComisionesEmpaqueService
             'ejecutado_por_id' => $responsable?->id,
             'area_ids' => $areasAutorizadas ?? AreaComisionEmpaque::query()->pluck('id')->all(),
             'automatica' => $automatica,
+            'version_rango' => $versionRango,
         ]);
 
+        $conteo = $this->conteo();
         try {
             $config = ConfiguracionComisionEmpaque::actual();
             if ($config->fecha_inicio === null) {
@@ -53,15 +56,25 @@ class SincronizarComisionesEmpaqueService
                 return $sync;
             }
 
+            if ($versionRango !== null && (int) $config->version_rango !== $versionRango) {
+                $sync->update(['estado' => 'omitida', 'mensaje' => 'El rango cambió durante la preparación.', 'finalizado_at' => now()]);
+
+                return $sync;
+            }
+
             $inicio = DineroComisionEmpaque::inicioDia($config->fecha_inicio->toDateString(), $config->zona_horaria);
             $fin = $config->fecha_fin ? DineroComisionEmpaque::finDia($config->fecha_fin->toDateString(), $config->zona_horaria) : null;
             $areas = AreaComisionEmpaque::query()->whereIn('id', $sync->area_ids)->orderBy('id')->pluck('id', 'codigo');
-            $conteo = $this->conteo();
             $ids = $pedidos !== null
                 ? collect($pedidos)->unique()->sort()
                 : $this->pedidosEnIntervalo($intervalo ? $inicio->max($intervalo[0]) : $inicio, $intervalo && $fin ? $fin->min($intervalo[1]) : ($intervalo[1] ?? $fin), $areas->all());
             foreach ($ids as $id) {
-                $resultado = DB::transaction(function () use ($id, $areas, $inicio, $fin, $responsable) {
+                $resultado = DB::transaction(function () use ($id, $areas, $inicio, $fin, $responsable, $config) {
+                    $rango = ConfiguracionComisionEmpaque::query()->sharedLock()->findOrFail($config->id);
+                    if ($rango->version_rango !== $config->version_rango) {
+                        throw new RuntimeException('El rango cambió durante la sincronización.');
+                    }
+
                     AreaComisionEmpaque::query()->whereIn('id', $areas->values())->orderBy('id')->lockForUpdate()->get();
 
                     return $this->sincronizarPedido((int) $id, $areas->all(), $inicio, $fin, $responsable);
@@ -69,9 +82,6 @@ class SincronizarComisionesEmpaqueService
                 $this->sumar($conteo, $resultado);
             }
 
-            foreach ($conteo['areas_modificadas'] as $areaModificada) {
-                Cache::forever('comisiones-empaque:revision:'.$areaModificada, (string) Str::uuid());
-            }
             $sync->update([
                 'estado' => 'ok',
                 'mensaje' => 'Sincronización terminada.',
@@ -88,6 +98,10 @@ class SincronizarComisionesEmpaqueService
                 'mensaje' => 'La actualización quedó incompleta. Vuelva a intentar.',
                 'finalizado_at' => now(),
             ]);
+        } finally {
+            foreach ($conteo['areas_modificadas'] as $areaModificada) {
+                Cache::forever('comisiones-empaque:revision:'.$areaModificada, (string) Str::uuid());
+            }
         }
 
         return $sync;
@@ -596,7 +610,11 @@ class SincronizarComisionesEmpaqueService
                 'conciliacion_previa' => $unidad->conciliacion,
             ]);
         }
+        $cambioFecha = $unidad->isDirty('empacado_at');
         $unidad->save();
+        if ($cambioFecha && ! $unidad->incorporacion_tardia) {
+            $this->valorar->marcarTardiaSiCorresponde($unidad);
+        }
         $this->valorar->aplicar($unidad->fresh('lineas'));
         $this->aplicarCancelacion($unidad->fresh(), $pedido, $responsable);
         $unidad = $unidad->fresh();

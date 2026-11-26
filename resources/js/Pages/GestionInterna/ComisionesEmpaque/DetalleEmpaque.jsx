@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import { AlertTriangle, BadgeCheck, Box, CircleMinus, Clock, Eye, FileCheck2, Plus, Wallet, X } from 'lucide-react';
 import { THEME_BTN_PRIMARY, THEME_INPUT, THEME_LABEL, THEME_MODAL_SHELL, geliaCardClass } from '@/utils/geliaTheme';
-import { BOTON_FILTRO, ErroresFormulario, dinero, momentoLegible } from './compartido';
+import { BOTON_FILTRO, ErroresFormulario, dinero, ir, momentoLegible } from './compartido';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 
 const INSIGNIA = {
     info: 'border-[color-mix(in_srgb,var(--color-info)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-info)_16%,transparent)] text-[color:var(--color-info)]',
@@ -47,7 +48,9 @@ export default function Fila({ fila, puede, tipos, motivos, abierta, onAbrir, on
             <td className="p-2 tabular-nums">{fila.cajas ?? (fila.cantidad_origen ? `${fila.cantidad_origen} sin clasificar` : 'Sin cantidad')}{fila.bolsas > 0 && <span className="block text-xs theme-text-muted">{fila.bolsas} bolsas</span>}</td>
             <td className="p-2 max-w-52"><span>{fila.logistica?.paqueteria || 'Sin paquetería'}</span><span className="block text-xs theme-text-muted">{[fila.logistica?.modalidad_preparacion || fila.logistica?.modalidad_envio, fila.motivo_comercial_codigo !== 'sin_informacion' && fila.motivo_comercial].filter(Boolean).join(' · ')}</span></td>
             <td className="p-2"><span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${INSIGNIA[estado.tono]}`} title={fila.situacion_etiqueta}><Icono className="size-3.5" aria-hidden="true" />{estado.texto}</span></td>
-            <td className="p-2 text-right whitespace-nowrap tabular-nums">{fila.importe_comisionable != null ? dinero(fila.importe_comisionable) : fila.liquidacion === 'pagado_fuera' ? dinero(fila.importe) : '—'}</td>
+            <td className="p-2 text-right whitespace-nowrap tabular-nums">{fila.incorporacion_tardia && !fila.corte && fila.situacion === 'elegible'
+                ? <span className="text-xs theme-text-aviso">Decisión pendiente</span>
+                : fila.importe_comisionable != null ? dinero(fila.importe_comisionable) : fila.liquidacion === 'pagado_fuera' ? dinero(fila.importe) : '—'}</td>
             <td className="p-2"><button type="button" className={BOTON_FILTRO} aria-haspopup="dialog" aria-expanded={abierta} onClick={onAbrir}>
                 {estado.tono === 'aviso' && puede.clasificar ? 'Revisar' : 'Ver detalle'}
             </button></td>
@@ -59,9 +62,13 @@ export default function Fila({ fila, puede, tipos, motivos, abierta, onAbrir, on
 function RevisionEmpaque({ fila: ultimaFila, puede, tipos, motivos, onCerrar, onSiguiente }) {
     const [verPedido, setVerPedido] = useState(Boolean(ultimaFila.evidencias_remision?.length));
     const [cambios, setCambios] = useState(false);
+    useProtegerEdicion(cambios);
     const filaRevision = useRef(ultimaFila);
     if (!cambios) filaRevision.current = ultimaFila;
     const fila = filaRevision.current;
+    const incidenciaTardia = fila.incidencias?.find((i) => i.corte_original_id);
+    const corteOriginal = incidenciaTardia?.folio_corte_original || fila.corte_original;
+    const corteOriginalId = incidenciaTardia?.corte_original_id || fila.corte_original_id;
     const editable = puede.clasificar && !fila.corte && fila.liquidacion !== 'pagado_fuera';
     const conciliar = editable && !['descartar', 'excluir'].includes(fila.ancla_decision)
         && ['pendiente_conciliacion', 'pendiente_tarifa', 'elegible', 'excluida'].includes(fila.situacion);
@@ -75,6 +82,12 @@ function RevisionEmpaque({ fila: ultimaFila, puede, tipos, motivos, onCerrar, on
                 <section className="space-y-2">
                     <h3 className="m-0 text-sm font-bold">Pedido y empaque</h3>
                     <p className="text-sm m-0">{[fila.folio_pedido, fila.area, momentoLegible(fila.empacado_at), fila.empacador].filter(Boolean).join(' · ')}</p>
+                    {fila.incorporacion_tardia && !fila.corte && <div className="space-y-1">
+                        <p className="text-sm m-0 theme-text-aviso">Decisión económica pendiente del supervisor{corteOriginal ? ` · Corte original ${corteOriginal}` : ''}</p>
+                        {corteOriginalId && <button type="button" className={BOTON_FILTRO} onClick={() => ir({
+                            tab: 'cortes', corte: corteOriginalId, area_id: fila.area_id, periodo_id: undefined, desde: undefined, hasta: undefined,
+                        })}>Consultar corte original</button>}
+                    </div>}
                     <p className="text-sm m-0">Remisiones {fila.remisiones?.join(', ') || fila.folio_remision || 'sin folio registrado'}</p>
                     <p className="text-sm theme-text-muted m-0">{fila.tipos?.join(', ') || 'Sin desglose físico'} · {logisticaTexto(fila.logistica)}</p>
                     {fila.logistica?.estado_envio && <p className="text-sm m-0">{fila.logistica.estado_envio}</p>}
@@ -115,7 +128,8 @@ function Conciliar({ fila, motivos, onCambios, onSiguiente }) {
             if (siguiente) onSiguiente();
         },
     });
-    return <form className="grid gap-3 sm:grid-cols-2" onChange={() => onCambios(true)} onSubmit={(e) => {
+    useEffect(() => { onCambios(form.isDirty || form.processing); }, [form.isDirty, form.processing, onCambios]);
+    return <form className="grid gap-3 sm:grid-cols-2" onSubmit={(e) => {
         e.preventDefault();
         guardar(e.nativeEvent.submitter?.value === 'siguiente');
     }}>
@@ -203,8 +217,9 @@ function Clasificar({ fila, tipos, onCambios }) {
         });
     };
 
+    useEffect(() => { onCambios(form.isDirty || form.processing); }, [form.isDirty, form.processing, onCambios]);
     return (
-        <div className="space-y-3" onChange={() => onCambios(true)}>
+        <div className="space-y-3">
             <ErroresFormulario form={form} />
             {(fila.situacion === 'pendiente_revision' || fila.situacion === 'posible_duplicado') && (
                 <form className="flex flex-wrap gap-2 items-end" onSubmit={(e) => { e.preventDefault(); enviar('revisar', (data) => ({ decision: data.revision, motivo: data.motivo })); }}>
@@ -264,7 +279,7 @@ function Clasificar({ fila, tipos, onCambios }) {
                         </div>
                     ))}
                         <div className="flex flex-wrap gap-2">
-                        <button type="button" className="inline-flex items-center gap-2 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" onClick={() => { onCambios(true); form.setData('lineas', [...form.data.lineas, { cantidad: 1, es_bolsa: false, catalogo_tipo_caja_id: '' }]); }}><Plus className="size-4" aria-hidden="true" />Agregar tipo de caja</button>
+                        <button type="button" className="inline-flex items-center gap-2 rounded-lg border theme-border theme-element px-3 py-2 text-sm theme-text-main" onClick={() => { form.setData('lineas', [...form.data.lineas, { cantidad: 1, es_bolsa: false, catalogo_tipo_caja_id: '' }]); }}><Plus className="size-4" aria-hidden="true" />Agregar tipo de caja</button>
                         <button className={THEME_BTN_PRIMARY} disabled={form.processing}>Guardar desglose</button>
                     </div>
                 </form>

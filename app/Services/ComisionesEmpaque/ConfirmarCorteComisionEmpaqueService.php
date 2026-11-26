@@ -31,9 +31,11 @@ class ConfirmarCorteComisionEmpaqueService
     /** @return array<string, mixed> */
     public function calcular(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias): array
     {
-        $incluidas = $this->unidades($areaId, $desde, $hasta, $incluirTardias);
-        $errores = [];
-        $sinCorte = UnidadComisionEmpaque::query()->where('area_id', $areaId)->whereNull('corte_id')
+        $incluidas = $this->unidades($areaId, $desde, $hasta);
+        $errores = $incluirTardias
+            ? ['Las incorporaciones tardías requieren una decisión económica del supervisor. Revise la bandeja de incorporaciones tardías.']
+            : [];
+        $sinCorte = UnidadComisionEmpaque::query()->where('area_id', $areaId)->whereNull('corte_id')->where('incorporacion_tardia', false)
             ->whereBetween('empacado_at', [$desde, $hasta]);
         $pendientes = (clone $sinCorte)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->count();
         if ($pendientes) {
@@ -47,7 +49,7 @@ class ConfirmarCorteComisionEmpaqueService
             ->where('desde', '<=', $hasta)->where('hasta', '>', $desde)->get();
         $equipoPermanente = RepartoComisionEmpaque::permanente($areaId);
         foreach ($periodos as $periodo) {
-            if (! $desde->eq($periodo->desde) || ! $hasta->copy()->addMicrosecond()->eq($periodo->hasta) || $incluirTardias) {
+            if (! $desde->eq($periodo->desde) || ! $hasta->copy()->addMicrosecond()->eq($periodo->hasta)) {
                 $errores[] = 'Prepare el corte con las fechas completas de un solo periodo y sin incorporar empaques de periodos anteriores.';
             }
         }
@@ -197,27 +199,35 @@ class ConfirmarCorteComisionEmpaqueService
     public function confirmar(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias, string $hash, User $responsable, ?int $borradorId = null): CorteComisionEmpaque
     {
         $config = ConfiguracionComisionEmpaque::actual();
-        $desdeCobertura = $desde;
         $cambiosConocidos = null;
         if ($config->fecha_inicio) {
-            if ($incluirTardias) {
-                $desdeCobertura = DineroComisionEmpaque::inicioDia($config->fecha_inicio->toDateString(), $config->zona_horaria)->min($desde);
-            }
             $cambiosConocidos = DB::table('comisiones_empaque_cambios_fuente')->pluck('id')->all();
-            $cobertura = $this->sincronizar->ejecutar($responsable, [$areaId], intervalo: [$desdeCobertura, $hasta]);
+            $cobertura = $this->sincronizar->ejecutar($responsable, [$areaId], intervalo: [$desde, $hasta]);
             if ($cobertura->estado !== 'ok') {
                 throw ValidationException::withMessages(['corte' => 'La actualización del intervalo quedó incompleta. Vuelva a preparar el corte.']);
             }
         }
 
-        return DB::transaction(function () use ($areaId, $desde, $hasta, $incluirTardias, $hash, $responsable, $borradorId, $desdeCobertura, $cambiosConocidos) {
+        $conexion = DB::connection();
+        if ($conexion->getDriverName() === 'mysql' && $conexion->transactionLevel() === 0) {
+            $conexion->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        }
+
+        return $conexion->transaction(function () use ($areaId, $desde, $hasta, $incluirTardias, $hash, $responsable, $borradorId, $config, $cambiosConocidos) {
             AreaComisionEmpaque::query()->whereKey($areaId)->lockForUpdate()->firstOrFail();
+            // Esta lectura consistente fija el cierre lógico. Las escrituras
+            // de origen posteriores quedan en el registro para el worker.
+            DB::table('comisiones_empaque_cambios_fuente')->orderBy('id')->value('id');
+            $puntoCierre = now();
+            if (ConfiguracionComisionEmpaque::actual()->version_rango !== $config->version_rango) {
+                throw ValidationException::withMessages(['corte' => 'Cambió el rango de sincronización. Vuelva a preparar el corte.']);
+            }
             if ($cambiosConocidos !== null) {
-                $this->assertSinCambiosNuevos($areaId, $desdeCobertura, $hasta, $cambiosConocidos);
+                $this->assertSinCambiosNuevos($areaId, $desde, $hasta, $cambiosConocidos);
             }
             $this->assertSinSolape($areaId, $desde, $hasta);
 
-            $ids = $this->unidades($areaId, $desde, $hasta, $incluirTardias)->pluck('id')->sort()->values();
+            $ids = $this->unidades($areaId, $desde, $hasta)->pluck('id')->sort()->values();
             $bloqueadas = UnidadComisionEmpaque::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
             foreach ($bloqueadas as $unidad) {
                 $diferencia = $this->fuentes->diferencia($unidad);
@@ -331,13 +341,13 @@ class ConfirmarCorteComisionEmpaqueService
                 }
             }
 
-            AuditoriaComisionEmpaque::anotar($responsable, 'corte', $corte->id, 'confirmar', null, ['folio' => $folio]);
+            AuditoriaComisionEmpaque::anotar($responsable, 'corte', $corte->id, 'confirmar', null, ['folio' => $folio, 'punto_cierre_at' => $puntoCierre->format('Y-m-d H:i:s.uP')]);
 
             return $corte->fresh(['asignaciones.participante', 'unidades', 'area']);
         });
     }
 
-    private function assertSinCambiosNuevos(int $areaId, Carbon $desde, Carbon $hasta, array $cambiosConocidos): void
+    protected function assertSinCambiosNuevos(int $areaId, Carbon $desde, Carbon $hasta, array $cambiosConocidos): void
     {
         $conocidos = array_fill_keys($cambiosConocidos, true);
         foreach (DB::table('comisiones_empaque_cambios_fuente')->lazyById(250)->chunk(250) as $lote) {
@@ -352,21 +362,15 @@ class ConfirmarCorteComisionEmpaqueService
         }
     }
 
-    private function unidades(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias)
+    private function unidades(int $areaId, Carbon $desde, Carbon $hasta)
     {
         return UnidadComisionEmpaque::query()
             ->with(['lineas.tipo', 'area:id,nombre'])
             ->where('area_id', $areaId)
             ->where('situacion', UnidadComisionEmpaque::ELEGIBLE)
             ->whereNull('corte_id')
-            ->where(function ($q) use ($desde, $hasta, $incluirTardias) {
-                $q->whereBetween('empacado_at', [$desde, $hasta]);
-                if ($incluirTardias) {
-                    $q->orWhere(function ($q2) use ($desde) {
-                        $q2->where('incorporacion_tardia', true)->where('empacado_at', '<', $desde);
-                    });
-                }
-            })
+            ->where('incorporacion_tardia', false)
+            ->whereBetween('empacado_at', [$desde, $hasta])
             ->orderBy('empacado_at')
             ->orderBy('id')
             ->get();

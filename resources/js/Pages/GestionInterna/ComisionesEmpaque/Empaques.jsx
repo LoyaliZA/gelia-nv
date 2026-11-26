@@ -1,4 +1,4 @@
-import { router, useForm } from '@inertiajs/react';
+import { useForm } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { BadgeCheck, Box, CircleMinus, ClipboardList, Download, Hourglass, Search, SlidersHorizontal, Wallet, X } from 'lucide-react';
 import GeliaPaginacion from '@/Components/GeliaPaginacion';
@@ -6,9 +6,19 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, gelia
 import { BOTON_FILTRO, ErroresFormulario, dinero, ir } from './compartido';
 import Fila from './DetalleEmpaque';
 import BuscarUsuario from './BuscarUsuario';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 
 export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado, totales, puede, tipos, capturaNombre, sinAreas, paqueterias = [], cargaRevision = null, motivos = {} }) {
     const [local, setLocal] = useState(filtros);
+    const filtrosServidor = JSON.stringify(filtros);
+    const masFiltros = useRef(null);
+    const consultaEnviada = useRef(null);
+    useEffect(() => {
+        const recibidos = JSON.parse(filtrosServidor);
+        const enBusqueda = consultaEnviada.current === (recibidos.buscar || '');
+        consultaEnviada.current = null;
+        if (!enBusqueda) setLocal(recibidos);
+    }, [filtrosServidor]);
     const [revisionId, setRevisionId] = useState(null);
     const [capturar, setCapturar] = useState(false);
     const [cargar, setCargar] = useState(Boolean(cargaRevision));
@@ -17,15 +27,25 @@ export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado
     const siguiente = filas.slice(indiceActual + 1).find((fila) =>
         ['pendiente_revision', 'posible_duplicado', 'pendiente_clasificacion', 'pendiente_conciliacion', 'pendiente_decision', 'reempaque_revision', 'solape_revision', 'revertida_revision'].includes(fila.situacion));
 
-    const cambiarVista = (vista) => ir({ ...filtros, tab: 'acumulado', vista: vista || undefined, situacion: undefined, page: undefined });
-    const vistas = [['', 'Todos'], ['revisados', 'Válidos'], ['pendientes', 'Por revisar'], ['excluidos', 'Excluidos']];
-    const buscar = (cambios) => router.get(route('gestion_interna.comisiones_empaque.index'), {
-        ...cambios, tab: 'acumulado', page: undefined,
-    }, { preserveState: true, preserveScroll: true, replace: true, only: ['acumulado', 'totales', 'resumen', 'filtros'] });
+    const cambiarVista = (vista) => ir({
+        ...filtros, tab: 'acumulado', vista: vista || undefined, situacion: undefined, page: undefined,
+        ...(vista === 'tardias' ? { periodo_id: undefined, desde: undefined, hasta: undefined } : {}),
+    });
+    const vistas = [['', 'Todos'], ['revisados', 'Válidos'], ['pendientes', 'Por revisar'], ['excluidos', 'Excluidos'], ['tardias', 'Incorporaciones tardías']];
+    const buscar = (cambios, replace = false) => {
+        consultaEnviada.current = replace ? cambios.buscar || '' : null;
+        ir({ ...cambios, tab: 'acumulado', page: undefined }, {
+            replace,
+            only: ['acumulado', 'totales', 'resumen', 'filtros', 'flash'],
+            onSuccess: () => {
+                if (!replace && masFiltros.current) masFiltros.current.open = false;
+            },
+        });
+    };
     const termino = (local.buscar || '').trim();
     useEffect(() => {
         if (termino === (filtros.buscar || '')) return undefined;
-        const espera = window.setTimeout(() => buscar({ ...filtros, buscar: termino || undefined }), 350);
+        const espera = window.setTimeout(() => buscar({ ...filtros, buscar: termino || undefined }, true), 350);
         return () => window.clearTimeout(espera);
     // La escritura en otros filtros solo se aplica al enviar.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,11 +84,12 @@ export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado
                 </span>
             </label>
             <button type="button" className={BOTON_FILTRO} onClick={() => {
-                const limpio = { area_id: filtros.area_id, periodo_id: filtros.periodo_id, vista: filtros.vista };
+                const limpio = { area_id: filtros.area_id, periodo_id: filtros.periodo_id, vista: filtros.vista,
+                    desde: undefined, hasta: undefined };
                 setLocal(limpio);
                 buscar(limpio);
             }}><X className="size-4" aria-hidden="true" />Limpiar filtros</button>
-            <details>
+            <details ref={masFiltros}>
                 <summary className={`${BOTON_FILTRO} w-fit list-none [&::-webkit-details-marker]:hidden`}><SlidersHorizontal className="size-4" aria-hidden="true" />Más filtros</summary>
                 <div className="absolute inset-x-0 top-full z-10 mt-1 grid gap-2 rounded-lg border theme-border theme-element p-3 sm:max-w-lg sm:grid-cols-3">
                     {[
@@ -107,6 +128,7 @@ export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado
         </div>
         {capturar && <Manual areas={areas} paqueterias={paqueterias} capturaNombre={capturaNombre} />}
         {cargar && <Carga revision={cargaRevision} />}
+        {filtros.vista === 'tardias' && <p className="m-0 text-sm theme-text-muted">Abra el detalle para consultar el corte original y la decisión pendiente del supervisor.</p>}
         <div className={geliaCardClass('!rounded-xl p-3 md:p-4')}><div className="overflow-x-auto"><table className="w-full text-sm min-w-[780px]"><thead><tr className="text-left theme-text-muted">{['Fecha', 'Cliente y remisiones', 'Empacador', 'Cajas', 'Envío', 'Validación', 'Comisión', 'Acción'].map((h) => <th key={h} className={`py-3 px-2 font-medium ${h === 'Comisión' ? 'text-right' : ''}`}>{h}</th>)}</tr></thead><tbody>{!filas.length && <tr><td colSpan={8} className="p-6 theme-text-muted">{sinAreas ? 'No tiene áreas asignadas.' : filtrado ? 'No hay coincidencias. Cambie la bandeja o limpie los filtros.' : resumen?.listo ? 'No hay empaques en el área para este periodo.' : 'Todavía no hay empaques en este periodo.'}</td></tr>}{filas.map((fila) => <Fila key={fila.id} fila={fila} puede={puede} tipos={tipos} motivos={motivos} abierta={revisionId === fila.id} onAbrir={() => setRevisionId(fila.id)} onCerrar={() => setRevisionId(null)} onSiguiente={siguiente ? () => setRevisionId(siguiente.id) : undefined} />)}</tbody></table></div>
             {acumulado?.total > 0
                 ? <GeliaPaginacion embedded paginator={acumulado} onIrAPagina={(page) => ir({ tab: 'acumulado', ...filtros, page })} />
@@ -117,6 +139,7 @@ export function Acumulado({ resumen, filtros, areas = [], situaciones, acumulado
 
 export function Carga({ revision }) {
     const form = useForm({ texto: revision?.texto || '' });
+    useProtegerEdicion(form.isDirty || form.processing || Boolean(revision));
     const errores = revision?.errores || [];
     const puedeGuardar = revision && errores.length === 0 && revision.resumen?.total > 0 && form.data.texto.trim() !== '';
     function enviar(ruta) {
@@ -157,6 +180,8 @@ function Manual({ areas = [], paqueterias = [], capturaNombre = '' }) {
         liquidacion: 'pendiente',
         notas: '',
     });
+
+    useProtegerEdicion(form.isDirty || form.processing);
 
     function elegirPaqueteria(nombre) {
         const catalogo = paqueterias.find((item) => item.nombre === nombre);

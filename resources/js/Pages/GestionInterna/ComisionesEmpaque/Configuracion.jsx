@@ -4,6 +4,7 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, gelia
 import BuscarUsuario from './BuscarUsuario';
 import Equipo from './Equipo';
 import { Carga } from './Empaques';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 import { ErroresFormulario, dinero, momentoLegible } from './compartido';
 
 const secciones = [['tarifas', 'Tarifas'], ['equipo', 'Equipo y reparto'], ['areas', 'Áreas'], ['accesos', 'Accesos'], ['sincronizacion', 'Sincronización e históricos']];
@@ -26,6 +27,7 @@ export default function Configuracion({ areas, areaId, fechaInicio, fechaFin, ta
 
 function Tarifas({ areas, areaId, tarifas }) {
     const form = useForm({ area_id: areaId || areas[0]?.id || '', importe: '', vigente_desde: '' });
+    useProtegerEdicion(form.isDirty || form.processing);
     const seleccionadas = tarifas.filter((t) => !areaId || String(t.area_id) === String(areaId));
     return <section className={geliaCardClass('space-y-4 p-4')}>
         <h2 className="m-0 text-base font-bold">Tarifas por caja</h2>
@@ -48,6 +50,7 @@ function Tarifas({ areas, areaId, tarifas }) {
 
 function Areas({ areas }) {
     const form = useForm({ codigo: '', nombre: '' });
+    useProtegerEdicion(form.isDirty || form.processing);
     return <section className={geliaCardClass('space-y-4 p-4')}>
         <h2 className="m-0 text-base font-bold">Áreas de empaque</h2>
         <ul className="m-0 list-none p-0">{areas.map((area) => <Area key={area.id} area={area} />)}</ul>
@@ -76,6 +79,7 @@ function Area({ area }) {
 function Accesos({ areas, alcances }) {
     const form = useForm({ user_id: '', area_ids: [] });
     const [cuenta, setCuenta] = useState(null);
+    useProtegerEdicion(form.isDirty || form.processing);
     return <form className={geliaCardClass('space-y-3 p-4')} onSubmit={(e) => { e.preventDefault(); form.put(route('gestion_interna.comisiones_empaque.alcance'), { preserveScroll: true }); }}>
         <h2 className="m-0 text-base font-bold">Acceso de operación</h2>
         <BuscarUsuario value={form.data.user_id} onChange={(id, nombre, datos) => {
@@ -97,6 +101,7 @@ function Accesos({ areas, alcances }) {
 function Sincronizacion({ fechaInicio, fechaFin, sincronizacion, puedeCargar, cargaRevision }) {
     const form = useForm({ fecha_inicio: fechaInicio || '', fecha_fin: fechaFin || '' });
     const [cargar, setCargar] = useState(Boolean(cargaRevision));
+    useProtegerEdicion(form.isDirty || form.processing);
     return <section className={geliaCardClass('space-y-4 p-4')}>
         <h2 className="m-0 text-base font-bold">Rango autorizado de sincronización</h2>
         {sincronizacion && <div className="text-sm theme-text-muted">

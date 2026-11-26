@@ -1,10 +1,12 @@
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { ir } from './compartido';
+import GeliaPaginacion from '@/Components/GeliaPaginacion';
+import { useProtegerEdicion } from './useActualizacionComisiones';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 
 function siguienteDia(fecha) { const dia = new Date(`${fecha}T12:00:00Z`); dia.setUTCDate(dia.getUTCDate() + 1); return dia.toISOString().slice(0, 10); }
-export default function Periodos({ periodos = [], equipo, areaId, puede }) {
+export default function Periodos({ periodos = [], paginacion, equipo, areaId, puede }) {
     const [editor, setEditor] = useState(null);
     const lista = periodos.filter((p) => String(p.area_id) === String(areaId));
     const navegar = (params) => ir({ area_id: areaId, ...params });
@@ -26,11 +28,13 @@ export default function Periodos({ periodos = [], equipo, areaId, puede }) {
             <ul className="m-0 pl-5 text-sm">{p.lineas.map((l, i) => <li key={`${l.participante_id}-${i}`}>{l.nombre}: {l.porcentaje}%{l.importe != null && ` · ${Number(l.importe).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}`}</li>)}</ul>
             {p.motivo && <p className="text-sm m-0">Motivo: {p.motivo}</p>}
         </section>)}
+        {paginacion?.total > 0 && <GeliaPaginacion embedded paginator={paginacion} onIrAPagina={(page) => navegar({ tab: 'periodos', page })} />}
     </div>;
 }
 function EditorPeriodo({ periodo, siguiente, equipo, areaId, onCerrar }) {
     const editando = periodo && !siguiente;
     const form = useForm({ nombre: editando ? periodo.nombre : '', area_id: areaId, desde: siguiente ? siguienteDia(periodo.hasta) : periodo?.desde || '', hasta: editando ? periodo.hasta : '', motivo: '' });
+    useProtegerEdicion(form.isDirty || form.processing);
     function guardar(e) { e.preventDefault(); const options = { preserveScroll: true, onSuccess: onCerrar }; if (editando) form.put(route('gestion_interna.comisiones_empaque.periodos.update', periodo.id), options); else form.post(route('gestion_interna.comisiones_empaque.periodos.store'), options); }
     return <form className={geliaCardClass('p-5 space-y-4')} onSubmit={guardar} aria-label={editando ? 'Cambiar fechas del periodo' : 'Nuevo periodo'}>
         <h3 className="font-bold m-0">{editando ? 'Cambiar fechas del periodo' : 'Nuevo periodo'}</h3>

@@ -4,15 +4,17 @@ import axios from 'axios';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import BuscarUsuario from '../Pages/GestionInterna/ComisionesEmpaque/BuscarUsuario';
-import ComisionesEmpaque, { Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import { Index as ComisionesEmpaque, Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
 import Equipo from '../Pages/GestionInterna/ComisionesEmpaque/Equipo';
 import Periodos from '../Pages/GestionInterna/ComisionesEmpaque/Periodos';
 
-const { guardar, navegar, recargar } = vi.hoisted(() => ({ guardar: vi.fn(), navegar: vi.fn(), recargar: vi.fn() }));
+const { guardar, navegar, recargar, precargar, invalidar } = vi.hoisted(() => ({
+    guardar: vi.fn(), navegar: vi.fn(), recargar: vi.fn(), precargar: vi.fn(), invalidar: vi.fn(),
+}));
 vi.mock('../Layouts/AppLayout', () => ({ default: ({ children }) => children }));
 vi.mock('@inertiajs/react', () => ({
     Head: () => null, usePage: () => ({ props: {} }),
-    router: { get: navegar, reload: recargar },
+    router: { get: navegar, reload: recargar, prefetch: precargar, flushByCacheTags: invalidar },
     useForm: (inicial) => {
         const base = useRef(inicial);
         const transformar = useRef((data) => data);
@@ -33,7 +35,7 @@ beforeEach(() => {
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
-    guardar.mockClear(); navegar.mockClear(); recargar.mockClear();
+    guardar.mockClear(); navegar.mockClear(); recargar.mockClear(); precargar.mockClear(); invalidar.mockClear();
 });
 afterEach(async () => {
     await act(() => root.unmount());
@@ -151,6 +153,9 @@ it('conserva el área y el rango seleccionados al abrir Liquidaciones o Producti
     expect(navegar.mock.calls[0][1]).toMatchObject({ ...contexto, tab: 'periodos' });
     await act(() => boton('Productividad').click());
     expect(navegar.mock.calls[1][1]).toMatchObject({ ...contexto, tab: 'productividad' });
+    for (const visita of navegar.mock.calls) {
+        expect(visita[2]).toMatchObject({ showProgress: false, preserveState: true, preserveScroll: true });
+    }
 });
 
 
@@ -174,11 +179,85 @@ it('difiere datos nuevos mientras hay una captura y refresca solo el reporte al 
         await act(() => boton('Ocultar captura').click());
         await act(async () => vi.advanceTimersByTimeAsync(25000));
         expect(recargar).toHaveBeenCalledWith(expect.objectContaining({
-            only: ['acumulado', 'totales', 'resumen', 'sincronizacion'], preserveState: true, preserveScroll: true,
+            only: ['acumulado', 'totales', 'resumen', 'sincronizacion'], preserveState: true, preserveScroll: true, showProgress: false,
         }));
         expect(container.querySelector('[data-busqueda-live]').value).toBe('REC');
         expect(container.querySelector('[aria-label="Por revisar"]').getAttribute('aria-pressed')).toBe('true');
     } finally {
         vi.useRealTimers();
     }
+});
+
+it('aplica Más filtros y recibe nuevos empaques sin desmontar la superficie', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        vi.spyOn(axios, 'get').mockResolvedValue({ data: { estado: 'ok', revision: 'r2' } });
+        const inicial = {
+            tab: 'acumulado', puede: { configurar: true }, areas: [{ id: 1, nombre: 'CEDIS' }],
+            filtros: { area_id: 1 }, sincronizacion: { estado: 'ok', revision: 'r1' },
+        };
+        await render(<ComisionesEmpaque {...inicial} />);
+        const titulo = container.querySelector('h1');
+        const panel = container.querySelector('.theme-card--solid');
+        const form = container.querySelector('form');
+        const detalles = form.querySelector('details');
+        await act(() => { detalles.open = true; });
+        await escribir(detalles.querySelector('input'), 'Cliente nuevo');
+        await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+        expect(navegar.mock.lastCall[1]).toMatchObject({ tab: 'acumulado', cliente: 'Cliente nuevo', area_id: 1 });
+        expect(navegar.mock.lastCall[2]).toMatchObject({ showProgress: false, preserveState: true, preserveScroll: true });
+        const payload = { ...inicial, filtros: { area_id: 1, cliente: 'Cliente nuevo' } };
+        await render(<ComisionesEmpaque {...payload} />);
+        await act(() => navegar.mock.lastCall[2].onSuccess({ props: payload }));
+        expect(detalles.open).toBe(false);
+        await act(async () => vi.advanceTimersByTimeAsync(25000));
+        expect(recargar).toHaveBeenCalledWith(expect.objectContaining({ showProgress: false, only: ['acumulado', 'totales', 'resumen', 'sincronizacion'] }));
+        await render(<ComisionesEmpaque {...payload} sincronizacion={{ estado: 'ok', revision: 'r2' }}
+            acumulado={{ data: [{ id: 1, cliente: 'Cliente nuevo', situacion: 'elegible', lineas: [] }] }} />);
+        expect(container.textContent).toContain('Cliente nuevo');
+        expect(container.querySelector('h1')).toBe(titulo);
+        expect(container.querySelector('.theme-card--solid')).toBe(panel);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('ignora una precarga en curso al navegar a otra sección', async () => {
+    vi.useFakeTimers();
+    try {
+        vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+        await render(<ComisionesEmpaque tab="acumulado" puede={{ configurar: true }}
+            areas={[{ id: 1, nombre: 'CEDIS' }]} filtros={{ area_id: 1 }}
+            sincronizacion={{ estado: 'ok', revision: 'r1', contexto: 'usuario-cedis' }} />);
+        await act(async () => vi.advanceTimersByTimeAsync(700));
+        expect(precargar).toHaveBeenCalledTimes(2);
+        const periodos = precargar.mock.calls.find(([, opciones]) => opciones.data.tab === 'periodos')[1];
+        expect(periodos).toMatchObject({ showProgress: false, data: { area_id: 1, tab: 'periodos' } });
+        await act(() => boton('Liquidaciones').click());
+        expect(navegar).not.toHaveBeenCalled();
+        await act(() => boton('Configuración').click());
+        expect(navegar.mock.lastCall[1].tab).toBe('configuracion');
+        await act(() => {
+            periodos.onPrefetched({ status: 200 });
+            precargar.mock.calls.find(([, opciones]) => opciones.data.tab === 'productividad')[1].onPrefetched({ status: 200 });
+        });
+        expect(navegar).toHaveBeenCalledTimes(1);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('conserva el cálculo revisado hasta solicitar otra vista previa', async () => {
+    const filtros = { area_id: '1', limite_desde: '2026-10-01', limite_hasta: '2026-10-13' };
+    const previo = { cajas: 1, importe: '10.00', hash: 'revisado', unidades: [{ id: 1 }], tramos: [], tipos: [], errores: [] };
+    const nuevo = { ...previo, cajas: 2, importe: '20.00', hash: 'nuevo' };
+    const props = { areas: [{ id: 1, nombre: 'CEDIS' }], filtros, puede: { confirmar: true } };
+    await render(<Preparar {...props} preview={previo} />);
+    await render(<Preparar {...props} preview={nuevo} />);
+    expect(container.textContent).toContain('$10.00');
+    const form = container.querySelector('form');
+    await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
+    await act(() => navegar.mock.lastCall[2].onSuccess({ props: { preview: nuevo } }));
+    expect(container.textContent).toContain('$20.00');
 });

@@ -166,19 +166,25 @@ class ValorarUnidadComisionEmpaque
         return $unidad;
     }
 
+    public const MOTIVO_TARDIA = 'El empaque llegó después del cierre. El supervisor debe definir el reparto antes de reconocer la comisión mediante un ajuste vinculado a esta unidad.';
+
     public function marcarTardiaSiCorresponde(UnidadComisionEmpaque $unidad): void
     {
-        $cubre = CorteComisionEmpaque::query()
+        $corte = CorteComisionEmpaque::query()
             ->where('area_id', $unidad->area_id)
             ->where('estado', CorteComisionEmpaque::CONFIRMADO)
             ->where('limite_desde', '<=', $unidad->empacado_at)
             ->where('limite_hasta', '>=', $unidad->empacado_at)
-            ->exists();
+            ->first(['id', 'folio']);
 
-        if ($cubre) {
+        if ($corte) {
             $unidad->incorporacion_tardia = true;
             $unidad->save();
-            $this->abrirIncidencia($unidad, 'incorporacion_tardia', null, 'Este empaque se incorporó después de cerrar su intervalo. Inclúyalo en la revisión de incorporaciones tardías del siguiente corte.', ['huella' => $unidad->huella]);
+            $this->abrirIncidencia($unidad, 'incorporacion_tardia', null, self::MOTIVO_TARDIA, [
+                'huella' => $unidad->huella,
+                'corte_original_id' => $corte->id,
+                'folio_corte_original' => $corte->folio,
+            ]);
         }
     }
 
