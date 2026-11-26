@@ -974,12 +974,15 @@ export default function ModalDetalleCedis({
                                         {cajasOrdenadas.map((c, idx) => {
                                             const pendiente = (c.estatus_recoleccion || 'pendiente') === 'pendiente';
                                             const pdfCaja = guiasPorCaja && (pedido.documentos || []).find(
-                                                (doc) => doc.relacion_tipo === 'guia_caja_confirmada' && doc.activo
+                                                (doc) => doc.tipo === 'guia' && doc.relacion_tipo === 'guia_caja_confirmada' && doc.activo
                                                     && Number(doc.pedido_bma_caja_id) === Number(c.id),
                                             );
                                             const evidenciasCaja = evidenciasEnvio.filter(
                                                 (d) => String(d.relacion_id) === String(c.id) && d.url,
                                             );
+                                            const vistaPreviaCaja = guiasPorCaja
+                                                ? (pdfCaja?.url ? pdfCaja : null)
+                                                : (evidenciasCaja.length ? evidenciasCaja : null);
                                             return (
                                                 <div
                                                     key={c.id || idx}
@@ -1018,10 +1021,14 @@ export default function ModalDetalleCedis({
                                                         <div className="flex shrink-0 gap-1">
                                                             <AccionEnvio
                                                                 icono={Image}
-                                                                etiqueta={evidenciasCaja.length ? `Ver evidencia del envío ${idx + 1}` : `Envío ${idx + 1} sin evidencia`}
-                                                                descripcion={evidenciasCaja.length ? 'Ver evidencia' : 'Sin evidencia'}
-                                                                onClick={() => setDocPreview(evidenciasCaja)}
-                                                                deshabilitada={!evidenciasCaja.length}
+                                                                etiqueta={guiasPorCaja
+                                                                    ? `Ver guía PDF del envío ${idx + 1}`
+                                                                    : (vistaPreviaCaja ? `Ver evidencia del envío ${idx + 1}` : `Envío ${idx + 1} sin evidencia`)}
+                                                                descripcion={guiasPorCaja
+                                                                    ? (vistaPreviaCaja ? 'Ver guía PDF' : 'Guía pendiente de asignación')
+                                                                    : (vistaPreviaCaja ? 'Ver evidencia' : 'Sin evidencia')}
+                                                                onClick={() => setDocPreview(vistaPreviaCaja)}
+                                                                deshabilitada={!vistaPreviaCaja}
                                                             />
                                                             <AccionEnvio
                                                                 icono={Download}

@@ -16,7 +16,7 @@ function ajustesFalsos(extra = {}) {
         fondos: [],
         tonos: [],
         estado: {
-            color: 'azul', dark: false, bg: 'none', font: 'mono', scale: 1, glass: true,
+            color: 'azul', dark: false, bg: 'none', font: 'mono', scale: 1, glass: true, glassOpacity: 0.75,
             layout: 'professional_left', mobileLayout: 'mobile_topbar', sidebarMode: 'expanded', fixedPosition: 'left',
             contentDensity: 'personalizado', contentMaxRem: 80, contentPaddingRem: 1,
             alertas: {
@@ -45,6 +45,7 @@ describe('Ajustes: render de los paneles', () => {
         expect(html).toContain('Ancho máximo');
         expect(html).toContain('Margen lateral');
         expect(html).toContain('Usar fondo del sistema');
+        expect(html).toContain('Opacidad de paneles');
     });
 
     it('Apariencia oculta ancho y margen cuando el abarcamiento no es personalizado', () => {
@@ -53,6 +54,15 @@ describe('Ajustes: render de los paneles', () => {
             <AjustesApariencia ajustes={{ ...base, estado: { ...base.estado, contentDensity: 'compacto' } }} />
         );
         expect(html).not.toContain('Ancho máximo');
+    });
+
+    it('Apariencia oculta el paso de opacidad cuando el cristal está apagado', () => {
+        const base = ajustesFalsos();
+        const html = renderToStaticMarkup(
+            <AjustesApariencia ajustes={{ ...base, estado: { ...base.estado, glass: false } }} />
+        );
+        expect(html).toContain('Transparencia de paneles');
+        expect(html).not.toContain('Opacidad de paneles');
     });
 
     it('Alertas expone interruptores con rol switch y estado, y deja el acordeón cerrado', () => {

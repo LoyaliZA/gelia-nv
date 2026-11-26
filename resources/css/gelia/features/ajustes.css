@@ -9,8 +9,7 @@
     justify-content: center;
     padding: 1rem;
     background-color: var(--theme-modal-overlay-bg);
-    backdrop-filter: blur(var(--theme-modal-blur));
-    -webkit-backdrop-filter: blur(var(--theme-modal-blur));
+    backdrop-filter: var(--gelia-modal-filter);
     animation: geliaAjustesFade 0.18s ease both;
 }
 
@@ -41,7 +40,7 @@
     }
     to {
         opacity: 1;
-        transform: translateY(0) scale(1);
+        transform: none;
     }
 }
 

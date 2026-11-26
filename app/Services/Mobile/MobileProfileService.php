@@ -99,6 +99,7 @@ class MobileProfileService
             'sidebar_modo',
             'sidebar_posicion_fija',
             'efecto_cristal',
+            'opacidad_cristal',
             'densidad_contenido',
             'contenido_max_rem',
             'contenido_padding_rem',
@@ -115,6 +116,12 @@ class MobileProfileService
             $escala = (float) $normalizado['escala_fuente'];
             $escala = round($escala / 0.0625) * 0.0625;
             $normalizado['escala_fuente'] = max(0.875, min(1.5, $escala));
+        }
+
+        if (isset($normalizado['opacidad_cristal'])) {
+            $opacidad = (float) $normalizado['opacidad_cristal'];
+            $opacidad = round($opacidad / 0.05) * 0.05;
+            $normalizado['opacidad_cristal'] = max(0.5, min(0.95, round($opacidad, 2)));
         }
 
         if (isset($normalizado['densidad_contenido'])) {

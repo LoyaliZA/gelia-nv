@@ -2,7 +2,7 @@ html,
 body {
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .gelia-app-shell {
@@ -11,7 +11,7 @@ body {
     width: 100%;
     max-width: 100vw;
     min-height: 100dvh;
-    overflow-x: hidden;
+    overflow-x: clip;
     box-sizing: border-box;
     color: var(--theme-text-main);
 }
@@ -150,8 +150,7 @@ body {
     box-sizing: border-box;
     border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 65%, transparent);
     background-color: color-mix(in srgb, var(--theme-surface-bg) 82%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: var(--gelia-glass-filter);
     box-shadow: none;
 }
 

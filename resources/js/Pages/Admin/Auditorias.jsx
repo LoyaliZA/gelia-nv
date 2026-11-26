@@ -24,6 +24,7 @@ const TEMA_VISUAL_LABELS = {
     sidebar_modo: 'Modo sidebar',
     sidebar_posicion_fija: 'Posición sidebar',
     efecto_cristal: 'Efecto cristal',
+    opacidad_cristal: 'Opacidad de paneles',
     densidad_contenido: 'Densidad',
     contenido_max_rem: 'Ancho máximo',
     contenido_padding_rem: 'Padding',

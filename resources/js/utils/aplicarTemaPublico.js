@@ -1,3 +1,5 @@
+import { applyGlassOpacityToRoot, GLASS_OPACITY_STORAGE_KEY } from './glassOpacity';
+
 const ACCENT_COLORS = {
     rosa: '#ec4899',
     azul: '#3b82f6',
@@ -20,6 +22,8 @@ export function aplicarTemaPublico(isDark) {
     const glass = localStorage.getItem('theme_glass');
     if (glass === 'true') root.classList.add('glass-active');
     else root.classList.remove('glass-active');
+
+    applyGlassOpacityToRoot(localStorage.getItem(GLASS_OPACITY_STORAGE_KEY), root);
 }
 
 /** true si dark; sin theme guardado → dark por defecto. */

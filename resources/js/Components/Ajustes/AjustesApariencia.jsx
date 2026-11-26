@@ -1,6 +1,11 @@
 import React from 'react';
-import { Droplet, Image as ImageIcon, Layers, Moon, PaintBucket, Palette, Sun, Trash2, Type, Upload } from 'lucide-react';
+import { Contrast, Droplet, Image as ImageIcon, Layers, Moon, PaintBucket, Palette, Sun, Trash2, Type, Upload } from 'lucide-react';
 import { formatFontScaleLabel, FONT_SCALE_MIN, FONT_SCALE_MAX } from '../../utils/fontScale';
+import {
+    formatGlassOpacityLabel,
+    GLASS_OPACITY_MIN,
+    GLASS_OPACITY_MAX,
+} from '../../utils/glassOpacity';
 import {
     formatContentMaxLabel,
     formatContentPaddingLabel,
@@ -97,9 +102,26 @@ export default function AjustesApariencia({ ajustes }) {
                         </div>
                     </AjustesFila>
 
-                    <AjustesFila icon={Droplet} title="Transparencia de paneles" subtitle="Aplica translucidez a tarjetas y paneles" inline>
+                    <AjustesFila icon={Droplet} title="Transparencia de paneles" subtitle="Aplica blur y translucidez a tarjetas y paneles" inline>
                         <AjustesInterruptor activo={estado.glass} onChange={acciones.cambiarCristal} label="Transparencia de paneles" />
                     </AjustesFila>
+
+                    {estado.glass && (
+                        <AjustesFila
+                            icon={Contrast}
+                            title="Opacidad de paneles"
+                            subtitle={`${formatGlassOpacityLabel(GLASS_OPACITY_MIN)} – ${formatGlassOpacityLabel(GLASS_OPACITY_MAX)}`}
+                        >
+                            <AjustesPaso
+                                nombre="Opacidad de paneles"
+                                etiqueta={formatGlassOpacityLabel(estado.glassOpacity)}
+                                onMenos={() => acciones.pasoOpacidadCristal(-1)}
+                                onMas={() => acciones.pasoOpacidadCristal(1)}
+                                deshabilitarMenos={estado.glassOpacity <= GLASS_OPACITY_MIN}
+                                deshabilitarMas={estado.glassOpacity >= GLASS_OPACITY_MAX}
+                            />
+                        </AjustesFila>
+                    )}
 
                     <AjustesFila icon={Type} title="Fuente del sistema" subtitle="Tipografía principal de la interfaz">
                         <select

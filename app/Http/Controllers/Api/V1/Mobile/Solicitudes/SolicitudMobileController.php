@@ -9,6 +9,7 @@ use App\Services\Mobile\Serializar\OperacionMovilSerializer;
 use App\Services\Solicitudes\ListarSolicitudesService;
 use App\Services\Solicitudes\SolicitarCancelacionSolicitudService;
 use App\Support\Api\V1\AutorizacionMovil;
+use App\Support\Solicitudes\EmitirSolicitudTagActualizada;
 use App\Support\Api\V1\RespuestaPaginada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,7 @@ class SolicitudMobileController extends Controller
         ]);
 
         $cancelar->ejecutar($solicitud, $datos['motivo_cancelacion']);
+        EmitirSolicitudTagActualizada::desde($solicitud, 'cancelacion_solicitada', $usuario->id);
 
         $this->cargar($solicitud->refresh());
 
