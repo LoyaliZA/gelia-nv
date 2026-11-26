@@ -13,6 +13,15 @@ class AreaComisionEmpaque extends Model
 
     protected $casts = ['activo' => 'boolean', 'sistema' => 'boolean'];
 
+    public function permisoGestionPedidos(): ?string
+    {
+        return match ($this->codigo) {
+            'cedis' => 'control_pedidos.cedis',
+            'tienda' => 'control_pedidos.tienda.ver',
+            default => null,
+        };
+    }
+
     public function tarifas(): HasMany
     {
         return $this->hasMany(TarifaComisionEmpaque::class, 'area_id');

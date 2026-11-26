@@ -25,6 +25,7 @@ use App\Services\ComisionesEmpaque\CargarEmpaquesComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\ConfigurarComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\ConfirmarCorteComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\ConsultarComisionesEmpaqueService;
+use App\Services\ComisionesEmpaque\ConsultarReporteComisionesEmpaque;
 use App\Services\ComisionesEmpaque\ExportarComisionesEmpaqueService;
 use App\Services\ComisionesEmpaque\GestionarPeriodoComisionEmpaqueService;
 use App\Services\ComisionesEmpaque\GestionarUnidadComisionEmpaqueService;
@@ -36,6 +37,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -52,17 +54,52 @@ class ComisionesEmpaqueController extends Controller
     public function index(Request $request): Response
     {
         Gate::authorize('gestion_interna.comisiones_empaque.ver');
-        $tab = $request->string('tab')->toString() ?: 'acumulado';
         $usuario = $request->user();
+        $preferencia = 'comisiones_empaque.'.$usuario->id;
+        $cookieModo = 'gelia_comisiones_modo_'.$usuario->id;
+        $modo = $request->input('modo');
+        if (in_array($modo, ['simple', 'avanzado'], true)) {
+            $request->session()->put($preferencia.'.modo', $modo);
+            Cookie::queue($cookieModo, $modo, 60 * 24 * 180);
+        }
+        $modoPreferido = $request->session()->get($preferencia.'.modo', $request->cookie($cookieModo));
+        $tab = $request->string('tab')->toString() ?: ($modoPreferido === 'avanzado' ? 'acumulado' : 'reporte');
+        $config = ConfiguracionComisionEmpaque::actual();
+        $areas = $this->alcance->areas($usuario);
+        $contextoSimple = $request->session()->get($preferencia.'.consulta', []);
+        $restaurarConsulta = $tab === 'reporte' || ! $request->filled('tab');
+        if ($restaurarConsulta && ! $request->hasAny(['area_id', 'periodo_id', 'desde', 'hasta'])) {
+            $areaGuardada = $contextoSimple['area_id'] ?? null;
+            if ($areaGuardada === 'todas' || $areas->contains('id', $areaGuardada)) {
+                $periodoGuardado = $contextoSimple['periodo_id'] ?? null;
+                if ($periodoGuardado && ! PeriodoComisionEmpaque::query()->where('area_id', $areaGuardada)->whereKey($periodoGuardado)->exists()) {
+                    unset($contextoSimple['periodo_id']);
+                }
+                $request->merge($contextoSimple);
+            } elseif ($areas->count() === 1) {
+                $request->merge(['area_id' => $areas->first()->id]);
+            }
+        }
         if ($tab === 'liquidaciones') {
             $tab = 'periodos';
         }
         if ($request->input('area_id') === 'todas') {
             $request->merge(['area_id' => null]);
         }
-        $areas = $this->alcance->areas($usuario);
         if ($request->filled('area_id')) {
             $this->assertArea($usuario, (int) $request->input('area_id'));
+        }
+        if ($tab === 'reporte' && $request->filled('area_id') && ! $request->hasAny(['periodo_id', 'desde', 'hasta'])) {
+            $abiertos = PeriodoComisionEmpaque::query()->where('area_id', $request->integer('area_id'))
+                ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('comisiones_empaque_cortes')
+                    ->whereColumn('comisiones_empaque_cortes.area_id', 'comisiones_empaque_periodos.area_id')
+                    ->where('comisiones_empaque_cortes.estado', CorteComisionEmpaque::CONFIRMADO)
+                    ->whereColumn('comisiones_empaque_cortes.limite_desde', '<', 'comisiones_empaque_periodos.hasta')
+                    ->whereColumn('comisiones_empaque_cortes.limite_hasta', '>=', 'comisiones_empaque_periodos.desde'))
+                ->limit(2)->pluck('id');
+            if ($abiertos->count() === 1) {
+                $request->merge(['periodo_id' => $abiertos->first()]);
+            }
         }
         $periodoSeleccionado = null;
         if ($request->filled('periodo_id')) {
@@ -78,7 +115,6 @@ class ComisionesEmpaqueController extends Controller
             $request->merge(['area_id' => $areas->first()->id]);
         }
         abort_if(in_array($tab, ['configuracion', 'ajustes'], true) && ! $usuario->can('gestion_interna.comisiones_empaque.configurar'), 403);
-        $config = ConfiguracionComisionEmpaque::actual();
         if ($periodoSeleccionado) {
             $request->merge([
                 'desde' => $periodoSeleccionado->desde->copy()->timezone($config->zona_horaria)->toDateString(),
@@ -86,6 +122,22 @@ class ComisionesEmpaqueController extends Controller
             ]);
         }
         $areaId = $request->integer('area_id') ?: null;
+        if ($tab === 'reporte') {
+            $hoy = now($config->zona_horaria);
+            if ($config->fecha_fin && $config->fecha_fin->toDateString() < $hoy->toDateString()) {
+                $hoy = Carbon::parse($config->fecha_fin->toDateString(), $config->zona_horaria);
+            }
+            $request->merge([
+                'desde' => $request->input('desde') ?: $hoy->copy()->startOfMonth()->toDateString(),
+                'hasta' => $request->input('hasta') ?: $hoy->toDateString(),
+            ]);
+            $this->validarFechasReporte($request);
+            $contextoSimple = ['area_id' => $areaId ?? 'todas'] + $request->only(['periodo_id', 'desde', 'hasta']);
+            if (! $request->boolean('consulta_pasiva')) {
+                $request->session()->put($preferencia.'.consulta', $contextoSimple);
+            }
+        }
+        $origenSimple = $request->input('origen') === 'simple';
         $sincronizacion = null;
         $sync = function () use (&$sincronizacion, $usuario, $areaId) {
             return $sincronizacion ??= $this->consultar->estadoSincronizacion($usuario, $areaId);
@@ -108,6 +160,11 @@ class ComisionesEmpaqueController extends Controller
 
         return Inertia::render('GestionInterna/ComisionesEmpaque/Index', [
             'tab' => $tab,
+            'origen_simple' => $origenSimple,
+            'contexto_simple' => $contextoSimple,
+            'reporte' => fn () => $tab === 'reporte'
+                ? array_diff_key(app(ConsultarReporteComisionesEmpaque::class)->consultar($request, $usuario, $config->zona_horaria), ['detalle' => true])
+                : null,
             'puede' => fn () => [
                 'configurar' => $usuario->can('gestion_interna.comisiones_empaque.configurar'),
                 'capturar' => $usuario->can('gestion_interna.comisiones_empaque.capturar'),
@@ -123,7 +180,7 @@ class ComisionesEmpaqueController extends Controller
             'fecha_inicio' => $config->fecha_inicio?->toDateString(),
             'fecha_fin' => $config->fecha_fin?->toDateString(),
             'sincronizacion' => $sync,
-            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'buscar', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista', 'empacador_id', 'empacador_nombre', 'seccion', 'retorno_corte', 'retorno_periodo_id']),
+            'filtros' => $request->only(['area_id', 'desde', 'hasta', 'buscar', 'cliente', 'remision', 'pedido', 'empacador', 'situacion', 'limite_desde', 'limite_hasta', 'incluir_tardias', 'periodo_id', 'vista', 'empacador_id', 'empacador_nombre', 'seccion', 'retorno_corte', 'retorno_periodo_id', 'origen', 'editar_equipo']),
             'sin_areas' => $areas->isEmpty(),
             'periodos_opciones' => fn () => $areaId ? $periodos()->get(['id', 'area_id', 'nombre', 'desde', 'hasta'])
                 ->map(fn ($p) => $this->opcionPeriodo($p, $config->zona_horaria)) : [],
@@ -163,7 +220,8 @@ class ComisionesEmpaqueController extends Controller
             'productividad' => fn () => $tab === 'productividad' ? $this->consultar->productividad($request, $usuario) : [],
             'saldos' => fn () => $tab === 'pagos' ? $this->consultar->saldos($usuario, $areaId, soloDetallePendiente: true) : [],
             'tarifas' => fn () => $configuracion && $seccion === 'tarifas' ? TarifaComisionEmpaque::query()
-                ->with('area:id,nombre')->tap(fn ($q) => $this->alcance->aplicar($q, $usuario))->orderByDesc('vigente_desde')->get()
+                ->with('area:id,nombre')->tap(fn ($q) => $this->alcance->aplicar($q, $usuario))
+                ->when($areaId, fn ($q) => $q->where('area_id', $areaId))->orderByDesc('vigente_desde')->get()
                 ->map(fn (TarifaComisionEmpaque $t) => [
                     'id' => $t->id,
                     'area' => $t->area?->nombre,
@@ -210,7 +268,7 @@ class ComisionesEmpaqueController extends Controller
                 'participante_id' => $l->participante_id, 'user_id' => $l->participante?->user_id,
                 'nombre' => $l->participante?->nombre, 'activo' => $l->participante?->activo,
                 'porcentaje' => DineroComisionEmpaque::porcentaje((int) $l->puntos_base),
-                'encargado' => $l->encargado,
+                'encargado' => $l->encargado, 'color' => $l->color,
             ])->values()->all() ?? [],
         ];
     }
@@ -674,9 +732,10 @@ class ComisionesEmpaqueController extends Controller
             'lineas.*.user_id' => ['required', 'integer', 'distinct', 'exists:users,id'],
             'lineas.*.encargado' => ['sometimes', 'boolean'],
             'lineas.*.porcentaje' => ['required', 'string'],
+            'lineas.*.color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ]);
         $this->assertArea($request->user(), (int) $datos['area_id']);
-        $service->guardar((int) $datos['area_id'], $datos['lineas'], $datos['motivo'], $request->user(), (int) $datos['reparto_id']);
+        $service->guardar((int) $datos['area_id'], $datos['lineas'], $datos['motivo'], $request->user(), (int) $datos['reparto_id'], verificarPermisos: true);
 
         return back()->with('success', 'Reparto permanente guardado. Los periodos abiertos usan este equipo y los cortes confirmados conservan sus importes.');
     }
@@ -764,9 +823,20 @@ class ComisionesEmpaqueController extends Controller
         );
         $q = trim((string) $request->input('q'));
         $catalogo = $request->boolean('catalogo');
-        $limite = $catalogo ? ($q === '' ? 400 : 80) : 15;
+        $areaEquipo = null;
+        if ($request->filled('equipo_area_id')) {
+            Gate::authorize('gestion_interna.comisiones_empaque.configurar');
+            $areaId = $request->integer('equipo_area_id');
+            $this->assertArea($request->user(), $areaId);
+            $areaEquipo = AreaComisionEmpaque::query()->findOrFail($areaId);
+        }
+        $permiso = $areaEquipo?->permisoGestionPedidos();
+        $limite = $areaEquipo ? 30 : ($catalogo ? ($q === '' ? 400 : 80) : 15);
 
         return User::query()
+            ->when($areaEquipo, fn ($consulta) => $consulta->where('es_demo', false)
+                ->whereNotIn('id', ParticipanteComisionEmpaque::query()->select('user_id')->where('activo', false)))
+            ->when($permiso, fn ($consulta) => $consulta->permission($permiso))
             ->with(['departamento:id,nombre', 'area:id,nombre', 'departamentos:id,nombre', 'areas:id,nombre'])
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($inner) use ($q) {
@@ -781,7 +851,7 @@ class ComisionesEmpaqueController extends Controller
             ->orderBy('name')
             ->limit($limite)
             ->get(['id', 'name', 'username', 'departamento_id', 'area_id'])
-            ->map(function (User $usuario) use ($request) {
+            ->map(function (User $usuario) use ($request, $areaEquipo) {
                 $ubicacion = $this->ubicacionCuenta($usuario);
 
                 return [
@@ -790,7 +860,7 @@ class ComisionesEmpaqueController extends Controller
                     'username' => $usuario->username,
                     'departamento' => $ubicacion['departamento'],
                     'area' => $ubicacion['area'],
-                    'facultades' => $request->user()->can('gestion_interna.comisiones_empaque.configurar')
+                    'facultades' => ! $areaEquipo && $request->user()->can('gestion_interna.comisiones_empaque.configurar')
                         ? collect([
                             'ver' => 'Consultar', 'ver_todas' => 'Todas las áreas', 'capturar' => 'Capturar',
                             'clasificar' => 'Conciliar', 'configurar' => 'Configurar', 'confirmar_cortes' => 'Confirmar liquidaciones',
@@ -831,6 +901,29 @@ class ComisionesEmpaqueController extends Controller
             'departamento' => $ubicacion['departamento'],
             'area' => $ubicacion['area'],
         ];
+    }
+
+    private function validarFechasReporte(Request $request): void
+    {
+        $request->validate([
+            'desde' => ['required', 'date_format:Y-m-d'],
+            'hasta' => ['required', 'date_format:Y-m-d', 'after_or_equal:desde'],
+        ]);
+    }
+
+    public function exportarReporte(Request $request, ExportarComisionesEmpaqueService $service): StreamedResponse
+    {
+        Gate::authorize('gestion_interna.comisiones_empaque.exportar');
+        $this->validarFechasReporte($request);
+        $request->validate(['version' => ['required', 'string', 'size:64']]);
+        if ($request->input('area_id') === 'todas') {
+            $request->merge(['area_id' => null]);
+        }
+        if ($request->filled('area_id')) {
+            $this->assertArea($request->user(), $request->integer('area_id'));
+        }
+
+        return $service->reporte($request, $request->user());
     }
 
     public function exportarAcumulado(Request $request, ExportarComisionesEmpaqueService $service): StreamedResponse

@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, Clock, Layers, Package, RefreshCw, Settings, Wallet } from 'lucide-react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, BarChart3, CalendarDays, CheckCircle2, Clock, History, Layers, Package, RefreshCw, Settings, Wallet } from 'lucide-react';
 import AppLayout from '@/Layouts/AppLayout';
 import GeliaPageShell from '@/Components/GeliaPageShell';
 import { THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL } from '@/utils/geliaTheme';
@@ -10,14 +10,16 @@ import {
     bloquearConsultas, cancelarConsulta, confirmarAntesDeConsultar, invalidarPrecargas, ir, momentoLegible,
     observarConsultas, precargarComisiones,
 } from './compartido';
-import { Acumulado } from './Empaques';
-import { Cortes, Pagos, Preparar } from './Liquidaciones';
-import Periodos from './Periodos';
-import Configuracion from './Configuracion';
-import Productividad from './Productividad';
+import Reporte from './Reporte';
 import useActualizacionComisiones, { ProteccionEdiciones } from './useActualizacionComisiones';
 
-export { Acumulado, Pagos, Preparar };
+const Acumulado = lazy(() => import('./Empaques').then((m) => ({ default: m.Acumulado })));
+const Cortes = lazy(() => import('./Liquidaciones').then((m) => ({ default: m.Cortes })));
+const Pagos = lazy(() => import('./Liquidaciones').then((m) => ({ default: m.Pagos })));
+const Preparar = lazy(() => import('./Liquidaciones').then((m) => ({ default: m.Preparar })));
+const Periodos = lazy(() => import('./Periodos'));
+const Configuracion = lazy(() => import('./Configuracion'));
+const Productividad = lazy(() => import('./Productividad'));
 
 const LIQUIDACIONES = [['periodos', 'Periodos y liquidación'], ['pagos', 'Por pagar'], ['cortes', 'Historial']];
 const SECCIONES = [['acumulado', 'Empaques', Package], ['periodos', 'Liquidaciones', Wallet], ['productividad', 'Productividad', BarChart3], ['configuracion', 'Configuración', Settings]];
@@ -84,8 +86,9 @@ function ProgresoConsulta({ consulta }) {
     </div>;
 }
 
-export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincronizacion, resumen, situaciones = {}, filtros = {}, acumulado, totales, preview, cortes, corte, saldos = [], tarifas = [], tipos_caja = [], sin_areas = false, captura_nombre = '', alcances = [], periodos, periodos_opciones = [], equipo, paqueterias = [], carga_revision = null, productividad = [], motivos_comerciales = {}, repartos = [] }) {
+export function Index({ tab, reporte, origen_simple = false, contexto_simple = {}, puede, areas = [], fecha_inicio, fecha_fin, sincronizacion, resumen, situaciones = {}, filtros = {}, acumulado, totales, preview, cortes, corte, saldos = [], tarifas = [], tipos_caja = [], sin_areas = false, captura_nombre = '', alcances = [], periodos, periodos_opciones = [], equipo, paqueterias = [], carga_revision = null, productividad = [], motivos_comerciales = {}, repartos = [] }) {
     const { flash } = usePage().props;
+    const simple = tab === 'reporte' || origen_simple;
     const areaId = filtros.area_id || '';
     const [actualizando, setActualizando] = useState(false);
     const peticionManual = useRef(null);
@@ -110,7 +113,7 @@ export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincron
         if (memoria.size > 6) memoria.delete(memoria.keys().next().value);
     }, [tab, contexto, filtros]);
 
-    const actualizacionDiscreta = useActualizacionComisiones({ estado: sincronizacion, areaId, tab, activo: !sin_areas, ocupado: mutacion || consulta?.pendiente });
+    const actualizacionDiscreta = useActualizacionComisiones({ estado: sincronizacion, areaId, tab, filtros, activo: !sin_areas, ocupado: mutacion || consulta?.pendiente });
     useEffect(() => confirmarAntesDeConsultar(actualizacionDiscreta.confirmarSalida), [actualizacionDiscreta.confirmarSalida]);
     useEffect(() => {
         const quitarObservador = observarConsultas(setConsulta);
@@ -160,18 +163,43 @@ export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincron
         ...(destino === 'preparar' || filtros.retorno_corte ? {
             limite_desde: filtros.limite_desde, limite_hasta: filtros.limite_hasta, incluir_tardias: filtros.incluir_tardias,
         } : {}),
-        retorno_corte: filtros.retorno_corte, retorno_periodo_id: filtros.retorno_periodo_id, tab: destino, ...cambios,
+        origen: filtros.origen, retorno_corte: filtros.retorno_corte, retorno_periodo_id: filtros.retorno_periodo_id, tab: destino, ...cambios,
     });
     const navegar = (destino, cambios) => {
         if (destino === tab && !cambios) return;
         actualizacionDiscreta.cancelarRecarga();
         ir(parametros(destino, cambios), { identidad: cambios ? undefined : identidad });
     };
+    const volverAlReporte = (modo) => navegar('reporte', {
+        area_id: contexto_simple.area_id || areaId || 'todas',
+        periodo_id: contexto_simple.periodo_id,
+        desde: contexto_simple.desde || filtros.desde,
+        hasta: contexto_simple.hasta || filtros.hasta,
+        origen: undefined, retorno_corte: undefined, retorno_periodo_id: undefined, modo,
+    });
+    const abrirDesdeReporte = (destino, cambios = {}) => navegar(destino, { origen: 'simple', ...cambios });
+    const revisarEmpaques = (area, vista) => abrirDesdeReporte('acumulado', {
+        ...Object.fromEntries(FILTROS_EMPAQUES.map((clave) => [clave, undefined])),
+        area_id: area || areaId || 'todas',
+        periodo_id: !area || String(area) === String(areaId) ? filtros.periodo_id : undefined,
+        vista,
+    });
+    const configurar = (seccion, area, editar = false) => abrirDesdeReporte('configuracion', {
+        editar_equipo: editar ? 1 : undefined,
+        seccion, area_id: area || areaId || 'todas',
+        periodo_id: !area || String(area) === String(areaId) ? filtros.periodo_id : undefined,
+    });
+    useEffect(() => {
+        if (origen_simple && tab === 'acumulado' && filtros.vista === 'pendientes'
+            && flash?.success && resumen?.por_revisar === 0 && !mutacion) volverAlReporte();
+    // El guardado y los totales de la bandeja se reciben juntos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [origen_simple, tab, filtros.vista, flash?.success, resumen?.por_revisar, mutacion]);
     const precargar = (destino) => {
-        if (destino !== tab && !consulta?.pendiente && !mutacion && !actualizando && !sin_areas && !filtros.retorno_corte) precargarComisiones(parametros(destino), identidad);
+        if (!simple && destino !== tab && !consulta?.pendiente && !mutacion && !actualizando && !sin_areas && !filtros.retorno_corte) precargarComisiones(parametros(destino), identidad);
     };
     useEffect(() => {
-        if (!identidad || !['acumulado', 'periodos', 'productividad'].includes(tab)) return undefined;
+        if (simple || !identidad || !['acumulado', 'periodos', 'productividad'].includes(tab)) return undefined;
         if (actualizando || mutacion || consulta?.pendiente || sin_areas || filtros.retorno_corte) return undefined;
         const preparar = () => {
             if (document.visibilityState !== 'visible' || !navigator.onLine) return;
@@ -182,7 +210,7 @@ export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincron
         return () => window.clearTimeout(espera);
     // Los parámetros de precarga están definidos por la identidad y la sección.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [identidad, tab, actualizando, mutacion, consulta?.pendiente, sin_areas, filtros.retorno_corte]);
+    }, [simple, identidad, tab, actualizando, mutacion, consulta?.pendiente, sin_areas, filtros.retorno_corte]);
     useEffect(() => {
         invalidarPrecargas();
     }, [contexto]);
@@ -218,14 +246,38 @@ export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincron
                 <div className="theme-card theme-card--solid theme-surface theme-no-blur theme-border min-w-0 space-y-3 !rounded-2xl p-3 md:p-5 [&_.theme-label]:!text-xs [&_.theme-label]:!font-semibold [&_.theme-input]:!min-h-11">
                 <header className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2 border-b theme-border pb-3">
                     <div className="min-w-0">
-                        <h1 className="m-0 text-xl font-bold theme-text-main">Comisiones de empaque</h1>
+                        <h1 className="m-0 flex items-center gap-2 text-xl font-bold theme-text-main"><span className="grid size-9 shrink-0 place-items-center rounded-lg theme-element theme-text-primario"><Wallet className="size-5" aria-hidden="true" /></span>Comisiones de empaque</h1>
                         <p role="status" className="m-0 mt-1 flex items-start gap-2 text-sm theme-text-muted">
                             <IconoActualizacion className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                            <span title={actualizacion.fecha ? `Última sincronización ${actualizacion.fecha}` : undefined}>{actualizacion.etiqueta}{actualizacion.detalle && ` · ${actualizacion.detalle}`}</span>
+                            <span title={actualizacion.fecha ? `Última sincronización ${actualizacion.fecha}` : undefined}>{simple && observado?.estado !== 'ok' ? 'Actualización pendiente' : actualizacion.etiqueta}{!simple && actualizacion.detalle && ` · ${actualizacion.detalle}`}</span>
                         </p>
                         {actualizacionDiscreta.pendiente && <p className="m-0 mt-1 text-xs theme-text-aviso" role="status">Hay datos nuevos. Se conserva tu revisión actual.</p>}
                     </div>
-                    {!sin_areas && <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 sm:flex sm:w-auto sm:flex-wrap">
+                    {!sin_areas && <div className="flex flex-wrap items-center gap-2">
+                        <div className="gelia-segment p-1" role="group" aria-label="Modo de comisiones">
+                            {['simple', 'avanzado'].map((modo) => <button type="button" key={modo}
+                                className="gelia-segment-btn min-h-11 px-3" data-active={simple === (modo === 'simple')}
+                                aria-pressed={simple === (modo === 'simple')}
+                                onClick={() => {
+                                    if (modo === 'simple' && !simple) navegar('reporte', {
+                                        modo, origen: undefined, retorno_corte: undefined, retorno_periodo_id: undefined,
+                                    });
+                                    if (modo === 'avanzado' && simple) navegar(tab === 'reporte' ? 'acumulado' : tab, { origen: undefined, modo });
+                                }}>{modo === 'simple' ? 'Simple' : 'Avanzado'}</button>)}
+                        </div>
+                        {tab === 'reporte' && <button type="button" className={`${THEME_BTN_SECONDARY} inline-flex min-h-11 items-center gap-2 !normal-case focus-visible:!outline-2 focus-visible:outline-offset-2`} onClick={() => abrirDesdeReporte('cortes')}>
+                            <History aria-hidden="true" className="size-4" /> Historial
+                        </button>}
+                        {tab === 'reporte' && puede.configurar && <div className="group relative">
+                            <button type="button" aria-label="Abrir configuración" className={`${THEME_BTN_SECONDARY} grid size-11 place-items-center !p-0 focus-visible:!outline-2 focus-visible:outline-offset-2`}
+                                onClick={() => configurar('tarifas')}>
+                                <Settings aria-hidden="true" className="size-4" />
+                            </button>
+                            <span role="tooltip" className="pointer-events-none invisible absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md border theme-border theme-element px-2 py-1 text-xs group-hover:visible group-focus-within:visible">Abrir configuración</span>
+                        </div>}
+                    </div>}
+                </header>
+                    {!sin_areas && !simple && (!configuracion || ['areas', 'accesos', 'sincronizacion'].includes(filtros.seccion)) && <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-end gap-2 sm:flex sm:w-auto sm:flex-wrap">
                         <label className="min-w-0 sm:min-w-32"><span className={THEME_LABEL}><span className="inline-flex items-center gap-1.5"><Layers className="size-4" aria-hidden="true" />Área</span></span><select className={THEME_INPUT} value={areaId} onChange={(e) => navegar(tab === 'preparar' ? 'periodos' : tab, { area_id: e.target.value || 'todas', periodo_id: undefined, seccion: filtros.seccion, retorno_corte: undefined, retorno_periodo_id: undefined, limite_desde: undefined, limite_hasta: undefined,
                             desde: filtros.periodo_id ? undefined : filtros.desde, hasta: filtros.periodo_id ? undefined : filtros.hasta })}>
                             <option value="">Todas</option>{areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
@@ -241,28 +293,36 @@ export function Index({ tab, puede, areas = [], fecha_inicio, fecha_fin, sincron
                             <span id="actualizar-comisiones-ayuda" role="tooltip" className="pointer-events-none invisible absolute right-0 top-full z-10 mt-1 whitespace-nowrap rounded-md border theme-border theme-element px-2 py-1 text-xs group-hover:visible group-focus-within:visible">Actualizar empaques de Gelia</span>
                         </div>
                     </div>}
-                </header>
                 {observado?.estado === 'sin_acceso' ? <div className="space-y-2">
                     <p role="alert" className="theme-text-aviso">Consulta las áreas a las que tienes acceso.</p>
-                    <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar('acumulado', { area_id: 'todas', periodo_id: undefined, desde: undefined, hasta: undefined })}>Consultar áreas disponibles</button>
+                    <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar(simple ? 'reporte' : 'acumulado', { area_id: 'todas', periodo_id: undefined, desde: undefined, hasta: undefined })}>Consultar áreas disponibles</button>
                 </div> : sin_areas ? <p role="alert" className="theme-text-aviso">Solicite al administrador acceso a un área de empaque.</p> : <>
+                    {origen_simple && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => volverAlReporte()}>Volver al cálculo</button>}
                     {!!filtros.retorno_corte && tab !== 'preparar' && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => navegar('preparar', { periodo_id: filtros.periodo_id || filtros.retorno_periodo_id, retorno_corte: undefined, retorno_periodo_id: undefined })}>Volver a preparar el corte</button>}
-                    <nav className="gelia-segment p-1" aria-label="Secciones de comisiones">
+                    {!simple && <nav className="gelia-segment p-1" aria-label="Secciones de comisiones">
                         <div className="grid w-full min-w-0 grid-cols-2 gap-1 sm:grid-cols-4">{SECCIONES.filter(([id]) => id !== 'configuracion' || puede.configurar).map(([id, nombre, Icono]) =>
                             <button key={id} type="button" className="gelia-segment-btn min-h-11 min-w-0 px-1" aria-current={principal === id ? 'page' : undefined} data-active={principal === id} onPointerEnter={() => precargar(id)} onFocus={() => precargar(id)} onClick={() => navegar(id)}><Icono className="size-4 shrink-0" aria-hidden="true" />{nombre}</button>)}
                         </div>
-                    </nav>
-                    {liquidaciones && <nav aria-label="Secciones de liquidación" className="flex flex-wrap gap-2 border-b theme-border">{LIQUIDACIONES.map(([id, nombre]) =>
+                    </nav>}
+                    {!simple && liquidaciones && <nav aria-label="Secciones de liquidación" className="flex flex-wrap gap-2 border-b theme-border">{LIQUIDACIONES.map(([id, nombre]) =>
                         <button key={id} type="button" className="min-h-11 border-b-2 border-transparent px-2 text-sm theme-text-main aria-[current=page]:border-current aria-[current=page]:font-semibold aria-[current=page]:theme-text-primario" aria-current={(tab === id || (tab === 'preparar' && id === 'periodos')) ? 'page' : undefined} onClick={() => navegar(id)}>{nombre}</button>)}</nav>}
                     <section aria-label="Contenido de comisiones" aria-busy={consulta?.pendiente || undefined} className="min-w-0 space-y-3">
                     <ProgresoConsulta consulta={consulta} />
+                    {tab === 'reporte' && reporte && <Reporte reporte={reporte} areaId={areaId} filtros={filtros}
+                        areas={areas} periodos={opcionesPeriodo} puede={puede} ocupado={Boolean(consulta)}
+                        onConsultar={(cambios) => navegar('reporte', cambios)} onEmpaques={revisarEmpaques}
+                        onConfigurar={configurar} onCorte={(area, corte) => abrirDesdeReporte('cortes', {
+                            area_id: area, corte, periodo_id: String(area) === String(areaId) ? filtros.periodo_id : undefined,
+                        })} />}
+                    <Suspense fallback={<p className="m-0 text-sm theme-text-muted" role="status">Cargando sección…</p>}>
                     {tab === 'acumulado' && <Acumulado key={`${areaId}|${filtros.periodo_id || ''}`} resumen={resumen} filtros={filtros} areas={areas} situaciones={situaciones} acumulado={acumulado} totales={totales} puede={puede} tipos={tipos_caja} capturaNombre={captura_nombre} paqueterias={paqueterias} cargaRevision={carga_revision} motivos={motivos_comerciales} />}
                     {tab === 'periodos' && <Periodos key={areaId} periodos={periodos?.data || []} paginacion={periodos} equipo={equipo} areaId={areaId} puede={puede} />}
                     {tab === 'preparar' && <Preparar key={`${contexto}|${filtros.limite_desde || ''}|${filtros.limite_hasta || ''}`} areas={areas} filtros={filtros} preview={preview} puede={puede} />}
                     {tab === 'cortes' && <Cortes cortes={cortes} corte={corte} puede={puede} filtros={filtros} />}
                     {tab === 'pagos' && <Pagos key={areaId} saldos={saldos} puede={puede} areaId={areaId} />}
                     {tab === 'productividad' && <Productividad key={contexto} filas={productividad} filtros={filtros} puede={puede} />}
-                    {configuracion && puede.configurar && <Configuracion key={areaId || 'todas'} areas={areas} areaId={areaId} fechaInicio={fecha_inicio} fechaFin={fecha_fin} tarifas={tarifas} alcances={alcances} equipo={equipo} puede={puede} fondo={resumen?.importe_por_cortar} repartos={repartos} sincronizacion={observado} cargaRevision={carga_revision} inicial={tab === 'equipo' ? 'equipo' : filtros.seccion} onSeccion={(seccion) => navegar('configuracion', { seccion })} />}
+                    {configuracion && puede.configurar && <Configuracion key={areaId || 'todas'} areas={areas} areaId={areaId} fechaInicio={fecha_inicio} fechaFin={fecha_fin} tarifas={tarifas} alcances={alcances} equipo={equipo} puede={puede} fondo={resumen?.importe_por_cortar} repartos={repartos} sincronizacion={observado} cargaRevision={carga_revision} simple={simple} editarEquipo={String(filtros.editar_equipo) === '1'} onAjustes={() => navegar('cortes')} inicial={tab === 'equipo' ? 'equipo' : filtros.seccion} onSeccion={(seccion, area) => navegar('configuracion', area ? { seccion, area_id: area, periodo_id: undefined } : { seccion })} />}
+                    </Suspense>
                     </section>
                 </>}
                 </div>

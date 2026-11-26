@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use App\Support\ComisionesEmpaque\RepartirCentavosComisionEmpaque;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -29,23 +30,24 @@ class ConfirmarCorteComisionEmpaqueService
     ) {}
 
     /** @return array<string, mixed> */
-    public function calcular(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias): array
+    public function calcular(int $areaId, Carbon $desde, Carbon $hasta, bool $incluirTardias, ?Collection $unidadesConsulta = null): array
     {
-        $incluidas = $this->unidades($areaId, $desde, $hasta);
+        $esConsulta = $unidadesConsulta !== null;
+        $incluidas = $unidadesConsulta ?? $this->unidades($areaId, $desde, $hasta);
         $errores = $incluirTardias
             ? ['Las incorporaciones tardías requieren una decisión económica del supervisor. Revise la bandeja de incorporaciones tardías.']
             : [];
         $sinCorte = UnidadComisionEmpaque::query()->where('area_id', $areaId)->whereNull('corte_id')->where('incorporacion_tardia', false)
             ->whereBetween('empacado_at', [$desde, $hasta]);
         $pendientes = (clone $sinCorte)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->count();
-        if ($pendientes) {
+        if ($pendientes && ! $esConsulta) {
             $errores[] = 'Resuelva los empaques pendientes del periodo antes de confirmar la liquidación.';
         }
         $cajasPendientes = \App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque::query()->where('es_bolsa', false)
             ->whereIn('unidad_id', (clone $sinCorte)->whereIn('situacion', UnidadComisionEmpaque::POR_REVISAR)->select('id'))->sum('cantidad');
         $cajasExcluidas = \App\Models\ComisionesEmpaque\UnidadLineaComisionEmpaque::query()->where('es_bolsa', false)
             ->whereIn('unidad_id', (clone $sinCorte)->whereIn('situacion', [UnidadComisionEmpaque::EXCLUIDA, UnidadComisionEmpaque::RECHAZADA])->select('id'))->sum('cantidad');
-        $periodos = PeriodoComisionEmpaque::query()->where('area_id', $areaId)
+        $periodos = $esConsulta ? [] : PeriodoComisionEmpaque::query()->where('area_id', $areaId)
             ->where('desde', '<=', $hasta)->where('hasta', '>', $desde)->get();
         $equipoPermanente = RepartoComisionEmpaque::permanente($areaId);
         foreach ($periodos as $periodo) {
@@ -58,11 +60,25 @@ class ConfirmarCorteComisionEmpaqueService
         $cajas = 0;
         $tipos = [];
         $tarifas = [];
+        $repartoIncompleto = false;
+        $tarifasConsulta = $esConsulta && $incluidas->isNotEmpty()
+            ? TarifaComisionEmpaque::query()->where('area_id', $areaId)
+                ->where('vigente_desde', '<=', $hasta)->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $desde))
+                ->orderByDesc('vigente_desde')->get()
+            : collect();
+        $repartosConsulta = $esConsulta && ! $equipoPermanente
+            ? RepartoComisionEmpaque::query()->with('lineas.participante')->where('area_id', $areaId)->where('permanente', false)
+                ->where('vigente_desde', '<=', $hasta)->where(fn ($q) => $q->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>', $desde))
+                ->orderByDesc('vigente_desde')->get()
+            : collect();
+        $vigenteEn = fn (Collection $vigencias, Carbon $momento) => $vigencias->first(
+            fn ($v) => $v->vigente_desde->lte($momento) && (! $v->vigente_hasta || $v->vigente_hasta->gt($momento))
+        );
 
         foreach ($incluidas as $unidad) {
             $cajas += (int) $unidad->cantidad_comisionable;
             $total += (int) $unidad->importe_centavos;
-            foreach ($unidad->lineas as $linea) {
+            foreach ($esConsulta ? [] : $unidad->lineas as $linea) {
                 if ($linea->es_bolsa) {
                     continue;
                 }
@@ -70,22 +86,30 @@ class ConfirmarCorteComisionEmpaqueService
                 $tipos[$nombre] = ($tipos[$nombre] ?? 0) + (int) $linea->cantidad;
             }
 
-            $tarifa = TarifaComisionEmpaque::vigente($areaId, $unidad->empacado_at);
+            $tarifa = $esConsulta
+                ? $vigenteEn($tarifasConsulta, $unidad->empacado_at)
+                : TarifaComisionEmpaque::vigente($areaId, $unidad->empacado_at);
             $esperado = $tarifa ? (int) $unidad->cantidad_comisionable * (int) $tarifa->importe_centavos : null;
             if ($esperado === null || $esperado !== (int) $unidad->importe_centavos) {
                 $errores[] = 'La tarifa vigente ya no coincide con el importe de '.($unidad->folio_pedido ?: $unidad->clave_origen).'. Actualice antes de confirmar.';
 
-                continue;
+                if (! $esConsulta) {
+                    continue;
+                }
+            } else {
+                $tarifas[] = DineroComisionEmpaque::texto((int) $tarifa->importe_centavos);
             }
-
-            $tarifas[] = DineroComisionEmpaque::texto((int) $tarifa->importe_centavos);
-            $reparto = $equipoPermanente ?? RepartoComisionEmpaque::vigente($areaId, $unidad->empacado_at);
+            $reparto = $equipoPermanente ?? ($esConsulta
+                ? $vigenteEn($repartosConsulta, $unidad->empacado_at)
+                : RepartoComisionEmpaque::vigente($areaId, $unidad->empacado_at));
             if (! $reparto || $reparto->lineas->isEmpty()) {
+                $repartoIncompleto = true;
                 $errores[] = 'Configure el equipo y reparto del área. No hay reparto para el '.$unidad->empacado_at->timezone(config('app.timezone'))->format('Y-m-d H:i').' para '.$unidad->folio_pedido.'.';
 
                 continue;
             }
             if ((int) $reparto->lineas->sum('puntos_base') !== 10000) {
+                $repartoIncompleto = true;
                 $errores[] = 'Corrija el reparto del área para que sume exactamente 100%.';
 
                 continue;
@@ -103,6 +127,7 @@ class ConfirmarCorteComisionEmpaqueService
                         'puntos_base' => (int) $l->puntos_base,
                         'porcentaje' => DineroComisionEmpaque::porcentaje((int) $l->puntos_base),
                     ])->all(),
+                    'colores' => $reparto->lineas->pluck('color', 'participante_id'),
                     'montos' => [],
                 ];
             }
@@ -123,10 +148,12 @@ class ConfirmarCorteComisionEmpaqueService
                 $tramos[$clave]['participantes'][] = [
                     'participante_id' => $linea['participante_id'],
                     'nombre' => $linea['nombre'],
+                    'color' => $tramo['colores']->get($linea['participante_id']),
                     'porcentaje' => $linea['porcentaje'],
                     'importe' => DineroComisionEmpaque::texto($importe),
                 ];
             }
+            unset($tramos[$clave]['colores']);
             $tramos[$clave]['importe'] = DineroComisionEmpaque::texto($tramo['importe_centavos']);
         }
 
@@ -143,7 +170,7 @@ class ConfirmarCorteComisionEmpaqueService
             'repartos' => collect($tramos)->map(fn ($tramo) => $tramo['lineas'])->all(),
         ];
 
-        $exclusiones = UnidadComisionEmpaque::query()
+        $exclusiones = $esConsulta ? collect() : UnidadComisionEmpaque::query()
             ->with('area:id,nombre')
             ->where('area_id', $areaId)
             ->whereNull('corte_id')
@@ -167,11 +194,13 @@ class ConfirmarCorteComisionEmpaqueService
             'cajas_pendientes' => (int) $cajasPendientes,
             'cajas_excluidas' => (int) $cajasExcluidas,
             'tarifas' => array_values(array_unique($tarifas)),
+            'reparto_incompleto' => $repartoIncompleto || ($esConsulta && $incluidas->isEmpty()
+                && (int) ($equipoPermanente ?? $vigenteEn($repartosConsulta, $hasta))?->lineas->sum('puntos_base') !== 10000),
             'importe' => DineroComisionEmpaque::texto($total),
             'importe_centavos' => $total,
             'tipos' => collect($tipos)->map(fn ($cantidad, $nombre) => ['nombre' => $nombre, 'cantidad' => $cantidad])->values()->all(),
             'tramos' => array_values($tramos),
-            'unidades' => $incluidas->map(fn (UnidadComisionEmpaque $u) => $this->fila($u))->values()->all(),
+            'unidades' => $esConsulta ? [] : $incluidas->map(fn (UnidadComisionEmpaque $u) => $this->fila($u))->values()->all(),
             'exclusiones' => $exclusiones,
         ];
     }
@@ -367,9 +396,7 @@ class ConfirmarCorteComisionEmpaqueService
         return UnidadComisionEmpaque::query()
             ->with(['lineas.tipo', 'area:id,nombre'])
             ->where('area_id', $areaId)
-            ->where('situacion', UnidadComisionEmpaque::ELEGIBLE)
-            ->whereNull('corte_id')
-            ->where('incorporacion_tardia', false)
+            ->disponibleParaCorte()
             ->whereBetween('empacado_at', [$desde, $hasta])
             ->orderBy('empacado_at')
             ->orderBy('id')

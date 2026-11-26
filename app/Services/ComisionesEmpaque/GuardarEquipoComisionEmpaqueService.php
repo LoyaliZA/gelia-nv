@@ -13,9 +13,9 @@ use Illuminate\Validation\ValidationException;
 
 class GuardarEquipoComisionEmpaqueService
 {
-    public function guardar(int $areaId, array $lineas, string $motivo, User $responsable, ?int $versionEsperada = null): RepartoComisionEmpaque
+    public function guardar(int $areaId, array $lineas, string $motivo, User $responsable, ?int $versionEsperada = null, bool $verificarPermisos = false): RepartoComisionEmpaque
     {
-        return DB::transaction(function () use ($areaId, $lineas, $motivo, $responsable, $versionEsperada) {
+        return DB::transaction(function () use ($areaId, $lineas, $motivo, $responsable, $versionEsperada, $verificarPermisos) {
             $area = AreaComisionEmpaque::query()->lockForUpdate()->findOrFail($areaId);
             if (! $area->activo) {
                 throw ValidationException::withMessages(['area_id' => 'Seleccione un área activa.']);
@@ -34,7 +34,7 @@ class GuardarEquipoComisionEmpaqueService
                 if ($puntos <= 0 || $puntos > 10000) {
                     throw ValidationException::withMessages(['lineas' => 'Cada porcentaje debe ser mayor a cero y no exceder 100%.']);
                 }
-                $normalizadas[$usuario->id] = ['usuario' => $usuario, 'puntos' => $puntos, 'encargado' => (bool) ($linea['encargado'] ?? false)];
+                $normalizadas[$usuario->id] = ['usuario' => $usuario, 'puntos' => $puntos, 'encargado' => (bool) ($linea['encargado'] ?? false), 'color' => $linea['color'] ?? null];
             }
             if (array_sum(array_column($normalizadas, 'puntos')) !== 10000) {
                 throw ValidationException::withMessages(['lineas' => 'El reparto del fondo común debe sumar exactamente 100%.']);
@@ -45,6 +45,13 @@ class GuardarEquipoComisionEmpaqueService
             $anterior = RepartoComisionEmpaque::permanente($areaId);
             if ($versionEsperada !== null && $versionEsperada !== (int) ($anterior?->id ?? 0)) {
                 throw ValidationException::withMessages(['equipo' => 'Otra persona actualizó el reparto. Recargue y revise los porcentajes antes de guardar.']);
+            }
+            if ($verificarPermisos && ($permiso = $area->permisoGestionPedidos())) {
+                $legados = $anterior?->lineas->pluck('participante.user_id')->all() ?? [];
+                $nuevos = array_diff(array_keys($normalizadas), $legados);
+                if (User::permission($permiso)->whereKey($nuevos)->where('es_demo', false)->count() !== count($nuevos)) {
+                    throw ValidationException::withMessages(['lineas' => 'Seleccione colaboradores con acceso a Gestión de Pedidos de '.$area->nombre.'.']);
+                }
             }
             $ahora = now();
             if ($anterior) {
@@ -62,7 +69,10 @@ class GuardarEquipoComisionEmpaqueService
                 if (! $persona->activo) {
                     throw ValidationException::withMessages(['lineas' => 'La cuenta '.$persona->nombre.' está inactiva en comisiones. Reactívela antes de incluirla.']);
                 }
-                $reparto->lineas()->create(['participante_id' => $persona->id, 'puntos_base' => $linea['puntos'], 'encargado' => $linea['encargado']]);
+                $reparto->lineas()->create([
+                    'participante_id' => $persona->id, 'puntos_base' => $linea['puntos'], 'encargado' => $linea['encargado'],
+                    'color' => $linea['color'] ?? $anterior?->lineas->firstWhere('participante_id', $persona->id)?->color,
+                ]);
             }
             AuditoriaComisionEmpaque::anotar($responsable, 'equipo', $reparto->id, 'guardar_reparto_permanente', $motivo, ['anterior_id' => $anterior?->id, 'lineas' => $reparto->load('lineas')->lineas->toArray()]);
 

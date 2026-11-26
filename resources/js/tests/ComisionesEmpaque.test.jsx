@@ -4,9 +4,12 @@ import axios from 'axios';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import BuscarUsuario from '../Pages/GestionInterna/ComisionesEmpaque/BuscarUsuario';
-import { Index as ComisionesEmpaque, Preparar, Pagos, Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import { Index as ComisionesEmpaque } from '../Pages/GestionInterna/ComisionesEmpaque/Index';
+import { Preparar, Pagos } from '../Pages/GestionInterna/ComisionesEmpaque/Liquidaciones';
+import { Acumulado } from '../Pages/GestionInterna/ComisionesEmpaque/Empaques';
 import Equipo from '../Pages/GestionInterna/ComisionesEmpaque/Equipo';
 import Periodos from '../Pages/GestionInterna/ComisionesEmpaque/Periodos';
+import { precargarComisiones } from '../Pages/GestionInterna/ComisionesEmpaque/compartido';
 
 const { guardar, navegar, recargar, precargar, invalidar } = vi.hoisted(() => ({
     guardar: vi.fn(), navegar: vi.fn(), recargar: vi.fn(), precargar: vi.fn(), invalidar: vi.fn(),
@@ -102,6 +105,25 @@ it('guarda porcentajes permanentes distintos sobre un mismo fondo', async () => 
     await act(() => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })));
     expect(guardar.mock.calls[0][1].lineas.map((l) => l.porcentaje)).toEqual(['50', '30', '10', '10']);
     expect(guardar.mock.calls[0][1]).not.toHaveProperty('desde');
+});
+
+it('limita cada porcentaje al saldo del equipo y permite completarlo desde el botón', async () => {
+    const lineas = [
+        { user_id: 1, nombre: 'Ana', porcentaje: '45' },
+        { user_id: 2, nombre: 'Beatriz', porcentaje: '40' },
+        { user_id: 3, nombre: 'Carlos', porcentaje: '10' },
+    ];
+    await render(<Equipo areaId={1} equipo={{ area: 'Tienda', lineas }} puede={{ configurar: true }} />);
+    await act(() => boton('Ajustar equipo y porcentajes').click());
+    const campos = container.querySelectorAll('input[type="number"]');
+    expect(campos[2].max).toBe('15.00');
+    await escribir(campos[2], '60');
+    expect(campos[2].value).toBe('15.00');
+    await escribir(campos[0], '35');
+    expect(campos[2].max).toBe('25.00');
+    await act(() => container.querySelector('[aria-label="Usar máximo disponible para Carlos"]').click());
+    expect(campos[2].value).toBe('25.00');
+    expect(container.querySelector('[role="status"]').textContent).toContain('100.00% asignado');
 });
 
 it('confirma el corte con la petición transformada sin encadenar el envío', async () => {
@@ -243,6 +265,25 @@ it('ignora una precarga en curso al navegar a otra sección', async () => {
             precargar.mock.calls.find(([, opciones]) => opciones.data.tab === 'productividad')[1].onPrefetched({ status: 200 });
         });
         expect(navegar).toHaveBeenCalledTimes(1);
+    } finally {
+        vi.useRealTimers();
+    }
+});
+
+it('reanuda la precarga bajo demanda después de una espera agotada', () => {
+    vi.useFakeTimers();
+    try {
+        const parametros = { tab: 'productividad', area_id: 1 };
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(5000);
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(30_000);
+        expect(precargar).toHaveBeenCalledTimes(1);
+        precargarComisiones(parametros, 'revision-prueba');
+        expect(precargar).toHaveBeenCalledTimes(2);
+        precargar.mock.lastCall[1].onPrefetched({ status: 200 });
     } finally {
         vi.useRealTimers();
     }

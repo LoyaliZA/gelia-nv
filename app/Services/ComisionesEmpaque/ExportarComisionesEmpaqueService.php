@@ -9,12 +9,79 @@ use App\Models\ComisionesEmpaque\UnidadComisionEmpaque;
 use App\Models\User;
 use App\Support\ComisionesEmpaque\DineroComisionEmpaque;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Rap2hpoutre\FastExcel\FastExcel;
+use Rap2hpoutre\FastExcel\SheetCollection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ExportarComisionesEmpaqueService
 {
     public function __construct(private ConsultarComisionesEmpaqueService $consultar) {}
+
+    public function reporte(Request $request, User $usuario): StreamedResponse
+    {
+        $conexion = DB::connection();
+        if ($conexion->getDriverName() === 'mysql' && $conexion->transactionLevel() === 0) {
+            $conexion->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        }
+        $reporte = $conexion->transaction(function () use ($request, $usuario) {
+            $zona = ConfiguracionComisionEmpaque::query()->value('zona_horaria') ?? config('app.timezone');
+
+            return app(ConsultarReporteComisionesEmpaque::class)->consultar($request, $usuario, $zona, detalle: true);
+        });
+        abort_unless(hash_equals($reporte['version'], $request->input('version')), 409, 'La consulta cambió. Actualice el cálculo y vuelva a generar el reporte.');
+
+        $resumen = [];
+        foreach ($reporte['grupos'] as $grupo) {
+            $cabecera = [
+                'Área' => $grupo['area'], 'Desde' => $grupo['desde'], 'Hasta' => $grupo['hasta'],
+                'Tipo' => $grupo['corte'] ? 'Corte histórico · Liquidación confirmada' : 'Reporte preliminar',
+                'Corte' => $grupo['folio'],
+            ];
+            $columnas = [
+                'Concepto' => null, 'Cajas válidas' => null, 'Tarifa por caja' => null, 'Comisión' => null,
+                'Reparto vigente desde' => null, 'Colaborador' => null, 'Porcentaje' => null, 'Observaciones' => null,
+            ];
+            $fila = fn (array $datos) => $cabecera + array_replace($columnas, $datos);
+            $resumen[] = $fila(['Concepto' => 'Comisión total', 'Cajas válidas' => $grupo['cajas'], 'Comisión' => (float) $grupo['importe']]);
+            foreach ($grupo['tarifas'] as $tarifa) {
+                $resumen[] = $fila(['Concepto' => 'Tarifa aplicada', 'Cajas válidas' => $tarifa['cajas'],
+                    'Tarifa por caja' => (float) $tarifa['tarifa'], 'Comisión' => (float) $tarifa['importe']]);
+            }
+            foreach ($grupo['tramos'] as $tramo) {
+                foreach ($tramo['participantes'] as $persona) {
+                    $resumen[] = $fila([
+                        'Concepto' => 'Distribución', 'Reparto vigente desde' => $tramo['desde'],
+                        'Colaborador' => $persona['nombre'], 'Porcentaje' => $persona['porcentaje'].'%',
+                        'Comisión' => (float) $persona['importe'],
+                    ]);
+                }
+                $resumen[] = $fila(['Concepto' => 'Total del reparto', 'Reparto vigente desde' => $tramo['desde'],
+                    'Porcentaje' => '100%', 'Comisión' => (float) $tramo['importe']]);
+            }
+            if (! $grupo['corte']) {
+                foreach (['pendientes' => 'Empaques que requieren revisión', 'tardios' => 'Empaques de periodos cerrados', 'excluidos' => 'Empaques excluidos'] as $campo => $etiqueta) {
+                    if ($grupo[$campo]) {
+                        $resumen[] = $fila(['Concepto' => 'Exclusión', 'Observaciones' => $etiqueta.' ('.$grupo[$campo].')']);
+                    }
+                }
+                foreach ($grupo['cortes_parciales'] as $corte) {
+                    $resumen[] = $fila(['Concepto' => 'Exclusión', 'Observaciones' => 'El intervalo cubre solo parte del corte '.$corte['folio'].'.']);
+                }
+                foreach ($grupo['advertencias'] as $aviso) {
+                    $resumen[] = $fila(['Concepto' => 'Advertencia', 'Observaciones' => $aviso]);
+                }
+                if ($grupo['reparto_incompleto']) {
+                    $resumen[] = $fila(['Concepto' => 'Advertencia', 'Observaciones' => 'La distribución está incompleta.']);
+                }
+            }
+        }
+
+        return (new FastExcel(new SheetCollection([
+            'Resumen de comisiones' => collect($resumen),
+            'Detalle de empaques' => collect($reporte['detalle']),
+        ])))->download('reporte-comisiones-empaque.xlsx');
+    }
 
     public function acumulado(Request $request, ?User $usuario): StreamedResponse
     {
@@ -60,6 +127,7 @@ class ExportarComisionesEmpaqueService
                     'Envío tienda' => $fila['logistica']['envio_tienda'] ?? null,
                     'Origen del pedido' => $fila['logistica']['origen_solicitud'] ?? null,
                     'Importe' => $fila['importe_comisionable'] ?? ($fila['liquidacion'] === 'pagado_fuera' ? $fila['importe'] : null),
+                    'Importe potencial' => $fila['importe_potencial'],
                     'Situación' => $fila['situacion_etiqueta'],
                     'Corte' => $fila['corte'],
                     'Incorporación tardía' => $fila['incorporacion_tardia'] ? 'Sí' : 'No',

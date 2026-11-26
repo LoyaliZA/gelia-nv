@@ -9,7 +9,7 @@ class RepartoParticipanteComisionEmpaque extends Model
 {
     protected $table = 'comisiones_empaque_reparto_participantes';
 
-    protected $fillable = ['reparto_id', 'participante_id', 'puntos_base', 'encargado'];
+    protected $fillable = ['reparto_id', 'participante_id', 'puntos_base', 'encargado', 'color'];
 
     protected $casts = ['puntos_base' => 'integer', 'encargado' => 'boolean'];
 

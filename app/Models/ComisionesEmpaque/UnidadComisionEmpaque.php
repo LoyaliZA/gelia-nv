@@ -3,6 +3,7 @@
 namespace App\Models\ComisionesEmpaque;
 
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -79,6 +80,20 @@ class UnidadComisionEmpaque extends Model
         self::SOLAPE_REVISION,
         self::POSIBLE_DUPLICADO,
     ];
+
+    public function scopeDisponibleParaCorte(Builder $query): Builder
+    {
+        return $query->where('situacion', self::ELEGIBLE)
+            ->whereNull('corte_id')->where('incorporacion_tardia', false)
+            ->where('liquidacion', '!=', self::LIQUIDACION_PAGADO_FUERA);
+    }
+
+    public function esComisionable(): bool
+    {
+        return $this->situacion === self::EN_CORTE
+            || ($this->situacion === self::ELEGIBLE && ! $this->corte_id
+                && ! $this->incorporacion_tardia && $this->liquidacion !== self::LIQUIDACION_PAGADO_FUERA);
+    }
 
     protected $table = 'comisiones_empaque_unidades';
 

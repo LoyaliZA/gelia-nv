@@ -1,50 +1,80 @@
+import { Boxes, Coins, History, Store, UsersRound } from 'lucide-react';
 import { useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_INPUT, THEME_LABEL, geliaCardClass } from '@/utils/geliaTheme';
 import BuscarUsuario from './BuscarUsuario';
 import Equipo from './Equipo';
-import { Carga } from './Empaques';
 import { useProtegerEdicion } from './useActualizacionComisiones';
-import { ErroresFormulario, dinero, momentoLegible } from './compartido';
+import { ACCION_PRINCIPAL_COMISIONES, ErroresFormulario, dinero, momentoLegible } from './compartido';
 
-const secciones = [['tarifas', 'Tarifas'], ['equipo', 'Equipo y reparto'], ['areas', 'Áreas'], ['accesos', 'Accesos'], ['sincronizacion', 'Sincronización e históricos']];
+const Carga = lazy(() => import('./Carga'));
 
-export default function Configuracion({ areas, areaId, fechaInicio, fechaFin, tarifas, alcances, equipo, puede, fondo, repartos, sincronizacion, inicial = 'tarifas', cargaRevision, onSeccion }) {
+const secciones = [['tarifas', 'Tarifa por caja', Coins], ['equipo', 'Equipo y porcentajes', UsersRound], ['areas', 'Áreas'], ['accesos', 'Accesos'], ['sincronizacion', 'Sincronización e históricos']];
+
+export default function Configuracion({ areas, areaId, fechaInicio, fechaFin, tarifas, alcances, equipo, puede, fondo, repartos, sincronizacion, inicial = 'tarifas', cargaRevision, onSeccion, onAjustes, editarEquipo = false, simple = false }) {
     const seccion = cargaRevision ? 'sincronizacion' : secciones.some(([id]) => id === inicial) ? inicial : 'tarifas';
+    const administracion = secciones.slice(2);
+    const esAdministracion = administracion.some(([id]) => id === seccion);
+    const visibles = simple && !esAdministracion ? secciones.slice(0, 2) : secciones;
+    const areaActiva = areaId || (seccion === 'tarifas' ? areas.find((a) => a.activo)?.id : '') || '';
+    const AreaIcono = areas.find((a) => String(a.id) === String(areaActiva))?.codigo === 'tienda' ? Store : Boxes;
     return <div className="min-w-0 space-y-4">
         <nav className="gelia-segment p-1" aria-label="Configuración de comisiones">
-            <div className="grid w-full min-w-0 grid-cols-2 gap-1 md:grid-cols-5">
-                {secciones.map(([id, nombre]) => <button type="button" key={id} className={`gelia-segment-btn min-h-11 min-w-0 px-1 ${id === 'sincronizacion' ? 'col-span-2 md:col-span-1' : ''}`} aria-pressed={seccion === id} data-active={seccion === id} onClick={() => onSeccion(id)}>{nombre}</button>)}
+            <div className={`grid w-full min-w-0 grid-cols-2 gap-1 ${visibles.length === 2 ? '' : 'md:grid-cols-5'}`}>
+                {visibles.map(([id, nombre, Icono]) => <button type="button" key={id} className={`gelia-segment-btn min-h-11 min-w-0 px-1 ${id === 'sincronizacion' ? 'col-span-2 md:col-span-1' : ''}`} aria-pressed={seccion === id} data-active={seccion === id} onClick={() => onSeccion(id)}>{Icono && <Icono className="size-4 shrink-0" aria-hidden="true" />}{nombre}</button>)}
             </div>
         </nav>
-        {seccion === 'tarifas' && <Tarifas areas={areas} areaId={areaId} tarifas={tarifas} />}
-        {seccion === 'equipo' && (areaId ? <Equipo equipo={equipo} areaId={areaId} puede={puede} acumulado={fondo} historial={repartos.filter((r) => String(r.area_id) === String(areaId))} /> : <p role="status">Seleccione un área para configurar su equipo.</p>)}
+        {simple && !esAdministracion && <button type="button" className={THEME_BTN_SECONDARY} onClick={() => onSeccion('areas')}>Abrir administración avanzada</button>}
+        {esAdministracion && <button type="button" className={THEME_BTN_SECONDARY} onClick={onAjustes}>Consultar ajustes de cortes</button>}
+        {['tarifas', 'equipo'].includes(seccion) && <label className="block max-w-xs">
+            <span className={THEME_LABEL}><AreaIcono aria-hidden="true" className="mr-1.5 inline-block size-4" />Área</span>
+            <select className={THEME_INPUT} value={areaActiva} onChange={(e) => onSeccion(seccion, e.target.value)}>
+                <option value="" disabled>Seleccione un área</option>
+                {areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}
+            </select>
+        </label>}
+        {seccion === 'tarifas' && areaActiva && <Tarifas key={areaActiva} area={areas.find((a) => String(a.id) === String(areaActiva))} tarifas={tarifas} />}
+        {seccion === 'equipo' && areaId && <Equipo key={areaId} equipo={equipo} areaId={areaId} puede={puede} editarAlAbrir={editarEquipo}
+            acumulado={fondo} historial={repartos.filter((r) => String(r.area_id) === String(areaId))} />}
         {seccion === 'areas' && <Areas areas={areas} />}
         {seccion === 'accesos' && <Accesos areas={areas} alcances={alcances} />}
         {seccion === 'sincronizacion' && <Sincronizacion fechaInicio={fechaInicio} fechaFin={fechaFin} sincronizacion={sincronizacion} puedeCargar={puede.capturar} cargaRevision={cargaRevision} />}
     </div>;
 }
 
-function Tarifas({ areas, areaId, tarifas }) {
-    const form = useForm({ area_id: areaId || areas[0]?.id || '', importe: '', vigente_desde: '' });
+function Tarifas({ area, tarifas }) {
+    const form = useForm({ area_id: area.id, importe: '', vigente_desde: '' });
     useProtegerEdicion(form.isDirty || form.processing);
-    const seleccionadas = tarifas.filter((t) => !areaId || String(t.area_id) === String(areaId));
-    return <section className={geliaCardClass('space-y-4 p-4')}>
-        <h2 className="m-0 text-base font-bold">Tarifas por caja</h2>
-        {!seleccionadas.length && <p className="m-0 text-sm theme-text-muted">Registre la primera tarifa del área.</p>}
-        <ul className="m-0 list-none p-0 text-sm">
-            {seleccionadas.map((t) => <li className="flex flex-wrap items-center justify-between gap-2 border-b theme-border py-2" key={t.id}>
-                <span><strong>{t.area}</strong> · {momentoLegible(t.vigente_desde)}{t.vigente_hasta ? ` al ${momentoLegible(t.vigente_hasta)}` : ''}</span>
-                <span>{dinero(t.importe)} · {t.estado}</span>
-            </li>)}
-        </ul>
-        <form className="grid gap-3 md:grid-cols-4 md:items-end" onSubmit={(e) => { e.preventDefault(); form.post(route('gestion_interna.comisiones_empaque.tarifas.store'), { preserveScroll: true, onSuccess: () => form.reset('importe', 'vigente_desde') }); }}>
-            <label><span className={THEME_LABEL}>Área</span><select className={THEME_INPUT} value={form.data.area_id} onChange={(e) => form.setData('area_id', e.target.value)}>{areas.map((a) => <option key={a.id} value={a.id}>{a.nombre}</option>)}</select></label>
-            <label><span className={THEME_LABEL}>Importe por caja</span><input className={THEME_INPUT} required inputMode="decimal" value={form.data.importe} onChange={(e) => form.setData('importe', e.target.value)} /></label>
-            <label><span className={THEME_LABEL}>Vigente desde</span><input className={THEME_INPUT} required type="datetime-local" value={form.data.vigente_desde} onChange={(e) => form.setData('vigente_desde', e.target.value)} /></label>
-            <button className={THEME_BTN_PRIMARY} disabled={form.processing}>Registrar tarifa</button>
+    const seleccionadas = tarifas.filter((t) => String(t.area_id) === String(area.id));
+    const vigente = seleccionadas.find((t) => t.estado === 'Vigente');
+    const otras = seleccionadas.filter((t) => t.id !== vigente?.id);
+    return <section className="space-y-4 rounded-xl border theme-border p-3 md:p-4">
+        <div className="flex flex-wrap items-center gap-3 border-b theme-border pb-3">
+            <span className="grid size-11 place-items-center rounded-lg theme-element theme-text-primario"><Coins className="size-5" aria-hidden="true" /></span>
+            <div className="min-w-0">
+                <h2 className="m-0 text-sm font-semibold theme-text-muted">Tarifa vigente en {area.nombre}</h2>
+                <p className="m-0 text-2xl font-semibold tabular-nums">{vigente ? dinero(vigente.importe) : 'Sin tarifa vigente'}</p>
+                {vigente && <p className="m-0 text-sm theme-text-muted">Desde {momentoLegible(vigente.vigente_desde)}</p>}
+            </div>
+        </div>
+        {otras.length > 0 && <details>
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold"><History className="mr-2 inline-block size-4" aria-hidden="true" />Ver otras vigencias</summary>
+            <ul className="m-0 list-none p-0 text-sm">
+                {otras.map((t) => <li className="flex flex-wrap items-center justify-between gap-2 border-b theme-border py-2" key={t.id}>
+                    <span>{momentoLegible(t.vigente_desde)}{t.vigente_hasta ? ` al ${momentoLegible(t.vigente_hasta)}` : ''}</span>
+                    <span><strong className="tabular-nums">{dinero(t.importe)}</strong> · {t.estado}</span>
+                </li>)}
+            </ul>
+        </details>}
+        <form className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end" onSubmit={(e) => {
+            e.preventDefault();
+            form.post(route('gestion_interna.comisiones_empaque.tarifas.store'), { preserveScroll: true, onSuccess: () => form.reset('importe', 'vigente_desde') });
+        }}>
+            <label className="min-w-0"><span className={THEME_LABEL}>Importe por caja</span><input className={THEME_INPUT} required inputMode="decimal" value={form.data.importe} onChange={(e) => { form.clearErrors?.('importe'); form.setData('importe', e.target.value); }} /></label>
+            <label className="min-w-0"><span className={THEME_LABEL}>Vigente desde</span><input className={`${THEME_INPUT} min-w-0 max-w-full`} required type="datetime-local" value={form.data.vigente_desde} onChange={(e) => { form.clearErrors?.('vigente_desde'); form.setData('vigente_desde', e.target.value); }} /></label>
+            <button className={ACCION_PRINCIPAL_COMISIONES} disabled={form.processing}><Coins className="size-4" aria-hidden="true" />{form.processing ? 'Registrando…' : 'Registrar tarifa'}</button>
+            <div className="md:col-span-3"><ErroresFormulario form={form} /></div>
         </form>
-        <ErroresFormulario form={form} />
     </section>;
 }
 
@@ -117,6 +147,8 @@ function Sincronizacion({ fechaInicio, fechaFin, sincronizacion, puedeCargar, ca
         </form>
         <ErroresFormulario form={form} />
         {puedeCargar && <button type="button" className={THEME_BTN_SECONDARY} aria-expanded={cargar} onClick={() => setCargar(!cargar)}>{cargar ? 'Ocultar carga histórica' : 'Cargar histórico'}</button>}
-        {puedeCargar && cargar && <Carga revision={cargaRevision} />}
+        {puedeCargar && cargar && <Suspense fallback={<p role="status" className="m-0 text-sm theme-text-muted">Cargando formulario…</p>}>
+            <Carga revision={cargaRevision} />
+        </Suspense>}
     </section>;
 }

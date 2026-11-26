@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 
 export const VISITA_MODAL = { preserveState: true, preserveScroll: true };
+export const ACCION_PRINCIPAL_COMISIONES = 'theme-btn-primary min-h-11 !px-3 !py-3 !text-sm !normal-case !tracking-normal !shadow-sm md:!px-6 focus-visible:!outline-2 focus-visible:outline-offset-2 motion-reduce:!transform-none motion-reduce:!transition-none !bg-[color-mix(in_srgb,var(--color-primario)_45%,black)] supports-[color:contrast-color(red)]:!bg-[var(--color-primario)] supports-[color:contrast-color(red)]:![color:contrast-color(var(--color-primario))]';
 export const BOTON_FILTRO = 'inline-flex items-center gap-2 rounded-lg border theme-border theme-element px-3 py-2 text-sm font-semibold theme-text-main min-h-11 cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 export function dinero(valor) {
     if (valor == null || valor === '') return '—';
@@ -8,7 +9,7 @@ export function dinero(valor) {
 }
 
 const PROPS = [
-    'tab', 'puede', 'areas', 'fecha_inicio', 'fecha_fin', 'sincronizacion', 'filtros', 'sin_areas',
+    'tab', 'reporte', 'origen_simple', 'contexto_simple', 'puede', 'areas', 'fecha_inicio', 'fecha_fin', 'sincronizacion', 'filtros', 'sin_areas',
     'periodos_opciones', 'carga_revision', 'captura_nombre', 'resumen', 'situaciones', 'motivos_comerciales',
     'tipos_caja', 'paqueterias', 'acumulado', 'totales', 'preview', 'cortes', 'corte', 'productividad',
     'saldos', 'tarifas', 'repartos', 'alcances', 'equipo', 'periodos', 'flash',
@@ -18,7 +19,9 @@ const precargas = new Map();
 const oyentes = new Set();
 let turno = 0;
 let epocaPrecarga = 0;
-let precargaSuspendida = false;
+const PAUSA_PRECARGA = 30_000;
+let reanudarPrecargaEn = 0;
+const precargaEnPausa = () => Date.now() < reanudarPrecargaEn;
 let cancelarLectura;
 let lecturaBloqueada = false;
 let confirmarLectura;
@@ -46,7 +49,7 @@ export function bloquearConsultas(bloqueo) {
 
 function consulta(params, identidad, only = PROPS) {
     const actual = new URL(window.location.href).searchParams;
-    const claves = ['area_id', 'periodo_id', 'desde', 'hasta'];
+    const claves = ['area_id', 'periodo_id', 'desde', 'hasta', 'origen'];
     const contexto = Object.fromEntries(claves.filter((clave) => actual.has(clave)).map((clave) => [clave, actual.get(clave)]));
     const datos = { ...contexto, ...params };
     const query = Object.fromEntries(Object.entries(datos).filter(([, valor]) => valor !== undefined && valor !== null && valor !== '').sort(([a], [b]) => a.localeCompare(b)));
@@ -78,7 +81,7 @@ export function cancelarConsulta() {
 }
 
 export function precargarComisiones(params, identidad) {
-    if (!identidad || lecturaBloqueada || precargaSuspendida || !router.prefetch
+    if (!identidad || lecturaBloqueada || precargaEnPausa() || !router.prefetch
         || !['periodos', 'productividad'].includes(params.tab)) return;
     const { url, query, options, clave, epoca } = consulta(params, identidad);
     const visita = { ...options, data: query };
@@ -88,18 +91,18 @@ export function precargarComisiones(params, identidad) {
     const espera = new Promise((resolve) => { resolver = resolve; });
     const terminar = (disponible) => {
         window.clearTimeout(limite);
-        precargas.delete(clave);
+        if (precargas.get(clave) === espera) precargas.delete(clave);
         resolver(disponible);
     };
     const limite = window.setTimeout(() => {
-        precargaSuspendida = true;
+        reanudarPrecargaEn = Date.now() + PAUSA_PRECARGA;
         terminar(false);
     }, 5000);
     precargas.set(clave, espera);
     router.prefetch(url, {
         ...visita,
         onPrefetched: (respuesta) => {
-            const vigente = epoca === epocaPrecarga && respuesta.status < 400;
+            const vigente = precargas.get(clave) === espera && epoca === epocaPrecarga && respuesta.status < 400;
             if (!vigente) router.flush?.(url, visita);
             terminar(vigente);
         },
@@ -120,7 +123,7 @@ export function ir(params, { identidad, only, replace = false, onSuccess } = {})
     const leer = (puedeUsarPrecarga = true) => {
         if (turno !== intento || lecturaBloqueada) return;
         let aceptada = false;
-        const opcionDeCache = puedeUsarPrecarga && epoca === epocaPrecarga && !precargaSuspendida;
+        const opcionDeCache = puedeUsarPrecarga && epoca === epocaPrecarga && !precargaEnPausa();
         reportarErrorLectura = { mostrar: fallo, url: null };
         const completar = () => {
             if (turno !== intento) return;

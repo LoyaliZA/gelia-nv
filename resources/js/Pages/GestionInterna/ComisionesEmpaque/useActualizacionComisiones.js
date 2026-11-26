@@ -5,6 +5,7 @@ import { recargarModuloInertia } from '@/utils/recargarModuloInertia';
 import { invalidarPrecargas } from './compartido';
 
 const PROPS = {
+    reporte: ['reporte', 'periodos_opciones'],
     acumulado: ['acumulado', 'totales', 'resumen'],
     productividad: ['productividad'],
     periodos: ['periodos', 'equipo', 'periodos_opciones'],
@@ -17,7 +18,8 @@ export function useProtegerEdicion(pendiente) {
     useEffect(() => pendiente && registrar ? registrar() : undefined, [pendiente, registrar]);
 }
 
-export default function useActualizacionComisiones({ estado, areaId, tab, activo, ocupado }) {
+export default function useActualizacionComisiones({ estado, areaId, tab, filtros, activo, ocupado }) {
+    const { periodo_id, desde, hasta } = filtros || {};
     const [observado, setObservado] = useState(null);
     const ediciones = useRef(new Set());
     const cancelarRecarga = useRef(null);
@@ -85,6 +87,9 @@ export default function useActualizacionComisiones({ estado, areaId, tab, activo
                 recargarModuloInertia([...new Set(props)], {
                     preserveErrors: true,
                     preserveUrl: true,
+                    ...(tab === 'reporte' && { data: {
+                        tab, area_id: areaId || 'todas', periodo_id, desde, hasta, consulta_pasiva: 1,
+                    } }),
                     onCancelToken: (token) => { cancelarRecarga.current = token.cancel; },
                     onSuccess: (pagina) => { revisionVista.current = pagina.props.sincronizacion?.revision || data.revision; },
                     onHttpException: ({ status }) => {
@@ -121,7 +126,7 @@ export default function useActualizacionComisiones({ estado, areaId, tab, activo
         };
     // La revisión de referencia se actualiza con cada respuesta de Inertia.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activo, areaId, tab, ocupado, Boolean(estado?.revision)]);
+    }, [activo, areaId, tab, periodo_id, desde, hasta, ocupado, Boolean(estado?.revision)]);
 
     return {
         observado: observado || estado,

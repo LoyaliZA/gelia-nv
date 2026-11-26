@@ -83,6 +83,7 @@ Route::prefix('gestion-interna')->name('gestion_interna.')->group(function () {
         Route::post('/configuracion/tarifas', [ComisionesEmpaqueController::class, 'guardarTarifa'])->name('tarifas.store');
         Route::post('/configuracion/repartos', [ComisionesEmpaqueController::class, 'guardarReparto'])->name('repartos.store');
         Route::get('/configuracion/usuarios', [ComisionesEmpaqueController::class, 'buscarUsuarios'])->name('usuarios');
+        Route::get('/exportar/reporte', [ComisionesEmpaqueController::class, 'exportarReporte'])->name('exportar.reporte');
         Route::get('/exportar/acumulado', [ComisionesEmpaqueController::class, 'exportarAcumulado'])->name('exportar.acumulado');
         Route::get('/exportar/productividad', [ComisionesEmpaqueController::class, 'exportarProductividad'])->name('exportar.productividad');
         Route::get('/exportar/tipos', [ComisionesEmpaqueController::class, 'exportarTipos'])->name('exportar.tipos');
