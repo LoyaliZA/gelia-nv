@@ -7,6 +7,7 @@ use App\Models\SolicitudFactura;
 use App\Services\Facturas\ImportarDatosFiscalesService;
 use App\Support\Facturas\LimitesAdjuntosFactura;
 use App\Support\Facturas\ReglasCatalogosFiscales;
+use App\Support\Facturas\TamanoComprobanteFactura;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -47,9 +48,16 @@ class ActualizarBorradorFacturaRequest extends FormRequest
             'campos_fiscales' => ['nullable', 'array'],
             'campos_fiscales.*' => ['string', Rule::in(EnlaceDatosFiscales::CAMPOS)],
             'vouchers' => ['nullable', 'array', 'max:5'],
-            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:'.LimitesAdjuntosFactura::MAX_KB_POR_ARCHIVO],
+            'vouchers.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf,zip', new TamanoComprobanteFactura],
             'vouchers_conservar' => ['nullable', 'array'],
             'vouchers_conservar.*' => ['integer'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'vouchers.*.mimes' => 'Selecciona un comprobante JPG, JPEG, PNG, WebP, PDF o ZIP.',
         ];
     }
 
