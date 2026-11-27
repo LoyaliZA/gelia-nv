@@ -68,6 +68,57 @@ class EmpaqueMunicipalTiendaTest extends TestCase
         $this->actingAs($u)->postJson(route('control_pedidos.municipal.empacar_tienda', $pedido))->assertStatus(422);
     }
 
+    private function consultaSinAprobar(string $estado, string $area = 'tienda'): PedidoBma
+    {
+        $origen = CatalogoOrigenPedido::firstOrCreate(['nombre' => 'Origen empaque'], ['activo' => true]);
+        $estatus = CatalogoEstatusPedido::firstOrCreate(['codigo_interno' => 'PESAJE_RESPONDIDO'], ['nombre_visual' => 'Pesaje respondido', 'color_hex' => '#000000', 'fase_ciclo' => 'PESAJE_RESPONDIDO', 'orden' => 1, 'activo' => true]);
+
+        return PedidoBma::create([
+            'folio' => 'PBMA-CONS-'.uniqid(), 'fecha' => '2026-11-24', 'vendedor_id' => User::factory()->create()->id,
+            'origen_id' => $origen->id, 'catalogo_estatus_pedido_id' => $estatus->id, 'folio_remision' => 'WIZ-'.uniqid(),
+            'solicitud_preparacion_json' => ['modalidad_entrega' => 'municipal', 'consulta_municipal' => ['area' => $area, 'estado' => $estado, 'enviada_at' => now()->subHour()->toIso8601String()]],
+        ]);
+    }
+
+    public function test_una_consulta_respondida_sin_aprobar_sigue_visible_en_atendidos(): void
+    {
+        $pedido = $this->consultaSinAprobar('respondida');
+        $u = $this->usuario();
+
+        $this->assertSame([], FilasConsultaMunicipalTienda::filas($u, ['tab' => 'PENDIENTES']));
+        $atendidos = FilasConsultaMunicipalTienda::filas($u, ['tab' => 'ATENDIDOS']);
+        $this->assertCount(1, $atendidos);
+        $this->assertSame('consulta_municipal', $atendidos[0]['tipo_fila']);
+        $this->assertSame('RESPONDIDA', $atendidos[0]['estado']);
+        $this->assertSame('Consulta respondida', $atendidos[0]['estado_label']);
+        $this->assertSame($pedido->id, $atendidos[0]['pedido']['id']);
+        $this->assertSame(1, FilasConsultaMunicipalTienda::sumarMetricas([], $u, [])['atendidos']);
+    }
+
+    public function test_una_consulta_cerrada_por_ventas_antes_de_aprobarse_no_desaparece(): void
+    {
+        $this->consultaSinAprobar('cerrada');
+        $u = $this->usuario();
+
+        $atendidos = FilasConsultaMunicipalTienda::filas($u, ['tab' => 'ATENDIDOS']);
+        $this->assertCount(1, $atendidos);
+        $this->assertSame('Consulta cerrada', $atendidos[0]['estado_label']);
+        $this->assertCount(1, FilasConsultaMunicipalTienda::filas($u, ['tab' => 'TODOS']));
+    }
+
+    public function test_la_consulta_atendida_no_se_duplica_ni_mezcla_otras_areas_o_pendientes(): void
+    {
+        $this->consultaSinAprobar('pendiente');
+        $this->consultaSinAprobar('respondida', 'cedis');
+        $u = $this->usuario();
+        $aprobado = $this->pedido();
+
+        $this->assertSame([], FilasConsultaMunicipalTienda::filas($u, ['tab' => 'ATENDIDOS']));
+        $todos = FilasConsultaMunicipalTienda::filas($u, ['tab' => 'TODOS']);
+        $this->assertEqualsCanonicalizing(['consulta_municipal', 'empaque_municipal'], array_column($todos, 'tipo_fila'));
+        $this->assertSame($aprobado->id, collect($todos)->firstWhere('tipo_fila', 'empaque_municipal')['pedido']['id']);
+    }
+
     public function test_municipal_de_cedis_no_se_empaca_en_tienda(): void
     {
         $pedido = $this->pedido('cedis');

@@ -2,8 +2,9 @@ import AvisoSolicitud from '@/Components/Solicitudes/AvisoSolicitud';
 import useSolicitudErrores from '@/Components/Solicitudes/useSolicitudErrores';
 import React from 'react';
 import { useForm } from '@inertiajs/react';
-import { AlertTriangle, Loader2, Send, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CheckSquare, Loader2, Send } from 'lucide-react';
 import SolicitudDialog from './SolicitudDialog';
+import CabeceraFlujoSolicitud from './CabeceraFlujoSolicitud';
 import AdjuntoRespuesta, { useAdjuntoRespuesta } from './AdjuntoRespuesta';
 
 export default function ModalRespuestaComercial({ onClose, onExito, solicitud, estadoId, esReporteError = false, esVerificacion = false, operativa = false }) {
@@ -31,16 +32,22 @@ export default function ModalRespuestaComercial({ onClose, onExito, solicitud, e
     const pideDecisionModalidad = !operativa && !esError && !verificar && !tienda && clienteMenudeo
         && !solicitud.convertir_menudeo_mayoreo
         && ['CAMBIO DE LISTA', 'ASIGNAR TAG Y CAMBIO DE LISTA'].includes(nombreProceso);
+    const visual = esError
+        ? { icono: AlertTriangle, tono: 'peligro' }
+        : verificar
+            ? { icono: CheckSquare, tono: 'info' }
+            : { icono: CheckCircle2, tono: 'exito' };
     return (
         <SolicitudDialog className={operativa ? '' : 'gelia-tag-lista-overlay'} onClose={onClose} busy={busy} dirty={isDirty} title={accion}>
             <form onSubmit={enviar} onPaste={attachment.onPaste} className="gelia-modal-shell gelia-respuesta-comercial w-full max-w-4xl">
-                <header className="gelia-workflow-header">
-                    <div className="min-w-0">
-                        <h2 className="theme-text-main m-0">{accion}</h2>
-                        <p className="text-sm theme-text-muted mt-1 mb-0">FOL-{solicitud.id} · {solicitud.proceso?.nombre}</p>
-                    </div>
-                    <button type="button" data-dialog-close disabled={busy} className="gelia-workflow-close" aria-label="Cerrar respuesta"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={visual.icono}
+                    tono={visual.tono}
+                    titulo={accion}
+                    subtitulo={`FOL-${solicitud.id} · ${solicitud.proceso?.nombre || 'Solicitud'}`}
+                    closeLabel="Cerrar respuesta"
+                    disabled={busy}
+                />
                 <div className="gelia-modal-body p-5 sm:p-6 space-y-5">
                     <dl className="gelia-respuesta-contexto">
                         <div><dt>Cliente</dt><dd>{solicitud.cliente?.nombre || 'Sin cliente'}{solicitud.cliente?.numero_cliente ? ` · ${solicitud.cliente.numero_cliente}` : ''}</dd></div>

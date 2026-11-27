@@ -490,6 +490,158 @@ class TransferenciaTiendaTest extends TestCase
         $this->assertSame($this->destino->id, $this->pedido->fresh()->almacen_id);
     }
 
+    public function test_confirmar_bolsas_en_pdv_separa_anexos_documentales_una_sola_vez(): void
+    {
+        $anexo = $this->anexoDocumentalRevisado();
+        $this->preparacionDocumentalEnPdv([$anexo, array_replace($anexo, ['documento_id' => 2, 'linea_id' => 'alternativa'])]);
+        $revisionIds = [];
+        foreach (['aceptar_condicion', 'retirar', 'sustituir'] as $orden => $resolucion) {
+            $revisionIds[] = $this->pedido->revisionesProducto()->create([
+                'orden' => $orden + 1, 'descripcion_producto' => 'Pieza de prueba',
+                'estado_fisico' => 'regular', 'resolucion' => $resolucion,
+            ])->id;
+        }
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['revision_disponibilidad']['estado'] = 'decision_registrada';
+        $json['anexo_sin_remision'][0]['unidades'][0] = ['resultado' => 'incidencia', 'revision_ids' => $revisionIds];
+        $json['anexo_sin_remision'][1]['sustituye_revision_id'] = $revisionIds[2];
+        $this->pedido->update(['solicitud_preparacion_json' => $json]);
+
+        $service = app(TransferenciaTiendaService::class);
+        $antes = $service->resumen($this->pedido->fresh(), $this->cedis);
+        $this->assertTrue($antes['puede_preparar']);
+        $this->assertNull($antes['bloqueo']);
+        $this->assertFalse($antes['puede_salida']);
+        $this->assertFalse($antes['puede_entregar']);
+        $this->assertFalse($service->resumen($this->pedido->fresh(), $this->auxiliar)['puede_preparar']);
+        $this->assertNotNull($this->pedido->fresh()->motivoBloqueoEntregaTienda());
+
+        $datos = ['version' => $antes['version'], 'bultos' => [['foto_bulto' => UploadedFile::fake()->image('bolsa.jpg')]]];
+        $despues = $service->ejecutar($this->pedido, $this->cedis, 'preparar', $datos);
+        $this->assertSame('preparada', $despues['estado']);
+        $this->assertTrue($despues['puede_salida']);
+        $this->assertFalse($despues['puede_entregar']);
+        $this->assertSame($despues['version'], $service->ejecutar($this->pedido, $this->cedis, 'preparar', $datos)['version']);
+
+        $pedido = $this->pedido->fresh();
+        $this->assertNull($pedido->motivoBloqueoEntregaTienda());
+        $this->assertSame('SEPARADA', $pedido->instruccionEntregaVigente->cumplimientoFisico->estado);
+        foreach ($pedido->solicitud_preparacion_json['anexo_sin_remision'] as $linea) {
+            $this->assertNotNull($linea['separada_at']);
+            $this->assertSame($this->cedis->id, $linea['separada_por_id']);
+        }
+        $this->assertSame($json['anexo_sin_remision'][0]['unidades'], $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]['unidades']);
+        $this->assertSame(['aceptar_condicion', 'retirar', 'sustituir'], $pedido->revisionesProducto()->orderBy('orden')->pluck('resolucion')->all());
+        $bulto = $pedido->bultosEmpaque()->sole();
+        $this->assertSame(1, $bulto->documentos()->count());
+        $evento = $pedido->historial()->where('accion', 'separacion_anexo_tienda')->sole();
+        $this->assertSame([$bulto->id], $evento->snapshot_json['bultos_empaque_ids']);
+        $this->assertSame([$revisionIds[0]], $evento->snapshot_json['anexos'][0]['revisiones_aceptadas_ids']);
+        $this->assertSame('alternativa', $evento->snapshot_json['anexos'][1]['linea_id']);
+    }
+
+    public function test_transferencia_en_pdv_conserva_bloqueos_de_anexos_y_requisitos_de_preparacion(): void
+    {
+        $anexo = $this->anexoDocumentalRevisado();
+        $this->preparacionDocumentalEnPdv([$anexo]);
+        $service = app(TransferenciaTiendaService::class);
+        $vigente = $this->pedido->getAttributes();
+        $json = $this->pedido->solicitud_preparacion_json;
+        $pendiente = array_replace($json, ['anexo_sin_remision' => [$anexo, ['entrada' => 'documento', 'pendiente_revision' => true]]]);
+        $inventario = array_replace($json, ['anexo_sin_remision' => [$anexo, ['entrada' => 'catalogo', 'estado' => 'disponible']]]);
+        $credito = array_replace($json, ['cobertura_tienda' => ['tipo' => 'credito'], 'credito_wizerp' => ['resultado' => 'aprobado']]);
+
+        foreach ([
+            ['solicitud_preparacion_json' => $pendiente],
+            ['solicitud_preparacion_json' => $inventario],
+            ['solicitud_preparacion_json' => $credito],
+            ['consulta_cerrada_at' => null],
+            ['pago_validado_at' => null],
+            ['numero_remision' => null],
+            ['catalogo_estatus_pedido_id' => CatalogoEstatusPedido::porFase('PENDIENTE_AUXILIAR')->id],
+        ] as $cambio) {
+            $this->pedido->update(array_replace(array_intersect_key($vigente, array_flip([
+                'consulta_cerrada_at', 'pago_validado_at', 'numero_remision', 'catalogo_estatus_pedido_id',
+            ])), ['solicitud_preparacion_json' => $json], $cambio));
+            $this->assertFalse($service->resumen($this->pedido->fresh(), $this->cedis)['puede_preparar']);
+        }
+        $this->assertSame(0, $this->pedido->bultosEmpaque()->count());
+        $this->assertSame(0, $this->pedido->historial()->where('accion', 'separacion_anexo_tienda')->count());
+    }
+
+    public function test_fallo_al_confirmar_bolsas_no_registra_separacion_del_anexo(): void
+    {
+        $this->preparacionDocumentalEnPdv([$this->anexoDocumentalRevisado()]);
+
+        try {
+            $this->operar('preparar', $this->cedis, ['bultos' => [[]]]);
+            $this->fail('El empaque sin evidencia debe fallar.');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('foto', $e->getMessage());
+        }
+
+        $pedido = $this->pedido->fresh();
+        $this->assertArrayNotHasKey('separada_at', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]);
+        $this->assertNull($pedido->empacado_at);
+        $this->assertSame(0, $pedido->historial()->where('accion', 'separacion_anexo_tienda')->count());
+    }
+
+    public function test_fallo_de_trazabilidad_revierte_empaque_y_separacion_de_anexo(): void
+    {
+        $this->preparacionDocumentalEnPdv([$this->anexoDocumentalRevisado()]);
+        $historial = \Mockery::mock(\App\Services\ControlPedidos\RegistrarHistorialPedidoService::class)->makePartial();
+        $historial->shouldReceive('ejecutar')->withArgs(fn (...$args) => ($args[5] ?? null) === 'separacion_anexo_tienda')
+            ->once()->andThrow(new \RuntimeException('Fallo simulado al registrar la separación.'));
+        $this->app->instance(\App\Services\ControlPedidos\RegistrarHistorialPedidoService::class, $historial);
+
+        try {
+            $this->preparar();
+            $this->fail('Debe propagarse el fallo del historial.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Fallo simulado al registrar la separación.', $e->getMessage());
+        }
+        $pedido = $this->pedido->fresh();
+        $this->assertArrayNotHasKey('separada_at', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]);
+        $this->assertNull($pedido->empacado_at);
+        $this->assertSame(0, $pedido->bultosEmpaque()->count());
+    }
+
+    public function test_cedis_prepara_anexo_documental_sin_registrar_separacion_de_pdv(): void
+    {
+        $json = $this->pedido->solicitud_preparacion_json;
+        $json['anexo_sin_remision'] = [$this->anexoDocumentalRevisado()];
+        $this->pedido->update(['solicitud_preparacion_json' => $json]);
+
+        $this->assertSame('preparada', $this->preparar()['estado']);
+        $pedido = $this->pedido->fresh();
+        $this->assertArrayNotHasKey('separada_at', $pedido->solicitud_preparacion_json['anexo_sin_remision'][0]);
+        $this->assertSame(0, $pedido->historial()->where('accion', 'separacion_anexo_tienda')->count());
+    }
+
+    private function preparacionDocumentalEnPdv(array $anexos): void
+    {
+        foreach (['control_pedidos.tienda.ver', 'control_pedidos.tienda.responder'] as $permiso) {
+            $this->cedis->givePermissionTo(Permission::findOrCreate($permiso, 'web'));
+        }
+        $json = array_replace($this->pedido->solicitud_preparacion_json, [
+            'area_revision' => 'preparacion_tienda', 'anexo_sin_remision' => $anexos,
+            'revision_disponibilidad' => ['estado' => 'sin_excepciones', 'aceptacion_vigente' => true],
+        ]);
+        $this->pedido->update(['almacen_id' => $this->destino->id, 'solicitud_preparacion_json' => $json]);
+        $this->pedido->tareasPreparacion()->create([
+            'catalogo_modalidad_preparacion_id' => CatalogoModalidadPreparacionPedido::query()->where('codigo', 'RECOGE_TIENDA_TRANSFERENCIA')->value('id'),
+            'almacen_id' => $this->destino->id, 'estado' => 'EN_ATENCION', 'area_responsable_codigo' => 'TIENDA',
+            'asignada_a_id' => $this->cedis->id, 'solicitada_por_id' => $this->vendedora->id, 'version' => 1,
+        ]);
+    }
+
+    private function anexoDocumentalRevisado(): array
+    {
+        return ['entrada' => 'documento', 'estado' => 'revisado_conjunto', 'documento_id' => 1,
+            'respondida_at' => now()->toIso8601String(), 'pendiente_revision' => false,
+            'unidades' => [['resultado' => 'correcto']]];
+    }
+
     public function test_city_center_se_identifica_como_ramificacion_t03(): void
     {
         $this->pedido->sucursalDestino->update(['nombre' => 'City Center']);

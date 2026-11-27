@@ -154,7 +154,7 @@ El bloque `factura` de la solicitud trae razón social, si hay datos fiscales, s
 | --- | --- | --- | --- |
 | POST | `/mobile/solicitudes/{id}/solicitar-cancelacion` | `solicitudes.solicitar_cancelacion` | Pide cancelar el folio. No lo cancela. |
 
-Body: `motivo_cancelacion` (mínimo 10 caracteres) y `catalogo_lista_rebaja_id` cuando el proceso es de cambio de lista. Solo la persona dueña del folio, igual que `SolicitarCancelacionSolicitudService`. Un folio operativo responde 403: se cancela en el módulo de abajo.
+Body: `motivo_cancelacion` (mínimo 10 caracteres). La cancelación revierte el monto operacional y regresa al cliente a la lista que tenía antes de la solicitud; no se elige una lista inferior. Si el proceso asignó TAG, el TAG se retira. Solo la persona dueña del folio, igual que `SolicitarCancelacionSolicitudService`. Un folio operativo responde 403: se cancela en el módulo de abajo.
 
 ### Solicitudes de facturación
 

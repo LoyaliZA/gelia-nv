@@ -1,9 +1,10 @@
 import React from 'react';
-import { Receipt, Clock } from 'lucide-react';
+import { Receipt, Clock, Check } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import { DashboardStatBlock } from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetFacturas({ metricas = {}, variant = 'desktop' }) {
     const pendientes = metricas.pendientes ?? 0;
@@ -17,7 +18,7 @@ export default function WidgetFacturas({ metricas = {}, variant = 'desktop' }) {
             {pendientes} pendientes
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     const summary =
@@ -37,6 +38,7 @@ export default function WidgetFacturas({ metricas = {}, variant = 'desktop' }) {
             variant={variant}
             title="Facturación"
             icon={Receipt}
+            tono={DASHBOARD_WIDGET_TONO.facturas}
             href={route('facturas.index')}
             ctaLabel="Ver facturas"
             minimalCount={pendientes}

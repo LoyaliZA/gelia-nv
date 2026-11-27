@@ -19,6 +19,16 @@ function resolveHref(item) {
     return '#';
 }
 
+/** Nombre de la sección (encabezado) bajo la que cuelga un grupo raíz. */
+function findSectionLabel(nodes, groupId) {
+    let actual = '';
+    for (const node of nodes || []) {
+        if (node?.type === 'header') actual = node.label;
+        if (node?.type === 'group' && node.id === groupId) return actual;
+    }
+    return '';
+}
+
 function groupHasActiveDescendant(node, url) {
     if (node.type === 'link') return node.active?.(url) ?? false;
     if (node.type === 'group') {
@@ -148,7 +158,13 @@ export default function SidebarTree({
         else groupTriggerRefs.current.delete(id);
     }, []);
 
-    const renderLink = (item, depth, { inFlyout = false } = {}) => (
+    // Estable entre renders: con SidebarLink memoizado, contraer el rail no vuelve a pintar las ~80 filas.
+    const handleLinkClick = useCallback(() => {
+        closeFlyoutWithReset();
+        onNavigate?.();
+    }, [closeFlyoutWithReset, onNavigate]);
+
+    const renderLink = (item, depth) => (
         <SidebarLink
             key={item.id}
             href={resolveHref(item)}
@@ -156,12 +172,8 @@ export default function SidebarTree({
             icon={item.icon}
             active={item.active?.(url) ?? false}
             badge={item.badge}
-            collapsed={collapsed && !inFlyout}
             depth={depth}
-            onClick={() => {
-                closeFlyoutWithReset();
-                onNavigate?.();
-            }}
+            onClick={handleLinkClick}
         />
     );
 
@@ -201,6 +213,7 @@ export default function SidebarTree({
     };
 
     const flyoutGroup = flyout ? findGroupById(tree, flyout.id) : null;
+    const flyoutSection = flyout ? findSectionLabel(tree, flyout.id) : '';
 
     return (
         <>
@@ -208,7 +221,7 @@ export default function SidebarTree({
                 {tree.map((node) => {
                     if (!node) return null;
                     if (node.type === 'header') {
-                        if (collapsed) return null;
+                        // Siempre montado: en el rail el CSS lo pliega a una regla, sin cambiar de nodo al terminar.
                         return (
                             <span key={node.id} className="gelia-pro-sidebar__header">
                                 {node.label}
@@ -229,6 +242,8 @@ export default function SidebarTree({
                 open={Boolean(flyoutGroup)}
                 anchorRect={flyout?.rect}
                 title={flyoutGroup?.label || ''}
+                eyebrow={flyoutSection}
+                icon={flyoutGroup?.icon}
                 onClose={closeFlyoutWithReset}
                 onMouseEnter={hover.handleFlyoutEnter}
                 onMouseLeave={hover.handleFlyoutLeave}

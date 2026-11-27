@@ -1,5 +1,6 @@
 import ResumenCambiosDisponibilidad from '../../Partials/ResumenCambiosDisponibilidad';
 import PanelRespuestaDisponibilidad from '../../Partials/PanelRespuestaDisponibilidad';
+import { revisionesVisiblesTienda } from '../../Partials/RespuestaPreparacionTienda';
 import React, { useEffect, useState } from 'react';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
@@ -117,7 +118,7 @@ function AtencionAnexo({ tarea, anexo, ocupado, onEnviar, onDirtyChange }) {
     </section>;
 }
 
-export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false, onEnviar, onDirtyChange, confirmarConjunto = false }) {
+export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false, onEnviar, onDirtyChange, onVer, confirmarConjunto = false }) {
     const [capturas, setCapturas] = useState({});
     const retirosPendientes = (tarea.pedido?.retiros || []).filter((retiro) => (retiro.estado || 'pendiente') === 'pendiente');
     const anexoPendienteDirty = (tarea.pedido?.anexos_pendientes || []).some((anexo) => capturas[`anexo-${anexo.indice}`]);
@@ -129,7 +130,9 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
         ?? (Number(tarea.responsable?.id) === Number(auth?.user?.id) && (auth?.user?.roles?.includes('Super Admin') || permisos.includes('control_pedidos.tienda.responder') || permisos.includes('control_pedidos.tienda.apartado.separar')));
     const consulta = tarea.pedido?.area_revision === 'preparacion_tienda';
     const actualizacion = consulta && Boolean(tarea.pedido?.anexos_pendientes?.length || tarea.pedido?.revision_disponibilidad?.actualizacion_pendiente);
-    const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []} vista="revision" />;
+    const revisionesVisibles = revisionesVisiblesTienda(tarea.respuesta);
+    const resumen = <ResumenCambiosDisponibilidad solicitud={tarea.pedido || {}} documentos={tarea.pedido?.documentos || []}
+        revisionesVisibles={revisionesVisibles} vista="revision" onVer={onVer} />;
     if (!autorizado || !['EN_ATENCION', 'RESPONDIDA'].includes(tarea.estado)) return resumen;
     return <div className="gelia-preparacion-ajustes grid gap-4">
         {!actualizacion && resumen}
@@ -145,7 +148,7 @@ export default function AjustesSolicitadosTienda({ tarea, auth, ocupado = false,
         </section>)}
         {actualizacion && <PanelRespuestaDisponibilidad
             key={tarea.pedido?.revision_disponibilidad?.actualizacion_id || 'actualizacion'}
-            origen="Tienda" mostrarCambios={false} tomada puedeResponder={!ocupado}
+            origen="Tienda" mostrarCambios={false} tomada puedeResponder={!ocupado} revisionesVisibles={revisionesVisibles}
             pedido={{ ...tarea.pedido, cliente: { nombre: tarea.pedido?.cliente_nombre }, almacen: tarea.almacen, solicitud_preparacion: tarea.pedido }}
             documentos={tarea.pedido?.documentos || []} revision={tarea.pedido?.revision_disponibilidad}
             onDirtyChange={valor => marcar('consulta', valor)}

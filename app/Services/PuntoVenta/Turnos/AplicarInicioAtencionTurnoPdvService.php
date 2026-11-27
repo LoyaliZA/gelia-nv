@@ -2,7 +2,9 @@
 
 namespace App\Services\PuntoVenta\Turnos;
 
+use App\Events\PuntoVenta\AtencionIniciada;
 use App\Jobs\PuntoVenta\Turnos\AlertaProrrogaAtencionTurnoPdvJob;
+use App\Models\PuntoVenta\TurnoPdv;
 use App\Models\PuntoVenta\TurnoPdvAtencion;
 use App\Support\Demo\FilaDemo;
 use Carbon\CarbonInterface;
@@ -25,6 +27,10 @@ class AplicarInicioAtencionTurnoPdvService
         ]);
 
         $atencion = $atencion->fresh();
+        $turno = TurnoPdv::query()->find($atencion->turno_id);
+        if ($turno instanceof TurnoPdv) {
+            AtencionIniciada::dispatch($turno, $atencion, (int) $turno->sucursal_id);
+        }
 
         $plazos = $this->plazos->obtener();
         $disparo = $ahora->copy()->addMinutes($plazos['prorroga_minutos']);

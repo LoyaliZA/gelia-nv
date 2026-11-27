@@ -1,10 +1,11 @@
 import React from 'react';
-import { Ban, Clock } from 'lucide-react';
+import { Ban, Clock, Check } from 'lucide-react';
 import DashboardAdaptiveWidget from '../../../Components/Dashboard/DashboardAdaptiveWidget';
 import DashboardQueueRow from '../../../Components/Dashboard/DashboardQueueRow';
 import DashboardWidgetStatus from '../../../Components/Dashboard/DashboardWidgetStatus';
 import DashboardWidgetSummaryChip from '../../../Components/Dashboard/DashboardWidgetSummaryChip';
 import { estiloEstadoSolicitud } from '../../../Components/Dashboard/dashboardEstadoSolicitud';
+import { DASHBOARD_WIDGET_TONO } from '../../../Components/Dashboard/dashboardModulesCatalog';
 
 export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [], metricas = {}, variant = 'desktop' }) {
     const pendientes = metricas.pendientes ?? 0;
@@ -18,7 +19,7 @@ export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [
             {pendientes} pendientes
         </DashboardWidgetStatus>
     ) : (
-        <DashboardWidgetStatus tono="exito">Al día</DashboardWidgetStatus>
+        <DashboardWidgetStatus tono="exito" icon={Check}>Al día</DashboardWidgetStatus>
     );
 
     const summary =
@@ -38,6 +39,7 @@ export default function WidgetCancelacionesCotizaciones({ ultimas_operativas = [
             variant={variant}
             title="Cancelaciones y cotizaciones"
             icon={Ban}
+            tono={DASHBOARD_WIDGET_TONO.cancelaciones}
             href={route('cancelaciones_cotizaciones.index')}
             ctaLabel="Ver solicitudes operativas"
             minimalCount={pendientes}

@@ -201,6 +201,8 @@ class PedidoBma extends Model
         'esperando_pago_at',
         'eliminacion_registro_at',
         'eliminacion_registro_por_id',
+        'multienvio_nacional_id',
+        'multienvio_orden',
     ];
 
     protected $casts = [
@@ -325,6 +327,11 @@ class PedidoBma extends Model
     public function tipoOperacionEnvio(): BelongsTo
     {
         return $this->belongsTo(CatalogoTipoOperacionEnvio::class, 'tipo_operacion_envio_id');
+    }
+
+    public function caratulasComision(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCaratula::class, 'pedido_bma_id')->orderByDesc('version')->orderByDesc('id');
     }
 
     public function anexosEnvio(): HasMany
@@ -819,6 +826,11 @@ class PedidoBma extends Model
     public function sesionesEvidencia(): HasMany
     {
         return $this->hasMany(PedidoBmaSesionEvidencia::class, 'pedido_bma_id');
+    }
+
+    public function multienvio(): BelongsTo
+    {
+        return $this->belongsTo(MultienvioNacional::class, 'multienvio_nacional_id');
     }
 
     public function cajas(): HasMany

@@ -1,16 +1,26 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
+import {
+    GELIA_SEGMENT_TABS_SCROLL,
+    GELIA_SEGMENT_TABS_TRACK_COMPACT,
+    THEME_BTN_SECONDARY,
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+} from '@/utils/geliaTheme';
 import { formatearDuracionSeg } from '@/utils/estadoPublicidadPdv';
+import CapaMediaRotada from '@/Pages/PuntoVenta/Pantallas/Partials/CapaMediaRotada';
+import { rotacionParaPantalla } from '@/utils/rotacionMedioPublicidad';
 import useModalPublicidad from '../useModalPublicidad';
 
 export default function VistaPreviaPublicidad({ items = [], indiceInicial = 0, onClose }) {
     const lista = items.filter((item) => item?.url);
     const [indice, setIndice] = useState(Math.min(indiceInicial, Math.max(lista.length - 1, 0)));
+    const [marco, setMarco] = useState('16:9');
     const ref = useRef(null);
     useModalPublicidad(true, onClose, ref);
     const actual = lista[indice];
+    const objectFit = actual?.ajuste === 'contain' ? 'contain' : 'cover';
 
     return createPortal(
         <div className={THEME_MODAL_OVERLAY} onClick={onClose}>
@@ -35,13 +45,31 @@ export default function VistaPreviaPublicidad({ items = [], indiceInicial = 0, o
                         <X className="h-4 w-4" />
                     </button>
                 </div>
+                <div className={GELIA_SEGMENT_TABS_SCROLL}>
+                    <div className={`gelia-segment ${GELIA_SEGMENT_TABS_TRACK_COMPACT} p-1 shadow-sm`} role="group" aria-label="Marco de vista previa">
+                        {['16:9', '9:16'].map((opcion) => (
+                            <button
+                                key={opcion}
+                                type="button"
+                                className="gelia-segment-btn whitespace-nowrap min-h-[44px]"
+                                data-active={marco === opcion}
+                                aria-pressed={marco === opcion}
+                                onClick={() => setMarco(opcion)}
+                            >
+                                Marco {opcion}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 {actual ? (
-                    <div className="overflow-hidden rounded-2xl bg-black aspect-video">
-                        {actual.tipo === 'video' ? (
-                            <video key={actual.id || actual.url} src={actual.url} controls className={`h-full w-full ${actual.ajuste === 'contain' ? 'object-contain' : 'object-cover'}`} />
-                        ) : (
-                            <img src={actual.url} alt="" className={`h-full w-full ${actual.ajuste === 'contain' ? 'object-contain' : 'object-cover'}`} />
-                        )}
+                    <div className={`overflow-hidden rounded-2xl bg-black ${marco === '9:16' ? 'aspect-[9/16] mx-auto w-full max-w-xs' : 'aspect-video'}`}>
+                        <CapaMediaRotada rotacion={rotacionParaPantalla(actual, marco === '9:16' ? 'kiosko' : 'sala')}>
+                            {actual.tipo === 'video' ? (
+                                <video key={actual.id || actual.url} src={actual.url} controls className="h-full w-full" style={{ objectFit }} />
+                            ) : (
+                                <img src={actual.url} alt="" className="h-full w-full" style={{ objectFit }} />
+                            )}
+                        </CapaMediaRotada>
                     </div>
                 ) : null}
                 {lista.length > 1 ? (

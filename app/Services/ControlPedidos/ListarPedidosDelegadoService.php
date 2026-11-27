@@ -21,13 +21,27 @@ class ListarPedidosDelegadoService
         $this->aplicarFiltros($query, $filtros);
         $this->aplicarOrden($query, $filtros);
 
+        $usuario = auth()->user();
+
         if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $pedido) => BitacoraCedis::presentar($pedido, auth()->user()));
+            $pedidos = $query->get();
+            $usuario && \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina($pedidos, $usuario);
+
+            return $pedidos->each(fn (PedidoBma $pedido) => $this->presentar($pedido));
         }
 
         $page = max(1, (int) ($filtros['page'] ?? 1));
+        $paginador = $query->paginate(15, ['*'], 'page', $page)->withQueryString();
+        $usuario && \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina($paginador->getCollection(), $usuario);
 
-        return $query->paginate(15, ['*'], 'page', $page)->withQueryString()->through(fn (PedidoBma $pedido) => BitacoraCedis::presentar($pedido, auth()->user()));
+        return $paginador->through(fn (PedidoBma $pedido) => $this->presentar($pedido));
+    }
+
+    private function presentar(PedidoBma $pedido): PedidoBma
+    {
+        $pedido->setAttribute('guias_pdf_por_caja', \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::aplica($pedido));
+
+        return BitacoraCedis::presentar($pedido, auth()->user());
     }
 
     public function metricas(): array
@@ -129,8 +143,16 @@ class ListarPedidosDelegadoService
             CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA,
         ]);
 
+        $pendienteGuia = CatalogoEstatusPedido::porFase(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA)?->id;
         $query->whereIn('catalogo_estatus_pedido_id', $ids ?: [0])
-            ->whereNull('numero_rastreo');
+            ->where(function (Builder $q) use ($pendienteGuia) {
+                $q->whereNull('numero_rastreo')->orWhere(function (Builder $q) use ($pendienteGuia) {
+                    $q->where('catalogo_estatus_pedido_id', $pendienteGuia ?? 0)
+                        ->where('solicitud_preparacion_json->modalidad_entrega', 'nacional')
+                        ->where('solicitud_preparacion_json->captura_nacional', 'compartida')
+                        ->where('aplica_seguro', false);
+                });
+            });
     }
 
     /** Guía capturada en paralelo; sigue en pendiente de empaque (CEDIS). */

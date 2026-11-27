@@ -11,6 +11,8 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 final class ResolverTokenPantallaSalaPdvService
 {
+    public const ALFABETO_CODIGO_CORTO = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
     public function __construct(
         private readonly RegistrarAuditoriaPantallaSalaPdvService $auditoria,
     ) {}
@@ -26,28 +28,38 @@ final class ResolverTokenPantallaSalaPdvService
             ->where('token_publico', $tokenPlano)
             ->first();
 
-        if (! $registro instanceof PdvPantallaSalaToken) {
+        return $this->confirmarRegistro($registro, $ahora, $auditarAcceso);
+    }
+
+    public function resolverPorCodigoCorto(string $codigo, CarbonInterface $ahora, bool $auditarAcceso = false): PdvPantallaSalaToken
+    {
+        $codigo = $this->normalizarCodigoCorto($codigo);
+        if ($codigo === null) {
             throw new NotFoundHttpException();
         }
 
-        if ($registro->estado !== PdvPantallaSalaToken::ESTADO_ACTIVA) {
-            throw new PantallaSalaInactivaException($registro);
+        $registro = PdvPantallaSalaToken::query()
+            ->where('codigo_corto', $codigo)
+            ->first();
+
+        return $this->confirmarRegistro($registro, $ahora, $auditarAcceso);
+    }
+
+    public function normalizarCodigoCorto(string $codigo): ?string
+    {
+        $codigo = strtoupper(trim($codigo));
+        $longitud = max(4, (int) config('pdv_pantalla_sala.codigo_corto.longitud', 6));
+        $alfabeto = (string) config('pdv_pantalla_sala.codigo_corto.alfabeto', self::ALFABETO_CODIGO_CORTO);
+
+        if (strlen($codigo) !== $longitud) {
+            return null;
         }
 
-        $registro->update(['ultimo_acceso_at' => $ahora]);
-
-        if ($auditarAcceso) {
-            $this->auditoria->registrar(
-                (int) $registro->sucursal_id,
-                null,
-                'acceso_publico',
-                $ahora,
-                [],
-                $registro->id,
-            );
+        if (strspn($codigo, $alfabeto) !== $longitud) {
+            return null;
         }
 
-        return $registro->fresh();
+        return $codigo;
     }
 
     public function urlPublicaDesdeToken(string $tokenPlano): string
@@ -86,5 +98,58 @@ final class ResolverTokenPantallaSalaPdvService
         $token = Str::lower(Str::random($longitud));
 
         return ['token' => $token, 'hash' => hash('sha256', $token)];
+    }
+
+    public function generarCodigoCorto(): string
+    {
+        $alfabeto = (string) config('pdv_pantalla_sala.codigo_corto.alfabeto', self::ALFABETO_CODIGO_CORTO);
+        $longitud = max(4, (int) config('pdv_pantalla_sala.codigo_corto.longitud', 6));
+        $max = strlen($alfabeto) - 1;
+
+        for ($intento = 0; $intento < 40; $intento++) {
+            $codigo = '';
+            for ($i = 0; $i < $longitud; $i++) {
+                $codigo .= $alfabeto[random_int(0, $max)];
+            }
+
+            $existe = PdvPantallaSalaToken::query()
+                ->where('codigo_corto', $codigo)
+                ->exists();
+
+            if (! $existe) {
+                return $codigo;
+            }
+        }
+
+        throw new \RuntimeException('No se pudo generar un código corto único para pantalla de sala.');
+    }
+
+    private function confirmarRegistro(
+        ?PdvPantallaSalaToken $registro,
+        CarbonInterface $ahora,
+        bool $auditarAcceso,
+    ): PdvPantallaSalaToken {
+        if (! $registro instanceof PdvPantallaSalaToken) {
+            throw new NotFoundHttpException();
+        }
+
+        if ($registro->estado !== PdvPantallaSalaToken::ESTADO_ACTIVA) {
+            throw new PantallaSalaInactivaException($registro);
+        }
+
+        $registro->update(['ultimo_acceso_at' => $ahora]);
+
+        if ($auditarAcceso) {
+            $this->auditoria->registrar(
+                (int) $registro->sucursal_id,
+                null,
+                'acceso_publico',
+                $ahora,
+                [],
+                $registro->id,
+            );
+        }
+
+        return $registro->fresh();
     }
 }

@@ -23,6 +23,8 @@ export const THEME_BTN_PRIMARY = 'theme-btn-primary';
 export const THEME_BTN_SECONDARY = 'theme-btn-secondary';
 export const THEME_MODAL_OVERLAY = 'gelia-modal-overlay animate-fade-in';
 export const THEME_MODAL_SHELL = 'gelia-modal-shell';
+export const THEME_MODAL_BODY = 'gelia-modal-body';
+export const THEME_MODAL_FOOTER = 'gelia-modal-footer';
 
 /** Diferir cierre de modal para evitar que el clic atraviese al overlay padre. */
 export const deferModalAction = (fn, ms = 50) => {
@@ -45,7 +47,7 @@ export const GELIA_PAGE_SHELL = 'gelia-page-shell min-w-0 box-border';
 
 export const GELIA_PAGE_SECTION = 'w-full max-w-full min-w-0 box-border';
 
-export const GELIA_PREVENT_OVERFLOW_X = 'overflow-x-hidden max-w-full';
+export const GELIA_PREVENT_OVERFLOW_X = 'overflow-x-clip max-w-full';
 
 export const GELIA_SEGMENT_TABS_SCROLL = 'gelia-segment-tabs-scroll';
 export const GELIA_SEGMENT_TABS_TRACK = 'gelia-segment-tabs-track';

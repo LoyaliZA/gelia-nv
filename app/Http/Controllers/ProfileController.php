@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Carbon\Carbon;
 use App\Services\PersonalizacionCatalogoService;
@@ -70,40 +71,18 @@ class ProfileController extends Controller
     }
 
     /**
-     * Preferencias: personalización del sistema (vista Profile/Edit).
+     * Ajustes ya no es una página: es un modal disponible en cualquier vista.
+     * Esta ruta se conserva para enlaces y marcadores antiguos: abre el modal sobre el panel principal.
      */
-    public function edit(Request $request): Response
+    public function edit(Request $request): RedirectResponse
     {
-        $user = $request->user()->load(['area.departamento', 'areas.departamento']);
-
-        $configuracion = DB::table('configuraciones_usuarios')
-            ->where('user_id', $user->id)
-            ->first();
-
-        $temaVisual = $configuracion ? (json_decode($configuracion->tema_visual ?? '[]', true) ?: []) : [];
-
-        $areaPrincipal = $user->area ?? $user->areas->first();
-
-        return Inertia::render('Profile/Edit', [
-            'tema_visual' => $temaVisual,
-            'perfilUsuario' => [
-                'fecha_nacimiento' => $user->fecha_nacimiento
-                    ? Carbon::parse($user->fecha_nacimiento)->format('Y-m-d')
-                    : null,
-                'area' => $areaPrincipal ? [
-                    'nombre'       => $areaPrincipal->nombre,
-                    'departamento' => $areaPrincipal->departamento ? [
-                        'nombre' => $areaPrincipal->departamento->nombre,
-                    ] : null,
-                ] : null,
-            ],
-        ]);
+        return redirect()->route('dashboard', ['ajustes' => 'apariencia']);
     }
 
     /**
      * Actualiza la información del perfil y la configuración visual sin sobrescribir el Dashboard.
      */
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): RedirectResponse|JsonResponse
     {
         $user = $request->user();
 
@@ -130,6 +109,7 @@ class ProfileController extends Controller
             'tema_visual.sidebar_modo'     => 'nullable|string|in:collapsed,expanded',
             'tema_visual.sidebar_posicion_fija' => 'nullable|string|in:left,right,top,bottom',
             'tema_visual.efecto_cristal'   => 'nullable|boolean',
+            'tema_visual.opacidad_cristal' => 'nullable|numeric|min:0.5|max:0.95',
             'tema_visual.densidad_contenido' => 'nullable|string|in:compacto,completo,personalizado',
             'tema_visual.contenido_max_rem' => 'nullable|numeric|min:60|max:120',
             'tema_visual.contenido_padding_rem' => 'nullable|numeric|min:0.5|max:2',
@@ -148,6 +128,12 @@ class ProfileController extends Controller
             $escala = (float) $configVisual['escala_fuente'];
             $escala = round($escala / 0.0625) * 0.0625;
             $configVisual['escala_fuente'] = max(0.875, min(1.5, $escala));
+        }
+
+        if (isset($configVisual['opacidad_cristal'])) {
+            $opacidad = (float) $configVisual['opacidad_cristal'];
+            $opacidad = round($opacidad / 0.05) * 0.05;
+            $configVisual['opacidad_cristal'] = max(0.5, min(0.95, round($opacidad, 2)));
         }
 
         if (isset($configVisual['densidad_contenido'])) {
@@ -283,6 +269,15 @@ class ProfileController extends Controller
             ],
             $user->id
         );
+
+        // Ajustes guarda en segundo plano (axios): sin redirección, la interfaz no se recarga.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'ok' => true,
+                'fondo_base' => $configVisual['fondo_base'] ?? null,
+                'alertas_prefs' => $configVisual['alertas_prefs'] ?? null,
+            ]);
+        }
 
         return back()->with('success', 'Perfil actualizado exitosamente.');
     }

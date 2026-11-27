@@ -4,7 +4,6 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import Seguimiento from './SeguimientoSolicitudMunicipal';
 
-vi.mock('../Partials/AccionesRapidasDisponibilidad', () => ({ default: () => <span>Acciones</span> }));
 vi.mock('../Partials/ModalVistaPreviaDocumento', () => ({
     default: () => null,
     MiniaturaDocumento: ({ documento }) => <img alt="" src={documento.url} />,
@@ -28,6 +27,38 @@ const pedido = {
         consulta_municipal: { area: 'cedis', estado: 'pendiente', enviada_at: '2026-11-17T10:00:00-06:00' },
     },
 };
+
+it('abre el menú real para una pieza con detalle y un faltante', async () => {
+    await act(() => root.render(<Seguimiento pedido={{
+        ...pedido,
+        solicitud_preparacion: {
+            ...pedido.solicitud_preparacion,
+            consulta_municipal: { ...pedido.solicitud_preparacion.consulta_municipal, estado: 'excepciones_pendientes' },
+            revision_disponibilidad: { estado: 'excepciones_pendientes' },
+        },
+        revisiones_producto: [
+            { id: 1, descripcion_producto: 'Pieza dañada', estado_fisico: 'danado' },
+            { id: 2, descripcion_producto: 'Pieza agotada', estado_fisico: 'sin_existencia' },
+        ],
+    }} />));
+    const [detalle, faltante] = host.querySelectorAll('button[aria-haspopup="menu"]');
+    const opciones = () => [...host.querySelectorAll('[role="menuitem"]')].map(opcion => opcion.textContent);
+    await act(() => detalle.click());
+    expect(opciones()).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+    await act(() => faltante.dispatchEvent(new Event('pointerdown', { bubbles: true })));
+    expect(opciones()).toEqual([]);
+    await act(() => faltante.click());
+    expect(opciones()).toEqual(['Retirar', 'Sustituir']);
+    const retirar = host.querySelector('[role="menuitem"]');
+    await act(() => retirar.click());
+    expect(opciones()).toEqual([]);
+    const dialogo = document.querySelector('.tienda-accion-dialogo');
+    expect(dialogo.textContent).toContain('Confirmar retiro');
+    expect(host.contains(dialogo)).toBe(false);
+    await act(() => [...dialogo.querySelectorAll('button')].find(boton => boton.textContent === 'Volver').click());
+    expect(document.querySelector('.tienda-accion-dialogo')).toBeNull();
+    expect(document.activeElement).toBe(faltante);
+});
 
 it('identifica el envío municipal y nombra la espera sin hablar de aceptación del cliente', async () => {
     await act(() => root.render(<Seguimiento pedido={pedido} />));

@@ -61,7 +61,10 @@ export default function useSolicitudRealtime(canal, evento, propsListado, auth, 
             || permisos.includes('cancelaciones_cotizaciones.cancelar')
             || permisos.includes('traspasos.verificar')
             || permisos.includes('traspasos.responder')
-            || permisos.includes('traspasos.monitorear_alertas');
+            || permisos.includes('traspasos.monitorear_alertas')
+            || permisos.includes('solicitudes.verificar')
+            || permisos.includes('solicitudes.reportar')
+            || permisos.includes('solicitudes.cancelar');
 
         if (tieneVisibilidadArea) {
             // Si el evento tiene departamento, verificar que pertenezca a mis departamentos

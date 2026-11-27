@@ -53,6 +53,7 @@ export default function PdvSalaProvider({
     sucursalId,
     estadoInicial = null,
     urlEstado = null,
+    anunciarTurnos = true,
 }) {
     const { tonos_alertas: tonosAlertas = [] } = usePage().props;
     const tonosAlertasRef = useRef(tonosAlertas);
@@ -73,8 +74,8 @@ export default function PdvSalaProvider({
         hablando,
         desbloquearAudio,
     } = useSpeechAnnouncements({
-        habilitado: true,
-        silenciado: false,
+        habilitado: anunciarTurnos,
+        silenciado: !anunciarTurnos,
         seleccionarVoz: seleccionarVozSalaPdv,
         permitirVozPorDefecto: true,
         mensajeAlDesbloquear: PDV_TTS_MENSAJE_ACTIVACION,
@@ -88,6 +89,7 @@ export default function PdvSalaProvider({
     });
 
     const anunciarEvento = useCallback((envelope) => {
+        if (!anunciarTurnos) return;
         if (!esEventoLlamadoSala(envelope)) return;
 
         const eventId = String(envelope.event_id || '');
@@ -102,7 +104,7 @@ export default function PdvSalaProvider({
 
         setModalLlamado(llamadoDesdeEnvelope(envelope) || envelope.datos || null);
         encolarTts(envelope);
-    }, [encolarTts, tonosAlertas]);
+    }, [anunciarTurnos, encolarTts, tonosAlertas]);
 
     const refrescarEstado = useCallback(async () => {
         if (!urlEstado) return;
@@ -243,6 +245,7 @@ export default function PdvSalaProvider({
     ]);
 
     useEffect(() => {
+        if (!anunciarTurnos) return undefined;
         const intentar = () => {
             window.speechSynthesis?.resume?.();
             desbloquearAudio();
@@ -257,16 +260,21 @@ export default function PdvSalaProvider({
             intentar();
         }, DEPLOY_REINTENTO_AUDIO_MS);
         return () => window.clearInterval(id);
-    }, [desbloquearAudio]);
+    }, [anunciarTurnos, desbloquearAudio]);
 
-    useEffect(() => alConsultarDeploy(() => {
-        window.speechSynthesis?.resume?.();
-        desbloquearAudio();
-    }), [desbloquearAudio]);
+    useEffect(() => {
+        if (!anunciarTurnos) return undefined;
+        return alConsultarDeploy(() => {
+            window.speechSynthesis?.resume?.();
+            desbloquearAudio();
+        });
+    }, [anunciarTurnos, desbloquearAudio]);
 
     return (
         <div data-pdv-sala-provider className="contents">
-            <ModalLlamadoTurnoPdv abierto={Boolean(modalLlamado)} turno={modalLlamado} variante="sala" />
+            {anunciarTurnos ? (
+                <ModalLlamadoTurnoPdv abierto={Boolean(modalLlamado)} turno={modalLlamado} variante="sala" />
+            ) : null}
             {typeof children === 'function' ? children(valor) : children}
         </div>
     );

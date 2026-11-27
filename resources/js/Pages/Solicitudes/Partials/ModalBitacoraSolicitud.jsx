@@ -3,7 +3,8 @@ import SolicitudDialog from '@/Components/Solicitudes/SolicitudDialog';
 import React, { useState } from 'react';
 import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
 import { eventosHistorial, leerSnapshotSeguro, cotizacionHistorial } from './solicitudHistorial';
-import { X, ShieldCheck, CheckCircle2, TrendingUp, Server, AlertOctagon, CreditCard, MessageSquare, ChevronDown, ArrowRight, Minus } from 'lucide-react';
+import { ShieldCheck, CheckCircle2, TrendingUp, Server, AlertOctagon, CreditCard, MessageSquare, ChevronDown, ArrowRight, Minus, History } from 'lucide-react';
+import CabeceraFlujoSolicitud from '@/Components/Solicitudes/CabeceraFlujoSolicitud';
 
 const money = (v) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(v || 0);
 
@@ -24,7 +25,7 @@ const ComparativaSnapshot = ({
     const filas = [
         ['Acumulado de venta', 'monto_venta', money],
         ['Lista', 'lista_nombre', value => value || 'Sin lista'],
-        ['TAG (vendedora)', 'tag_vendedor_nombre', value => value || 'Sin asignar'],
+        ['TAG (responsable)', 'tag_vendedor_nombre', value => value || 'Sin asignar'],
         [etiquetaTipo, 'tipo_cliente_nombre', value => value || 'Sin tipo'],
     ];
     const mostrar = (valor, formato) => valor === undefined ? 'No registrado' : valor === null ? 'Sin asignar' : formato(valor);
@@ -53,7 +54,7 @@ const describirPaso = (registro) => {
         return { titulo: 'Pago vencido', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo || 'Incorrecta', tono: 'error', esSistema: true, modoComparativa: 'default' };
     }
     if (motivo.includes('PAGO CONFIRMADO')) {
-        return { titulo: 'Pago confirmado', detalle: 'Vendedora registró el pago', tono: 'pago', esSistema: false, modoComparativa: 'pago' };
+        return { titulo: 'Pago confirmado', detalle: 'Pago registrado', tono: 'pago', esSistema: false, modoComparativa: 'pago' };
     }
     if (motivo.includes('ALERTA DE PAGO')) {
         return { titulo: 'Alerta: pago insuficiente', detalle: anterior && nuevo ? `${anterior} → ${nuevo}` : nuevo, tono: 'alerta', esSistema: false, modoComparativa: 'pago' };
@@ -137,10 +138,13 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
     return (
         <SolicitudDialog onClose={onClose} title={`Bitácora de FOL-${solicitud.id}`} className="gelia-tag-lista-overlay">
             <div className="gelia-modal-shell gelia-tag-bitacora w-full max-w-6xl">
-                <header className="gelia-workflow-header">
-                    <div><h2 className="m-0 theme-text-main">Bitácora de la solicitud</h2><p className="m-0 mt-1 text-sm theme-text-muted">FOL-{solicitud.id} · {solicitud.cliente?.nombre || 'Cliente'}</p></div>
-                    <button type="button" data-dialog-close className="gelia-workflow-close" aria-label="Cerrar bitácora"><X className="w-5 h-5" aria-hidden="true" /></button>
-                </header>
+                <CabeceraFlujoSolicitud
+                    icono={History}
+                    tono="neutro"
+                    titulo="Bitácora de la solicitud"
+                    subtitulo={`FOL-${solicitud.id} · ${solicitud.cliente?.nombre || 'Cliente'}`}
+                    closeLabel="Cerrar bitácora"
+                />
                 <div className="gelia-modal-body gelia-tag-history-layout">
                     <aside className="gelia-tag-history-summary">
                         <h3 className="m-0 text-base theme-text-main">Resumen actual</h3>
@@ -168,7 +172,7 @@ export default function ModalBitacoraSolicitud({ onClose, solicitud, listas = []
                             {solicitud.motivo_incorrecta && <AvisoSolicitud tono="peligro" compacto>Motivo del error: {solicitud.motivo_incorrecta.replaceAll('_', ' ')}</AvisoSolicitud>}
                         </div>
                         {solicitud.observaciones_vendedor && <AvisoSolicitud tono="neutro" titulo="Comentario de ventas" className="mt-5">{solicitud.observaciones_vendedor}</AvisoSolicitud>}
-                        {solicitud.motivo_cancelacion && <AvisoSolicitud tono={solicitud.estado?.nombre === 'Cancelada' ? 'neutro' : 'peligro'} titulo={solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'} className="mt-5">{solicitud.motivo_cancelacion}{(solicitud.lista_rebaja || solicitud.listaRebaja)?.nombre && <span className="block">Lista de rebaja: {(solicitud.lista_rebaja || solicitud.listaRebaja).nombre}</span>}</AvisoSolicitud>}
+                        {solicitud.motivo_cancelacion && <AvisoSolicitud tono={solicitud.estado?.nombre === 'Cancelada' ? 'neutro' : 'peligro'} titulo={solicitud.estado?.nombre === 'Cancelada' ? 'Motivo de cancelación' : 'Cancelación solicitada'} className="mt-5">{solicitud.motivo_cancelacion}</AvisoSolicitud>}
                         {solicitud.evidencia_path && <div className="mt-4"><EvidenciaSolicitud path={solicitud.evidencia_path} title="Evidencia de la solicitud" dialogClassName="gelia-tag-lista-overlay" /></div>}
                     </aside>
                     <section className="gelia-tag-history-events" aria-label="Cronología de la solicitud">

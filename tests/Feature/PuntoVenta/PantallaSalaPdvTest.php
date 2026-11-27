@@ -51,6 +51,14 @@ class PantallaSalaPdvTest extends TestCase
                 ->has('estado_inicial.anteriores')
                 ->has('estado_inicial.publicidad')
                 ->has('estado_inicial.tema.color_primario'));
+
+        $this->get(route('sala_publicidad.publica.show', ['sucursal' => $this->sucursal->id]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Pantallas/Kiosko', false)
+                ->where('sucursal_id', $this->sucursal->id)
+                ->where('disposicion', 'auto')
+                ->has('estado_inicial.publicidad'));
     }
 
     public function test_estado_solo_lectura_expone_llamados_sin_datos_sensibles(): void
@@ -113,6 +121,8 @@ class PantallaSalaPdvTest extends TestCase
         );
 
         $this->get(route('sala_turnos.publica.show', ['sucursal' => $this->sucursal->id]))
+            ->assertNotFound();
+        $this->get(route('sala_publicidad.publica.show', ['sucursal' => $this->sucursal->id]))
             ->assertNotFound();
     }
 

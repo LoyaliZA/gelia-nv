@@ -3,9 +3,9 @@
 namespace App\Services\Solicitudes;
 
 use App\Models\SolicitudTag;
-use App\Models\CatalogoEstadoSolicitud;
 use App\Models\AuditoriaSolicitud;
 use App\Notifications\AlertaSolicitud;
+use App\Support\Solicitudes\EfectosCancelacionSolicitud;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -13,21 +13,17 @@ use Illuminate\Support\Facades\Notification;
 
 class SolicitarCancelacionSolicitudService
 {
-    public function __construct(
-        private ValidarListaInferiorService $validarListaInferior,
-    ) {}
-
-    public function ejecutar(SolicitudTag $solicitud, string $motivo, ?int $listaRebajaId = null, ?string $permisoAuth = null, ?array $permisosNotificacion = null): void
+    public function ejecutar(SolicitudTag $solicitud, string $motivo, ?string $permisoAuth = null, ?array $permisosNotificacion = null): void
     {
         Gate::authorize($permisoAuth ?? 'solicitudes.solicitar_cancelacion');
 
         $permisosEncargados = $permisosNotificacion ?? ['solicitudes.verificar', 'solicitudes.reportar', 'solicitudes.cancelar'];
 
-        DB::transaction(function () use ($solicitud, $motivo, $listaRebajaId, $permisosEncargados) {
-            $solicitud->loadMissing(['estado', 'vendedor', 'departamento', 'proceso', 'cliente.listaDescuento', 'listaDescuento']);
+        DB::transaction(function () use ($solicitud, $motivo, $permisosEncargados) {
+            $solicitud->loadMissing(['estado', 'vendedor', 'departamento', 'proceso', 'cliente.listaDescuento', 'listaDescuento', 'auditorias.estadoAnterior']);
 
             if ($solicitud->vendedor_id !== Auth::id()) {
-                abort(403, 'Solo la vendedora dueña puede solicitar la cancelación.');
+                abort(403, 'Solo la persona dueña del folio puede solicitar la cancelación.');
             }
 
             if ($solicitud->cancelacion_solicitada_at) {
@@ -44,35 +40,22 @@ class SolicitarCancelacionSolicitudService
                 abort(422, 'Las solicitudes con pago vencido no pueden solicitar cancelación.');
             }
 
-            $listaRebaja = null;
-            $esCambioLista = $this->validarListaInferior->exigeListaRebaja($solicitud);
-
-            if ($esCambioLista) {
-                if (!$listaRebajaId) {
-                    abort(422, 'Debe indicar a qué lista inferior debe rebajarse el cliente.');
-                }
-                $listaRebaja = $this->validarListaInferior->validarListaInferior($solicitud, $listaRebajaId);
-            } elseif ($listaRebajaId) {
-                abort(422, 'La lista de rebaja solo aplica a solicitudes de cambio de lista.');
-            }
+            $efectos = app(EfectosCancelacionSolicitud::class);
+            $textoBitacora = $efectos->textoBitacora($solicitud, $motivo);
+            $mensajeAlerta = $efectos->mensajeAlerta($solicitud, Auth::user()->name);
 
             $solicitud->update([
                 'cancelacion_solicitada_at' => now(),
                 'motivo_cancelacion' => $motivo,
-                'catalogo_lista_rebaja_id' => $listaRebaja?->id,
+                'catalogo_lista_rebaja_id' => null,
             ]);
-
-            $motivoAuditoria = 'SOLICITUD DE CANCELACIÓN: ' . $motivo;
-            if ($listaRebaja) {
-                $motivoAuditoria .= ' | Lista rebaja: ' . $listaRebaja->nombre;
-            }
 
             AuditoriaSolicitud::create([
                 'solicitud_id' => $solicitud->id,
                 'usuario_id' => Auth::id(),
                 'estado_anterior_id' => $solicitud->catalogo_estado_solicitud_id,
                 'estado_nuevo_id' => $solicitud->catalogo_estado_solicitud_id,
-                'motivo_reporte' => $motivoAuditoria,
+                'motivo_reporte' => $textoBitacora,
                 'datos_snapshot' => null,
             ]);
 
@@ -84,17 +67,12 @@ class SolicitarCancelacionSolicitudService
                 );
 
             if ($encargados->isNotEmpty()) {
-                $mensaje = Auth::user()->name . ' solicita cancelar la solicitud FOL-' . $solicitud->id . '.';
-                if ($listaRebaja) {
-                    $mensaje .= ' Lista rebaja solicitada: ' . $listaRebaja->nombre . '.';
-                }
-
                 Notification::send(
                     $encargados,
                     new AlertaSolicitud(
                         $solicitud,
                         'cancelacion_solicitada',
-                        $mensaje
+                        $mensajeAlerta,
                     )
                 );
             }

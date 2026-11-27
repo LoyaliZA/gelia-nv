@@ -1,6 +1,5 @@
 import React from 'react';
-import { CheckCircle2, ChevronDown, Clock3, FileText, TriangleAlert, Users, X, ArrowUpRight } from 'lucide-react';
-import { geliaCardClass } from '@/utils/geliaTheme';
+import { CheckCircle2, Clock3, FileText, TriangleAlert, Users, X, ArrowUpRight } from 'lucide-react';
 import { claseEtiquetaTipoCliente, iconoTipoCliente } from './solicitudesStyles';
 import EtiquetaConIcono from '@/Components/EtiquetaConIcono';
 
@@ -39,7 +38,7 @@ function CeldaKpi({ etiqueta, valor, numero, icono: Icono, tono, tab, activo, se
 
     return (
         <div role="listitem" className="contents">
-        <Tag className={`gelia-solicitudes-indicador gelia-tag-kpi ${Tag === 'button' ? FOCUS_TIPO : ''}`} data-tone={apagado ? 'neutro' : tono} data-active={activo || undefined} {...botonProps}>
+        <Tag className={`gelia-solicitudes-indicador gelia-tag-kpi ${Tag === 'button' ? FOCUS_TIPO : ''}`} data-tone={apagado ? 'neutro' : tono} data-active={seleccionado || undefined} {...botonProps}>
             <span className="gelia-tag-kpi-icono" aria-hidden="true"><Icono className="h-5 w-5" /></span>
             <span className="min-w-0 text-left">
                 <span className="block text-xs font-medium theme-text-muted">{etiqueta}</span>
@@ -99,11 +98,8 @@ function TarjetaTipoKpi({ tipo, numero, activo, onSeleccionar, onQuitarFiltro })
     );
 }
 
-export default function ResumenSolicitudes({
+export function DesgloseTipoCliente({
     resumen,
-    metricas = null,
-    tabActiva = 'TODAS',
-    onSeleccionarTab,
     filtroTipoCliente = '',
     onFiltrarTipo,
     onLimpiarTipo,
@@ -112,65 +108,66 @@ export default function ResumenSolicitudes({
     const tipoActivo = filtroTipoCliente ? String(filtroTipoCliente) : '';
 
     return (
-        <section
-            className={geliaCardClass('gelia-tag-resultados p-4 md:p-5')}
-            aria-label="Resumen de los resultados filtrados"
-        >
-            <div className="gelia-solicitudes-indicadores gelia-tag-resultados-kpis" role="list">
-                {INDICADORES.map(({ key, ...kpi }) => (
-                    <CeldaKpi key={key} {...kpi} valor={resumen[key]} numero={numero} activo={kpi.tab === tabActiva && kpi.tab !== 'TODAS'} seleccionado={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
-                ))}
-                {metricas && INDICADORES_ACTIVIDAD.map(({ key, ...kpi }) => (
-                    <CeldaKpi key={key} {...kpi} valor={metricas[key]} numero={numero} activo={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
-                ))}
-            </div>
-
-            <details className="gelia-tag-event-details gelia-tag-resultados-details" defaultOpen={Boolean(resumen.tipos?.length)}>
-                <summary>
-                    Desglose por tipo de cliente
-                    <span className="hidden text-xs font-normal theme-text-muted sm:inline">
-                        Toca un tipo para filtrar la lista
-                    </span>
-                    <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
-                </summary>
-                <div className="gelia-tag-resultados-details-body">
-                    {tipoActivo && onLimpiarTipo && (
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <p className="m-0 text-xs theme-text-muted">
-                                Mostrando solo un tipo de cliente. Los totales arriba corresponden a este filtro.
-                            </p>
-                            <button
-                                type="button"
-                                className={`gelia-tag-resultados-limpiar-tipo ${FOCUS_TIPO}`}
-                                onClick={onLimpiarTipo}
-                            >
-                                <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                                Ver todos los tipos
-                            </button>
-                        </div>
-                    )}
+        <div className="gelia-tag-resultados-details-body">
+            {tipoActivo && onLimpiarTipo && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="m-0 text-xs theme-text-muted">
-                        Tipo registrado en cada solicitud. Un cliente con solicitudes de distintos tipos puede aparecer en más de una tarjeta.
-                        Vigentes: aprobadas o verificadas sin cancelación pendiente ni reversión. Con error: estado Incorrecta.
+                        Mostrando solo un tipo de cliente. Los totales de la bandeja corresponden a este filtro.
                     </p>
-                    {resumen.tipos?.length ? (
-                        <div className="gelia-tag-resultados-tipos" role="list">
-                            {resumen.tipos.map((tipo) => (
-                                <TarjetaTipoKpi
-                                    key={tipo.id ?? 'sin-tipo'}
-                                    tipo={tipo}
-                                    numero={numero}
-                                    activo={tipoActivo === idFiltroTipo(tipo)}
-                                    onSeleccionar={onFiltrarTipo}
-                                    onQuitarFiltro={onLimpiarTipo}
-                                />
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="m-0 text-sm theme-text-muted">No hay solicitudes para estos filtros.</p>
-                    )}
+                    <button
+                        type="button"
+                        className={`gelia-tag-resultados-limpiar-tipo ${FOCUS_TIPO}`}
+                        onClick={onLimpiarTipo}
+                    >
+                        <X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        Ver todos los tipos
+                    </button>
                 </div>
-            </details>
+            )}
+            <p className="m-0 text-xs theme-text-muted">
+                Tipo registrado en cada solicitud. Un cliente con solicitudes de distintos tipos puede aparecer en más de una tarjeta.
+                Vigentes: aprobadas o verificadas sin cancelación pendiente ni reversión. Con error: estado Incorrecta.
+            </p>
+            {resumen.tipos?.length ? (
+                <div className="gelia-tag-resultados-tipos" role="list">
+                    {resumen.tipos.map((tipo) => (
+                        <TarjetaTipoKpi
+                            key={tipo.id ?? 'sin-tipo'}
+                            tipo={tipo}
+                            numero={numero}
+                            activo={tipoActivo === idFiltroTipo(tipo)}
+                            onSeleccionar={onFiltrarTipo}
+                            onQuitarFiltro={onLimpiarTipo}
+                        />
+                    ))}
+                </div>
+            ) : (
+                <p className="m-0 text-sm theme-text-muted">No hay solicitudes para estos filtros.</p>
+            )}
+        </div>
+    );
+}
+
+export default function ResumenSolicitudes({
+    resumen,
+    metricas = null,
+    tabActiva = 'TODAS',
+    onSeleccionarTab,
+}) {
+    const numero = (value) => new Intl.NumberFormat('es-MX').format(value || 0);
+
+    return (
+        <section
+            className="gelia-solicitudes-indicadores gelia-tag-resultados-kpis"
+            aria-label="Resumen de los resultados filtrados"
+            role="list"
+        >
+            {INDICADORES.map(({ key, ...kpi }) => (
+                <CeldaKpi key={key} {...kpi} valor={resumen[key]} numero={numero} activo={kpi.tab === tabActiva && kpi.tab !== 'TODAS'} seleccionado={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
+            ))}
+            {metricas && INDICADORES_ACTIVIDAD.map(({ key, ...kpi }) => (
+                <CeldaKpi key={key} {...kpi} valor={metricas[key]} numero={numero} activo={kpi.tab === tabActiva} onSeleccionarTab={onSeleccionarTab} />
+            ))}
         </section>
     );
 }

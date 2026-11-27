@@ -179,6 +179,14 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         }
     }, [cargarYMarcar, paramsListado]);
 
+    const onPdfCajaGuardado = () => {
+        if (modalAbiertoRef.current) {
+            syncPendienteRef.current = true;
+        } else {
+            cargarYMarcar(paramsListado(), { silencioso: true });
+        }
+    };
+
     const onBuscar = (valor) => {
         setBusqueda(valor);
         if (debounceBusqueda.current) clearTimeout(debounceBusqueda.current);
@@ -317,6 +325,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                     busqueda={busqueda}
                     cargando={cargando}
                     onModalAbierto={onModalAbierto}
+                    onPdfCajaGuardado={onPdfCajaGuardado}
                     onIrAPagina={onIrAPagina}
                     onLimpiarBusqueda={() => onBuscar('')}
                     mensajeFiltroVacio={mensajeFiltroVacio}

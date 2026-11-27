@@ -220,11 +220,12 @@ class NacionalAnexoExtraordinarioTest extends TestCase
             'numero_rastreo' => 'GUIA-P',
             'empacado_at' => now(),
         ]);
-        $this->caja($principal, ['numero_rastreo' => 'GUIA-P', 'peso_real_kg' => 1]);
-        PedidoBmaDocumento::query()->create([
-            'pedido_bma_id' => $principal->id, 'tipo' => PedidoBmaDocumento::TIPO_GUIA, 'ruta_archivo' => 'guias/p.pdf',
-            'nombre_original' => 'p.pdf', 'mime_type' => 'application/pdf', 'activo' => true,
-        ]);
+        Storage::fake('local');
+        $caja = $this->caja($principal, ['peso_real_kg' => 1]);
+        app(\App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService::class)->subir(
+            $principal, UploadedFile::fake()->create('guia-principal.pdf', 1, 'application/pdf'), $this->usuario->id, $caja->id
+        );
+        app(\App\Services\ControlPedidos\AsignarGuiaPedidoBmaService::class)->ejecutar($principal, 'GUIA-P', $this->usuario->id);
         $datos = $this->datos($principal, [['sku' => 'SKU-A', 'descripcion' => 'Pieza A', 'cantidad' => 1]]);
         $hijo = app(RegistrarComplementoNacional::class)->ejecutar($principal, $this->usuario, $datos, [$datos['documento']]);
         $this->assertNull($hijo->pesaje_solicitado_at, 'el anexo sigue pendiente');

@@ -1,4 +1,5 @@
 import PiezasAdicionalesArea from '../../Partials/PiezasAdicionalesArea';
+import { etiquetaMarcarEnviado } from './etiquetaEnvioCedis';
 import CambioATiendaArea from '../../Partials/CambioATiendaArea';
 import React, { useState } from 'react';
 import axios from 'axios';
@@ -31,6 +32,7 @@ import {
 } from '../../Partials/pedidosBmaStyles';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
@@ -100,6 +102,8 @@ function TarjetaPedido({
     const puedeReportarError = ['EN_CEDIS', 'INCIDENCIA_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase) && !pedido.es_resguardo;
     const puedeApartar = Boolean(pedido.es_resguardo) && fase === 'EN_CEDIS' && !pedido.resguardo_apartado_at;
     const tieneGuiaPdf = tieneGuiaPdfDisponible(pedido);
+    const guiasPorCaja = Boolean(pedido.guias_pdf_por_caja);
+    const faltanGuias = guiasPorCaja && (pedido.faltan_guias_por_caja > 0 || !pedido.numero_rastreo);
     const requiereLogistica = municipal ? false : pedidoRequiereLogistica(pedido);
     const trasladoInterno = pedidoEsTrasladoInternoPdv(pedido);
     const preparacion = pedido.tarea_preparacion_vigente || pedido.tarea_preparacion_respondida || pedido.tarea_preparacion;
@@ -118,6 +122,7 @@ function TarjetaPedido({
             <div className="gelia-pedidos-tarjeta-cabecera flex flex-col gap-3">
                 <div className="min-w-0">
                     <EncabezadoFolioPedido pedido={pedido} size="lg" etiquetaPrincipal="Folio" internoCompacto />
+                    <HermanosMultienvio pedido={pedido} className="mt-1" />
                     <p className="gelia-cedis-cliente">Cliente: {pedido.cliente?.nombre || pedido.cliente?.nombre_comercial || pedido.contacto_nombre_snapshot || 'Cliente por confirmar'}</p>
                     <div className="gelia-cedis-solicitud">
                         {pedido.vendedor?.name && <span className="gelia-cedis-solicitante" aria-label={`Solicitó ${pedido.vendedor.name}`}><User size={15} aria-hidden />{pedido.vendedor.name}</span>}
@@ -277,7 +282,10 @@ function TarjetaPedido({
                         Liberar integración
                     </button>
                 )}
-                {puedeMarcarEnviado && (
+                {puedeMarcarEnviado && faltanGuias && (
+                    <p className="text-xs theme-text-muted m-0">Guías pendientes de asignación: {pedido.faltan_guias_por_caja}</p>
+                )}
+                {puedeMarcarEnviado && !faltanGuias && (
                     <button
                         type="button"
                         onClick={() => (requiereSeleccionEnvios
@@ -286,7 +294,7 @@ function TarjetaPedido({
                         className={`${BTN_PRIMARY} w-full flex items-center justify-center gap-2 text-xs outline-none py-3 min-h-[44px]`}
                     >
                         <Truck className="w-4 h-4" />
-                        {requiereSeleccionEnvios ? 'Elegir envíos a recolectar' : 'Marcar enviado'}
+                        {requiereSeleccionEnvios && !guiasPorCaja ? 'Elegir envíos a recolectar' : etiquetaMarcarEnviado(pedido)}
                     </button>
                 )}
                 {puedeReabrirEnvio && (
@@ -308,7 +316,7 @@ function TarjetaPedido({
                     {(pendientePesaje || municipal) && pdfPedido && (
                         <BotonAccionCubico icon={FileText} label="PDF pedido" onClick={() => onVerDocumento(pdfPedido)} conLabel />
                     )}
-                    {esEmpacado && tieneGuiaPdf && !recolectaSucursal && !esperaIntegracion && (
+                    {esEmpacado && tieneGuiaPdf && !guiasPorCaja && !recolectaSucursal && !esperaIntegracion && (
                         <div className="col-span-2 sm:col-span-1 [&_button]:w-full [&_button]:min-h-[44px]">
                             <BotonGuiaPdf pedido={pedido} onVerPdf={onVerDocumento} compact className="w-full justify-center py-2.5 min-h-[44px]" />
                         </div>

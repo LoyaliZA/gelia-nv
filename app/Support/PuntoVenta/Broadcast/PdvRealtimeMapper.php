@@ -3,6 +3,7 @@
 namespace App\Support\PuntoVenta\Broadcast;
 
 use App\Events\PuntoVenta\AtencionCerrada;
+use App\Events\PuntoVenta\AtencionIniciada;
 use App\Events\PuntoVenta\AtencionEsperaProximoVencer;
 use App\Events\PuntoVenta\AtencionProrroga;
 use App\Events\PuntoVenta\AtencionProrrogaProximoVencer;
@@ -55,6 +56,7 @@ final class PdvRealtimeMapper
             TurnoReatencion::class,
             TurnoVentanaReatencionVencida::class,
             TurnoTransferido::class,
+            AtencionIniciada::class,
             AtencionCerrada::class,
             AtencionProrroga::class,
             AtencionEsperaProximoVencer::class,
@@ -118,6 +120,7 @@ final class PdvRealtimeMapper
             TurnoReatencion::class => $this->turnoLlamado($event, TurnoPdvEvento::TIPO_REATENCION),
             TurnoVentanaReatencionVencida::class => $this->turnoVentanaReatencionVencida($event),
             TurnoTransferido::class => $this->turnoTransferido($event),
+            AtencionIniciada::class => $this->turnoAtencionIniciada($event),
             AtencionCerrada::class => $this->turnoAtencionCerrada($event),
             AtencionProrroga::class => $this->turnoProrroga($event),
             AtencionEsperaProximoVencer::class => $this->turnoEsperaProximoVencer($event),
@@ -342,6 +345,44 @@ final class PdvRealtimeMapper
                     $event->turno->version,
                     PayloadTurnoPdvBroadcast::publico($event->turno, $atencionNueva),
                     $event->evento->ocurrido_at,
+                ),
+            ],
+        ];
+    }
+
+    /**
+     * @return list<array{channels: list<Channel>, envelope: array<string, mixed>}>
+     */
+    private function turnoAtencionIniciada(AtencionIniciada $event): array
+    {
+        $eventId = PayloadTurnoPdvBroadcast::eventIdAtencionIniciada($event->atencion);
+        $atencion = $this->atencionConPersona($event->atencion);
+
+        return [
+            [
+                'channels' => [CanalesPdv::sucursal($event->sucursalId)],
+                'envelope' => PdvRealtimeEnvelope::crear(
+                    $eventId,
+                    TurnoPdvEvento::TIPO_ATENCION_INICIADA,
+                    'turnos',
+                    'sucursal',
+                    $event->sucursalId,
+                    $event->turno->version,
+                    PayloadTurnoPdvBroadcast::sucursal($event->turno, $atencion),
+                    $event->atencion->atencion_inicio_at,
+                ),
+            ],
+            [
+                'channels' => [CanalesPdv::usuario((int) $atencion->user_id)],
+                'envelope' => PdvRealtimeEnvelope::crear(
+                    $eventId,
+                    TurnoPdvEvento::TIPO_ATENCION_INICIADA,
+                    'turnos',
+                    'usuario',
+                    $event->sucursalId,
+                    $event->turno->version,
+                    PayloadTurnoPdvBroadcast::usuario($event->turno, $atencion),
+                    $event->atencion->atencion_inicio_at,
                 ),
             ],
         ];

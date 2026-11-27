@@ -17,6 +17,7 @@ use App\Services\ControlPedidos\ListarPedidosDelegadoService;
 use App\Services\ControlPedidos\ReportarErrorDatosPedidoBmaService;
 use App\Support\ControlPedidos\BusquedaDelegadoPedidoBma;
 use App\Support\ControlPedidos\FiltroPaqueteriaDelegadoPedidoBma;
+use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
 use App\Support\ControlPedidos\SituacionOperativaDelegadoPedidoBma;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -109,27 +110,65 @@ class PedidoBmaDelegadoController extends Controller
         SubirGuiaPdfPedidoBmaRequest $request,
         PedidoBma $pedidoBma,
         GestionarGuiaPdfPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
+        $cajaId = $request->filled('caja_id') ? $request->integer('caja_id') : null;
+        $guiaGeneralId = $request->filled('guia_general_id') ? $request->integer('guia_general_id') : null;
+        $responderJson = $request->expectsJson() && $cajaId !== null && $guiaGeneralId === null;
+
         try {
-            $service->subir($pedidoBma->load('estatus'), $request->file('guia_pdf'), Auth::id());
+            $actualizado = $service->subir(
+                $pedidoBma->load('estatus'),
+                $request->file('guia_pdf'),
+                Auth::id(),
+                $cajaId,
+                $guiaGeneralId,
+            );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($responderJson) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'PDF de guía subido correctamente.');
+        $mensaje = 'PDF de guía subido correctamente.';
+        if ($responderJson) {
+            $guia = GuiasPdfPorCaja::vigentes($actualizado)->firstWhere('pedido_bma_caja_id', $cajaId);
+
+            return response()->json([
+                'guia' => $guia?->only(['id', 'pedido_bma_caja_id', 'tipo', 'activo', 'relacion_tipo', 'nombre_original', 'mime_type', 'url']),
+                'message' => $mensaje,
+            ]);
+        }
+
+        return redirect()->back()->with('success', $mensaje);
     }
 
     public function eliminarGuiaPdf(
+        Request $request,
         PedidoBma $pedidoBma,
         GestionarGuiaPdfPedidoBmaService $service
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
+        $datos = $request->validate(['caja_id' => ['nullable', 'integer', 'min:1']]);
+        $cajaId = isset($datos['caja_id']) ? $request->integer('caja_id') : null;
+        $responderJson = $request->expectsJson() && $cajaId !== null;
+
         try {
-            $service->eliminar($pedidoBma->load('estatus'), Auth::id());
+            $service->eliminar($pedidoBma->load('estatus'), Auth::id(), $cajaId);
         } catch (\InvalidArgumentException|\RuntimeException $e) {
+            if ($responderJson) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
             return redirect()->back()->with('error', $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'PDF de guía eliminado.');
+        $mensaje = 'PDF de guía eliminado.';
+        if ($responderJson) {
+            return response()->json(['guia' => null, 'message' => $mensaje]);
+        }
+
+        return redirect()->back()->with('success', $mensaje);
     }
 
     public function reportarErrorDatos(

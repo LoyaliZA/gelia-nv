@@ -115,6 +115,11 @@ class PedidoBmaCaja extends Model
         return $this->belongsTo(CatalogoTipoGuiaPedido::class, 'catalogo_tipo_guia_id');
     }
 
+    public function remisionesActivas(): HasMany
+    {
+        return $this->hasMany(PedidoBmaCajaRemision::class, 'pedido_bma_caja_id')->where('activa', true);
+    }
+
     public function documentos(): HasMany
     {
         return $this->hasMany(PedidoBmaDocumento::class, 'pedido_bma_caja_id');

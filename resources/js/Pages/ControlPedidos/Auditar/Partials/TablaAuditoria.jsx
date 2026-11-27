@@ -18,6 +18,7 @@ import {
     TABS_AUDITORIA,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 
@@ -123,6 +124,7 @@ function CardAuditoria({
                     >
                         <EncabezadoFolioPedido pedido={pedido} size="sm" />
                     </FiltroCelda>
+                    <HermanosMultienvio pedido={pedido} onAbrir={onFiltrarBusqueda} className="mt-1" />
                     <p className="text-xs theme-text-muted font-medium mt-1 m-0">
                         {formatearFechaNegocio(pedido.fecha)}
                     </p>
@@ -347,6 +349,7 @@ export default function TablaAuditoria({
                                         >
                                             <EncabezadoFolioPedido pedido={pedido} size="sm" />
                                         </FiltroCelda>
+                                        <HermanosMultienvio pedido={pedido} onAbrir={onFiltrarBusqueda} className="mt-1" />
                                         {pedido.origen?.nombre && (
                                             <p className="text-[9px] font-black uppercase text-blue-600 mt-1 m-0">Tipo: {pedido.origen.nombre}</p>
                                         )}

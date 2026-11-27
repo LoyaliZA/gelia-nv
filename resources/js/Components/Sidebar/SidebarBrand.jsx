@@ -9,7 +9,7 @@ export default function SidebarBrand({ collapsed = false, onToggleCollapse, show
             <div className="gelia-pro-sidebar__brand-main">
                 <Link
                     href={typeof route === 'function' ? route('dashboard') : '/dashboard'}
-                    className="gelia-pro-sidebar__brand-logo gelia-pro-sidebar__tooltip"
+                    className="gelia-pro-sidebar__brand-logo"
                     data-tip={collapsed ? 'Panel principal' : ''}
                     aria-label="Panel principal"
                 >
@@ -32,11 +32,11 @@ export default function SidebarBrand({ collapsed = false, onToggleCollapse, show
             ) : showToggle && (
                 <button
                     type="button"
-                    className="gelia-pro-sidebar__toggle gelia-pro-sidebar__tooltip"
+                    className="gelia-pro-sidebar__toggle"
                     onClick={onToggleCollapse}
                     aria-label={collapsed ? 'Expandir navegación' : 'Contraer navegación'}
                     aria-pressed={collapsed}
-                    data-tip={collapsed ? 'Expandir' : ''}
+                    data-tip={collapsed ? 'Expandir navegación' : ''}
                 >
                     {collapsed
                         ? <PanelLeftOpen className="w-4 h-4" aria-hidden />

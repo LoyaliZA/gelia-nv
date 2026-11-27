@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GeliaLogo from '@/Components/GeliaLogo';
 import { volumenAudioVideoPublicidad, VOLUMEN_PUBLICIDAD_SALA_DEFECTO } from '@/utils/volumenPublicidadPdv';
+import { rotacionParaPantalla } from '@/utils/rotacionMedioPublicidad';
+import CapaMediaRotada from './CapaMediaRotada';
 
 function MediaProgress({ items, index, progress }) {
     if (!items.length) return null;
@@ -68,7 +70,12 @@ function siguienteIndice(playlist, desde, omitidos) {
     return i;
 }
 
-export default function AdvertisingPanel({ items = [], pausado = false, volumen = VOLUMEN_PUBLICIDAD_SALA_DEFECTO }) {
+export default function AdvertisingPanel({
+    items = [],
+    pausado = false,
+    volumen = VOLUMEN_PUBLICIDAD_SALA_DEFECTO,
+    variante = 'sala',
+}) {
     const [index, setIndex] = useState(0);
     const [ciclo, setCiclo] = useState(0);
     const [progress, setProgress] = useState(0);
@@ -187,43 +194,52 @@ export default function AdvertisingPanel({ items = [], pausado = false, volumen 
 
     const objectFit = actual?.ajuste === 'contain' ? 'contain' : 'cover';
     const siguienteVideo = playlist[(index + 1) % playlist.length];
+    const esKiosko = variante === 'kiosko';
+    const rotacion = rotacionParaPantalla(actual, esKiosko ? 'kiosko' : 'sala');
 
     return (
         <section
-            className="relative min-h-[10rem] overflow-hidden rounded-[1.5rem] border theme-border theme-surface max-[1099px]:h-[34vh] min-[1100px]:h-full min-[1100px]:min-h-0 min-[1100px]:rounded-[2.5rem]"
-            style={{ boxShadow: 'var(--theme-shadow-card)' }}
+            className={esKiosko
+                ? 'relative h-full w-full overflow-hidden bg-black'
+                : 'relative min-h-[10rem] overflow-hidden rounded-[1.5rem] border theme-border theme-surface max-[1099px]:h-[34vh] min-[1100px]:h-full min-[1100px]:min-h-0 min-[1100px]:rounded-[2.5rem]'}
+            style={esKiosko ? undefined : { boxShadow: 'var(--theme-shadow-card)' }}
             data-pdv-sala-publicidad
+            data-pdv-publicidad-variante={variante}
         >
             {!actual ? (
                 <FallbackInstitucional />
-            ) : actual.tipo === 'video' ? (
-                <video
-                    key={actual.id}
-                    ref={videoRef}
-                    className="h-full w-full"
-                    style={{ objectFit }}
-                    src={actual.url}
-                    autoPlay
-                    muted={!sonidoActivo}
-                    playsInline
-                    preload="auto"
-                    onTimeUpdate={() => {
-                        const video = videoRef.current;
-                        if (!video?.duration) return;
-                        setProgress(Math.min(1, video.currentTime / video.duration));
-                    }}
-                    onEnded={alTerminar}
-                    onError={() => omitir(actual)}
-                />
             ) : (
-                <img
-                    key={actual.id}
-                    src={actual.url}
-                    alt=""
-                    className="h-full w-full"
-                    style={{ objectFit }}
-                    onError={() => omitir(actual)}
-                />
+                <CapaMediaRotada rotacion={rotacion}>
+                    {actual.tipo === 'video' ? (
+                        <video
+                            key={`${actual.id}:${rotacion}`}
+                            ref={videoRef}
+                            className="h-full w-full"
+                            style={{ objectFit }}
+                            src={actual.url}
+                            autoPlay
+                            muted={!sonidoActivo}
+                            playsInline
+                            preload="auto"
+                            onTimeUpdate={() => {
+                                const video = videoRef.current;
+                                if (!video?.duration) return;
+                                setProgress(Math.min(1, video.currentTime / video.duration));
+                            }}
+                            onEnded={alTerminar}
+                            onError={() => omitir(actual)}
+                        />
+                    ) : (
+                        <img
+                            key={`${actual.id}:${rotacion}`}
+                            src={actual.url}
+                            alt=""
+                            className="h-full w-full"
+                            style={{ objectFit }}
+                            onError={() => omitir(actual)}
+                        />
+                    )}
+                </CapaMediaRotada>
             )}
             {siguienteVideo?.tipo === 'video' ? (
                 <video src={siguienteVideo.url} preload="metadata" className="hidden" muted />

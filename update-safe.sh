@@ -9,8 +9,6 @@
 #   ./update-safe.sh --purge-assets  # Borra chunks viejos (si no, solo simula)
 #   ./update-safe.sh --dry-run       # La purga solo informa, aunque vaya --purge-assets
 #   ./update-safe.sh --quick         # Mismo camino. No omite respaldo ni verificación
-#   ./update-safe.sh --allow-local   # Permite cambios locales (p. ej. default.conf del túnel)
-#   ./update-safe.sh --refresh-cache # optimize:clear antes de optimize
 #   ./update-safe.sh --rebuild       # Recompila la imagen. Corta el servicio
 #   ./update-safe.sh --recreate-env  # Fuerza recrear app, queue y scheduler
 #
@@ -37,8 +35,6 @@ REVERB_CONTAINER="${DOCKER_REVERB_CONTAINER:-gelianv_reverb}"
 # Vacío: se usa la rama del checkout. GIT_BRANCH solo si coincide con esa rama.
 
 SKIP_GIT=false
-ALLOW_LOCAL_CHANGES=false
-REFRESH_CACHE=false
 REBUILD_IMAGE=false
 FORCE_RECREATE_ENV=false
 ASSUME_YES=false
@@ -70,8 +66,6 @@ parse_args() {
     for arg in "$@"; do
         case "$arg" in
             --skip-git)       SKIP_GIT=true ;;
-            --allow-local)    ALLOW_LOCAL_CHANGES=true ;;
-            --refresh-cache)  REFRESH_CACHE=true ;;
             --rebuild)        REBUILD_IMAGE=true ;;
             --recreate-env)   FORCE_RECREATE_ENV=true ;;
             --yes)            ASSUME_YES=true ;;
@@ -185,15 +179,28 @@ confirmar_recreacion() {
 }
 
 recargar_nginx() {
-    log "Recargando Nginx sin cortar conexiones..."
-    docker exec -i "$WEB_CONTAINER" nginx -s reload
-    ok "Nginx recargado."
+    log "Renderizando vhosts de Nginx desde APP_URL y FORM_PUBLIC_URL..."
+    "${SCRIPT_DIR}/reload-nginx.sh"
 }
 
 graceful_php_fpm_reload() {
-    log "Recargando PHP-FPM sin cortar peticiones activas..."
-    exec_app sh -c "kill -USR2 \$(pgrep -o php-fpm) 2>/dev/null || true" || true
-    ok "Señal USR2 enviada a PHP-FPM."
+    # OPcache de PHP-FPM corre con validate_timestamps=Off. USR2 respawnea
+    # workers sobre la misma memoria compartida: si composer --no-dev quitó un
+    # paquete (p. ej. laravel/boost), FPM sigue ejecutando el bytecode viejo
+    # y la app responde 500. Hay que reiniciar el master del contenedor.
+    log "Reiniciando ${APP_CONTAINER} para vaciar OPcache de PHP-FPM..."
+    docker restart "$APP_CONTAINER"
+    local intento=0
+    while [ "$intento" -lt 30 ]; do
+        if container_running "$APP_CONTAINER" \
+            && docker exec -i "$APP_CONTAINER" sh -c 'pgrep -o php-fpm >/dev/null 2>&1'; then
+            ok "PHP-FPM listo. OPcache vaciado."
+            return 0
+        fi
+        intento=$((intento + 1))
+        sleep 1
+    done
+    fail "PHP-FPM no quedó listo tras reiniciar ${APP_CONTAINER}."
 }
 
 esperar_cola() {
@@ -218,10 +225,6 @@ refresh_permissions() {
     log "Ajustando permisos de storage y bootstrap/cache..."
     exec_app chown -R 1337:1337 /var/www/html/storage /var/www/html/bootstrap/cache
     exec_app chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
-    # PHP-FPM (usuario gelia, gid 1000) debe leer .env: clear_env no deja pasar todo el env del contenedor.
-    if [ -f .env ]; then
-        chmod 640 .env 2>/dev/null || true
-    fi
     ok "Permisos actualizados."
 }
 
@@ -377,12 +380,10 @@ main() {
         fail "El contenedor ${WEB_CONTAINER} no está corriendo."
     fi
 
-    if ! $SKIP_GIT && ! $ALLOW_LOCAL_CHANGES; then
+    if ! $SKIP_GIT; then
         if [ -n "$(git status --porcelain)" ]; then
             fail "El checkout tiene cambios locales. No se despliega encima de un árbol sucio."
         fi
-    elif ! $SKIP_GIT && [ -n "$(git status --porcelain)" ]; then
-        warn "Hay cambios locales; se continúa (--allow-local). Revise conflictos tras el merge."
     fi
 
     preflight_espacio
@@ -431,13 +432,7 @@ main() {
     migrate_con_triggers
     compilar_frontend
 
-    if $REFRESH_CACHE; then
-        log "Vaciando caché de aplicación antes de regenerar..."
-        exec_app php artisan optimize:clear
-        ok "Caché anterior eliminada."
-    fi
-
-    log "Regenerando caché de producción..."
+    log "Regenerando caché sin vaciar la anterior..."
     exec_app php artisan optimize
     ok "Caché de producción regenerada."
 

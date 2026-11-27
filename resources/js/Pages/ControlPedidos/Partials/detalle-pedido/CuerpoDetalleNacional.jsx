@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import DireccionPedidoResumen from '../DireccionPedidoResumen';
 import { codigoDireccionCliente } from '../codigoDireccionCliente';
+import { esCapturaNacional } from '../flujoCapturaPedido';
 import SeccionGuiaRastreo from '../SeccionGuiaRastreo';
 import SeccionRevisionFisicaPedido from '../SeccionRevisionFisicaPedido';
 import { cambioATiendaNacional } from '../../Nacional/superficieNacional';
@@ -23,10 +24,36 @@ import {
 } from '../pedidosBmaStyles';
 import DetallePedidoDato, { DetallePedidoDatos, DetallePedidoResumen } from './DetallePedidoDato';
 import DetallePedidoSeccion from './DetallePedidoSeccion';
+import SeccionMultienvioDetalle from './SeccionMultienvioDetalle';
 import { etiquetaRespuestaDetalle, textoPagosPedido } from './resolverModalidadDetalle';
 
 function kg(valor) {
     return valor != null && valor !== '' ? `${valor} kg` : null;
+}
+
+function guiasConfirmadasPorCaja(pedido, cajas) {
+    if (!esCapturaNacional(pedido) || pedido.aplica_seguro || pedido.cliente_proporciona_guia) {
+        return null;
+    }
+
+    const documentos = (pedido.documentos || []).filter((doc) => doc.tipo === 'guia'
+        && ['guia_caja_confirmada', 'guia_caja_avance'].includes(doc.relacion_tipo));
+    if (!documentos.length) return null;
+
+    const confirmadas = new Map(documentos
+        .filter((doc) => doc.relacion_tipo === 'guia_caja_confirmada' && doc.activo && doc.url)
+        .map((doc) => [String(doc.pedido_bma_caja_id), doc]));
+
+    return cajas.flatMap((caja, idx) => {
+        if (['retirada', 'cancelada'].includes(caja.estado_operativo)) return [];
+        const documento = confirmadas.get(String(caja.id));
+        return documento ? [{
+            cajaId: caja.id,
+            nombreCaja: caja.tipo_caja?.nombre || caja.tipoCaja?.nombre,
+            envio: idx + 1,
+            documento,
+        }] : [];
+    });
 }
 
 export default function CuerpoDetalleNacional({
@@ -57,6 +84,9 @@ export default function CuerpoDetalleNacional({
         ? (pedido.peso_cobrado_guia_kg != null ? `${pedido.peso_cobrado_guia_kg} kg` : (vacios ? '— kg' : null))
         : (pedido.numero_cajas != null ? String(pedido.numero_cajas) : (vacios ? '—' : null));
     const cajas = [...(pedido.cajas || [])].sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0));
+    const guiasPorCaja = guiasConfirmadasPorCaja(pedido, cajas);
+    const direccionBloqueada = pedido.solicitud_preparacion?.modalidad_entrega === 'nacional'
+        && ['ENVIADO', 'ENTREGADO'].includes(pedido.estatus?.fase_ciclo);
 
     return (
         <>
@@ -118,6 +148,7 @@ export default function CuerpoDetalleNacional({
                     <DetallePedidoDato icon={Wallet} label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} obligatorio />
                 </DetallePedidoDatos>
             </DetallePedidoSeccion>
+            <SeccionMultienvioDetalle pedido={pedido} />
             {cajas.length > 0 && (
                 <DetallePedidoSeccion icon={Package} titulo="Envíos y pesaje">
                     {cajas.map((c, idx) => (
@@ -149,7 +180,7 @@ export default function CuerpoDetalleNacional({
                 id="detalle-envio"
                 icon={MapPin}
                 titulo="Entrega y dirección"
-                extra={puedeCambiarDireccion ? (
+                extra={puedeCambiarDireccion && !direccionBloqueada ? (
                     <button
                         type="button"
                         className={`${BTN_SECONDARY} text-xs py-1.5 px-2 inline-flex items-center gap-1`}
@@ -159,7 +190,7 @@ export default function CuerpoDetalleNacional({
                     </button>
                 ) : null}
             >
-                <SeccionGuiaRastreo pedido={pedido} onVerPdf={onVerDoc} />
+                <SeccionGuiaRastreo pedido={pedido} onVerPdf={onVerDoc} guiasPorCaja={guiasPorCaja} />
                 <DireccionPedidoResumen
                     direccion={snap}
                     domicilioLegacy={pedido.domicilio_entrega}

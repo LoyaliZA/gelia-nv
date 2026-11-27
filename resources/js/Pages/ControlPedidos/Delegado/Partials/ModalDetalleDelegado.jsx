@@ -4,9 +4,10 @@ import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 import {
-    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2,
+    X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2, FileCheck, CheckCircle2,
 } from 'lucide-react';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
+import { reportarExitoOperacion } from '../../../../utils/geliaToast';
 import {
     badgeEstatusPedido,
     pedidoRequiereLogistica,
@@ -28,9 +29,11 @@ import {
     LABELS_ESTATUS_POR_FASE,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import BotonCopiar from '../../Partials/BotonCopiar';
+import usePedidoDialog from '../../Partials/usePedidoDialog';
 import { textoDireccionParaGuia, textoDomicilioCompleto } from '../../Partials/textoDireccionGuia';
 
 const PROPS_LISTADO = ['pedidos', 'metricas', 'filtros'];
@@ -77,14 +80,15 @@ const modoAccionGuia = (pedido) => {
     return 'solo_lectura';
 };
 
-function CampoAsignarGuia({ pedido, onDone }) {
-    const [guia, setGuia] = useState('');
+function CampoAsignarGuia({ pedido, onDone, listo = true, rastreoFijo = false }) {
+    const [guia, setGuia] = useState(pedido.numero_rastreo || '');
+    const rastreoValido = pedido.guias_pdf_por_caja ? guia.trim().length >= 3 : Boolean(guia.trim());
     const [procesando, setProcesando] = useState(false);
 
     const guardar = (e) => {
         e?.preventDefault?.();
         const valor = guia.trim();
-        if (!valor || procesando) return;
+        if (!listo || !rastreoValido || procesando) return;
         setProcesando(true);
         router.post(route('control_pedidos.delegado.asignar_guia', pedido.id), { numero_rastreo: valor }, {
             preserveScroll: true,
@@ -100,11 +104,14 @@ function CampoAsignarGuia({ pedido, onDone }) {
                 type="text"
                 value={guia}
                 onChange={(e) => setGuia(e.target.value)}
+                aria-label="Número de rastreo"
+                maxLength={100}
+                readOnly={rastreoFijo}
                 placeholder="Número de guía"
                 className={`${THEME_INPUT} py-3 text-sm font-bold font-mono w-full`}
                 disabled={procesando}
             />
-            <button type="submit" disabled={procesando || !guia.trim()} className={`${BTN_PRIMARY} flex items-center justify-center gap-1.5 text-[10px] outline-none disabled:opacity-50 shrink-0 px-4`}>
+            <button type="submit" disabled={procesando || !listo || !rastreoValido} className={`${BTN_PRIMARY} flex items-center justify-center gap-1.5 text-[10px] outline-none disabled:opacity-50 shrink-0 px-4`}>
                 <Check className="w-3.5 h-3.5" />
                 {procesando ? 'Guardando…' : 'Asignar'}
             </button>
@@ -322,8 +329,107 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
     );
 }
 
+function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onDone, onPdfActualizado }) {
+    const archivo = useRef(null);
+    const botonCargar = useRef(null);
+    const botonRetirar = useRef(null);
+    const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
+    const etiqueta = `caja ${indice + 1}`;
+    const endpoint = route('control_pedidos.delegado.guia_pdf.store', pedido.id);
+    const opciones = {
+        preserveScroll: true,
+        only: PROPS_LISTADO,
+        onSuccess: onDone,
+        onFinish: () => setGuardando(false),
+    };
+    const actualizarPdf = async (pdf) => {
+        if (guardando) return;
+        if (!pdf && !window.confirm(`¿Retirar el PDF de la ${etiqueta}?`)) return;
+
+        setGuardando(true);
+        setError('');
+        const headers = { Accept: 'application/json' };
+        try {
+            let respuesta;
+            if (pdf) {
+                const datos = new FormData();
+                datos.append('guia_pdf', pdf);
+                datos.append('caja_id', String(caja.id));
+                respuesta = await axios.post(endpoint, datos, { headers });
+            } else {
+                respuesta = await axios.delete(route('control_pedidos.delegado.guia_pdf.destroy', pedido.id), {
+                    headers, data: { caja_id: caja.id },
+                });
+                if (botonRetirar.current === document.activeElement) {
+                    botonCargar.current?.focus({ preventScroll: true });
+                }
+            }
+            onPdfActualizado(caja.id, respuesta.data.guia);
+            reportarExitoOperacion(respuesta.data.message);
+        } catch (fallo) {
+            const respuesta = fallo.response;
+            setError(respuesta?.status === 422
+                ? respuesta.data.message
+                : 'No se pudo confirmar el cambio del PDF. Revisa el documento y vuelve a intentarlo.');
+        } finally {
+            setGuardando(false);
+        }
+    };
+    const boton = `${BTN_SECONDARY} min-h-[44px] px-2 text-xs inline-flex items-center gap-1.5 whitespace-nowrap`;
+
+    return (
+        <div className="space-y-1">
+            {guia && (
+                <p className="m-0 max-w-40 truncate text-xs theme-text-muted" title={guia.nombre_original}>
+                    {guia.nombre_original} · {guia.relacion_tipo === 'guia_caja_confirmada' ? 'Confirmada' : 'Avance'}
+                </p>
+            )}
+            <div className="flex flex-wrap gap-1">
+                {guia && (
+                    <button type="button" className={boton} aria-label={`Ver PDF de la ${etiqueta}`} onClick={() => onVer(guia)}>
+                        <Eye size={14} aria-hidden="true" /> Ver
+                    </button>
+                )}
+                {editable && (
+                    <>
+                        <input type="file" accept=".pdf,application/pdf" ref={archivo} hidden onChange={(event) => {
+                            const pdf = event.target.files?.[0];
+                            event.target.value = '';
+                            if (pdf) actualizarPdf(pdf);
+                        }} />
+                        <button type="button" ref={botonCargar} className={boton} aria-disabled={guardando}
+                            aria-label={`${guia ? 'Reemplazar' : 'Cargar'} PDF de la ${etiqueta}`}
+                            onClick={() => { if (!guardando) archivo.current?.click(); }}>
+                            <Upload size={14} aria-hidden="true" /> {guardando ? 'Guardando…' : guia ? 'Reemplazar' : 'Cargar'}
+                        </button>
+                        {guia && (
+                            <button type="button" ref={botonRetirar} className={boton} aria-disabled={guardando}
+                                aria-label={`Retirar PDF de la ${etiqueta}`} onClick={() => actualizarPdf(null)}>
+                                <Trash2 size={14} aria-hidden="true" /> Retirar
+                            </button>
+                        )}
+                        {!guia && general && (
+                            <button type="button" className={boton} disabled={guardando} aria-label={`Vincular PDF previo a la ${etiqueta}`} onClick={() => {
+                                if (window.confirm(`¿Vincular el PDF previo a la ${etiqueta}?`)) {
+                                    setGuardando(true);
+                                    router.post(endpoint, { guia_general_id: general.id, caja_id: caja.id }, opciones);
+                                }
+                            }}>
+                                <FileText size={14} aria-hidden="true" /> Vincular PDF previo
+                            </button>
+                        )}
+                    </>
+                )}
+            </div>
+            {error && <p role="alert" className="m-0 text-xs theme-text-peligro">{error}</p>}
+            {!guia && !editable && <span className="text-xs theme-text-muted">Sin PDF</span>}
+        </div>
+    );
+}
+
 export default function ModalDetalleDelegado({
-    abierto, onClose, pedido: pedidoInicial, onReportarError, onPedidoActualizado,
+    abierto, onClose, pedido: pedidoInicial, onReportarError, onPedidoActualizado, onPdfCajaGuardado,
 }) {
     const [pedido, setPedido] = useState(pedidoInicial);
     const [docPreview, setDocPreview] = useState(null);
@@ -334,6 +440,8 @@ export default function ModalDetalleDelegado({
             setDocPreview(null);
         }
     }, [abierto, pedidoInicial?.id, pedidoInicial?.numero_rastreo, pedidoInicial?.guia_subida_at]);
+
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedidoInicial?.guias_pdf_por_caja) && Boolean(pedido), onClose });
 
     if (!abierto || !pedido) return null;
 
@@ -346,14 +454,40 @@ export default function ModalDetalleDelegado({
     const badgesSla = badgesRetrasoSla(pedido);
     const badgeResguardo = pedido.es_resguardo ? badgeResguardoSemantico() : null;
     const badgeErrorGuia = tieneErrorGuiaReportado(pedido) ? badgeCorregirGuia() : null;
-    const docs = documentosVisibles(pedido);
+    const guiasPorCaja = Boolean(pedido.guias_pdf_por_caja);
+    const docs = documentosVisibles(pedido).filter((doc) => !guiasPorCaja || doc.tipo !== 'guia' || !doc.pedido_bma_caja_id);
     const cajasVigentes = (pedido.cajas || []).filter((caja) => !['retirada', 'cancelada'].includes(caja.estado_operativo));
+    const cajasPendientes = cajasVigentes.filter((caja) => caja.estatus_recoleccion !== 'recolectada');
+    const guias = (pedido.documentos || []).filter((doc) => doc.tipo === 'guia' && doc.activo);
+    const guiaGeneral = guias.find((doc) => !doc.pedido_bma_caja_id);
+    const guiaDeCaja = (caja) => guias.find((doc) => Number(doc.pedido_bma_caja_id) === Number(caja.id)
+        && ['guia_caja_avance', 'guia_caja_confirmada'].includes(doc.relacion_tipo));
+    const guiasCargadas = cajasPendientes.filter(guiaDeCaja).length;
+    const puedeGestionarCajas = guiasPorCaja && !pedido.es_resguardo
+        && ['EN_CEDIS', 'PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO'].includes(fase);
+    const faltaConfirmar = !pedido.numero_rastreo
+        || cajasPendientes.some((caja) => guiaDeCaja(caja)?.relacion_tipo !== 'guia_caja_confirmada');
+    const guiasConfirmadas = guiasPorCaja
+        ? cajasVigentes.filter((caja) => guiaDeCaja(caja)?.relacion_tipo === 'guia_caja_confirmada').length
+        : 0;
+    const mostrarResumenGuias = !faltaConfirmar && guiasConfirmadas > 0;
     const dir = pedido.direccion_vigente || pedido.direccionVigente;
     const modo = modoAccionGuia(pedido);
     const puedeReportar = ['PENDIENTE_DE_GUIA', 'PENDIENTE_DE_ENVIO', 'EN_CEDIS'].includes(fase) && !pedido.es_resguardo;
     const codigoDir = codigoDireccionCliente(pedido.cliente?.numero_cliente, dir?.numero_direccion);
     const direccionTexto = textoDireccionParaGuia(dir, pedido.domicilio_entrega);
     const domicilioCompleto = textoDomicilioCompleto(dir, pedido.domicilio_entrega, pedido.codigo_postal);
+
+    const actualizarPdfCaja = (cajaId, guia) => {
+        setPedido((actual) => {
+            if (actual?.id !== pedido.id) return actual;
+            const documentos = (actual.documentos || []).filter((doc) => !(
+                doc.tipo === 'guia' && doc.activo && Number(doc.pedido_bma_caja_id) === Number(cajaId)
+            ));
+            return { ...actual, documentos: guia ? [...documentos, guia] : documentos };
+        });
+        onPdfCajaGuardado?.();
+    };
 
     /** Refresca el pedido sin cerrar el modal (puede haber salido del tab filtrado). */
     const recargarPedido = async () => {
@@ -378,6 +512,7 @@ export default function ModalDetalleDelegado({
         <>
             <div className={`${THEME_MODAL_OVERLAY} items-start sm:items-center py-4 sm:py-6`} onClick={onClose}>
                 <div
+                    {...(guiasPorCaja ? { ...dialog, 'aria-label': 'Detalle de guías del pedido' } : {})}
                     className={`${THEME_MODAL_SHELL} max-w-3xl lg:max-w-5xl w-full flex flex-col`}
                     style={{ maxHeight: 'calc(100dvh - 2rem)' }}
                     onClick={(e) => e.stopPropagation()}
@@ -386,6 +521,7 @@ export default function ModalDetalleDelegado({
                         <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Detalle guía</p>
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
+                            <HermanosMultienvio pedido={pedido} className="mt-2" />
                             {pedido.vendedor?.name && (
                                 <p className="text-xs font-bold theme-text-muted mt-2 m-0 flex items-center gap-1">
                                     <User className="w-3.5 h-3.5" /> {pedido.vendedor.name}
@@ -468,6 +604,7 @@ export default function ModalDetalleDelegado({
                                                 <th className="px-3 py-2 font-bold">Peso cobrado</th>
                                                 <th className="px-3 py-2 font-bold">Flete</th>
                                                 <th className="px-3 py-2 font-bold">Seguro</th>
+                                                {guiasPorCaja && <th className="px-3 py-2 font-bold">Guía PDF</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -479,6 +616,14 @@ export default function ModalDetalleDelegado({
                                                     <td className="px-3 py-2">{caja.peso_cobrado_kg != null ? `${Number(caja.peso_cobrado_kg)} kg` : '—'}</td>
                                                     <td className="px-3 py-2">{formatearMoneda(caja.costo_envio)}</td>
                                                     <td className="px-3 py-2">{pedido.aplica_seguro ? formatearMoneda(caja.costo_seguro) : 'Sin seguro'}</td>
+                                                    {guiasPorCaja && (
+                                                        <td className="px-3 py-2">
+                                                            <GuiaPdfCaja pedido={pedido} caja={caja} indice={indice} guia={guiaDeCaja(caja)}
+                                                                general={guiaGeneral} onVer={setDocPreview} onDone={recargarPedido}
+                                                                onPdfActualizado={actualizarPdfCaja}
+                                                                editable={puedeGestionarCajas && caja.estatus_recoleccion !== 'recolectada'} />
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -539,17 +684,43 @@ export default function ModalDetalleDelegado({
                                 {modo === 'resguardo' && (
                                     <p className="text-sm font-bold theme-text-info m-0">En resguardo — la guía se habilita al liberar.</p>
                                 )}
-                                {modo === 'solo_lectura' && !pedido.numero_rastreo && (
+                                {!guiasPorCaja && modo === 'solo_lectura' && !pedido.numero_rastreo && (
                                     <p className="text-sm theme-text-muted font-bold m-0">Sin guía capturada.</p>
                                 )}
-                                {modo === 'solo_lectura' && pedido.numero_rastreo && fase === 'EN_CEDIS' && !pedido.empacado_at && (
+                                {!guiasPorCaja && modo === 'solo_lectura' && pedido.numero_rastreo && fase === 'EN_CEDIS' && !pedido.empacado_at && (
                                     <p className="text-sm font-bold theme-text-aviso m-0">
                                         Guía asignada. El número queda fijo mientras el pedido sigue en {LABELS_ESTATUS_POR_FASE.EN_CEDIS}; puedes adjuntar o reemplazar el PDF.
                                     </p>
                                 )}
-                                {modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
-                                {modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
-                                {(modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
+                                {mostrarResumenGuias && (
+                                    <div className="border-t theme-border pt-4">
+                                        <div role="status" className="flex items-center gap-3 rounded-xl border p-3 border-[color-mix(in_srgb,var(--color-exito)_48%,transparent)] bg-[color-mix(in_srgb,var(--color-exito)_10%,var(--theme-surface-solid))]">
+                                            <FileCheck size={24} className="shrink-0 theme-text-exito" aria-hidden="true" />
+                                            <div className="min-w-0 flex-1 space-y-1">
+                                                <p className="m-0 text-sm font-bold theme-text-main">
+                                                    {guiasConfirmadas} {guiasConfirmadas === 1 ? 'guía cargada' : 'guías cargadas'}
+                                                </p>
+                                                <p className="m-0 text-xs theme-text-exito">
+                                                    {guiasConfirmadas === 1 ? 'Guía confirmada' : 'Guías confirmadas'}
+                                                </p>
+                                            </div>
+                                            <CheckCircle2 size={16} className="shrink-0 theme-text-exito" aria-hidden="true" />
+                                        </div>
+                                    </div>
+                                )}
+                                {guiasPorCaja && !mostrarResumenGuias && (
+                                    <p role="status" className="text-sm theme-text-muted m-0">
+                                        {guiasCargadas} de {cajasPendientes.length} guías cargadas para cajas pendientes
+                                    </p>
+                                )}
+                                {puedeGestionarCajas && !mostrarResumenGuias && (
+                                    <CampoAsignarGuia key={pedido.id} pedido={pedido} onDone={recargarPedido}
+                                        listo={faltaConfirmar && cajasPendientes.length > 0 && guiasCargadas === cajasPendientes.length}
+                                        rastreoFijo={!faltaConfirmar || cajasPendientes.length !== cajasVigentes.length || (fase === 'EN_CEDIS' && Boolean(pedido.numero_rastreo))} />
+                                )}
+                                {!guiasPorCaja && modo === 'asignar' && <CampoAsignarGuia pedido={pedido} onDone={recargarPedido} />}
+                                {!guiasPorCaja && modo === 'correccion' && <CampoActualizarGuia pedido={pedido} onDone={recargarPedido} />}
+                                {!guiasPorCaja && (modo === 'asignar' || modo === 'correccion' || pedido.numero_rastreo) && (
                                     <div className="space-y-2">
                                         <p className={`${THEME_LABEL} m-0`}>PDF de la guía</p>
                                         <CampoSubirGuiaPdf

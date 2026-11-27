@@ -69,6 +69,13 @@ class FiltrosResumenSolicitudesTest extends TestCase
         $this->assertSame('Distribuidor', $resumen['tipos'][0]['nombre']);
         $this->assertCount(16, $service->ejecutar(null, $filtros + ['tab' => 'VIGENTES'], false));
         $this->assertSame([$error->id], $service->ejecutar(null, $filtros + ['tab' => 'INCORRECTAS'], false)->pluck('id')->all());
+        $conteos = $service->conteosPorTab(null, $filtros + ['tab' => 'INCORRECTAS']);
+        $this->assertSame(19, $conteos['TODAS']);
+        $this->assertSame(1, $conteos['PENDIENTES']);
+        $this->assertSame(17, $conteos['RESPONDIDAS']);
+        $this->assertSame(1, $conteos['INCORRECTAS']);
+        $this->assertSame(0, $conteos['CANCELADAS']);
+        $this->assertArrayNotHasKey('ELIMINADAS', $conteos);
         $this->assertCount(0, $service->ejecutar(null, array_replace($filtros, ['tag' => 'sin_tag']), false));
         $this->cliente->update(['vendedor_id' => null]);
         $this->assertSame(19, $service->resumenFiltrado(null, array_replace($filtros, ['tag' => 'sin_tag']))['solicitudes']);
@@ -166,5 +173,28 @@ class FiltrosResumenSolicitudesTest extends TestCase
         $this->assertSame([$vencida->id], $ids(['pago' => 'vencido']));
         $this->assertSame([$cancelacion->id], $ids(['cancelacion' => 'solicitada']));
         $this->assertCount(4, $ids(['pago' => 'desconocido', 'consulta' => 'otra']));
+    }
+
+    public function test_busqueda_tipificada_no_mezcla_folio_con_nombre_ni_responsable(): void
+    {
+        $folio = $this->solicitud();
+        $otroCliente = Cliente::create([
+            'numero_cliente' => '8802',
+            'nombre' => 'Razón Distinta SA',
+            'vendedor_id' => $this->vendedor->id,
+            'lista_actual_id' => $this->lista->id,
+        ]);
+        $porNombre = $this->solicitud('Pendiente', ['cliente_id' => $otroCliente->id]);
+        $otroResponsable = User::factory()->create(['name' => 'Pat Rivera']);
+        $porResponsable = $this->solicitud('Pendiente', ['vendedor_id' => $otroResponsable->id]);
+        $service = app(ListarSolicitudesService::class);
+        $ids = fn (array $f) => $service->ejecutar(null, $f, false)->pluck('id')->all();
+
+        $this->assertSame([$folio->id], $ids(['q' => (string) $folio->id, 'q_campo' => 'folio']));
+        $this->assertSame([$folio->id], $ids(['q' => 'FOL-'.$folio->id, 'q_campo' => 'folio']));
+        $this->assertSame([$porNombre->id], $ids(['q' => 'Razón Distinta', 'q_campo' => 'nombre_cliente']));
+        $this->assertSame([$porNombre->id], $ids(['q' => '8802', 'q_campo' => 'numero_cliente']));
+        $this->assertSame([$porResponsable->id], $ids(['q' => 'Pat Rivera', 'q_campo' => 'responsable']));
+        $this->assertNotContains($porNombre->id, $ids(['q' => 'Razón Distinta', 'q_campo' => 'folio']));
     }
 }

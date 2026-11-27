@@ -5,6 +5,7 @@ import { Eye, GripVertical, Minus, MoreHorizontal, Pencil, Plus, Trash2 } from '
 import { THEME_BTN_SECONDARY } from '@/utils/geliaTheme';
 import { formatearDuracionSeg, formatearTamanoBytes, textoEliminacion, textoProgramacion } from '@/utils/estadoPublicidadPdv';
 import BadgeEstadoPublicidad, { BadgeAlcancePublicidad } from './BadgeEstadoPublicidad';
+import CapaMediaRotada from '@/Pages/PuntoVenta/Pantallas/Partials/CapaMediaRotada';
 
 export default function TarjetaPublicidad({
     item,
@@ -75,11 +76,13 @@ export default function TarjetaPublicidad({
                 <span className="text-sm font-black theme-text-main">{String(posicion).padStart(2, '0')}</span>
             </div>
             <button type="button" className="relative h-24 w-full shrink-0 overflow-hidden rounded-xl bg-black md:h-20 md:w-36" onClick={() => onPrevisualizar(item)} aria-label="Previsualizar">
-                {item.tipo === 'video' ? (
-                    <video src={item.url || undefined} muted playsInline preload="metadata" className="h-full w-full object-cover" />
-                ) : (
-                    <img src={item.url || undefined} alt="" className="h-full w-full object-cover" />
-                )}
+                <CapaMediaRotada rotacion={item.rotacion}>
+                    {item.tipo === 'video' ? (
+                        <video src={item.url || undefined} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+                    ) : (
+                        <img src={item.url || undefined} alt="" className="h-full w-full object-cover" />
+                    )}
+                </CapaMediaRotada>
             </button>
             <div className="min-w-0 flex-1 space-y-1">
                 <p className="font-bold theme-text-main m-0 truncate" title={item.nombre_original || ''}>

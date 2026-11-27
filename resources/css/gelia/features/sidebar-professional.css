@@ -16,9 +16,9 @@
     --gelia-pro-brand-height: calc(2.25rem + 1.5rem + 1px);
     --gelia-pro-brand-rail-height: calc(2rem + 0.25rem + 2rem + 0.625rem + 1px);
     --gelia-pro-utilities-height: calc(var(--gelia-pro-utility-btn-size) + 1rem + 1px);
-    --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-rail-cell) + 0.25rem + 0.625rem + 1px);
+    --gelia-pro-utilities-rail-height: calc(3 * var(--gelia-pro-rail-cell) + 0.5rem + 0.625rem + 1px);
     /* Rail contraído: celdas más compactas para caber sin scroll en 100dvh típico */
-    --gelia-pro-rail-cell: 2.125rem;
+    --gelia-pro-rail-cell: 2.375rem;
     --gelia-pro-rail-gap: 0.125rem;
     /* Inset horizontal compartido del rail contraído (marca, nav, utilidades, perfil) */
     --gelia-pro-rail-inset-inline: 0.25rem;
@@ -188,7 +188,7 @@
         --gelia-pro-rail-cell: 2rem;
         --gelia-pro-rail-gap: 0.0625rem;
         --gelia-pro-brand-rail-height: calc(1.875rem + 0.25rem + 1.875rem + 0.5rem + 1px);
-        --gelia-pro-utilities-rail-height: calc(2 * var(--gelia-pro-rail-cell) + 0.125rem + 0.5rem + 1px);
+        --gelia-pro-utilities-rail-height: calc(3 * var(--gelia-pro-rail-cell) + 0.25rem + 0.5rem + 1px);
     }
 }
 
@@ -201,16 +201,66 @@
 }
 
 .gelia-pro-sidebar__header {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-sizing: border-box;
+    height: 2.375rem;
+    margin: 0 auto;
+    padding: 0.875rem 0.625rem 0.25rem;
     font-size: 0.6875rem;
-    font-weight: 600;
-    letter-spacing: 0.06em;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
+    white-space: nowrap;
     color: var(--theme-text-muted);
-    opacity: 0.9;
-    padding: 0.625rem 0.625rem 0.25rem;
-    max-height: 2.5rem;
     overflow: hidden;
+    transition:
+        height var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        width var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        padding var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        margin var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
+        color var(--gelia-pro-label-duration) var(--gelia-pro-ease),
+        background-color var(--gelia-pro-settle-duration) var(--gelia-pro-ease);
+}
+
+/* Marca de acento: identifica el inicio de cada sección sin añadir cajas. */
+.gelia-pro-sidebar__header::before {
+    content: '';
+    flex-shrink: 0;
+    width: 0.75rem;
+    height: 2px;
+    border-radius: 9999px;
+    background: var(--color-primario);
+    transition: opacity var(--gelia-pro-label-duration) var(--gelia-pro-ease);
+}
+
+.gelia-pro-sidebar__header:first-child {
+    height: 1.625rem;
+    padding-top: 0.375rem;
+}
+
+/* Rail contraído: el mismo elemento se pliega a una regla fina (sin cambiar de nodo al terminar). */
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header {
+    width: 1.25rem;
+    height: 1px;
+    min-height: 0;
+    max-height: none;
+    flex: 0 0 auto;
+    margin: 0.5rem auto;
+    padding: 0;
+    color: transparent;
+    background-color: var(--theme-border);
+}
+
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header::before {
+    opacity: 0;
+}
+
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header:first-child {
+    height: 0;
+    margin: 0;
+    background: transparent;
 }
 
 .gelia-pro-sidebar__row {
@@ -232,51 +282,51 @@
     font-weight: 500;
     line-height: 1.25;
     overflow: hidden;
-    transition:
-        background 0.18s ease,
-        border-color 0.18s ease,
-        color 0.18s ease,
-        transform var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        width var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        min-width var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        height var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        min-height var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        padding var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        margin var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        gap var(--gelia-pro-settle-duration) var(--gelia-pro-ease),
-        border-inline-start-width var(--gelia-pro-settle-duration) var(--gelia-pro-ease);
+    transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-/* Categorías raíz (Inicio, Operaciones, Finanzas…) */
+/* Categorías raíz (Inicio, Comercial, Finanzas…): fila plana con icono en mosaico */
 .gelia-pro-sidebar__row--root {
-    margin-block: 0.125rem;
-    min-height: calc(var(--gelia-sidebar-row-height) + 0.125rem);
+    margin-block: 0.0625rem;
+    min-height: calc(var(--gelia-sidebar-row-height) - 0.125rem);
     padding-block: 0.125rem;
+    padding-inline-start: 0.25rem;
     font-size: 0.875rem;
     font-weight: 600;
-    background: color-mix(in srgb, currentColor 4%, transparent);
-    border: 1px solid color-mix(in srgb, var(--theme-border, currentColor) 65%, transparent);
+    background: transparent;
+    border: 1px solid transparent;
     border-inline-start-width: 3px;
 }
 
 .gelia-pro-sidebar__row--root:hover {
-    background: color-mix(in srgb, currentColor 8%, transparent);
+    background: color-mix(in srgb, currentColor 6%, transparent);
 }
 
 .gelia-pro-sidebar__row--root-open {
-    background: color-mix(in srgb, var(--color-primario) 6%, transparent);
-    border-color: color-mix(in srgb, var(--color-primario) 22%, var(--theme-border, currentColor));
+    background: color-mix(in srgb, var(--color-primario) 7%, transparent);
+    border-color: color-mix(in srgb, var(--color-primario) 18%, transparent);
+    border-inline-start-color: var(--color-primario);
 }
 
-.gelia-pro-sidebar__row--flyout-open {
-    background: color-mix(in srgb, var(--color-primario) 14%, transparent);
-    color: var(--theme-text-main, inherit);
+/* Mosaico del icono: fondo 10 % y borde 30 % del acento (identidad de GELIA, ver DESIGN.md). */
+.gelia-pro-sidebar__icon-tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 1.875rem;
+    height: 1.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 10%, transparent);
+    color: var(--color-primario);
+    transition: background 0.18s ease, border-color 0.18s ease;
 }
 
-.gelia-pro-sidebar__row--root .gelia-pro-sidebar__row-icon {
-    width: 1.125rem;
-    height: 1.125rem;
-    opacity: 1;
+.gelia-pro-sidebar__row--root:hover .gelia-pro-sidebar__icon-tile,
+.gelia-pro-sidebar__row--root-open .gelia-pro-sidebar__icon-tile {
+    background: color-mix(in srgb, var(--color-primario) 16%, transparent);
+    border-color: color-mix(in srgb, var(--color-primario) 45%, transparent);
 }
 
 /* Subgrupos anidados (Logística → Gestión de pedidos) */
@@ -496,6 +546,11 @@
     transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
 
+.gelia-pro-sidebar__utility-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
 .gelia-pro-sidebar__utility-btn:hover {
     border-color: color-mix(in srgb, var(--color-primario) 35%, var(--theme-border));
     background: color-mix(in srgb, var(--color-primario) 8%, var(--theme-surface-bg));
@@ -616,6 +671,39 @@
     animation: geliaProMenuFadeIn 0.18s var(--gelia-pro-ease) both;
 }
 
+/* Salida: el menú permanece montado USER_MENU_EXIT_MS (SidebarUserMenu.jsx) para poder animarse. */
+.gelia-pro-sidebar__user-menu[data-state='closing'] {
+    pointer-events: none;
+    animation: geliaProMenuOut 0.16s var(--gelia-pro-ease) both;
+}
+
+.gelia-pro-sidebar__user-menu--flyout[data-state='closing'] {
+    animation: geliaProMenuFadeOut 0.14s ease both;
+}
+
+@keyframes geliaProMenuOut {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(6px) scale(0.98);
+    }
+}
+
+@keyframes geliaProMenuFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.gelia-pro-sidebar__user-menu-sep {
+    display: block;
+    height: 1px;
+    margin: 0.25rem 0.5rem;
+    background: var(--theme-border);
+}
+
 @keyframes geliaProMenuFadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
@@ -671,7 +759,6 @@
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__brand-text,
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__row-label,
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__row-chevron,
-.gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__header,
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__badge,
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__user-meta,
 .gelia-pro-sidebar[data-anim='expanding'] .gelia-pro-sidebar__user-chevron {
@@ -686,7 +773,6 @@
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__brand-text,
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__row-label,
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__row-chevron,
-.gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__header,
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__badge,
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__user-meta,
 .gelia-pro-sidebar:is([data-anim='collapsing'], [data-anim='settling']) .gelia-pro-sidebar__user-chevron {
@@ -695,10 +781,6 @@
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand-text,
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-label,
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-chevron,
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header,
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__badge,
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-meta,
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user-chevron {
     max-width: 0;
@@ -709,8 +791,12 @@
     overflow: hidden;
 }
 
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__header {
-    max-height: 0;
+/* Filas del nav: el texto no cambia de caja, solo se desvanece y lo recorta el ancho del aside. */
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-label,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-chevron,
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__badge {
+    opacity: 0;
+    pointer-events: none;
 }
 
 /* Submenús plegados en clip y settle; no display:none (salto de altura). */
@@ -720,48 +806,46 @@
     opacity: 0;
 }
 
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__brand-text,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__row-label,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__row-chevron,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__header,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__badge,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__user-meta,
-.gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__user-chevron {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-    opacity: 0;
-    pointer-events: none;
-    flex: none;
+/* Mientras el aside cambia de ancho, lo único que anima es ese ancho (contenido en
+   `contain: layout paint`) y el fundido de etiquetas (opacity, compositor). El resto de
+   transiciones de geometría (height/padding/margin/gap/max-width/flex de ~todas las filas)
+   forzaban un layout por cuadro: ahí estaba el lag. Los hijos se asientan al instante,
+   recortados por el overflow del aside. */
+.gelia-pro-sidebar[data-anim] * {
+    transition: none !important;
 }
 
-.gelia-pro-sidebar[data-anim] {
-    will-change: width;
+.gelia-pro-sidebar[data-anim] :is(
+    .gelia-pro-sidebar__brand-text,
+    .gelia-pro-sidebar__row-label,
+    .gelia-pro-sidebar__row-chevron,
+    .gelia-pro-sidebar__badge,
+    .gelia-pro-sidebar__user-meta,
+    .gelia-pro-sidebar__user-chevron
+) {
+    transition: opacity var(--gelia-pro-label-duration) var(--gelia-pro-ease) !important;
+}
+
+/* Las filas dentro de submenús se recortan al plegarse: no hace falta animar su geometría. */
+.gelia-pro-sidebar[data-anim] .gelia-pro-sidebar__children .gelia-pro-sidebar__row,
+.gelia-pro-sidebar[data-anim] .gelia-pro-sidebar__children .gelia-pro-sidebar__row-icon {
+    transition: none;
+}
+
+.gelia-pro-sidebar[data-anim] .gelia-pro-sidebar__nav {
+    overflow-y: hidden;
 }
 
 .gelia-pro-sidebar[data-collapsed='true']:not([data-anim]) .gelia-pro-sidebar__collapse {
     display: none;
 }
 
-/* Morph card → icono (settling) y rail asentado. Sin justify-content/margin:auto (no interpolan). */
+/* Rail: las filas raíz no cambian de tamaño ni de posición; el icono queda donde estaba.
+   Así solo se anima el ancho del aside y el resto del movimiento es recorte. */
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root {
-    border-color: transparent;
+    padding-inline-end: 0;
     background: transparent;
-    width: var(--gelia-pro-rail-cell);
-    min-width: var(--gelia-pro-rail-cell);
-    height: var(--gelia-pro-rail-cell);
-    min-height: var(--gelia-pro-rail-cell);
-    padding: 0.5rem;
-    margin-inline: 0;
-    border-radius: 0.5rem;
-    gap: 0;
-    justify-content: center;
+    border-color: transparent;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--root:hover,
@@ -769,50 +853,13 @@
     background: color-mix(in srgb, var(--color-primario) 12%, transparent);
 }
 
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row,
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__link {
-    align-items: center;
-    justify-content: center;
-    width: var(--gelia-pro-rail-cell);
-    min-width: var(--gelia-pro-rail-cell);
-    height: var(--gelia-pro-rail-cell);
-    min-height: var(--gelia-pro-rail-cell);
-    padding: 0.5rem;
-    margin-inline: 0;
-    border-inline-start-width: 0;
-    border-radius: 0.5rem;
-    gap: 0;
-}
-
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row-icon {
-    margin: 0;
-    width: 1.125rem;
-    height: 1.125rem;
-    flex-shrink: 0;
-}
-
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--active {
-    background: color-mix(in srgb, var(--color-primario) 14%, transparent);
+.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__row--hint {
+    border-inline-start-color: var(--color-primario);
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__nav {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--gelia-pro-rail-gap);
-    margin-block: 0.125rem 0.25rem;
-    margin-inline: var(--gelia-pro-rail-inset-inline);
-    padding: 0.125rem 0 0.25rem;
     background: transparent;
     border-color: transparent;
-    border-radius: 0.625rem;
-}
-
-.gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__group {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__user {
@@ -861,6 +908,8 @@
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__brand-main {
     flex: 0;
     justify-content: center;
+    /* El texto colapsa a ancho 0 pero su gap seguía empujando el logo hacia la izquierda. */
+    gap: 0;
 }
 
 .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__toggle {
@@ -894,29 +943,32 @@
     justify-content: center;
 }
 
-.gelia-pro-sidebar__tooltip[data-tip]:not([data-tip='']) {
-    position: relative;
+/* Tooltip del rail contraído: portal con posición fija (SidebarTipLayer.jsx). */
+.gelia-pro-tip {
+    position: fixed;
+    z-index: calc(var(--gelia-z-sidebar) + 7);
+    transform: translateY(-50%);
+    white-space: nowrap;
+    padding: 0.35rem 0.55rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--theme-surface-bg);
+    border: 1px solid var(--theme-border);
+    box-shadow: var(--theme-shadow-card);
+    color: var(--theme-text-main);
+    pointer-events: none;
+    animation: geliaProTipIn 0.14s var(--gelia-pro-ease) both;
 }
 
-@media (hover: hover) and (min-width: 768px) {
-    .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__tooltip[data-tip]:hover::after,
-    .gelia-pro-sidebar[data-collapsed='true'] .gelia-pro-sidebar__tooltip[data-tip]:focus-visible::after {
-        content: attr(data-tip);
-        position: absolute;
-        inset-inline-start: calc(100% + 0.5rem);
-        top: 50%;
-        transform: translateY(-50%);
-        z-index: 20;
-        white-space: nowrap;
-        padding: 0.35rem 0.55rem;
-        border-radius: 0.375rem;
-        font-size: 0.75rem;
-        font-weight: 500;
-        background: var(--theme-surface-bg);
-        border: 1px solid var(--theme-border);
-        box-shadow: var(--theme-shadow-card);
-        color: var(--theme-text-main);
-        pointer-events: none;
+@keyframes geliaProTipIn {
+    from {
+        opacity: 0;
+        transform: translate(-4px, -50%);
+    }
+    to {
+        opacity: 1;
+        transform: translate(0, -50%);
     }
 }
 
@@ -967,17 +1019,45 @@
 .gelia-pro-flyout__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.625rem 0.75rem;
+    gap: 0.75rem;
+    padding: 0.75rem 0.875rem;
     border-block-end: 1px solid var(--theme-border);
-    background: var(--theme-element-bg);
+    background: color-mix(in srgb, var(--color-primario) 6%, var(--theme-element-bg));
     color: var(--theme-text-main);
 }
 
+.gelia-pro-flyout__tile {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2.125rem;
+    height: 2.125rem;
+    border-radius: 0.625rem;
+    border: 1px solid color-mix(in srgb, var(--color-primario) 30%, transparent);
+    background: color-mix(in srgb, var(--color-primario) 10%, transparent);
+    color: var(--color-primario);
+}
+
+.gelia-pro-flyout__heading {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.gelia-pro-flyout__eyebrow {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--theme-text-muted);
+    line-height: 1.2;
+}
+
 .gelia-pro-flyout__title {
-    font-size: 0.875rem;
-    font-weight: 600;
+    font-size: 0.9375rem;
+    font-weight: 800;
     line-height: 1.25;
 }
 
@@ -1001,7 +1081,7 @@
 }
 
 .gelia-pro-flyout__body {
-    padding: 0.375rem;
+    padding: 0.5rem;
     overflow-x: hidden;
     overflow-y: auto;
     min-height: 0;
@@ -1057,9 +1137,11 @@
 .gelia-pro-sidebar--drawer {
     z-index: calc(var(--gelia-z-sidebar) + 12);
     transform: translateX(calc(-100% - 0.75rem));
+    visibility: hidden;
     transition:
         transform 0.34s var(--gelia-pro-ease),
-        box-shadow 0.34s var(--gelia-pro-ease);
+        box-shadow 0.34s var(--gelia-pro-ease),
+        visibility 0s linear 0.34s;
     width: min(22rem, 88vw);
     top: 0;
     height: 100dvh;
@@ -1072,6 +1154,8 @@
 }
 
 .gelia-pro-sidebar--drawer[data-open='true'] {
+    visibility: visible;
+    transition-delay: 0s;
     transform: translateX(0);
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
 }
@@ -1196,7 +1280,10 @@
     .gelia-pro-sidebar__user,
     .gelia-pro-sidebar__user-btn,
     .gelia-pro-sidebar__avatar,
-    .gelia-pro-sidebar__user-menu {
+    .gelia-pro-sidebar__user-menu,
+    .gelia-pro-sidebar__icon-tile,
+    .gelia-pro-flyout,
+    .gelia-pro-tip {
         transition: none;
         animation: none;
     }

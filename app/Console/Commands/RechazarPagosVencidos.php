@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use App\Notifications\AlertaSolicitud;
 use App\Notifications\ResumenPagosVencidos;
+use App\Support\Solicitudes\EmitirSolicitudTagActualizada;
 
 class RechazarPagosVencidos extends Command
 {
@@ -47,7 +48,8 @@ class RechazarPagosVencidos extends Command
                 continue;
             }
 
-            DB::transaction(function () use ($solicitud, &$contador) {
+            $procesada = false;
+            DB::transaction(function () use ($solicitud, &$contador, &$procesada) {
                 if ($solicitud->cliente_id) {
                     app(AjustarMontoPorSolicitudService::class)->prepararBloqueo((int) $solicitud->cliente_id);
                 }
@@ -109,7 +111,12 @@ class RechazarPagosVencidos extends Command
                 }
 
                 $contador++;
+                $procesada = true;
             });
+
+            if ($procesada) {
+                EmitirSolicitudTagActualizada::desde($solicitud, 'vencida');
+            }
         }
 
         if ($contador > 0 && $encargadas->isNotEmpty()) {

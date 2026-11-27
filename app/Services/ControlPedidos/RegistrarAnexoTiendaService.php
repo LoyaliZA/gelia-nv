@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use App\Support\ControlPedidos\ActualizacionConsulta;
 use App\Support\ControlPedidos\ConsultaMunicipal;
+use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\Municipal\RecorridoFisicoMunicipal;
 use App\Support\ControlPedidos\RegistrarPedidos\DestinoRevisionRegistrarPedidos;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -79,11 +80,26 @@ final class RegistrarAnexoTiendaService
                 return $this->pedidoRelacionado($pedido, $usuario, $lineas, $archivos, $solicitudId);
             }
 
+            $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
+            $consultaCedis = $pedido->esConsultaDisponibilidadCedis();
+            if (($json['modalidad_entrega'] ?? '') === 'tienda' && ($consultaCedis || $pedido->esConsultaDisponibilidadTienda())
+                && $pedido->revisionesProducto()
+                    ->whereNotIn('id', $consultaCedis
+                        ? ActualizacionConsulta::revisionesEnCurso($json)
+                        : RespuestaPreparacionTienda::revisionesNoEnviadas($json))
+                    ->whereIn('estado_fisico', ['regular', 'malo', 'danado', 'sin_existencia'])
+                    ->whereNull('resolucion')
+                    ->whereNull('retirada_at')
+                    ->exists()) {
+                throw ValidationException::withMessages([
+                    'anexo' => 'Confirme, retire o sustituya las piezas pendientes antes de agregar más.',
+                ]);
+            }
+
             $cerrada = $pedido->consulta_cerrada_at !== null;
             $ciclo = $this->adjuntos->ciclo($pedido, $cerrada);
             $this->adjuntos->asegurar($this->adjuntos->bytesUsados($pedido, $ciclo), $archivos);
             $docs = $this->guardar($pedido, $archivos, 'anexo', PedidoBmaDocumento::TIPO_ANEXO_PIEZAS, $this->comentarioDe($lineas));
-            $json = is_array($pedido->solicitud_preparacion_json) ? $pedido->solicitud_preparacion_json : [];
             $meta = $this->meta($docs, $ciclo, $solicitudId);
             $lineas = array_map(fn ($linea) => array_merge($linea, $meta), $lineas);
             if (($json['modalidad_entrega'] ?? '') === 'tienda' && ($json['area_revision'] ?? '') === 'preparacion_tienda') {

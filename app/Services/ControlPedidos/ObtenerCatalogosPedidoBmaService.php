@@ -79,7 +79,10 @@ class ObtenerCatalogosPedidoBmaService
                 'requiere_caratula', 'requiere_identificacion', 'requiere_remision', 'permite_por_cobrar',
                 'requiere_peso', 'requiere_caja', 'requiere_evidencia_conjunto', 'campos_destino_obligatorios',
                 'plantilla_caratula', 'habilitado_envio_municipio',
-            ]),
+            ])->each(fn (CatalogoPaqueteriaPedido $paqueteria) => $paqueteria->setAttribute(
+                'cobertura_seguro',
+                app(\App\Services\ControlPedidos\CalcularSeguroPedidoService::class)->tieneCobertura($paqueteria->nombre)
+            )),
             'departamentos' => Departamento::query()
                 ->where('activo', true)
                 ->orderBy('nombre')

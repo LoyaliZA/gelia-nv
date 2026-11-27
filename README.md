@@ -29,7 +29,7 @@
 
 ## Qué es GELIA
 
-Para agentes que trabajen en la interfaz: consultar [AGENTS.md](AGENTS.md) y la [guía de dirección visual de GELIA](GUIA_DISENO_GELIA.md) antes de aplicar skills de diseño.
+Para agentes que trabajen en la interfaz: consultar [AGENTS.md](AGENTS.md) y [DESIGN.md](DESIGN.md) (identidad en `DESIGN.md`).
 
 **GELIA-NV** es una aplicación de uso interno que reúne herramientas para la operación comercial, logística y administrativa de Bellaroma. Ayuda a las áreas a consultar información, atender solicitudes y dar seguimiento a sus procesos desde una plataforma compartida.
 

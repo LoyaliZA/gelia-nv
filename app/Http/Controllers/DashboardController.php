@@ -8,11 +8,13 @@ use App\Models\SolicitudTag;
 use App\Models\CatalogoEstadoSolicitud;
 use App\Models\CatalogoProceso;
 use App\Models\CobranzaAlerta;
-use App\Models\CobranzaFactura;
 use App\Services\Activos\AlertasActivosService;
 use App\Services\CancelacionesCotizaciones\ListarSolicitudesOperativasService;
+use App\Services\Cobranza\ResumenCarteraVencidaService;
 use App\Services\Contabilidad\ObtenerDashboardContabilidadService;
 use App\Services\ControlPedidos\ListarPedidosBmaService;
+use App\Services\Dashboard\ObtenerMetricasOperativasDashboardService;
+use App\Services\Dashboard\ResolverPeriodoDashboard;
 use App\Services\Facturas\ListarSolicitudesFacturaService;
 use App\Services\Rh\ResumenDashboardRhService;
 use App\Services\Solicitudes\ListarSolicitudesService;
@@ -39,6 +41,9 @@ class DashboardController extends Controller
         $alertasActivosDestacadas = [];
         $rhWidget = [];
 
+        $resolverPeriodo = app(ResolverPeriodoDashboard::class);
+        $periodo = $resolverPeriodo->resolver($request);
+
         $verWidgetSolicitudes = $user->can('configuracion.ver_auditoria')
             || $user->can('solicitudes.ver_listado')
             || $user->can('solicitudes.gestionar');
@@ -56,51 +61,21 @@ class DashboardController extends Controller
             $estadisticas['mis_activas'] = $queryMisActivas->count();
         }
 
-        if ($user->can('usuarios.gestionar') || $user->can('configuracion.ver_auditoria') || $user->can('clientes.carga_masiva')) {
-            $inicioMesActual = now()->startOfMonth();
-
-            $estadisticas['solicitudes_mes'] = SolicitudTag::whereMonth('created_at', $inicioMesActual->month)
-                ->whereYear('created_at', $inicioMesActual->year)
-                ->count();
-
-            $inicioMesAnterior = $inicioMesActual->copy()->subMonth();
-            $montosPorDia = SolicitudTag::query()
-                ->where('created_at', '>=', $inicioMesAnterior)
-                ->where('created_at', '<', $inicioMesActual)
-                ->whereNotNull('monto_cotizado')
-                ->selectRaw('DATE(created_at) as dia, SUM(monto_cotizado) as total')
-                ->groupByRaw('DATE(created_at)')
-                ->pluck('total', 'dia');
-
-            $tramos = [];
-            if ($montosPorDia->isNotEmpty()) {
-                $diasDelMes = $inicioMesAnterior->daysInMonth;
-                for ($desde = 1; $desde <= $diasDelMes; $desde += 7) {
-                    $tramos[] = ['desde' => $desde, 'hasta' => min($desde + 6, $diasDelMes), 'monto' => 0];
-                }
-
-                foreach ($montosPorDia as $fecha => $monto) {
-                    $dia = (int) substr($fecha, -2);
-                    $tramos[intdiv($dia - 1, 7)]['monto'] += $monto;
-                }
-            }
-
-            $estadisticas['cotizado_mes_anterior'] = [
-                'periodo' => $inicioMesAnterior->locale('es')->translatedFormat('F Y'),
-                'total' => $montosPorDia->sum(),
-                'tramos' => $tramos,
-            ];
-        }
-
         if ($verWidgetSolicitudes) {
-            $ultimasSolicitudes = SolicitudTag::with(['cliente', 'estado', 'proceso'])
+            $metricasOperativasDashboard = app(ObtenerMetricasOperativasDashboardService::class)
+                ->ejecutar($user, $periodo);
+            $estadisticas['cotizado'] = $metricasOperativasDashboard['cotizado'];
+            $estadisticas['actividad'] = $metricasOperativasDashboard['actividad'];
+            $estadisticas['solicitudes_periodo'] = $metricasOperativasDashboard['actividad']['creadas'];
+
+            $listarSolicitudes = app(ListarSolicitudesService::class);
+            $queryUltimas = SolicitudTag::with(['cliente', 'estado', 'proceso'])
                 ->whereHas('proceso', function ($q) {
                     $q->where('categoria_flujo', '!=', CatalogoProceso::CATEGORIA_OPERATIVO);
-                })
-                ->latest()
-                ->take(4)
-                ->get();
-            $metricasSolicitudes = app(ListarSolicitudesService::class)->metricas($user);
+                });
+            $listarSolicitudes->aislarConsulta($queryUltimas, $user);
+            $ultimasSolicitudes = $queryUltimas->latest()->take(4)->get();
+            $metricasSolicitudes = $listarSolicitudes->metricas($user);
         }
 
         if ($user->can('cancelaciones_cotizaciones.ver_listado')) {
@@ -134,14 +109,12 @@ class DashboardController extends Controller
         }
 
         if ($user->can('cobranza.ver')) {
-            $hoy = now()->toDateString();
+            $cartera = app(ResumenCarteraVencidaService::class)->ejecutar();
             $metricasCredibox = [
                 'alertas_pendientes' => CobranzaAlerta::query()->where('estado', 'pendiente')->count(),
-                'saldo_vencido' => round((float) CobranzaFactura::query()
-                    ->where('pagada', false)
-                    ->where('monto', '>', 0)
-                    ->whereDate('fecha_vencimiento', '<', $hoy)
-                    ->sum('monto'), 2),
+                'saldo_vencido' => $cartera['saldo_vencido'],
+                'cartera' => $cartera['cartera'],
+                'top_vencidos' => $cartera['top_vencidos'],
             ];
         }
 
@@ -154,7 +127,7 @@ class DashboardController extends Controller
         }
 
         if ($user->can('contabilidad.ver')) {
-            $dashRequest = Request::create('/', 'GET', ['filtro' => 'mes']);
+            $dashRequest = Request::create('/', 'GET', $resolverPeriodo->parametrosContabilidad($periodo));
             $kpis = app(ObtenerDashboardContabilidadService::class)->ejecutar($dashRequest)['kpis'] ?? [];
             $metricasContabilidad = [
                 'ventas' => $kpis['ventas'] ?? 0,
@@ -162,11 +135,13 @@ class DashboardController extends Controller
                 'ganancias' => $kpis['ganancias'] ?? 0,
                 'perdidas' => $kpis['perdidas'] ?? 0,
                 'utilidad' => round((float) (($kpis['ganancias'] ?? 0) + ($kpis['perdidas'] ?? 0)), 2),
+                'etiqueta_periodo' => $periodo['etiqueta'],
             ];
         }
 
         return Inertia::render('Dashboards/Index', [
             'estadisticas' => $estadisticas,
+            'filtro_periodo' => $resolverPeriodo->paraInertia($periodo),
             'ultimas_solicitudes' => $ultimasSolicitudes,
             'ultimas_operativas' => $ultimasOperativas,
             'metricas_solicitudes' => $metricasSolicitudes,
@@ -195,6 +170,7 @@ class DashboardController extends Controller
             'dashboard_layout.*.y' => 'required_with:dashboard_layout|integer|min:0|max:200',
             'dashboard_layout.*.w' => 'required_with:dashboard_layout|integer|min:4|max:24',
             'dashboard_layout.*.h' => 'required_with:dashboard_layout|integer|min:4|max:100',
+            'dashboard_layout.*.rw' => 'nullable|integer|min:320|max:10000',
             'dashboard_preset' => 'sometimes|string|in:operativo,comercial,launcher',
         ]);
 

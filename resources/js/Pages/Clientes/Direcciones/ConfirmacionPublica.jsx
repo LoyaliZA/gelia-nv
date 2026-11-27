@@ -27,10 +27,10 @@ function mensajePorMotivo({ aplicado, ya_utilizado, enlace_invalido, motivo }) {
     }
 
     const mapa = {
-        sin_token: 'Para capturar una dirección necesita un enlace único enviado por su vendedora.',
-        invalido: 'El enlace no es válido. Solicite uno nuevo a su vendedora.',
-        expirado: 'Este enlace expiró o fue revocado. Solicite uno nuevo a su vendedora.',
-        sin_accion: 'Este enlace no está autorizado. Solicite uno nuevo a su vendedora.',
+        sin_token: 'Para capturar una dirección necesita un enlace único enviado por quien atiende el pedido.',
+        invalido: 'El enlace no es válido. Solicite uno nuevo a quien le envió el enlace.',
+        expirado: 'Este enlace expiró o fue revocado. Solicite uno nuevo a quien le envió el enlace.',
+        sin_accion: 'Este enlace no está autorizado. Solicite uno nuevo a quien le envió el enlace.',
     };
 
     return {

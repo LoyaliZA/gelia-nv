@@ -7,6 +7,7 @@ use App\Models\EnlaceDireccion;
 use App\Models\SolicitudDireccion;
 use App\Models\User;
 use App\Notifications\AlertaDireccion;
+use App\Support\Clientes\Direcciones\ResolverAccionEnlaceDireccion;
 use App\Support\Clientes\Direcciones\SanitizarEntradaDireccionPublica;
 use Illuminate\Support\Facades\DB;
 
@@ -26,7 +27,7 @@ class AplicarDireccionPublicaDesdeEnlaceService
             $enlace = $this->reclamarEnlace($token);
             $datosDireccion = SanitizarEntradaDireccionPublica::ejecutar($datosDireccion);
 
-            $accion = $enlace->accion_permitida;
+            $accion = ResolverAccionEnlaceDireccion::desdeEnlace($enlace);
             $clienteId = (int) $enlace->cliente_id;
 
             $ctx = [
@@ -71,7 +72,7 @@ class AplicarDireccionPublicaDesdeEnlaceService
             throw new \InvalidArgumentException('El enlace expiró o fue revocado.');
         }
 
-        if (! filled($enlace->accion_permitida)) {
+        if (! filled(ResolverAccionEnlaceDireccion::desdeEnlace($enlace))) {
             throw new \InvalidArgumentException('Este enlace no permite registro directo.');
         }
 

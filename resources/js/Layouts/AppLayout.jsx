@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, usePage, router } from '@inertiajs/react';
 import Sidebar from '../Components/Sidebar';
 import ProfessionalSidebar from '../Components/Sidebar/ProfessionalSidebar';
+import AjustesModal from '../Components/Ajustes/AjustesModal';
 import GeliaLogo from '../Components/GeliaLogo';
 import NotificationBell from '../Components/NotificationBell';
 import PdvLlamadoVendedor from '../Components/PuntoVenta/PdvLlamadoVendedor';
@@ -42,6 +43,11 @@ import {
     FONT_SCALE_STORAGE_KEY,
     applyFontScaleToRoot,
 } from '../utils/fontScale';
+import {
+    GLASS_OPACITY_DEFAULT,
+    GLASS_OPACITY_STORAGE_KEY,
+    applyGlassOpacityToRoot,
+} from '../utils/glassOpacity';
 import {
     applyContentDensityToRoot,
     resolveContentDensity,
@@ -650,6 +656,14 @@ export default function AppLayout({ children, fullScreen = false }) {
         if (isGlassActive) root.classList.add('glass-active');
         else root.classList.remove('glass-active');
 
+        const savedGlassOpacity = typeof window !== 'undefined' ? localStorage.getItem(GLASS_OPACITY_STORAGE_KEY) : null;
+        applyGlassOpacityToRoot(
+            savedGlassOpacity !== null && savedGlassOpacity !== ''
+                ? savedGlassOpacity
+                : (tema.opacidad_cristal ?? GLASS_OPACITY_DEFAULT),
+            root
+        );
+
         const density = applyContentDensityToRoot(tema);
         setContentDensityMode(density.modo);
 
@@ -672,7 +686,7 @@ export default function AppLayout({ children, fullScreen = false }) {
     };
 
     const mainClassName = [
-        'gelia-app-main transition-all duration-500 bg-transparent',
+        'gelia-app-main transition-[background-color,opacity] duration-500 bg-transparent',
         isPageFullscreen
             ? `gelia-app-main--fullscreen box-border w-full max-w-none min-w-0 p-0 h-dvh max-h-dvh${isGeliaAiFull ? ' overflow-visible gelia-ai-main' : ' overflow-hidden'}${isMensajeriaFull ? ' gelia-mensajeria-main' : ''}${mensajeriaImmersivaMovil ? ' gelia-mensajeria-main--immersive' : ''}`
             : 'gelia-app-main--default',
@@ -768,6 +782,8 @@ export default function AppLayout({ children, fullScreen = false }) {
                         isMobileViewport={isMobileViewport}
                     />
                 )}
+
+                <AjustesModal />
 
                 <div className={`gelia-app-body gelia-ui-scale ${GELIA_PREVENT_OVERFLOW_X} ${isPageFullscreen ? (isGeliaAiFull ? 'h-dvh overflow-x-hidden overflow-y-visible' : 'h-dvh overflow-hidden') : 'min-h-dvh'} ${mensajeriaImmersivaMovil ? 'gelia-mensajeria-immersive' : ''}`}>
                     {needsPrompt && !promptDismissed && (

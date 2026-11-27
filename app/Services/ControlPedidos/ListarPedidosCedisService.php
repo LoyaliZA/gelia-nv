@@ -58,8 +58,20 @@ class ListarPedidosCedisService
             $pedido->setAttribute('cambio_a_tienda', \App\Support\ControlPedidos\Municipal\PresentadorCambioATienda::para($pedido, $usuario));
             $pedido->setAttribute('caratula_municipal', \App\Support\ControlPedidos\Municipal\PresentadorCaratulaMunicipalCedis::para($pedido));
 
+            \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::presentarEnCedis($pedido);
+            foreach ($pedido->complementos as $complemento) {
+                \App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::presentarEnCedis($complemento);
+            }
+
             return BitacoraCedis::presentar($pedido, $usuario);
         };
+
+        if ($usuario) {
+            \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina(
+                $resultado instanceof LengthAwarePaginator ? $resultado->getCollection() : $resultado,
+                $usuario
+            );
+        }
 
         if ($resultado instanceof LengthAwarePaginator) {
             $resultado->getCollection()->transform($marcar);
@@ -245,6 +257,8 @@ class ListarPedidosCedisService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_rastreo', 'like', "%{$termino}%")
                     ->orWhereHas('complementos', function (Builder $c) use ($termino) {
                         $c->where('folio', 'like', "%{$termino}%")
                             ->orWhere('folio_remision', 'like', "%{$termino}%");
@@ -253,6 +267,7 @@ class ListarPedidosCedisService
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
                     });
+                \App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio::orHermano($q, $termino, ['folio', 'folio_remision', 'numero_remision', 'numero_rastreo']);
             });
         }
 

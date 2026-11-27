@@ -17,6 +17,7 @@ import {
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
 import { esDispositivoCampo } from '../../../Activos/Partials/useDispositivoCampo';
+import { THEME_INPUT, THEME_LABEL } from '@/utils/geliaTheme';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 
 // Mismo alcance que CustodiaDocumentalTienda del servidor.
@@ -24,6 +25,7 @@ export const empaqueSoloBolsa = pedido => pedido?.solicitud_preparacion?.modalid
     && ['transferencia', 'credito'].includes(pedido?.solicitud_preparacion?.cobertura_tienda?.tipo);
 
 const filaVacia = () => ({
+    tipo_bulto: '',
     foto_bulto: null,
     foto_ticket: null,
     usar_remision_pdf: false,
@@ -164,6 +166,7 @@ function SeccionPedidoBultos({ pedido, bultos, onChange, disabled, mostrarPedido
                     remisionPdf={remisionPrincipalPdf(pedido)}
                     disabled={disabled}
                     fila={fila}
+                    onTipo={(tipo_bulto) => actualizarFila(idx, { tipo_bulto })}
                     puedeQuitar={bultos.length > 1}
                     onQuitar={() => quitarFila(idx)}
                     onFotoBulto={(file) => {
@@ -200,7 +203,7 @@ function SeccionPedidoBultos({ pedido, bultos, onChange, disabled, mostrarPedido
     );
 }
 
-function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTicket, onUsarPdf, soloBolsa, remisionPdf = null, disabled }) {
+function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTicket, onUsarPdf, onTipo, soloBolsa, remisionPdf = null, disabled }) {
     const inputBultoRef = useRef(null);
     const camaraBultoRef = useRef(null);
     const inputTicketRef = useRef(null);
@@ -224,6 +227,14 @@ function BultoFila({ numero, fila, puedeQuitar, onQuitar, onFotoBulto, onFotoTic
                     </button>
                 )}
             </div>
+            {!soloBolsa && <label className="block max-w-xs">
+                <span className={THEME_LABEL}>Tipo de bulto {numero}</span>
+                <select className={THEME_INPUT} value={fila.tipo_bulto} onChange={(e) => onTipo(e.target.value)} required disabled={disabled}>
+                    <option value="">Selecciona caja o bolsa</option>
+                    <option value="caja">Caja</option>
+                    <option value="bolsa">Bolsa</option>
+                </select>
+            </label>}
             <div className={soloBolsa ? '' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
                 <CapturaFoto
                     etiqueta={soloBolsa ? `Foto de la bolsa ${numero}` : 'Foto del pedido *'}
@@ -310,6 +321,9 @@ export default function ModalMarcarEmpacadoBultos({ abierto, onClose, pedido, on
                 return `Registre al menos una foto del pedido ${p.folio}.`;
             }
             for (let i = 0; i < filas.length; i += 1) {
+                if (!empaqueSoloBolsa(p) && !filas[i].tipo_bulto) {
+                    return 'Selecciona caja o bolsa para cada bulto.';
+                }
                 if (!filas[i].foto_bulto || (!empaqueSoloBolsa(p) && !filas[i].foto_ticket && !(filas[i].usar_remision_pdf && remisionPrincipalPdf(p)))) {
                     return empaqueSoloBolsa(p)
                         ? `Toma la foto de la bolsa ${i + 1} del pedido ${p.folio_remision || p.folio}.`
@@ -333,6 +347,7 @@ export default function ModalMarcarEmpacadoBultos({ abierto, onClose, pedido, on
         pedidosObjetivo.forEach((p) => {
             (bultosPorPedido[p.id] || []).forEach((fila, idx) => {
                 formData.append(`bultos_por_pedido[${p.id}][${idx}][foto_bulto]`, fila.foto_bulto);
+                if (fila.tipo_bulto) formData.append(`bultos_por_pedido[${p.id}][${idx}][tipo_bulto]`, fila.tipo_bulto);
                 if (!empaqueSoloBolsa(p) && fila.foto_ticket) formData.append(`bultos_por_pedido[${p.id}][${idx}][foto_ticket]`, fila.foto_ticket);
                 if (!empaqueSoloBolsa(p) && fila.usar_remision_pdf && !fila.foto_ticket) formData.append(`bultos_por_pedido[${p.id}][${idx}][usar_remision_pdf]`, '1');
             });

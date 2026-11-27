@@ -81,7 +81,8 @@ class MobileAuthService
             'scope_version' => $scopeVersion,
             'es_demo' => (bool) $user->es_demo,
             'user' => $this->payloadUsuario($user),
-            'permissions' => $user->getPermissionNames()->values()->all(),
+            'permissions' => $this->permisos($user),
+            'roles' => $user->getRoleNames()->values()->all(),
             'tema_visual' => $this->resolverTemaVisual($user),
             'device' => $this->payloadDispositivo($device),
         ];
@@ -119,12 +120,24 @@ class MobileAuthService
     {
         return [
             'user' => $this->payloadUsuario($user),
-            'permissions' => $user->getPermissionNames()->values()->all(),
+            'permissions' => $this->permisos($user),
+            'roles' => $user->getRoleNames()->values()->all(),
             'scope_version' => $this->scopeVersion->compute($user),
             'es_demo' => (bool) $user->es_demo,
             'tema_visual' => $this->resolverTemaVisual($user),
             'device' => $this->payloadDispositivo($device),
         ];
+    }
+
+    /**
+     * Permisos efectivos (directos y heredados por rol), igual que la web:
+     * la app móvil rige sus vistas con esta lista.
+     *
+     * @return array<int, string>
+     */
+    public function permisos(User $user): array
+    {
+        return $user->getAllPermissions()->pluck('name')->unique()->values()->all();
     }
 
     public function nombreToken(MobileDevice $device): string

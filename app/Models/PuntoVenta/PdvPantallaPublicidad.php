@@ -24,6 +24,9 @@ class PdvPantallaPublicidad extends Model
 
     public const AJUSTE_CONTAIN = 'contain';
 
+    /** @var list<int> */
+    public const ROTACIONES = [0, 90, 180, 270];
+
     public const ESTADO_PROGRAMADA = 'programada';
 
     public const ESTADO_ACTIVA = 'activa';
@@ -45,6 +48,8 @@ class PdvPantallaPublicidad extends Model
         'ruta',
         'duracion_seg',
         'ajuste',
+        'rotacion',
+        'rotacion_kiosko',
         'volumen_pct',
         'orden',
         'activa',
@@ -62,6 +67,7 @@ class PdvPantallaPublicidad extends Model
             'sucursal_id' => 'integer',
             'medio_id' => 'integer',
             'duracion_seg' => 'integer',
+            'rotacion' => 'integer',
             'volumen_pct' => 'integer',
             'orden' => 'integer',
             'activa' => 'boolean',

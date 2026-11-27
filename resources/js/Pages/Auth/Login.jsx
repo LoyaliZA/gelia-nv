@@ -3,6 +3,7 @@ import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { User, Lock, LogIn, Sun, Moon, Eye, EyeOff, Loader2, Fingerprint } from 'lucide-react';
 import GeliaLogo from '../../Components/GeliaLogo';
 import WebAuthnService from '../../Services/WebAuthnService';
+import { applyGlassOpacityToRoot, GLASS_OPACITY_STORAGE_KEY } from '../../utils/glassOpacity';
 
 const ACCENT_COLORS = {
     rosa: '#ec4899',
@@ -22,6 +23,8 @@ function applyLoginTheme(isDark) {
     const glass = localStorage.getItem('theme_glass');
     if (glass === 'true') root.classList.add('glass-active');
     else root.classList.remove('glass-active');
+
+    applyGlassOpacityToRoot(localStorage.getItem(GLASS_OPACITY_STORAGE_KEY), root);
 }
 
 export default function Login() {

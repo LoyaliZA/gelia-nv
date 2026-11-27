@@ -2,7 +2,7 @@ html,
 body {
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow-x: clip;
 }
 
 .gelia-app-shell {
@@ -11,7 +11,7 @@ body {
     width: 100%;
     max-width: 100vw;
     min-height: 100dvh;
-    overflow-x: hidden;
+    overflow-x: clip;
     box-sizing: border-box;
     color: var(--theme-text-main);
 }
@@ -150,8 +150,7 @@ body {
     box-sizing: border-box;
     border-bottom: 1px solid color-mix(in srgb, var(--theme-border) 65%, transparent);
     background-color: color-mix(in srgb, var(--theme-surface-bg) 82%, transparent);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: var(--gelia-glass-filter);
     box-shadow: none;
 }
 
@@ -322,10 +321,8 @@ body {
         --gelia-main-inset-inline-start: var(--gelia-sidebar-collapsed-width);
     }
 
-    /* Misma curva/duración que el rail: evita desync contenido vs sidebar. */
-    .gelia-app-shell[data-sidebar-layout='professional-left'] .gelia-app-body {
-        transition: padding-inline-start var(--gelia-pro-duration, 0.38s) var(--gelia-pro-ease, cubic-bezier(0.22, 1, 0.36, 1));
-    }
+    /* Sin transición de padding: animarlo re-maqueta la página entera en cada cuadro del rail
+       (era la causa del lag al contraer/expandir). El contenido se acomoda una sola vez. */
 
     /* Chat inmersivo (GELIA / mensajería): sin franjas arriba/abajo del body */
     .gelia-app-shell[data-page-fullscreen='true'] {

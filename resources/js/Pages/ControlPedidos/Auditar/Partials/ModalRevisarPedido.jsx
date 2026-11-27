@@ -42,6 +42,7 @@ import SeccionGuiaRastreo from '../../Partials/SeccionGuiaRastreo';
 import ModalLiberarResguardoAbierto from './ModalLiberarResguardoAbierto';
 import PanelResguardoMunicipalAuditoria from '../../Municipal/PanelResguardoMunicipalAuditoria';
 import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
+import { AvisoComprobanteCompartido } from '../../Partials/HermanosMultienvio';
 import EncabezadoRevisionPedido, { AvisosRevisionPedido, indicacionRevisionPedido } from './EncabezadoRevisionPedido';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import NavegacionPedido from '../../Partials/NavegacionPedido';
@@ -818,6 +819,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                         </div>
                                     )}
                                     <PanelResguardoMunicipalAuditoria resguardo={resguardoMunicipal} />
+                                    <AvisoComprobanteCompartido pedido={pedido} />
                                     <SeccionPagosExhibicion
                                         key={creditoTienda ? pedido.pago_validado_at : undefined}
                                         pedidoId={pedido.id}

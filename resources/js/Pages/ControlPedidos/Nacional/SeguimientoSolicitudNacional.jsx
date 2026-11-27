@@ -6,6 +6,7 @@ import AccionesRapidasDisponibilidad from '../Partials/AccionesRapidasDisponibil
 import { MiniaturaDocumento } from '../Partials/ModalVistaPreviaDocumento';
 import AvisoOperativoPedido from '../Partials/AvisoOperativoPedido';
 import RespuestaDisponibilidadPedido from '../Partials/RespuestaDisponibilidadPedido';
+import { filasDeCambios } from '../Partials/cambiosDisponibilidad';
 import { adaptadorConsultaNacional } from '../Partials/adaptadoresConsulta';
 import { GELIA_BTN_OUTLINE, GELIA_ICON_BOX, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import { vinculoFisicoNacional } from './superficieNacional';
@@ -113,6 +114,9 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         documentos: (pedido?.documentos || []).filter((doc) => doc.tipo === 'evidencia_condicion' && doc.activo !== false && doc.url
             && doc.relacion_tipo === 'revision_producto' && Number(doc.relacion_id) === Number(pieza.id)),
     }));
+    const solicitudCambios = pedido?.solicitud_preparacion || {};
+    const cambios = filasDeCambios(solicitudCambios, pedido?.documentos || [], { revisionIdsEnTabla: new Set(filas.map((fila) => Number(fila.id))) });
+    const avisoReapertura = solicitudCambios.reapertura_disponibilidad ? `Consulta reabierta por ${solicitudCambios.reapertura_disponibilidad.por}.` : '';
     const conPago = Boolean(pedido?.numero_remision || pedido?.pago_validado_at);
     const hayMercancia = respondida;
 
@@ -125,7 +129,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         return data;
     };
 
-    const ejecutarPieza = async (pieza, { accion, entrada, producto, archivo, solicitudId }) => {
+    const ejecutarPieza = async (pieza, descripcionVisible, { accion, entrada, producto, archivo, solicitudId }) => {
         const cabeceras = { Accept: 'application/json' };
         if (accion === 'confirmar') {
             const { data } = await axios.post(`/control-pedidos/${pedido.id}/confirmar-pieza-nacional`, { revision_id: pieza.id }, { headers: cabeceras });
@@ -138,7 +142,7 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
         form.append('base_captura', String(pedido.base_captura ?? ''));
         form.append('piezas[0][revision_id]', String(pieza.id));
         form.append('piezas[0][sku]', pieza.sku || '');
-        form.append('piezas[0][descripcion]', pieza.descripcion_producto || pieza.descripcion || '');
+        form.append('piezas[0][descripcion]', descripcionVisible || pieza.descripcion_producto || pieza.descripcion || '');
         form.append('piezas[0][cantidad]', String(Math.max(1, Number(pieza.cantidad_solicitada) || Number(pieza.cantidad_encontrada) || 1)));
         form.append('motivo', accion === 'retirar' ? 'Retiro confirmado con el cliente' : 'Sustitución solicitada por el cliente');
         if (accion === 'sustituir') {
@@ -192,19 +196,22 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                     estado={filas.length ? (conDetalle ? 'excepciones_pendientes' : 'sin_excepciones') : null}
                     aceptacionVigente={!actualizando}
                     mostrarCaptura={false}
+                    cambios={cambios}
+                    avisoReapertura={avisoReapertura}
                     filas={filas}
                     cantidad={filas.length ? filas.reduce((total, fila) => total + numero(fila.cantidad || 0), 0) : null}
                     labelCantidad="Unidades encontradas"
                     onVer={onVer}
-                    accionesDePieza={(pieza) => (!puedeAjustar || !ESTADOS_CON_DETALLE.includes(pieza?.estado_fisico) ? null : (
+                    accionesDePieza={(pieza, descripcionVisible) => (!puedeAjustar || !ESTADOS_CON_DETALLE.includes(pieza?.estado_fisico) ? null : (
                         <AccionesRapidasDisponibilidad
                             compacta
                             pieza={pieza}
+                            descripcionVisible={descripcionVisible}
                             pedidoId={pedido.id}
                             almacenId={adaptador.almacenId}
                             onActualizar={onPedidoActualizado}
                             onVer={onVer}
-                            ejecutor={(datos) => ejecutarPieza(pieza, datos)}
+                            ejecutor={(datos) => ejecutarPieza(pieza, descripcionVisible, datos)}
                         />
                     ))}
                 >
@@ -215,6 +222,9 @@ export default function SeguimientoSolicitudNacional({ pedido, onPedidoActualiza
                         </button>
                     )}
                 </RespuestaDisponibilidadPedido>
+            )}
+            {!respondida && (cambios.actuales.length > 0 || cambios.anteriores.length > 0) && (
+                <RespuestaDisponibilidadPedido titulo="Cambios solicitados" ariaLabel="Cambios solicitados" estado={null} cantidad={null} mostrarCaptura={false} cambios={cambios} avisoReapertura={avisoReapertura} onVer={onVer} />
             )}
             {cerrada && (
                 <AvisoOperativoPedido label="Consulta cerrada" tono="success" icon={CheckCircle2}>

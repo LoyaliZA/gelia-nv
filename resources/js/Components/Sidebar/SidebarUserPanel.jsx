@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import SidebarUserMenu from './SidebarUserMenu';
+import SidebarUserMenu, { useMenuPresence } from './SidebarUserMenu';
 
 function buildUserMenuStyle(rect) {
     const gap = 8;
@@ -39,6 +39,7 @@ export default function SidebarUserPanel({
     const displayName = user?.name || 'Usuario';
     const [menuStyle, setMenuStyle] = useState(null);
     const internalBtnRef = useRef(null);
+    const menuPresence = useMenuPresence(userMenuOpen);
 
     const setBtnRef = useCallback((el) => {
         internalBtnRef.current = el;
@@ -54,8 +55,9 @@ export default function SidebarUserPanel({
     }, [collapsed, userMenuOpen, onToggleMenu]);
 
     useLayoutEffect(() => {
-        if (!userMenuOpen || !collapsed) {
-            if (!userMenuOpen) setMenuStyle(null);
+        // El estilo se conserva mientras corre la animación de salida; se libera al desmontar el menú.
+        if (!menuPresence.present || !collapsed) {
+            if (!menuPresence.present) setMenuStyle(null);
             return;
         }
         const btn = internalBtnRef.current;
@@ -74,7 +76,7 @@ export default function SidebarUserPanel({
         menuEl.style.setProperty('width', style.width, 'important');
         menuEl.style.setProperty('max-height', style.maxHeight, 'important');
         menuEl.style.setProperty('z-index', String(style.zIndex), 'important');
-    }, [userMenuOpen, collapsed, menuStyle, userMenuRef]);
+    }, [menuPresence.present, collapsed, menuStyle, userMenuRef]);
 
     useEffect(() => {
         if (!userMenuOpen || !collapsed) return undefined;
@@ -158,7 +160,7 @@ export default function SidebarUserPanel({
             <button
                 ref={setBtnRef}
                 type="button"
-                className="gelia-pro-sidebar__user-btn gelia-pro-sidebar__tooltip"
+                className="gelia-pro-sidebar__user-btn"
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
                 aria-label="Menú de perfil"
@@ -181,9 +183,9 @@ export default function SidebarUserPanel({
                     aria-hidden
                 />
             </button>
-            {collapsed && userMenuOpen && typeof document !== 'undefined' && createPortal(
+            {collapsed && menuPresence.present && typeof document !== 'undefined' && createPortal(
                 <>
-                    <div className="gelia-pro-flyout-backdrop" onClick={onCloseMenu} aria-hidden />
+                    {userMenuOpen && <div className="gelia-pro-flyout-backdrop" onClick={onCloseMenu} aria-hidden />}
                     {menu}
                 </>,
                 document.body

@@ -11,7 +11,8 @@ source "${SCRIPT_DIR}/scripts/backup-db.sh"
 # Actualización de producción CON recarga de Nginx
 #
 # Usar cuando el deploy incluye cambios en default.conf (IPs Cloudflare, vhosts,
-# proxy, etc.). Equivalente a update.sh + reload de Nginx.
+# proxy, etc.). Equivalente a update.sh + render de vhosts desde APP_URL /
+# FORM_PUBLIC_URL y reload de Nginx.
 #
 # Uso:
 #   ./update-nginx.sh

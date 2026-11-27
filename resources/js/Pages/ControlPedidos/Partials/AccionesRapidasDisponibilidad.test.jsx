@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
-import React, { act } from 'react';
+import React, { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import axios from 'axios';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
 import AccionesRapidasDisponibilidad from './AccionesRapidasDisponibilidad';
 import SeguimientoSolicitudTienda from './SeguimientoSolicitudTienda';
+import ModalVistaPreviaDocumento from './ModalVistaPreviaDocumento';
+import usePedidoDialog from './usePedidoDialog';
+vi.mock('./VisorPdfPaginas', () => ({ default: () => null }));
 vi.mock('axios', () => ({ default: { get: vi.fn(), post: vi.fn() } }));
 let container, root;
 const faltante = { id: 8, descripcion_producto: 'Aroma agotado', sku: 'SKU-8', estado_fisico: 'sin_existencia', cantidad_solicitada: 1 };
-const boton = texto => [...container.querySelectorAll('button')].find(b => b.textContent === texto);
+const boton = (texto, raiz = document) => [...raiz.querySelectorAll('button')].find(b => b.textContent === texto);
+const dialogoAccion = () => document.querySelector('.tienda-accion-dialogo');
+const disparador = (raiz = container) => raiz.querySelector('button[aria-haspopup="menu"]');
+const opciones = (raiz = container) => [...raiz.querySelectorAll('[role="menuitem"]')];
 beforeEach(() => { vi.clearAllMocks(); globalThis.IS_REACT_ACT_ENVIRONMENT = true; container = document.createElement('div'); document.body.append(container); root = createRoot(container); });
 afterEach(async () => { await act(() => root.unmount()); container.remove(); });
 it('libera la pausa al desaparecer la acción de una pieza resuelta', async () => {
@@ -28,12 +34,132 @@ it('un faltante ofrece solo retirar o sustituir, sin aceptar su inexistencia', a
     axios.post.mockResolvedValue({ data: { id: 1 } }); await act(() => boton('Confirmar retiro').click());
     expect(axios.post.mock.calls[0][1].get('revision_id')).toBe('8'); expect(axios.post.mock.calls[0][1].get('accion')).toBe('retirar');
 });
-it('un detalle permite confirmar estado y una sustitución admite captura pegada', async () => {
-    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} />));
+it.each([false, true])('un detalle permite confirmar y sustituir por captura (menú compacto: %s)', async compacta => {
+    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} compacta={compacta} />));
+    if (compacta) await act(() => disparador().click());
     expect(boton('Confirmar estado')).toBeDefined();
     await act(() => boton('Sustituir').click()); await act(() => boton('Por captura o PDF').click());
-    expect(container.textContent).toContain('pega con Ctrl+V');
-    await act(() => boton('Solicitar sustitución').click()); expect(axios.post).not.toHaveBeenCalled(); expect(container.textContent).toContain('Seleccione la alternativa');
+    const formulario = compacta ? dialogoAccion() : container;
+    expect(formulario.textContent).toContain('pega con Ctrl+V');
+    await act(() => boton('Solicitar sustitución').click()); expect(axios.post).not.toHaveBeenCalled(); expect(formulario.textContent).toContain('Seleccione la alternativa');
+});
+
+function EditorFicticio({ onClose }) {
+    const editor = usePedidoDialog({ abierto: true, onClose });
+    const [vista, setVista] = useState(null);
+    return <div className="gelia-modal-overlay">
+        <div {...editor} aria-label="Editar pedido">
+            <AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} compacta almacenId={12}
+                onVer={(documentos, indice) => setVista({ documentos, indice })} />
+            <ModalVistaPreviaDocumento abierto={Boolean(vista)} {...vista} onClose={() => setVista(null)} />
+        </div>
+    </div>;
+}
+
+const escape = () => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+it.each([
+    ['Confirmar estado', 'volver'],
+    ['Retirar', 'x'],
+    ['Sustituir', 'escape'],
+])('%s sale de la tarjeta y se cierra de forma independiente con %s', async (accion, cierre) => {
+    const cerrarEditor = vi.fn();
+    await act(() => root.render(<EditorFicticio onClose={cerrarEditor} />));
+    const control = disparador();
+    await act(() => control.click());
+    await act(() => boton(accion).click());
+    const dialogo = dialogoAccion();
+    expect(dialogo.querySelector('h2').textContent).toBe(accion);
+    expect(container.contains(dialogo)).toBe(false);
+    expect(disparador()).toBe(control);
+    expect(control.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(dialogo);
+    await act(() => {
+        if (cierre === 'escape') escape();
+        else if (cierre === 'x') dialogo.querySelector('header button').click();
+        else boton('Volver', dialogo).click();
+    });
+    expect(dialogoAccion()).toBeNull();
+    expect(cerrarEditor).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(control);
+    expect(axios.post).not.toHaveBeenCalled();
+});
+
+it('busca por SKU en el almacén vigente y envía el producto alternativo', async () => {
+    const producto = { id: 52, sku: 'GELIA-FICTICIO', descripcion: 'Alternativa de prueba' };
+    const buscar = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [producto] }) });
+    vi.stubGlobal('fetch', buscar);
+    vi.stubGlobal('route', () => '/productos-ficticios');
+    vi.useFakeTimers();
+    try {
+        await act(() => root.render(<EditorFicticio />));
+        await act(() => disparador().click());
+        await act(() => boton('Sustituir').click());
+        await act(() => boton('Por SKU').click());
+        const input = dialogoAccion().querySelector('input[type="text"]');
+        await act(async () => {
+            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, producto.sku);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            await vi.advanceTimersByTimeAsync(300);
+        });
+        const params = new URL(buscar.mock.lastCall[0], 'http://gelia.test').searchParams;
+        expect(params.get('q')).toBe(producto.sku);
+        expect(params.get('almacen_id')).toBe('12');
+        expect(params.get('incluir_sin_inventario')).toBe('1');
+        await act(() => dialogoAccion().querySelector('.selector-productos-lista button').click());
+        axios.post.mockResolvedValue({ data: { id: 1 } });
+        await act(() => boton('Solicitar sustitución').click());
+        expect(axios.post.mock.lastCall[1].get('producto_id')).toBe('52');
+        expect(dialogoAccion()).toBeNull();
+    } finally {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+    }
+});
+
+it('adjunta y muestra una evidencia; Escape vuelve a Sustituir y el archivo se conserva para el envío', async () => {
+    const cerrarEditor = vi.fn();
+    await act(() => root.render(<EditorFicticio onClose={cerrarEditor} />));
+    await act(() => disparador().click());
+    await act(() => boton('Sustituir').click());
+    const dialogo = dialogoAccion();
+    const input = dialogo.querySelector('input[aria-label="Adjuntar: Captura de la pieza alternativa"]');
+    const archivo = new File(['foto ficticia'], 'pieza-ficticia.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { value: [archivo] });
+    await act(() => input.dispatchEvent(new Event('change', { bubbles: true })));
+    expect(dialogo.textContent).toContain('1 archivo');
+    const miniatura = dialogo.querySelector('button[aria-label^="Ver evidencia"]');
+    await act(() => { miniatura.focus(); miniatura.click(); });
+    expect(document.querySelector('[aria-label="Visor de evidencia"]').textContent).toContain('pieza-ficticia.png');
+    await act(escape);
+    expect(document.querySelector('[aria-label="Visor de evidencia"]')).toBeNull();
+    expect(dialogoAccion()).toBe(dialogo);
+    expect(document.activeElement).toBe(miniatura);
+    expect(cerrarEditor).not.toHaveBeenCalled();
+    axios.post.mockResolvedValue({ data: { id: 1 } });
+    await act(() => boton('Solicitar sustitución', dialogo).click());
+    expect(axios.post.mock.lastCall[1].get('evidencia').name).toBe(archivo.name);
+    expect(dialogoAccion()).toBeNull();
+});
+
+it('Confirmar estado conserva el editor abierto y bloquea el cierre mientras envía', async () => {
+    const cerrarEditor = vi.fn();
+    let responder;
+    axios.post.mockImplementationOnce(() => new Promise(resolve => { responder = resolve; }));
+    await act(() => root.render(<EditorFicticio onClose={cerrarEditor} />));
+    await act(() => disparador().click());
+    await act(() => boton('Confirmar estado').click());
+    const dialogo = dialogoAccion();
+    await act(() => boton('Confirmar estado', dialogo).click());
+    expect(boton('Enviando…', dialogo).disabled).toBe(true);
+    expect(boton('Volver', dialogo).disabled).toBe(true);
+    expect(dialogo.querySelector('header button').disabled).toBe(true);
+    await act(escape);
+    expect(dialogoAccion()).toBe(dialogo);
+    expect(axios.post.mock.lastCall[1].get('accion')).toBe('confirmar');
+    await act(() => responder({ data: { id: 1 } }));
+    expect(dialogoAccion()).toBeNull();
+    expect(cerrarEditor).not.toHaveBeenCalled();
 });
 it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste detallado plegado', async () => {
     const pedido = { id: 1, solicitud_preparacion: { modalidad_entrega: 'tienda', revision_disponibilidad: { estado: 'excepciones_pendientes' } }, revisiones_producto: [faltante], motivo_bloqueo_cierre: 'Faltante por resolver' };
@@ -42,16 +168,18 @@ it('la consulta cerrada con faltante muestra alerta, reabre y conserva el ajuste
     expect(container.querySelector('[role=alert]').className).toContain('tienda-alerta-disponibilidad');
     expect(container.textContent).toContain('Consulta cerrada con piezas sin existencias');
     await act(() => boton('Reabrir consulta').click());
-    expect(axios.post.mock.calls[0][0]).toContain('reabrir-consulta'); expect(boton('Retirar')).toBeDefined();
+    expect(axios.post.mock.calls[0][0]).toContain('reabrir-consulta');
+    await act(() => disparador().click());
+    expect(boton('Retirar')).toBeDefined();
     expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
     await act(() => boton('Modificar pedido').click()); expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('true');
 });
 it('los ajustes guardados permanecen visibles cuando la captura avanzada está plegada', async () => {
     const pedido = { id: 1, solicitud_preparacion: { revision_disponibilidad: { estado: 'excepciones_pendientes' }, anexo_sin_remision: [{ descripcion: 'Alternativa enviada', entrada: 'documento' }] } };
     await act(() => root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos" />));
-    expect(container.textContent).toContain('Alternativa enviada'); expect(container.textContent).toContain('Cambios del pedido');
-    expect(container.querySelector('.consulta-cambios-actuales')).toBeNull();
-    expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Alternativa enviada');
+    const fila = container.querySelector('[data-origen="cambio"]');
+    expect(fila.textContent).toContain('Alternativa enviada'); expect(fila.textContent).toContain('Por revisar'); expect(fila.getAttribute('data-tono')).toBe('aviso');
+    expect(container.textContent).not.toContain('Cambios del pedido');
     expect(boton('Modificar pedido').getAttribute('aria-expanded')).toBe('false');
 });
 
@@ -65,13 +193,14 @@ it('en Ventas despliega la respuesta del almacén y contrae anexos y retiros ped
   retiro_piezas:[{estado:'pendiente',solicitado_at:'2026-11-06T11:05:00Z',piezas:[{descripcion:'Retiro pedido',sku:'R',cantidad:1}]}],
  }};
  await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} area="control_pedidos"/>));
- const abiertos=container.querySelector('.consulta-cambios-actuales').textContent;
- expect(abiertos).toContain('Pieza respondida');
- expect(abiertos).not.toContain('Anexo pedido');
- expect(abiertos).not.toContain('Retiro pedido');
- expect(container.querySelector('summary').textContent).toBe('Movimientos (2)');
- expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Anexo pedido');
- expect(container.querySelector('.consulta-cambios-historial').textContent).toContain('Retiro pedido');
+ const tabla=container.querySelector('[aria-label="Productos de la respuesta"]');
+ const abiertos=[...tabla.querySelectorAll('[data-origen="cambio"]')].map(f=>[f.textContent,f.getAttribute('data-tono')]);
+ expect(abiertos).toHaveLength(2);
+ expect(abiertos[0][0]).toContain('Anexo pedido'); expect(abiertos[0][1]).toBe('aviso');
+ expect(abiertos[1][0]).toContain('Retiro pedido'); expect(abiertos[1][1]).toBe('peligro');
+ const minis=[...container.querySelectorAll('.tienda-respuesta-oks .consulta-cambio')].map(m=>m.textContent);
+ expect(minis).toHaveLength(1);expect(minis[0]).toContain('Pieza respondida');expect(minis[0]).toContain('Todo OK');
+ expect(container.querySelector('.tienda-respuesta-movimientos')).toBeNull();
 });
 
 it('genera la clave contra duplicados cuando el acceso HTTP no ofrece randomUUID', () => {
@@ -86,10 +215,15 @@ it('el menú compacto conserva el ID de la segunda unidad con SKU repetido y ado
  const pedido={id:1,solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'excepciones_pendientes'}},revisiones_producto:[primera,segunda],motivo_bloqueo_cierre:'Resolver el faltante original'};
  await act(()=>root.render(<SeguimientoSolicitudTienda pedidoId={1} pedido={pedido} revisiones={[primera,segunda]} area="control_pedidos"/>));
  const filas=container.querySelectorAll('.tienda-respuesta-fila');expect(filas).toHaveLength(2);
- await act(()=>filas[1].querySelector('summary').click());
- expect(filas[1].querySelector('details').open).toBe(true);
- expect(filas[1].textContent).not.toContain('Confirmar estado');
- await act(()=>[...filas[1].querySelectorAll('button')].find(b=>b.textContent==='Retirar').click());
+ const controlDetalle = disparador(filas[0]);
+ await act(() => controlDetalle.click());
+ expect(opciones().map(opcion => opcion.textContent)).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+ await act(() => controlDetalle.click());
+ const control = disparador(filas[1]);
+ await act(() => control.click());
+ expect(control.getAttribute('aria-expanded')).toBe('true');
+ expect(opciones().map(opcion => opcion.textContent)).toEqual(['Retirar', 'Sustituir']);
+ await act(() => boton('Retirar').click());
  expect(axios.post).not.toHaveBeenCalled();
  axios.post.mockResolvedValue({data:{...pedido,revisiones_producto:[primera,{...segunda,resolucion:'retirar'}],motivo_bloqueo_cierre:'Confirma el estado de la primera unidad'}});
  await act(()=>boton('Confirmar retiro').click());
@@ -105,6 +239,7 @@ it('al confirmar el retiro deja Cerrar consulta disponible y Modificar pedido, s
  expect(boton('Cerrar consulta')).toBeUndefined();
  expect(boton('Modificar pedido')).toBeDefined();
  axios.post.mockResolvedValue({data:{id:1,puede_cerrar_consulta:true,motivo_bloqueo_cierre:null,consulta_cerrada:false,revisiones_producto:[{...faltante,resolucion:'retirar'}],solicitud_preparacion:{area_revision:'control_pedidos',revision_disponibilidad:{estado:'decision_registrada',aceptacion_vigente:true},retiro_piezas:[{estado:'aplicada',piezas:[{descripcion:'Aroma agotado',sku:'SKU-8',cantidad:1}]}]}}});
+ await act(() => disparador().click());
  await act(()=>boton('Retirar').click());
  await act(()=>boton('Confirmar retiro').click());
  expect(axios.post.mock.calls.every(c => !String(c[0]).includes('cerrar-consulta'))).toBe(true);
@@ -130,9 +265,60 @@ it('un agregado nuevo conserva el historial y bloquea el cierre anterior hasta r
 });
 
 it('Escape cierra el menú compacto y devuelve foco sin propagar el cierre al modal', async () => {
- await act(()=>root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} compacta/>));
- const summary=container.querySelector('summary');await act(()=>summary.click());expect(container.querySelector('details').open).toBe(true);
- const modalEscape=vi.fn();document.addEventListener('keydown',modalEscape,true);
- try {await act(()=>summary.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));expect(container.querySelector('details').open).toBe(false);expect(document.activeElement).toBe(summary);expect(modalEscape).not.toHaveBeenCalled();}
- finally {document.removeEventListener('keydown',modalEscape,true);}
+    await act(() => root.render(<AccionesRapidasDisponibilidad pedidoId={1} pieza={faltante} compacta />));
+    const control = disparador();
+    await act(() => control.click());
+    expect(control.getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(opciones()[0]);
+    await act(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(opciones()[1]);
+
+    const modalEscape = vi.fn();
+    document.addEventListener('keydown', modalEscape, true);
+    try {
+        await act(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })));
+        expect(control.getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(control);
+        expect(modalEscape).not.toHaveBeenCalled();
+    } finally {
+        document.removeEventListener('keydown', modalEscape, true);
+    }
+});
+
+it('ancla el menú fuera de la lista y lo cierra cuando el desplazamiento oculta el botón', async () => {
+    await act(() => root.render(
+        <div role="dialog">
+            <div className="gelia-modal-body">
+                <div className="tienda-respuesta-lista" data-desplazable>
+                    <AccionesRapidasDisponibilidad pedidoId={1} pieza={{ ...faltante, estado_fisico: 'regular' }} compacta />
+                </div>
+            </div>
+        </div>,
+    ));
+    const dialogo = container.querySelector('[role="dialog"]');
+    const cuerpo = dialogo.querySelector('.gelia-modal-body');
+    const lista = cuerpo.firstElementChild;
+    const control = disparador(lista);
+    cuerpo.getBoundingClientRect = () => new DOMRect(20, 40, 320, 300);
+    lista.getBoundingClientRect = () => new DOMRect(30, 60, 300, 220);
+    control.getBoundingClientRect = () => new DOMRect(240, 100, 44, 44);
+    await act(() => control.click());
+    const menu = dialogo.querySelector('[role="menu"]');
+    expect(lista.contains(menu)).toBe(false);
+    expect(menu.style.top).toBe('150px');
+    expect(opciones(menu).map(opcion => opcion.textContent)).toEqual(['Confirmar estado', 'Retirar', 'Sustituir']);
+
+    control.getBoundingClientRect = () => new DOMRect(240, 220, 44, 44);
+    Object.defineProperties(menu, {
+        scrollHeight: { value: 148 },
+        offsetHeight: { value: 148 },
+        clientHeight: { value: 148 },
+    });
+    await act(() => lista.dispatchEvent(new Event('scroll')));
+    expect(menu.style.top).toBe('66px');
+    control.getBoundingClientRect = () => new DOMRect(240, 5, 44, 44);
+    await act(() => lista.dispatchEvent(new Event('scroll')));
+    expect(dialogo.querySelector('[role="menu"]')).toBeNull();
+    expect(control.getAttribute('aria-expanded')).toBe('false');
+    expect(axios.post).not.toHaveBeenCalled();
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GripVertical, Maximize2 } from 'lucide-react';
 import {
     GRID_COLS,
@@ -10,6 +10,8 @@ import {
     gridHeightFromLayout,
     layoutToPixelStyle,
     moveItem,
+    reflowLayoutForWidth,
+    stampLayoutWidth,
     pointerToGridCell,
     resizeItemFromDelta,
     resolveCollisionsOnly,
@@ -236,7 +238,21 @@ export default function DashboardLayoutGrid({
         }
     }, [editMode]);
 
-    const gridHeight = gridHeightFromLayout(layout);
+    // Al editar se convierte el layout al ancho actual y se sella (`rw`): lo que se arrastra es lo que se guarda,
+    // y la vista lo reproduce igual en ese ancho y lo reacomoda en otros.
+    useEffect(() => {
+        if (!editMode || !gridWidth || interactionRef.current) return;
+        const rw = Math.round(gridWidth);
+        if (layout.length === 0 || layout.every((item) => item.rw === rw)) return;
+        onLayoutChange(stampLayoutWidth(reflowLayoutForWidth(layout, gridWidth), gridWidth));
+    }, [editMode, layout, gridWidth, onLayoutChange]);
+
+    // En vista el layout se reacomoda al ancho disponible; en edición ya está en coordenadas del ancho actual.
+    const displayLayout = useMemo(
+        () => (editMode ? layout : reflowLayoutForWidth(layout, gridWidth)),
+        [editMode, layout, gridWidth]
+    );
+    const gridHeight = gridHeightFromLayout(displayLayout);
 
     return (
         <div
@@ -251,7 +267,7 @@ export default function DashboardLayoutGrid({
                     '--dg-gap': `${GRID_GAP_PX}px`,
                 }}
             >
-                {layout.map((item) => (
+                {displayLayout.map((item) => (
                     <DashboardGridItem
                         key={item.i}
                         item={item}

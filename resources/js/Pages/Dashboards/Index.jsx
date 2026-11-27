@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { Settings2, X, Check, RotateCcw, Sparkles } from 'lucide-react';
@@ -9,6 +9,7 @@ import DashboardLayoutGrid from '../../Components/Dashboard/DashboardLayoutGrid'
 import DashboardMobileView from '../../Components/Dashboard/DashboardMobileView';
 import DashboardPanel, { DashboardCardSlot, DashboardPanelCards } from '../../Components/Dashboard/DashboardPanel';
 import DashboardToolbar from '../../Components/Dashboard/DashboardToolbar';
+import DashboardAnalitico from '../../Components/Dashboard/DashboardAnalitico';
 import { useDashboardBreakpoint } from '../../Components/Dashboard/useDashboardBreakpoint';
 import {
     PANEL_IDS,
@@ -18,7 +19,7 @@ import {
     resolveLayout,
 } from '../../Components/Dashboard/dashboardLayoutUtils';
 import DashboardModuleCard from '../../Components/Dashboard/DashboardModuleCard';
-import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS } from '../../Components/Dashboard/dashboardModulesCatalog';
+import { DASHBOARD_MODULE_CARDS, DASHBOARD_FUNCTION_CARDS, dashboardTonoClass } from '../../Components/Dashboard/dashboardModulesCatalog';
 import {
     geliaCardClass,
     GELIA_BTN_OUTLINE,
@@ -28,7 +29,6 @@ import {
     THEME_MODAL_SHELL,
 } from '../../utils/geliaTheme';
 import RelojConexion from '../../Components/Dashboard/RelojConexion';
-import { formatoMoneda } from '../../utils/formatoMoneda';
 
 import WidgetSolicitudes from './Widgets/WidgetSolicitudes';
 import WidgetCancelacionesCotizaciones from './Widgets/WidgetCancelacionesCotizaciones';
@@ -39,19 +39,12 @@ import WidgetPedidosBma from './Widgets/WidgetPedidosBma';
 import WidgetFacturas from './Widgets/WidgetFacturas';
 import WidgetContabilidad from './Widgets/WidgetContabilidad';
 
-const KPI_STRIP_CONFIG = [
-    { key: 'mis_activas', label: 'Mis solicitudes abiertas', hint: 'TAG · mi cartera' },
-    { key: 'solicitudes_mes', label: 'Solicitudes creadas', hint: 'Este mes · todas' },
-];
-
 const PRESET_IDS = Object.values(DASHBOARD_PRESETS);
 
 function buildCardGridPanel({
     variant,
     title,
     icon,
-    iconStyle,
-    iconClassName = '',
     emptyMessage,
     items,
 }) {
@@ -60,8 +53,6 @@ function buildCardGridPanel({
             variant={variant}
             title={title}
             icon={icon}
-            iconStyle={iconStyle}
-            iconClassName={iconClassName}
         >
             <DashboardPanelCards variant={variant} emptyMessage={emptyMessage}>
                 {items.map((item) => (
@@ -72,12 +63,7 @@ function buildCardGridPanel({
                             title={item.titulo}
                             subtitle={item.subtitulo}
                             icon={item.icon}
-                            borderClass={item.borderClass || 'theme-border'}
-                            iconWrapClass={item.iconWrapClass || 'theme-element theme-border'}
-                            iconClass={item.iconClass || 'theme-text-main'}
-                            iconWrapStyle={item.iconWrapStyle}
-                            iconStyle={item.iconStyle}
-                            borderStyle={item.borderStyle}
+                            tono={item.tono}
                         />
                     </DashboardCardSlot>
                 ))}
@@ -91,7 +77,6 @@ function buildModulosPanel({ variant, tarjetasVisibles }) {
         variant,
         title: 'Módulos del sistema',
         icon: LayoutDashboard,
-        iconStyle: { color: 'var(--color-primario)' },
         emptyMessage: 'No hay módulos visibles. Haz clic en "Configurar" para añadir accesos a tu panel.',
         items: tarjetasVisibles,
     });
@@ -102,103 +87,15 @@ function buildFuncionesPanel({ variant, funcionesVisibles }) {
         variant,
         title: 'Funciones operativas',
         icon: Layers,
-        iconStyle: { color: 'var(--color-primario)' },
         emptyMessage: 'No hay funciones visibles. Usa Configurar para mostrar accesos operativos.',
         items: funcionesVisibles,
     });
 }
 
-function trazarPerfilCotizado(puntos, inicio) {
-    return puntos.map(([x, y], i) => {
-        if (i === 0) return `${inicio} ${x},${y}`;
-
-        const [xAnterior, yAnterior] = puntos[i - 1];
-        const tercio = (x - xAnterior) / 3;
-        // Las tangentes horizontales unen los tramos sin sobrepasar sus importes.
-        return `C ${xAnterior + tercio},${yAnterior} ${x - tercio},${y} ${x},${y}`;
-    }).join(' ');
-}
-
-function GraficaMontoCotizado({ periodo, total, tramos }) {
-    const degradado = useId();
-    const maximo = Math.max(0, ...tramos.map(({ monto }) => monto));
-    const base = 75;
-    const profundidadX = 1.5;
-    const profundidadY = 5;
-    const anchoTramo = 108 / Math.max(1, tramos.length - 1);
-    const puntos = tramos.map(({ monto }, i) => [
-        2 + i * anchoTramo,
-        base - (Math.max(0, monto) / (maximo || 1)) * 58,
-    ]);
-    const perfil = trazarPerfilCotizado(puntos, 'M');
-    const puntosTraseros = puntos.map(([x, y]) => [x + profundidadX, y - profundidadY]).reverse();
-    const perfilTrasero = trazarPerfilCotizado(puntosTraseros, 'L');
-    const [ultimoX, ultimoY] = puntos.at(-1) ?? [2, base];
-
-    return (
-        <figure className={geliaCardClass('m-0 min-w-0 p-4 md:p-5')}>
-            <figcaption className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                <span className="text-xs font-medium theme-text-muted">Monto cotizado</span>
-                <span className="text-[11px] theme-text-muted capitalize">{periodo}</span>
-            </figcaption>
-            <p className="text-2xl md:text-[1.75rem] font-semibold theme-text-main m-0 leading-none tabular-nums mt-2 break-words">
-                {formatoMoneda(total)}
-            </p>
-            {tramos.length > 0 ? (
-                <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                    <svg aria-hidden="true" viewBox="0 0 120 80" preserveAspectRatio="none" className="block h-[4.75rem] w-full">
-                        <defs>
-                            <linearGradient id={degradado} x1="0" x2="0" y1="0" y2="1">
-                                <stop stopColor="var(--color-primario)" />
-                                <stop offset="1" stopColor="color-mix(in srgb, var(--color-primario), black 28%)" />
-                            </linearGradient>
-                        </defs>
-                        <line x1="2" y1={base} x2="116" y2={base} stroke="currentColor" className="theme-text-muted opacity-25" />
-                        {maximo > 0 && (
-                            <>
-                                <polygon
-                                    points={`${ultimoX},${ultimoY} ${ultimoX + profundidadX},${ultimoY - profundidadY} ${ultimoX + profundidadX},${base - profundidadY} ${ultimoX},${base}`}
-                                    fill="color-mix(in srgb, var(--color-primario), black 40%)"
-                                />
-                                <path
-                                    d={`${perfil} ${perfilTrasero} Z`}
-                                    fill="color-mix(in srgb, var(--color-primario), white 27%)"
-                                />
-                                <path d={`${perfil} L ${ultimoX},${base} 2,${base} Z`} fill={`url(#${degradado})`} />
-                                <path d={perfil} fill="none" stroke="color-mix(in srgb, var(--color-primario), white 48%)" strokeWidth="1.2" strokeLinejoin="round" />
-                            </>
-                        )}
-                        {puntos.map(([x], i) => {
-                            const { desde, hasta, monto } = tramos[i];
-                            const inicio = i === 0 ? 0 : x - anchoTramo / 2;
-                            const fin = i === tramos.length - 1 ? 120 : x + anchoTramo / 2;
-
-                            return (
-                                <rect key={desde} x={inicio} width={fin - inicio} height="80" fill="transparent">
-                                    <title>{`Días ${desde}–${hasta}: ${formatoMoneda(monto)}`}</title>
-                                </rect>
-                            );
-                        })}
-                    </svg>
-                    <ol aria-label="Monto por tramo de días" className="m-0 grid list-none gap-y-1 p-0 text-[11px] tabular-nums">
-                        {tramos.map(({ desde, hasta, monto }) => (
-                            <li key={desde} className="flex items-center justify-between gap-2">
-                                <span className="theme-text-muted"><span className="sr-only">Días </span>{desde}–{hasta}</span>
-                                <span className="text-right theme-text-main">{formatoMoneda(monto)}</span>
-                            </li>
-                        ))}
-                    </ol>
-                </div>
-            ) : (
-                <p className="text-[11px] theme-text-muted m-0 mt-2">Sin montos registrados en este periodo.</p>
-            )}
-        </figure>
-    );
-}
-
 export default function AdminDashboard({
     auth,
     estadisticas = {},
+    filtro_periodo = { clave: 'mes', desde: '', hasta: '', etiqueta: '' },
     ultimas_solicitudes = [],
     ultimas_operativas = [],
     metricas_solicitudes = {},
@@ -216,6 +113,7 @@ export default function AdminDashboard({
 
     const [showConfig, setShowConfig] = useState(false);
     const [editLayoutMode, setEditLayoutMode] = useState(false);
+    const [refreshingPeriodo, setRefreshingPeriodo] = useState(false);
     const { isMobile } = useDashboardBreakpoint();
 
     const dashboardOcultosBD = auth?.tema_visual?.dashboard_ocultos || [];
@@ -261,12 +159,6 @@ export default function AdminDashboard({
     const mostrarWidgetPedidos = can('control_pedidos.ver_listado');
     const mostrarWidgetFacturas = can('facturas.ver_listado');
     const mostrarWidgetContabilidad = can('contabilidad.ver');
-
-    const kpiItems = useMemo(
-        () => KPI_STRIP_CONFIG.filter((item) => Object.prototype.hasOwnProperty.call(estadisticas, item.key)),
-        [estadisticas]
-    );
-    const cotizadoMesAnterior = estadisticas.cotizado_mes_anterior;
 
     const layoutFlags = useMemo(
         () => ({
@@ -447,6 +339,23 @@ export default function AdminDashboard({
         if (!editLayoutMode) setEditLayoutMode(true);
     };
 
+    const aplicarPeriodo = (params) => {
+        const query = { periodo: params.periodo };
+        if (params.periodo === 'rango') {
+            query.desde = params.desde;
+            query.hasta = params.hasta;
+        }
+        setRefreshingPeriodo(true);
+        router.get(route('dashboard'), query, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            showProgress: false,
+            only: ['estadisticas', 'filtro_periodo', 'metricas_contabilidad'],
+            onFinish: () => setRefreshingPeriodo(false),
+        });
+    };
+
     const aplicarPreset = (presetId) => {
         if (!PRESET_IDS.includes(presetId)) return;
         const nextLayout = buildPresetLayout(presetId, layoutFlags);
@@ -475,37 +384,34 @@ export default function AdminDashboard({
                         'dashboard-page-header p-4 md:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10 dashboard-page-reveal'
                     )}
                 >
-                    <div className="min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                            <span
-                                className="h-1 w-8 rounded-full shrink-0"
-                                style={{ backgroundColor: 'var(--color-primario)' }}
-                                aria-hidden
-                            />
-                            <span className="text-[10px] font-semibold tracking-wide theme-text-muted m-0">Gelia NV</span>
+                    <div className="min-w-0 flex items-center gap-3">
+                        <div className="dashboard-page-header__icon" aria-hidden>
+                            <LayoutDashboard size={24} duration={1} isAnimated={false} color="currentColor" />
                         </div>
-                        <h1 className="text-xl md:text-2xl font-bold theme-text-main m-0 leading-tight">Panel de control</h1>
-                        <p className="text-sm theme-text-muted m-0 mt-1">
-                            Sesión de <span className="font-medium theme-text-main">{primerNombre}</span>
-                        </p>
+                        <div className="min-w-0">
+                            <h1 className="dashboard-page-header__title theme-text-main m-0">Panel de control</h1>
+                            <p className="dashboard-page-header__support theme-text-muted m-0">
+                                Sesión de <span className="theme-text-main">{primerNombre}</span>
+                            </p>
+                        </div>
                     </div>
 
                     <RelojConexion />
                 </header>
 
-                {(kpiItems.length > 0 || cotizadoMesAnterior) && (
-                    <section aria-label="Indicadores" className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-5 dashboard-page-reveal">
-                        {kpiItems.map(({ key, label, hint }) => (
-                            <div key={key} className={geliaCardClass('p-4 md:p-5 min-h-[4.5rem] flex flex-col justify-center')}>
-                                <p className="text-xs font-medium theme-text-muted m-0">{label}</p>
-                                <p className="text-2xl md:text-[1.75rem] font-semibold theme-text-main m-0 leading-none tabular-nums mt-2">
-                                    {Number(estadisticas[key] || 0).toLocaleString('es-MX')}
-                                </p>
-                                {hint && <p className="text-[11px] theme-text-muted m-0 mt-2">{hint}</p>}
-                            </div>
-                        ))}
-                        {cotizadoMesAnterior && <GraficaMontoCotizado {...cotizadoMesAnterior} />}
-                    </section>
+                {activePreset !== DASHBOARD_PRESETS.LAUNCHER && (
+                    <DashboardAnalitico
+                        filtroPeriodo={filtro_periodo}
+                        estadisticas={estadisticas}
+                        metricasCredibox={metricas_credibox}
+                        metricasPedidos={metricas_pedidos}
+                        metricasSolicitudes={metricas_solicitudes}
+                        ultimasSolicitudes={ultimas_solicitudes}
+                        ultimasOperativas={ultimas_operativas}
+                        alertasActivos={alertas_activos_destacadas}
+                        onPeriodoChange={aplicarPeriodo}
+                        refreshing={refreshingPeriodo}
+                    />
                 )}
 
                 {hayPaneles && (
@@ -625,19 +531,27 @@ export default function AdminDashboard({
 
                                 {[...tarjetasHabilitadas, ...funcionesHabilitadas].map((item) => {
                                     const isVisible = !data.dashboard_ocultos.includes(item.id);
+                                    const ItemIcon = item.icon;
                                     return (
                                         <button
                                             key={item.id}
                                             type="button"
                                             onClick={() => toggleVisibilidad(item.id)}
                                             aria-pressed={isVisible}
-                                            className={`dashboard-config-row w-full flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${
+                                            className={`dashboard-config-row w-full flex items-center justify-between gap-3 p-3 rounded-xl border transition-colors text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primario)] ${dashboardTonoClass(item.tono)} ${
                                                 isVisible
-                                                    ? 'border-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_8%,transparent)] theme-text-main'
+                                                    ? 'border-[color-mix(in_srgb,var(--dashboard-modulo)_45%,transparent)] bg-[color-mix(in_srgb,var(--dashboard-modulo)_8%,transparent)] theme-text-main'
                                                     : 'theme-border theme-element theme-text-muted'
                                             }`}
                                         >
-                                            <span className="min-w-0 truncate">{item.titulo}</span>
+                                            <span className="flex items-center gap-2 min-w-0">
+                                                {ItemIcon && (
+                                                    <span className="dashboard-widget__icon-wrap" aria-hidden>
+                                                        <ItemIcon size={16} duration={1} isAnimated={false} color="currentColor" className="dashboard-widget__icon" />
+                                                    </span>
+                                                )}
+                                                <span className="min-w-0 truncate">{item.titulo}</span>
+                                            </span>
                                             <span
                                                 className={`dashboard-config-row__check shrink-0 w-5 h-5 rounded-md border flex items-center justify-center ${
                                                     isVisible ? 'border-[var(--color-primario)] bg-[var(--color-primario)] text-white' : 'theme-border'

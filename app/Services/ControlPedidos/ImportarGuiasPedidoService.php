@@ -58,6 +58,9 @@ class ImportarGuiasPedidoService
                 }
 
                 try {
+                    if (\App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::aplica($pedido)) {
+                        throw new \RuntimeException('Cargue los PDFs por caja y confirme el rastreo con Asignar en Delegado.');
+                    }
                     $this->asignarGuiaService->ejecutar($pedido, $guia, $usuarioId);
                     $resultado['actualizados']++;
                 } catch (\InvalidArgumentException|\RuntimeException $e) {

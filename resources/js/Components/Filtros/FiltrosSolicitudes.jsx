@@ -1,18 +1,29 @@
-import React, { useEffect, useState } from 'react';
-import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar, Workflow, Wallet } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Search, Filter, AlertOctagon, SlidersHorizontal, X, Calendar, Workflow, Wallet, Layers, Clock3, CheckCircle2, ShieldCheck, TriangleAlert, Ban, Trash2, Loader2 } from 'lucide-react';
 import CampoBusqueda from '@/Components/CampoBusqueda';
 import useIconoHover from '@/hooks/useIconoHover';
 import { normalizarFechaAlConfirmar } from '@/utils/fechaFiltro';
 import RangoFechasPersonalizado from '@/Components/Filtros/RangoFechasPersonalizado';
-import { geliaCardClass, GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
+import { CAMPO_BUSQUEDA_DEFECTO, PROPS_BUSQUEDA_SOLICITUD } from '@/hooks/useFiltrosSolicitudesPage';
+import { GELIA_CHIP, GELIA_SEGMENT_TABS_SCROLL, GELIA_SEGMENT_TABS_TRACK_COMPACT, THEME_INPUT, THEME_LABEL, THEME_SELECT } from '@/utils/geliaTheme';
+
+export const CAMPOS_BUSQUEDA_SOLICITUD = [
+    { id: 'folio', label: 'Folio', corto: 'Folio', placeholder: 'FOL-12 o 12…' },
+    { id: 'numero_cliente', label: 'N.º de cliente', corto: 'N.º', placeholder: 'Número de cliente…' },
+    { id: 'nombre_cliente', label: 'Cliente', corto: 'Cliente', placeholder: 'Nombre del cliente…' },
+    { id: 'responsable', label: 'Responsable', corto: 'Resp.', placeholder: 'Nombre de quien registró…' },
+];
+
+const DEBOUNCE_BUSQUEDA_MS = 400;
+const VISITA_BUSQUEDA = { replace: true, only: PROPS_BUSQUEDA_SOLICITUD };
 
 const TABS = [
-    { id: 'TODAS', label: 'Todas' },
-    { id: 'PENDIENTES', label: 'Pendientes' },
-    { id: 'RESPONDIDAS', label: 'Respondidas' },
-    { id: 'INCORRECTAS', label: 'Incorrectas' },
-    { id: 'CANCELADAS', label: 'Canceladas' },
-    { id: 'ELIMINADAS', label: 'Eliminadas' },
+    { id: 'TODAS', label: 'Todas', icono: Layers },
+    { id: 'PENDIENTES', label: 'Pendientes', icono: Clock3 },
+    { id: 'RESPONDIDAS', label: 'Respondidas', icono: CheckCircle2 },
+    { id: 'INCORRECTAS', label: 'Incorrectas', icono: TriangleAlert },
+    { id: 'CANCELADAS', label: 'Canceladas', icono: Ban },
+    { id: 'ELIMINADAS', label: 'Eliminadas', icono: Trash2 },
 ];
 
 const ETIQUETA_PERIODO = {
@@ -62,6 +73,8 @@ const FOCUS = 'focus-visible:outline focus-visible:outline-2 focus-visible:outli
 export default function FiltrosSolicitudes({
     tabActiva,
     busqueda,
+    busquedaCampo = '',
+    buscando = false,
     tipoFecha,
     fechaInicio,
     fechaFin,
@@ -76,14 +89,18 @@ export default function FiltrosSolicitudes({
     etiquetaBuscar = 'Buscar solicitudes',
     mostrarEliminadas = false,
     variante,
+    conteosTab = {},
     mostrarFiltrosClientes = false,
     filtroLista = '', filtroTipoCliente = '', filtroTag = '',
     listas = [], tiposCliente = [],
     procesos = [], filtrosExtra = SIN_EXTRAS,
 }) {
-    const filtrosClientes = variante === 'tag-lista' || mostrarFiltrosClientes;
-    const tabsBase = filtrosClientes ? [...TABS.slice(0, 3), { id: 'VIGENTES', label: 'Vigentes' }, ...TABS.slice(3)] : TABS;
-    const tabs = mostrarEliminadas ? tabsBase : tabsBase.filter((tab) => tab.id !== 'ELIMINADAS');
+    const compacto = variante === 'tag-lista';
+    const filtrosClientes = compacto || mostrarFiltrosClientes;
+    const tabsBase = filtrosClientes && !compacto
+        ? [...TABS.slice(0, 3), { id: 'VIGENTES', label: 'Vigentes', icono: ShieldCheck }, ...TABS.slice(3)]
+        : TABS;
+    const tabs = (mostrarEliminadas && !compacto) ? tabsBase : tabsBase.filter((tab) => tab.id !== 'ELIMINADAS');
 
     const [mostrarAdicionales, setMostrarAdicionales] = useState(
         filtrosActivos > 0 || tipoFecha !== 'TODAS'
@@ -100,16 +117,24 @@ export default function FiltrosSolicitudes({
     const [tagLocal, setTagLocal] = useState(filtroTag);
     const [extraLocal, setExtraLocal] = useState(filtrosExtra);
     const [errorFechas, setErrorFechas] = useState('');
+    const [verEliminadas, setVerEliminadas] = useState(tabActiva === 'ELIMINADAS');
+    const campoInicial = compacto ? (busquedaCampo || CAMPO_BUSQUEDA_DEFECTO) : busquedaCampo;
+    const [campoLocal, setCampoLocal] = useState(campoInicial);
+    const [escribiendo, setEscribiendo] = useState(false);
+    const debounceBusqueda = useRef(null);
+    const ultimaBusqueda = useRef(`${busqueda}\0${campoInicial}`);
     const iconoBuscar = useIconoHover(Search, { size: 16, className: 'h-4 w-4 shrink-0' });
     const iconoFiltros = useIconoHover(SlidersHorizontal, { size: 16, className: 'h-4 w-4 shrink-0' });
     const iconoPanelFiltros = useIconoHover(Filter, { size: 14, className: 'h-3.5 w-3.5' });
     useEffect(() => { setExtraLocal(filtrosExtra); }, [filtrosExtra]);
     const cambiarExtra = (clave, valor) => setExtraLocal((actual) => ({ ...actual, [clave]: valor }));
     useEffect(() => { setListaLocal(filtroLista); setTipoClienteLocal(filtroTipoCliente); setTagLocal(filtroTag); }, [filtroLista, filtroTipoCliente, filtroTag]);
+    useEffect(() => { setVerEliminadas(tabActiva === 'ELIMINADAS'); }, [tabActiva]);
 
     useEffect(() => {
+        if (escribiendo) return;
         setBusquedaLocal(busqueda);
-    }, [busqueda]);
+    }, [busqueda, escribiendo]);
 
     useEffect(() => {
         setTipoFechaLocal(tipoFecha);
@@ -135,16 +160,23 @@ export default function FiltrosSolicitudes({
             }
         }
         setErrorFechas('');
+        ultimaBusqueda.current = `${(busquedaLocal || '').trim()}\0${campoLocal || ''}`;
+        const tabConsulta = motivoLocal
+            ? 'INCORRECTAS'
+            : (compacto && mostrarEliminadas
+                ? (verEliminadas ? 'ELIMINADAS' : (tabActiva === 'ELIMINADAS' ? 'TODAS' : undefined))
+                : undefined);
         onAplicarFiltros({
             ...(filtrosClientes ? { lista_id: listaLocal, tipo_cliente_id: tipoClienteLocal, tag: tagLocal } : {}),
             ...(variante === 'tag-lista' ? extraLocal : {}),
             q: busquedaLocal,
+            ...(compacto ? { q_campo: campoLocal } : {}),
             tipo_fecha: tipoFechaLocal,
             fecha_inicio: fechaInicioLocal,
             fecha_fin: fechaFinLocal,
             vendedor_id: vendedorLocal,
             motivo_incorrecta: motivoLocal,
-            tab: motivoLocal ? 'INCORRECTAS' : undefined,
+            tab: tabConsulta,
         });
     };
 
@@ -156,6 +188,7 @@ export default function FiltrosSolicitudes({
         setFechaFinLocal('');
         setVendedorLocal('');
         setMotivoLocal('');
+        setVerEliminadas(false);
         onLimpiarAdicionales?.();
     };
 
@@ -165,7 +198,8 @@ export default function FiltrosSolicitudes({
         if (facetas[clave]) { facetas[clave](''); onAplicarFiltros({ [clave]: '' }); return; }
         if (clave === 'q') {
             setBusquedaLocal('');
-            onAplicarFiltros({ q: '' });
+            ultimaBusqueda.current = `\0${campoLocal || ''}`;
+            onAplicarFiltros({ q: '' }, compacto ? VISITA_BUSQUEDA : undefined);
             return;
         }
         if (clave === 'periodo') {
@@ -183,6 +217,11 @@ export default function FiltrosSolicitudes({
         if (clave === 'motivo') {
             setMotivoLocal('');
             onAplicarFiltros({ motivo_incorrecta: '' });
+            return;
+        }
+        if (clave === 'eliminadas' || clave === 'vigentes') {
+            setVerEliminadas(false);
+            onCambiarTab('TODAS');
         }
     };
 
@@ -191,14 +230,23 @@ export default function FiltrosSolicitudes({
         ? `${fechaInicio} – ${fechaFin}`
         : ETIQUETA_PERIODO[tipoFecha];
 
+    const campoActivo = CAMPOS_BUSQUEDA_SOLICITUD.find((c) => c.id === campoLocal) || CAMPOS_BUSQUEDA_SOLICITUD[0];
+    const placeholderBusqueda = compacto
+        ? (campoActivo?.placeholder || 'Buscar folio o cliente…')
+        : 'Buscar folio o cliente…';
+    const etiquetaCampoActivo = CAMPOS_BUSQUEDA_SOLICITUD.find((c) => c.id === (busquedaCampo || campoLocal))?.label;
+    const formatearConteo = (valor) => new Intl.NumberFormat('es-MX').format(valor ?? 0);
+
     const chips = [
-        busqueda ? { clave: 'q', etiqueta: `Búsqueda: ${busqueda}` } : null,
+        busqueda ? { clave: 'q', etiqueta: `${etiquetaCampoActivo || 'Búsqueda'}: ${busqueda}` } : null,
         tipoFecha && tipoFecha !== 'TODAS' ? { clave: 'periodo', etiqueta: etiquetaPeriodo || 'Periodo' } : null,
         filtroVendedor ? { clave: 'vendedor', etiqueta: nombreResponsable || 'Responsable comercial' } : null,
         filtroMotivo ? { clave: 'motivo', etiqueta: ETIQUETA_MOTIVO[filtroMotivo] || filtroMotivo } : null,
         filtrosClientes && filtroLista ? { clave: 'lista_id', etiqueta: `Lista: ${listas.find(l => String(l.id) === String(filtroLista))?.nombre || filtroLista}` } : null,
         filtrosClientes && filtroTipoCliente ? { clave: 'tipo_cliente_id', etiqueta: `Tipo: ${filtroTipoCliente === 'SIN_TIPO' ? 'Sin tipo registrado' : tiposCliente.find(t => String(t.id) === String(filtroTipoCliente))?.nombre || filtroTipoCliente}` } : null,
         filtrosClientes && filtroTag ? { clave: 'tag', etiqueta: filtroTag === 'con_tag' ? 'Con TAG actual' : 'Sin TAG actual' } : null,
+        compacto && tabActiva === 'VIGENTES' ? { clave: 'vigentes', etiqueta: 'Vigentes' } : null,
+        compacto && tabActiva === 'ELIMINADAS' ? { clave: 'eliminadas', etiqueta: 'Eliminadas' } : null,
         ...(variante === 'tag-lista' ? [
             filtrosExtra.proceso_id ? { clave: 'extra:proceso_id', etiqueta: `Operación: ${procesos.find((p) => String(p.id) === String(filtrosExtra.proceso_id))?.nombre || filtrosExtra.proceso_id}` } : null,
             filtrosExtra.cliente_numero ? { clave: 'extra:cliente_numero', etiqueta: `Cliente n.º ${filtrosExtra.cliente_numero}` } : null,
@@ -207,13 +255,156 @@ export default function FiltrosSolicitudes({
         ] : []),
     ].filter(Boolean);
 
-    const barFiltrosClass = variante === 'tag-lista'
-        ? geliaCardClass('gelia-tag-filtros-bar p-3 md:p-4')
-        : '';
+    useEffect(() => () => clearTimeout(debounceBusqueda.current), []);
+
+    useEffect(() => {
+        setCampoLocal(compacto ? (busquedaCampo || CAMPO_BUSQUEDA_DEFECTO) : busquedaCampo);
+    }, [busquedaCampo, compacto]);
+
+    const aplicarBusquedaInstantanea = (q, campo) => {
+        const firma = `${(q || '').trim()}\0${campo || ''}`;
+        if (ultimaBusqueda.current === firma) return;
+        ultimaBusqueda.current = firma;
+        onAplicarFiltros({ q, q_campo: campo }, VISITA_BUSQUEDA);
+    };
+
+    const programarBusqueda = (q, campo, inmediato = false) => {
+        clearTimeout(debounceBusqueda.current);
+        if (!compacto) return;
+        if (inmediato) {
+            aplicarBusquedaInstantanea(q, campo);
+            return;
+        }
+        debounceBusqueda.current = setTimeout(() => aplicarBusquedaInstantanea(q, campo), DEBOUNCE_BUSQUEDA_MS);
+    };
+
+    const claseBuscar = compacto
+        ? `gelia-tag-filtros-accion theme-btn-primary inline-flex shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold ${FOCUS}`
+        : `text-white inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold sm:w-auto ${FOCUS}`;
+    const claseFiltros = compacto
+        ? `gelia-tag-filtros-accion inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-medium ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`
+        : `inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors sm:w-auto ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`;
+
+    const selectorCampo = compacto ? (
+        <>
+            <label htmlFor={`${idPrefixFechas}-campo`} className="sr-only">Buscar por</label>
+            <span className="gelia-tag-filtros-campo-wrap" data-valor={campoActivo.corto || campoActivo.label}>
+                <select
+                    id={`${idPrefixFechas}-campo`}
+                    value={campoLocal}
+                    onChange={(e) => {
+                        const siguiente = e.target.value;
+                        setCampoLocal(siguiente);
+                        if (busquedaLocal.trim()) programarBusqueda(busquedaLocal, siguiente, true);
+                    }}
+                    className={`gelia-tag-filtros-campo ${FOCUS}`}
+                    aria-label="Campo de búsqueda"
+                    title={campoActivo.label}
+                >
+                    {CAMPOS_BUSQUEDA_SOLICITUD.map((campo) => (
+                        <option key={campo.id} value={campo.id}>{campo.corto || campo.label}</option>
+                    ))}
+                </select>
+            </span>
+            <span className="gelia-tag-filtros-separador" aria-hidden="true" />
+        </>
+    ) : null;
+    const campoBusqueda = (
+        <CampoBusqueda
+            wrapperClassName={compacto ? 'gelia-tag-filtros-busqueda' : 'relative min-w-0 flex-1'}
+            type="search"
+            placeholder={placeholderBusqueda}
+            value={busquedaLocal}
+            onChange={(e) => {
+                const valor = e.target.value;
+                setBusquedaLocal(valor);
+                if (compacto) programarBusqueda(valor, campoLocal);
+            }}
+            onFocus={() => compacto && setEscribiendo(true)}
+            onBlur={() => compacto && setEscribiendo(false)}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (compacto) programarBusqueda(busquedaLocal, campoLocal, true);
+                    else aplicarConsulta();
+                }
+            }}
+            enterKeyHint="search"
+            autoComplete="off"
+            aria-label={compacto ? placeholderBusqueda : 'Buscar folio o cliente'}
+            aria-busy={compacto && buscando ? true : undefined}
+            className={`${THEME_INPUT} w-full`}
+            leading={selectorCampo}
+            suffix={compacto && buscando ? (
+                <Loader2 className="gelia-tag-filtros-busqueda-estado" aria-hidden="true" />
+            ) : null}
+        />
+    );
+    const botonBuscar = (
+        <button
+            type="button"
+            {...iconoBuscar.triggerProps}
+            onClick={aplicarConsulta}
+            className={claseBuscar}
+            style={compacto ? undefined : { backgroundColor: 'var(--color-primario)' }}
+            aria-label={etiquetaBuscar}
+        >
+            {iconoBuscar.nodo}
+            Buscar
+        </button>
+    );
+    const botonFiltros = (
+        <button
+            type="button"
+            {...iconoFiltros.triggerProps}
+            onClick={() => setMostrarAdicionales((v) => !v)}
+            aria-expanded={mostrarAdicionales}
+            aria-controls={`${idPrefixFechas}-adicionales`}
+            className={claseFiltros}
+        >
+            {iconoFiltros.nodo}
+            <span>Filtros</span>
+            {filtrosActivos > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white tabular-nums" style={{ backgroundColor: 'var(--color-primario)' }}>
+                    {filtrosActivos}
+                </span>
+            )}
+        </button>
+    );
 
     return (
         <div className={`space-y-3 ${variante === 'tag-lista' ? 'gelia-tag-filtros' : ''}`}>
-            <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${barFiltrosClass}`}>
+            {compacto ? (
+                <div className="gelia-tag-filtros-toolbar">
+                    <div className="gelia-tag-filtros-capsulas" role="group" aria-label="Estado de la solicitud">
+                        {tabs.map((tab) => {
+                            const Icono = tab.icono;
+                            const conteo = conteosTab[tab.id];
+                            return (
+                                <button
+                                    key={tab.id}
+                                    type="button"
+                                    onClick={() => onCambiarTab(tab.id)}
+                                    className={`gelia-tag-capsula ${FOCUS}`}
+                                    data-active={tabActiva === tab.id}
+                                    aria-pressed={tabActiva === tab.id}
+                                >
+                                    {Icono ? <Icono aria-hidden="true" /> : null}
+                                    <span>{tab.label}</span>
+                                    <span className="gelia-tag-capsula-conteo tabular-nums">{formatearConteo(conteo)}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="gelia-tag-filtros-consulta">
+                        <div className="gelia-tag-filtros-buscar" role="search">
+                            {campoBusqueda}
+                        </div>
+                        {botonFiltros}
+                    </div>
+                </div>
+            ) : (
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className={`gelia-segment gelia-tag-filtros-tabs ${GELIA_SEGMENT_TABS_SCROLL} w-full p-1 shadow-sm lg:w-auto`}>
                     <div className={GELIA_SEGMENT_TABS_TRACK_COMPACT} role="group" aria-label="Estado de la solicitud">
                         {tabs.map((tab) => (
@@ -233,53 +424,13 @@ export default function FiltrosSolicitudes({
 
                 <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl lg:flex-1">
                     <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
-                        <CampoBusqueda
-                            wrapperClassName="relative min-w-0 flex-1"
-                            type="search"
-                            placeholder="Buscar folio o cliente…"
-                            value={busquedaLocal}
-                            onChange={(e) => setBusquedaLocal(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    aplicarConsulta();
-                                }
-                            }}
-                            enterKeyHint="search"
-                            autoComplete="off"
-                            aria-label="Buscar folio o cliente"
-                            className={`${THEME_INPUT} w-full`}
-                        />
-                        <button
-                            type="button"
-                            {...iconoBuscar.triggerProps}
-                            onClick={aplicarConsulta}
-                            className={`${variante === 'tag-lista' ? 'theme-btn-primary' : 'text-white'} inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold sm:w-auto ${FOCUS}`}
-                            style={variante === 'tag-lista' ? undefined : { backgroundColor: 'var(--color-primario)' }}
-                            aria-label={etiquetaBuscar}
-                        >
-                            {iconoBuscar.nodo}
-                            Buscar
-                        </button>
+                        {campoBusqueda}
+                        {botonBuscar}
                     </div>
-                    <button
-                        type="button"
-                        {...iconoFiltros.triggerProps}
-                        onClick={() => setMostrarAdicionales((v) => !v)}
-                        aria-expanded={mostrarAdicionales}
-                        aria-controls={`${idPrefixFechas}-adicionales`}
-                        className={`inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-medium transition-colors sm:w-auto ${FOCUS} ${mostrarAdicionales || filtrosActivos > 0 || tipoFecha !== 'TODAS' ? 'border-[var(--color-primario)] text-[var(--color-primario)] bg-[color-mix(in_srgb,var(--color-primario)_10%,transparent)]' : 'theme-border theme-element theme-text-muted hover:border-[var(--color-primario)]'}`}
-                    >
-                        {iconoFiltros.nodo}
-                        <span>Filtros</span>
-                        {filtrosActivos > 0 && (
-                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-semibold text-white tabular-nums" style={{ backgroundColor: 'var(--color-primario)' }}>
-                                {filtrosActivos}
-                            </span>
-                        )}
-                    </button>
+                    {botonFiltros}
                 </div>
             </div>
+            )}
 
             {chips.length > 0 && (
                 <div className="flex flex-wrap gap-2">
@@ -300,7 +451,7 @@ export default function FiltrosSolicitudes({
             )}
 
             {mostrarAdicionales && (
-                <div id={`${idPrefixFechas}-adicionales`} className="gelia-tag-filtros-panel theme-surface space-y-4 rounded-xl border theme-border p-4">
+                <div id={`${idPrefixFechas}-adicionales`} className="gelia-tag-filtros-panel theme-surface theme-no-blur space-y-4 rounded-xl border theme-border p-4">
                     <div className="flex items-center justify-between gap-3">
                         <p className="m-0 flex items-center gap-2 text-sm font-medium theme-text-main" {...iconoPanelFiltros.triggerProps}>
                             {iconoPanelFiltros.nodo} Filtros
@@ -422,8 +573,26 @@ export default function FiltrosSolicitudes({
                                     </div>
                                 ))}
                             </div>
+                            {mostrarEliminadas && (
+                                <>
+                                    <EncabezadoGrupo icono={Trash2}>Papelera</EncabezadoGrupo>
+                                    <div className="flex max-w-sm flex-col gap-1.5">
+                                        <label htmlFor={`${idPrefixFechas}-eliminadas`} className={THEME_LABEL}>Solicitudes eliminadas</label>
+                                        <select
+                                            id={`${idPrefixFechas}-eliminadas`}
+                                            value={verEliminadas ? '1' : ''}
+                                            onChange={(e) => setVerEliminadas(e.target.value === '1')}
+                                            className={`${THEME_SELECT} w-full`}
+                                        >
+                                            <option value="">Ocultar eliminadas</option>
+                                            <option value="1">Mostrar eliminadas{conteosTab.ELIMINADAS != null ? ` (${formatearConteo(conteosTab.ELIMINADAS)})` : ''}</option>
+                                        </select>
+                                        <p className="m-0 text-xs theme-text-muted">La papelera se consulta desde este filtro, no desde las cápsulas de estado.</p>
+                                    </div>
+                                </>
+                            )}
                         </>}
-                        <p className="m-0 text-xs theme-text-muted">El periodo corresponde a la creación de la solicitud. Para consultar listas aprobadas, combina la lista con Vigentes. El TAG refleja la asignación actual del cliente.</p>
+                        <p className="m-0 text-xs theme-text-muted">El periodo corresponde a la creación de la solicitud. Para consultar listas aprobadas, combina la lista con el indicador Vigentes. El TAG refleja la asignación actual del cliente.</p>
                     </>}
                     {tipoFechaLocal === 'MES_ESPECIFICO' && <div className="flex flex-col gap-1.5 max-w-sm"><label htmlFor={`${idPrefixFechas}-mes`} className={THEME_LABEL}>Mes y año</label><input id={`${idPrefixFechas}-mes`} type="month" value={fechaInicioLocal?.slice(0, 7) || ''} className={THEME_INPUT} onChange={event => {
                         const mes = event.target.value;

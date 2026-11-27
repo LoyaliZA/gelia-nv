@@ -466,6 +466,11 @@ class NacionalOla3Test extends TestCase
         $this->assertTrue($resguardo->fresh()->solicitud_preparacion_json['vinculo_resguardo']['integrado']);
         $empacado = app(MarcarEmpacadoPedidoBmaService::class)->ejecutar($envio->fresh(), $this->usuario->id);
         $this->assertNotNull($empacado->empacado_at);
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $caja = $this->caja($envio, ['peso_real_kg' => 1]);
+        app(\App\Services\ControlPedidos\GestionarGuiaPdfPedidoBmaService::class)->subir(
+            $empacado, UploadedFile::fake()->create('integrada.pdf', 1, 'application/pdf'), $this->usuario->id, $caja->id
+        );
         $conGuia = app(AsignarGuiaPedidoBmaService::class)->ejecutar($empacado->fresh(), 'GUIA-SI', $this->usuario->id);
         $this->assertSame('GUIA-SI', $conGuia->numero_rastreo);
         $enviado = app(MarcarEnviadoPedidoBmaService::class)->ejecutar($conGuia->fresh(), $this->usuario->id);

@@ -257,6 +257,7 @@ describe('buildSidebarNavigation permissions', () => {
             'almacenes_inventarios',
             'almacenes_costos',
             'almacenes_importaciones',
+            'avisos',
             'almacenes_config_catalogos',
         ]);
         expect(almacenes.children.map((n) => n.label)).not.toContain('Cobertura');
@@ -264,7 +265,7 @@ describe('buildSidebarNavigation permissions', () => {
         expect(almacenes.children.find((n) => n.id === 'almacenes_productos_gi')?.href()).toBe('/gestion-interna/productos');
 
         const gestion = tree.find((n) => n?.id === 'gestion_interna');
-        expect(gestion.children.find((n) => n.id === 'gestion_productos')?.href()).toBe('/gestion-interna/productos');
+        expect(gestion.children.some((n) => n.id === 'gestion_productos')).toBe(false);
 
         const logistica = tree.find((n) => n?.id === 'logistica');
         const pedidos = logistica.children.find((n) => n?.id === 'gestion_pedidos');
@@ -309,5 +310,88 @@ describe('buildSidebarNavigation permissions', () => {
         const ids = tree.find((n) => n?.id === 'almacenes').children.map((n) => n.id);
         expect(ids).toEqual(['almacenes_resumen', 'almacenes_catalogo', 'almacenes_inventarios']);
         expect(ids).not.toContain('almacenes_cobertura');
+    });
+
+    it('agrupa el menú en secciones con encabezado y ningún encabezado queda vacío', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith([], true),
+            showAdminMenu: true,
+            manualesHubVisible: true,
+            geliaAiVisible: true,
+        });
+        const secuencia = tree.map((n) => `${n.type}:${n.id}`);
+        expect(secuencia).toEqual([
+            'header:seccion_principal',
+            'group:inicio',
+            'header:seccion_operacion',
+            'group:comercial',
+            'group:logistica',
+            'group:punto_venta',
+            'header:seccion_finanzas',
+            'group:finanzas',
+            'group:reportes',
+            'header:seccion_inventario',
+            'group:almacenes',
+            'group:vinculaciones',
+            'header:seccion_organizacion',
+            'group:gestion_interna',
+            'header:seccion_sistema',
+            'group:herramientas',
+            'group:soporte',
+            'group:sistema',
+        ]);
+
+        const parcial = buildSidebarNavigation({
+            can: canWith(['facturas.ver_listado']),
+            showAdminMenu: false,
+        });
+        const headers = parcial.filter((n) => n.type === 'header').map((n) => n.id);
+        expect(headers).toContain('seccion_finanzas');
+        expect(headers).not.toContain('seccion_inventario');
+        parcial.forEach((nodo, i) => {
+            if (nodo.type === 'header') expect(parcial[i + 1]?.type).toBe('group');
+        });
+    });
+
+    it('Inicio conserva el Panel Principal primero y no repite enlaces entre grupos', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith([], true),
+            showAdminMenu: true,
+            manualesHubVisible: true,
+            geliaAiVisible: true,
+        });
+        const inicio = tree.find((n) => n?.id === 'inicio');
+        expect(inicio.children.map((n) => n.id)).toEqual(['dashboard', 'mensajeria', 'gelia_ai']);
+
+        const ids = collectLinkIds(tree);
+        expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('reubica los módulos en la sección que les corresponde', () => {
+        const tree = buildSidebarNavigation({
+            can: canWith([], true),
+            showAdminMenu: true,
+            manualesHubVisible: true,
+            geliaAiVisible: true,
+        });
+        const grupo = (id) => tree.find((n) => n?.id === id);
+        const idsDe = (id) => collectLinkIds(grupo(id).children);
+
+        expect(idsDe('logistica')).toEqual(expect.arrayContaining(['traspasos', 'traspasos_cedis', 'mapa_logistico']));
+        expect(idsDe('comercial')).toEqual(expect.arrayContaining(['solicitudes', 'cancelaciones', 'mis_clientes', 'plantilla_bellaroma', 'ejercicio_escalonamiento']));
+        expect(idsDe('finanzas')).not.toContain('ejercicio_escalonamiento');
+        expect(idsDe('reportes')).toContain('listados');
+        expect(idsDe('gestion_interna')).toContain('asistencia');
+        expect(idsDe('almacenes')).toContain('avisos');
+        expect(idsDe('herramientas').sort()).toEqual(
+            ['gastos', 'limpieza_archivos', 'limpieza_clientes', 'transacciones'].sort()
+        );
+        expect(tree.some((n) => n?.id === 'operaciones' || n?.id === 'solicitudes_group')).toBe(false);
+    });
+
+    it('Logística pone la operación diaria primero y la configuración de zonas al final', () => {
+        const tree = buildSidebarNavigation({ can: canWith([], true), showAdminMenu: false });
+        const ids = tree.find((n) => n?.id === 'logistica').children.map((n) => n.id);
+        expect(ids).toEqual(['entregas', 'traspasos', 'traspasos_cedis', 'gestion_pedidos', 'mapa_logistico']);
     });
 });

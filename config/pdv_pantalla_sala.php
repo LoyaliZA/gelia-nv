@@ -11,4 +11,9 @@ return [
         'longitud' => 32,
     ],
 
+    'codigo_corto' => [
+        'longitud' => 6,
+        'alfabeto' => '23456789ABCDEFGHJKLMNPQRSTUVWXYZ',
+    ],
+
 ];

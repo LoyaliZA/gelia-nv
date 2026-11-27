@@ -42,7 +42,7 @@ import CapturaExcepcionesConsulta, {
 import ResumenCambiosDisponibilidad from '../../Partials/ResumenCambiosDisponibilidad';
 import ModalSeleccionProductosDetalle from '../../Partials/ModalSeleccionProductosDetalle';
 import { solicitudNacionalConCambios } from './ajustesNacionalesComoCambios';
-import { anexosPendientesRevision, cambioDelCicloActual, cambiosDisponibilidad, revisionesDelCicloEnCurso } from '../../Partials/cambiosDisponibilidad';
+import { anexosPendientesRevision, cambioDelCicloActual, cambiosDisponibilidad, revisionesDelCicloEnCurso, revisionesVisiblesDeConsulta } from '../../Partials/cambiosDisponibilidad';
 import useEscaneoPreparacion from '../../Tienda/Partials/useEscaneoPreparacion';
 import {
     completarRevisionesPesajeNacional, excepcionesDesdeRevisiones, piezasVigentesNacional,
@@ -1929,19 +1929,19 @@ export default function ModalResponderPesaje({
                         <section id="pesaje-productos" tabIndex={-1} hidden={!nacional && paso !== 1} className="gelia-pedidos-paso gelia-pedidos-seccion space-y-4">
                             {nacional ? (
                                 <>
-                                    {actualizacionNacional ? (
-                                        <ResumenCambiosDisponibilidad
-                                            solicitud={solicitudNacional}
-                                            documentos={pedido.documentos || []}
-                                            vista="revision"
-                                            interactivo={!procesando}
-                                            respuestas={respuestasCambios}
-                                            onResponder={responderCambioNacional}
-                                            onIncidencia={reportarCambioNacional}
-                                            disabled={procesando}
-                                            onVer={(documentos, indice) => setGaleria({ abierto: true, documentos, indice })}
-                                        />
-                                    ) : (
+                                    <ResumenCambiosDisponibilidad
+                                        solicitud={solicitudNacionalConCambios(pedido, { incluirHistorial: true })}
+                                        documentos={pedido.documentos || []}
+                                        revisionesVisibles={revisionesVisiblesDeConsulta(pedido, solicitudNacional)}
+                                        vista="revision"
+                                        interactivo={actualizacionNacional && !procesando}
+                                        respuestas={respuestasCambios}
+                                        onResponder={responderCambioNacional}
+                                        onIncidencia={reportarCambioNacional}
+                                        disabled={procesando}
+                                        onVer={(documentos, indice) => setGaleria({ abierto: true, documentos, indice })}
+                                    />
+                                    {!actualizacionNacional && (
                                         <EstadoPedidoConsulta name="estado-pesaje-nacional" estado={estadoPedido} onChange={setEstadoPedido} disabled={procesando} />
                                     )}
                                     {(estadoPedido === 'detalle' || actualizacionNacional) && (

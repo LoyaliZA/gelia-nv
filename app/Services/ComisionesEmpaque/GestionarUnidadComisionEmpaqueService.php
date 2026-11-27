@@ -22,7 +22,7 @@ class GestionarUnidadComisionEmpaqueService
     public function __construct(private ValorarUnidadComisionEmpaque $valorar) {}
 
     /** @param  list<array{catalogo_tipo_caja_id: ?int, cantidad: int, es_bolsa: bool}>  $lineas */
-    public function clasificar(UnidadComisionEmpaque $unidad, array $lineas, User $responsable): UnidadComisionEmpaque
+    public function clasificar(UnidadComisionEmpaque $unidad, array $lineas, User $responsable, ?string $versionRevision = null): UnidadComisionEmpaque
     {
         if ($unidad->posible_duplicado || $unidad->situacion === UnidadComisionEmpaque::POSIBLE_DUPLICADO) {
             throw ValidationException::withMessages([
@@ -66,9 +66,10 @@ class GestionarUnidadComisionEmpaqueService
 
         $antes = $unidad->lineas()->get(['catalogo_tipo_caja_id', 'cantidad', 'es_bolsa'])->toArray();
 
-        DB::transaction(function () use ($unidad, $lineas, $responsable, $antes) {
+        DB::transaction(function () use ($unidad, $lineas, $responsable, $antes, $versionRevision) {
             $bloqueada = UnidadComisionEmpaque::query()->whereKey($unidad->id)->lockForUpdate()->first();
-            if ($bloqueada->corte_id) {
+            $this->assertVersionRevision($bloqueada, $versionRevision);
+            if ($bloqueada->corte_id || $bloqueada->huella !== $unidad->huella || $bloqueada->posible_duplicado) {
                 throw ValidationException::withMessages([
                     'unidad' => 'Esta unidad ya está en un corte confirmado. Registre un ajuste si el desglose debe corregirse.',
                 ]);
@@ -82,7 +83,11 @@ class GestionarUnidadComisionEmpaqueService
                     'es_bolsa' => (bool) $linea['es_bolsa'],
                 ]);
             }
-            $this->valorar->aplicar($unidad->fresh('lineas'));
+            if ($bloqueada->logistica['revisar_desglose'] ?? false) {
+                $bloqueada->update(['logistica' => array_replace($bloqueada->logistica, ['revisar_desglose' => false])]);
+                $this->cerrarIncidencias($bloqueada, 'cambio_desglose', 'clasificar', 'Desglose revisado.', $responsable);
+            }
+            $this->valorar->aplicar($bloqueada->fresh('lineas'));
             AuditoriaComisionEmpaque::anotar($responsable, 'unidad', $unidad->id, 'clasificar', null, [
                 'antes' => $antes,
                 'despues' => $lineas,
@@ -92,7 +97,49 @@ class GestionarUnidadComisionEmpaqueService
         return $unidad->fresh('lineas');
     }
 
-    public function decidirCancelacion(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable): UnidadComisionEmpaque
+    public function conciliar(UnidadComisionEmpaque $unidad, array $datos, User $responsable): void
+    {
+        DB::transaction(function () use ($unidad, $datos, $responsable) {
+            $unidad = UnidadComisionEmpaque::query()->lockForUpdate()->findOrFail($unidad->id);
+            $this->assertVersionRevision($unidad, $datos['version_revision'] ?? null);
+            unset($datos['version_revision']);
+            if ($unidad->posible_duplicado || $unidad->corte_id || $unidad->liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA
+                || ! in_array($unidad->situacion, [
+                    UnidadComisionEmpaque::PENDIENTE_CONCILIACION, UnidadComisionEmpaque::PENDIENTE_CLASIFICACION,
+                    UnidadComisionEmpaque::ELEGIBLE, UnidadComisionEmpaque::PENDIENTE_TARIFA, UnidadComisionEmpaque::EXCLUIDA,
+                ], true) || $this->valorar->anclaCubre($unidad, ['excluir', 'descartar'])) {
+                throw ValidationException::withMessages(['conciliacion' => 'Resuelva primero la incidencia del empaque o consulte el corte confirmado.']);
+            }
+            if ($datos['huella'] !== $unidad->huella || ($datos['fuente'] ?? null) !== ($unidad->logistica['huella_comercial'] ?? null)) {
+                throw ValidationException::withMessages(['conciliacion' => 'El empaque cambió. Abra el detalle actualizado para registrar la decisión.']);
+            }
+            if (($datos['decision'] === 'validar' && in_array($datos['motivo_comercial'], ['sin_informacion', 'captura_incorrecta'], true))
+                || ($datos['motivo_comercial'] === 'captura_incorrecta' && $datos['decision'] !== 'excluir')) {
+                throw ValidationException::withMessages(['motivo_comercial' => 'Elija un motivo compatible con la decisión.']);
+            }
+            if ($datos['decision'] !== 'excluir' && ($diferencia = app(ComprobarFuenteCorteComisionEmpaque::class)->diferencia($unidad))) {
+                throw ValidationException::withMessages(['conciliacion' => $diferencia]);
+            }
+
+            $antes = $unidad->conciliacion;
+            $decision = [
+                ...$datos,
+                'responsable_id' => $responsable->id,
+                'responsable' => $responsable->name,
+                'fecha' => now()->toIso8601String(),
+            ];
+            $unidad->update(['conciliacion' => $decision]);
+            $this->valorar->aplicar($unidad);
+            if ($datos['decision'] !== 'pendiente') {
+                $this->cerrarIncidencias($unidad, 'cambio_comercial', $datos['decision'], $datos['observaciones'], $responsable);
+            }
+            AuditoriaComisionEmpaque::anotar($responsable, 'unidad', $unidad->id, 'conciliar', $datos['observaciones'], [
+                'antes' => $antes, 'despues' => $decision,
+            ]);
+        });
+    }
+
+    public function decidirCancelacion(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable, ?string $versionRevision = null): UnidadComisionEmpaque
     {
         if (! in_array($decision, ['conservar', 'excluir'], true)) {
             throw ValidationException::withMessages(['decision' => 'Elija conservar o excluir la comisión.']);
@@ -108,7 +155,7 @@ class GestionarUnidadComisionEmpaqueService
         }
 
         $pedidoCancelado = null;
-        if ($unidad->origen_registro === 'manual') {
+        if (in_array($unidad->origen_registro, ['manual', 'carga'], true)) {
             if (! $unidad->pedido_bma_id) {
                 throw ValidationException::withMessages([
                     'unidad' => 'Este registro manual no está vinculado a un pedido cancelado.',
@@ -122,7 +169,16 @@ class GestionarUnidadComisionEmpaqueService
             }
         }
 
-        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable, $pedidoCancelado) {
+        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable, $pedidoCancelado, $versionRevision) {
+            $bloqueada = UnidadComisionEmpaque::query()->lockForUpdate()->findOrFail($unidad->id);
+            $this->assertVersionRevision($bloqueada, $versionRevision);
+            if ($bloqueada->corte_id || $bloqueada->situacion !== $unidad->situacion || $bloqueada->huella !== $unidad->huella) {
+                throw ValidationException::withMessages(['unidad' => 'El empaque cambió. Consulte su estado actualizado.']);
+            }
+            $unidad = $bloqueada;
+            if ($pedidoCancelado && (string) PedidoBma::query()->find($pedidoCancelado->id)?->cancelado_at !== (string) $pedidoCancelado->cancelado_at) {
+                throw ValidationException::withMessages(['unidad' => 'La cancelación cambió. Consulte su estado actualizado.']);
+            }
             $this->valorar->fijarAncla($unidad, $decision, $motivo, $responsable);
             if ($pedidoCancelado) {
                 $unidad->ancla_huella = HuellaFuenteComisionEmpaque::deCancelacion(
@@ -139,7 +195,7 @@ class GestionarUnidadComisionEmpaqueService
                 $unidad->importe_centavos = null;
                 $unidad->cantidad_comisionable = null;
                 $unidad->save();
-            } elseif ($unidad->origen_registro === 'manual' && $unidad->revision_estado === 'pendiente') {
+            } elseif (in_array($unidad->origen_registro, ['manual', 'carga'], true) && $unidad->revision_estado === 'pendiente') {
                 $unidad->situacion = UnidadComisionEmpaque::PENDIENTE_REVISION;
                 $unidad->importe_centavos = null;
                 $unidad->cantidad_comisionable = null;
@@ -161,7 +217,7 @@ class GestionarUnidadComisionEmpaqueService
         return $unidad->fresh();
     }
 
-    public function resolverRevision(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable): UnidadComisionEmpaque
+    public function resolverRevision(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable, ?string $versionRevision = null): UnidadComisionEmpaque
     {
         if (! in_array($unidad->situacion, [UnidadComisionEmpaque::REEMPAQUE_REVISION, UnidadComisionEmpaque::SOLAPE_REVISION, UnidadComisionEmpaque::REVERTIDA_REVISION], true)) {
             throw ValidationException::withMessages(['unidad' => 'Esta unidad no está en revisión de reempaque, solape o reversión.']);
@@ -170,7 +226,19 @@ class GestionarUnidadComisionEmpaqueService
             throw ValidationException::withMessages(['motivo' => 'Escriba por qué acepta o descarta esta unidad.']);
         }
 
-        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable) {
+        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable, $versionRevision) {
+            $revisada = UnidadComisionEmpaque::query()->lockForUpdate()->findOrFail($unidad->id);
+            $this->assertVersionRevision($revisada, $versionRevision);
+            if ($revisada->corte_id || $revisada->situacion !== $unidad->situacion || $revisada->huella !== $unidad->huella) {
+                throw ValidationException::withMessages(['unidad' => 'El empaque cambió. Consulte su estado actualizado.']);
+            }
+            $unidad = $revisada;
+            if ($decision === 'aceptar' && ($unidad->logistica['fuente_en_otro_corte'] ?? false)) {
+                throw ValidationException::withMessages(['decision' => 'Este empaque ya pertenece a un corte confirmado. Revise si corresponde un ajuste al corte original.']);
+            }
+            if ($decision === 'aceptar' && $unidad->cantidad_origen < 1) {
+                throw ValidationException::withMessages(['decision' => 'La fuente no tiene una cantidad física. Revise Gestión de Pedidos o descarte la comisión.']);
+            }
             if (! in_array($decision, ['aceptar', 'descartar'], true)) {
                 throw ValidationException::withMessages(['decision' => 'Elija aceptar o descartar.']);
             }
@@ -348,9 +416,6 @@ class GestionarUnidadComisionEmpaqueService
      */
     public function marcarSiDuplicado(UnidadComisionEmpaque $unidad): void
     {
-        if (! in_array($unidad->procedencia, [FuentesComisionEmpaque::MANUAL, FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO], true)) {
-            return;
-        }
         if (! $unidad->pedido_bma_id && ! $unidad->folio_pedido && ! $unidad->folio_remision) {
             return;
         }
@@ -369,9 +434,9 @@ class GestionarUnidadComisionEmpaqueService
         }
     }
 
-    public function revisarManual(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable): UnidadComisionEmpaque
+    public function revisarManual(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable, ?string $versionRevision = null): UnidadComisionEmpaque
     {
-        $manualPendiente = $unidad->origen_registro === 'manual' && $unidad->revision_estado === 'pendiente';
+        $manualPendiente = in_array($unidad->origen_registro, ['manual', 'carga'], true) && $unidad->revision_estado === 'pendiente';
         $duplicado = $unidad->situacion === UnidadComisionEmpaque::POSIBLE_DUPLICADO || $unidad->posible_duplicado;
         if (! $manualPendiente && ! $duplicado) {
             throw ValidationException::withMessages(['unidad' => 'Solo un registro manual pendiente o un posible duplicado puede revisarse.']);
@@ -381,7 +446,7 @@ class GestionarUnidadComisionEmpaqueService
         }
 
         try {
-            $this->transaccionRevisionManual($unidad, $decision, $motivo, $responsable);
+            $this->transaccionRevisionManual($unidad, $decision, $motivo, $responsable, $versionRevision);
         } catch (ValidationException $e) {
             $this->marcarSiDuplicado($unidad->fresh());
             throw $e;
@@ -390,13 +455,14 @@ class GestionarUnidadComisionEmpaqueService
         return $unidad->fresh();
     }
 
-    private function transaccionRevisionManual(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable): void
+    private function transaccionRevisionManual(UnidadComisionEmpaque $unidad, string $decision, string $motivo, User $responsable, ?string $versionRevision): void
     {
-        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable) {
+        DB::transaction(function () use ($unidad, $decision, $motivo, $responsable, $versionRevision) {
             $unidad = UnidadComisionEmpaque::query()->whereKey($unidad->id)->lockForUpdate()->first();
+            $this->assertVersionRevision($unidad, $versionRevision);
             $this->marcarSiDuplicado($unidad);
             $unidad->refresh();
-            $manualPendiente = $unidad->origen_registro === 'manual' && $unidad->revision_estado === 'pendiente';
+            $manualPendiente = in_array($unidad->origen_registro, ['manual', 'carga'], true) && $unidad->revision_estado === 'pendiente';
             if ($this->referenciaInsuficiente($unidad) && $decision === 'aceptar') {
                 throw ValidationException::withMessages([
                     'decision' => $this->textoReferenciaInsuficiente(),
@@ -561,7 +627,8 @@ class GestionarUnidadComisionEmpaqueService
 
     public function reconciliarCancelacionManual(UnidadComisionEmpaque $unidad, ?User $responsable): void
     {
-        if ($unidad->origen_registro !== 'manual' || ! $unidad->pedido_bma_id) {
+        if (! in_array($unidad->origen_registro, ['manual', 'carga'], true) || ! $unidad->pedido_bma_id
+            || $unidad->liquidacion === UnidadComisionEmpaque::LIQUIDACION_PAGADO_FUERA) {
             return;
         }
         $pedido = PedidoBma::query()->find($unidad->pedido_bma_id);
@@ -748,7 +815,11 @@ class GestionarUnidadComisionEmpaqueService
         return UnidadComisionEmpaque::query()
             ->where('area_id', $unidad->area_id)
             ->where('id', '!=', $unidad->id)
-            ->whereIn('procedencia', [FuentesComisionEmpaque::MANUAL, FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO])
+            ->when($unidad->procedencia !== FuentesComisionEmpaque::MANUAL, function ($q) use ($unidad) {
+                $q->whereIn('procedencia', $unidad->procedencia === FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO
+                    ? [FuentesComisionEmpaque::MANUAL, FuentesComisionEmpaque::TIENDA_CUMPLIMIENTO]
+                    : [FuentesComisionEmpaque::MANUAL]);
+            })
             ->where('situacion', '!=', UnidadComisionEmpaque::RECHAZADA)
             ->where(function ($q) use ($unidad) {
                 $q->whereRaw('1 = 0');
@@ -795,7 +866,7 @@ class GestionarUnidadComisionEmpaqueService
         unset($logistica['coincidencias']);
         $unidad->logistica = $logistica;
         if ($unidad->situacion === UnidadComisionEmpaque::POSIBLE_DUPLICADO) {
-            $unidad->situacion = $unidad->origen_registro === 'manual' && $unidad->revision_estado === 'pendiente'
+            $unidad->situacion = in_array($unidad->origen_registro, ['manual', 'carga'], true) && $unidad->revision_estado === 'pendiente'
                 ? UnidadComisionEmpaque::PENDIENTE_REVISION
                 : UnidadComisionEmpaque::PENDIENTE_CLASIFICACION;
             $unidad->diferencia = $this->referenciaInsuficiente($unidad) ? $this->textoReferenciaInsuficiente() : null;
@@ -819,6 +890,13 @@ class GestionarUnidadComisionEmpaqueService
         }
 
         return implode(' ', $partes).' Reconozca un trabajo distinto, con motivo, o rechace el registro.';
+    }
+
+    private function assertVersionRevision(UnidadComisionEmpaque $unidad, ?string $versionRevision): void
+    {
+        if ($versionRevision !== null && ! hash_equals($unidad->versionRevision(), $versionRevision)) {
+            throw ValidationException::withMessages(['unidad' => 'Otra revisión modificó este empaque. Abra el detalle actualizado para continuar.']);
+        }
     }
 
     private function cerrarIncidencias(UnidadComisionEmpaque $unidad, ?string $tipo, string $decision, string $motivo, User $responsable): void

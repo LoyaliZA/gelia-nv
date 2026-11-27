@@ -28,6 +28,7 @@ export default function Index({
     const [modalTarea, setModalTarea] = useState(null);
     const tareaDesdeFiltro = useRef(null);
     const [consultaMunicipalId, setConsultaMunicipalId] = useState(null);
+    const [consultaMunicipalLectura, setConsultaMunicipalLectura] = useState(false);
     const [pedidoDetalle, setPedidoDetalle] = useState(null);
     const abrirVerPedido = (tarea) => {
         const id = tarea?.pedido?.id;
@@ -44,7 +45,11 @@ export default function Index({
     };
     const abrirPreparacion = (tarea, atender = false) => {
         if (tarea.tipo_fila === 'empaque_municipal') { abrirVerPedido(tarea); return; }
-        if (tarea.tipo_fila === 'consulta_municipal') { setConsultaMunicipalId(tarea.pedido.id); return; }
+        if (tarea.tipo_fila === 'consulta_municipal') {
+            setConsultaMunicipalLectura(tarea.estado !== 'PENDIENTE');
+            setConsultaMunicipalId(tarea.pedido.id);
+            return;
+        }
         setModalTarea({ id: tarea.id, atender });
     };
     const {
@@ -143,7 +148,7 @@ export default function Index({
                     onIrAPagina={(page) => cargar(paramsListado({ page }))}
                 />
             </GeliaPageShell>
-            {consultaMunicipalId && <PanelConsultaMunicipalTienda pedidoId={consultaMunicipalId} onClose={() => { setConsultaMunicipalId(null); onActualizar(); }} />}
+            {consultaMunicipalId && <PanelConsultaMunicipalTienda pedidoId={consultaMunicipalId} soloLectura={consultaMunicipalLectura} onClose={() => { setConsultaMunicipalId(null); onActualizar(); }} />}
             {pedidoDetalle && <ModalDetallePedido abierto pedido={pedidoDetalle} onClose={() => setPedidoDetalle(null)} />}
             {modalTarea && <ModalPreparacionTienda key={modalTarea.id} tareaId={modalTarea.id} atender={modalTarea.atender} auth={auth}
                 onClose={() => { setModalTarea(null); onActualizar(); }} onActualizado={onActualizar} />}

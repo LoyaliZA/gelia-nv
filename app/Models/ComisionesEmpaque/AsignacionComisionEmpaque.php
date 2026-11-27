@@ -28,6 +28,11 @@ class AsignacionComisionEmpaque extends Model
         return $this->belongsTo(ParticipanteComisionEmpaque::class, 'participante_id');
     }
 
+    public function reparto(): BelongsTo
+    {
+        return $this->belongsTo(RepartoComisionEmpaque::class, 'reparto_id');
+    }
+
     public function corte(): BelongsTo
     {
         return $this->belongsTo(CorteComisionEmpaque::class, 'corte_id');

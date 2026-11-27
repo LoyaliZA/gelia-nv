@@ -60,6 +60,50 @@ final class AlcanceConsultaMunicipal
     }
 
     /**
+     * Consultas de PDV ya respondidas (o cerradas por Ventas) que aún no se aprueban. Sin esta lista el
+     * pedido salía de Pendientes al responder y no aparecía en ninguna pestaña hasta el pago validado.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function atendidasTienda(User $usuario, int $limite = 50): array
+    {
+        if (! $usuario->can('control_pedidos.municipal.responder_consulta')) {
+            return [];
+        }
+        $query = PedidoBma::query()
+            ->where('solicitud_preparacion_json->modalidad_entrega', 'municipal')
+            ->where('solicitud_preparacion_json->consulta_municipal->area', 'tienda')
+            ->whereIn('solicitud_preparacion_json->consulta_municipal->estado', [ConsultaMunicipal::RESPONDIDA, ConsultaMunicipal::CERRADA])
+            ->whereNull('pago_validado_at')
+            ->whereNull('cancelado_at');
+        self::aplicarTienda($query, $usuario);
+        $pedidos = $query->with(['cliente:id,nombre,numero_cliente', 'paqueteria:id,nombre'])
+            ->orderByDesc('id')->limit($limite)->get();
+        $almacenes = Almacen::query()->whereIn('id', $pedidos->map(fn (PedidoBma $p) => ConsultaMunicipal::seguimiento($p)['almacen_id'] ?? null)->filter()->unique())
+            ->pluck('nombre', 'id');
+
+        return $pedidos->map(function (PedidoBma $pedido) use ($almacenes) {
+            $consulta = ConsultaMunicipal::seguimiento($pedido);
+            $almacenId = $consulta['almacen_id'] ?? null;
+            $visible = \App\Models\ControlPedidos\PedidoBmaReferencia::visible($pedido);
+
+            return [
+                'id' => $pedido->id,
+                'folio' => $pedido->folio,
+                'folio_visible' => $visible['folio'],
+                'folio_etiqueta' => $visible['etiqueta'],
+                'folio_remision' => $pedido->folio_remision,
+                'enviada_at' => $consulta['enviada_at'] ?? null,
+                'cerrada' => ($consulta['estado'] ?? null) === ConsultaMunicipal::CERRADA,
+                'cliente' => $pedido->cliente?->nombre,
+                'terminal_destino' => $pedido->paqueteria?->nombre,
+                'almacen_id' => $almacenId,
+                'almacen' => $almacenId ? ($almacenes[$almacenId] ?? null) : null,
+            ];
+        })->values()->all();
+    }
+
+    /**
      * Municipales aprobados cuyo almacén es PDV: se empacan en Tienda.
      *
      * @return array<int, array<string, mixed>>

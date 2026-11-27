@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import usePedidoDialog from '@/Pages/ControlPedidos/Partials/usePedidoDialog';
 
 /** Dialog behavior is shared; styling is scoped to commercial request workflows. */
-export default function SolicitudDialog({ children, onClose, busy = false, dirty = false, title = 'Detalle de solicitud', className = '' }) {
+export default function SolicitudDialog({ children, onClose, busy = false, dirty = false, title = 'Detalle de solicitud', className = '', conservarContenidoAlCerrar = false, mensajeDescartar = 'La información y los archivos de esta respuesta aún no se han enviado.' }) {
     const [confirmar, setConfirmar] = useState(false);
     const id = useId();
     const volverRef = useRef(null);
@@ -31,16 +31,17 @@ export default function SolicitudDialog({ children, onClose, busy = false, dirty
                     const boton = event.target.closest('button[data-dialog-close]');
                     if (boton && event.currentTarget.contains(boton)) { event.preventDefault(); event.stopPropagation(); cerrar(); }
                 }}>
+                {conservarContenidoAlCerrar && <div hidden={confirmar} inert={confirmar || undefined} className={confirmar ? undefined : 'contents'}>{children}</div>}
                 {confirmar ? (
                     <div className="gelia-modal-shell gelia-workflow-confirm p-6 space-y-4" aria-labelledby={id}>
                         <h2 id={id} className="m-0 theme-text-main">¿Descartar los cambios?</h2>
-                        <p className="text-sm theme-text-muted m-0">La información y los archivos de esta respuesta aún no se han enviado.</p>
+                        <p className="text-sm theme-text-muted m-0">{mensajeDescartar}</p>
                         <div className="flex flex-wrap justify-end gap-2">
                             <button ref={volverRef} type="button" className="theme-btn-secondary" onClick={() => { setConfirmar(false); dialog.ref.current?.focus(); }}>Seguir editando</button>
                             <button type="button" className="theme-btn-danger" onClick={onClose}>Descartar cambios</button>
                         </div>
                     </div>
-                ) : children}
+                ) : !conservarContenidoAlCerrar && children}
             </div>
         </div>, document.body
     );

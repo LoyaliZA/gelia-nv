@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import {
     applyLayoutChange,
     buildDefaultLayout,
@@ -225,6 +226,20 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
         expect(layoutHasCollisions(layout)).toBe(false);
     });
 
+    it('usa alto 5 en widgets y 10 en launchers del preset operativo', () => {
+        const layout = buildPresetLayout(DASHBOARD_PRESETS.OPERATIVO, {
+            hasModulos: true,
+            hasFunciones: true,
+            hasWidgetCredibox: true,
+            hasWidgetPedidos: true,
+        });
+        const credibox = layout.find((item) => item.i === PANEL_IDS.CREDIBOX);
+        const modulos = layout.find((item) => item.i === PANEL_IDS.MODULOS);
+        expect(credibox.h).toBe(5);
+        expect(modulos.h).toBe(10);
+        expect(layoutHasCollisions(layout)).toBe(false);
+    });
+
     it('define minW/minH 4 en widgets y minH mayor en paneles de tarjetas', () => {
         const layout = buildDefaultLayout({
             hasModulos: true,
@@ -234,7 +249,6 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
             hasWidgetActivos: true,
         });
         layout.forEach((item) => {
-            expect(item.minW).toBe(PANEL_GRID_MIN_W);
             expect(item.w).toBeGreaterThanOrEqual(PANEL_GRID_MIN_W);
             expect(item.h).toBeGreaterThanOrEqual(PANEL_GRID_MIN_H);
             if (item.i === PANEL_IDS.MODULOS || item.i === PANEL_IDS.FUNCIONES) {
@@ -243,6 +257,7 @@ describe('resolveLayout — mínimo 4×4 en todos los paneles', () => {
                 expect(item.h).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_H);
                 expect(item.w).toBeGreaterThanOrEqual(CARD_GRID_PANEL_MIN_W);
             } else {
+                expect(item.minW).toBe(PANEL_GRID_MIN_W);
                 expect(item.minH).toBe(PANEL_GRID_MIN_H);
             }
         });
