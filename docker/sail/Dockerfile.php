@@ -25,7 +25,7 @@ RUN apt-get update \
         php8.4-redis \
         php8.4-swoole \
         php8.4-xdebug \
-    && apt-get install -y --no-install-recommends zlib1g-dev \
+    && apt-get install -y --no-install-recommends zlib1g-dev qpdf \
     && pecl install -f xlswriter-3.0.0 \
     && echo "extension=xlswriter.so" > /etc/php/8.4/cli/conf.d/20-xlswriter.ini \
     && php -m | grep -qx xlswriter \

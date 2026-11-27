@@ -50,7 +50,13 @@ class ListarPedidosAuditoriaService
 
     public function detalle(int $pedidoId, User $usuario): PedidoBma
     {
-        return $this->anexarFlagsVista($this->queryBase($usuario)->findOrFail($pedidoId), $usuario);
+        $pedido = $this->anexarFlagsVista($this->queryBase($usuario)->findOrFail($pedidoId), $usuario);
+        $resumen = ResumenGrupoMultienvio::de($pedido, $usuario);
+        if ($resumen !== null) {
+            $pedido->setAttribute('multienvio', $resumen);
+        }
+
+        return $pedido;
     }
 
     private function anexarFlagsVista(PedidoBma $pedido, ?User $usuario): PedidoBma

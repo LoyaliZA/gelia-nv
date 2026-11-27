@@ -5,6 +5,7 @@ namespace App\Services\ControlPedidos;
 use App\Events\PedidoBmaActualizado;
 use App\Models\ControlPedidos\CatalogoEstatusPedido;
 use App\Models\ControlPedidos\PedidoBma;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja;
@@ -20,20 +21,20 @@ class AsignarGuiaPedidoBmaService
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
+    public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId, bool $registrarImpresionCedis = false): PedidoBma
     {
         $guia = trim($numeroRastreo);
 
         if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
             return DB::transaction(fn () => $this->asignar(
-                PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id), $guia, $usuarioId
+                PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id), $guia, $usuarioId, $registrarImpresionCedis
             ));
         }
 
-        return $this->asignar($pedido, $guia, $usuarioId);
+        return $this->asignar($pedido, $guia, $usuarioId, $registrarImpresionCedis);
     }
 
-    private function asignar(PedidoBma $pedido, string $guia, int $usuarioId): PedidoBma
+    private function asignar(PedidoBma $pedido, string $guia, int $usuarioId, bool $registrarImpresionCedis): PedidoBma
     {
 
         if ($guia === '') {
@@ -80,8 +81,9 @@ class AsignarGuiaPedidoBmaService
         $yaEmpacado = $fase === CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA
             || $pedido->empacado_at !== null;
 
-        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado, $porCaja) {
-            if ($porCaja && ! $this->confirmarPdfs($pedido, $guia)) {
+        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $yaEmpacado, $porCaja, $registrarImpresionCedis) {
+            $documentosConfirmados = $porCaja ? $this->confirmarPdfs($pedido, $guia) : null;
+            if ($porCaja && $documentosConfirmados === null) {
                 return $pedido;
             }
 
@@ -127,6 +129,7 @@ class AsignarGuiaPedidoBmaService
                     $corrigeRastreo ? AccionesHistorialPedidoBma::ACTUALIZAR_GUIA : AccionesHistorialPedidoBma::ASIGNACION_GUIA
                 );
 
+                $this->registrarImpresion($pedido, $documentosConfirmados, $registrarImpresionCedis);
                 $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
 
                 $this->notificarService->ejecutar(
@@ -162,11 +165,12 @@ class AsignarGuiaPedidoBmaService
                 AccionesHistorialPedidoBma::ASIGNACION_GUIA
             );
 
+            $this->registrarImpresion($pedido, $documentosConfirmados, $registrarImpresionCedis);
             return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
         });
     }
 
-    private function confirmarPdfs(PedidoBma $pedido, string $rastreo): bool
+    private function confirmarPdfs(PedidoBma $pedido, string $rastreo): ?Collection
     {
         $pendientes = GuiasPdfPorCaja::pendientes($pedido);
         $guias = GuiasPdfPorCaja::vigentes($pedido)->whereIn('pedido_bma_caja_id', $pendientes->pluck('id'));
@@ -188,13 +192,27 @@ class AsignarGuiaPedidoBmaService
             }
         }
         if ($avances->isEmpty() && $rastreo === $pedido->numero_rastreo) {
-            return false;
+            return null;
         }
 
         $pedido->documentos()->whereIn('id', $avances->pluck('id'))
             ->update(['relacion_tipo' => GuiasPdfPorCaja::CONFIRMADA]);
 
-        return true;
+        return $avances;
+    }
+
+    private function registrarImpresion(PedidoBma $pedido, ?Collection $documentos, bool $solicitada): void
+    {
+        if (! $solicitada || ! config('impresion_guias_cedis.activa')) {
+            return;
+        }
+
+        $registro = app(RegistrarGuiasComunicadasCedis::class);
+        if ($documentos !== null) {
+            $registro->porCaja($pedido, $documentos);
+        } else {
+            $registro->general($pedido);
+        }
     }
 
     /** @param  list<string>  $camposResueltos */

@@ -68,6 +68,7 @@ class PdvPantallaPublicidad extends Model
             'medio_id' => 'integer',
             'duracion_seg' => 'integer',
             'rotacion' => 'integer',
+            'rotacion_kiosko' => 'integer',
             'volumen_pct' => 'integer',
             'orden' => 'integer',
             'activa' => 'boolean',

@@ -1,6 +1,6 @@
 import { esRegistroMunicipal, nombreTerminalMunicipal } from '../../Municipal/terminalMunicipal';
 import ConsultaSolicitudTienda from '../../Partials/ConsultaSolicitudTienda';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { router, usePage } from '@inertiajs/react';
 import axios from 'axios';
@@ -44,6 +44,8 @@ import PanelResguardoMunicipalAuditoria from '../../Municipal/PanelResguardoMuni
 import SeccionPagosExhibicion from '../../Partials/SeccionPagosExhibicion';
 import { AvisoComprobanteCompartido } from '../../Partials/HermanosMultienvio';
 import EncabezadoRevisionPedido, { AvisosRevisionPedido, indicacionRevisionPedido } from './EncabezadoRevisionPedido';
+import { esGrupoMultienvio } from './SelectorEnviosAuditoria';
+import { hayCapturaPendienteAuditoria } from './capturaAuditoria';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
 import NavegacionPedido from '../../Partials/NavegacionPedido';
 import ReferenciaPedidoCompartido from '../../Partials/ReferenciaPedidoCompartido';
@@ -135,33 +137,44 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const [resumenCobertura, setResumenCobertura] = useState(null);
     const [masInformacion, setMasInformacion] = useState(false);
     const [errorNumeroRemision, setErrorNumeroRemision] = useState('');
+    const [cargandoEnvio, setCargandoEnvio] = useState(false);
+    const cargaEnvioSeq = useRef(0);
 
-    useEffect(() => {
+    const aplicarPedido = (siguiente) => {
+        setPedido(siguiente);
+        setNumeroRemision(siguiente?.numero_remision || '');
+        setFechaEmisionRemision(fechaInicialRemision(siguiente || {}));
+    };
+
+    const limpiarDialogosRevision = () => {
+        setProcesando(false);
+        setAlerta({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
+        setConfirmacion(null);
+        setRechazoPagos({ abierto: false, ids: [], motivo: '' });
+        setMotivoAnexoAbierto(false);
+        setErrorDatosAbierto(false);
+        setLiberarCapturaAbierto(false);
+        setDocPreview(null);
+        setResumenCobertura(null);
+        setBloqueosPago([]);
+        setErrorRechazo(null);
+        setErrorCredito('');
+        setMasInformacion(false);
+        setErrorNumeroRemision('');
+    };
+
+    useLayoutEffect(() => {
         if (abierto && pedidoInicial) {
-            setPedido(pedidoInicial);
-            setNumeroRemision(pedidoInicial.numero_remision || '');
-            setFechaEmisionRemision(fechaInicialRemision(pedidoInicial));
-            setProcesando(false);
-            setAlerta({ abierto: false, tipo: 'success', titulo: '', mensaje: '' });
-            setConfirmacion(null);
-            setRechazoPagos({ abierto: false, ids: [], motivo: '' });
-            setMotivoAnexoAbierto(false);
-            setErrorDatosAbierto(false);
-            setLiberarCapturaAbierto(false);
-            setDocPreview(null);
-            setResumenCobertura(null);
-            setBloqueosPago([]);
-            setErrorRechazo(null);
-            setErrorCredito('');
-            setMasInformacion(false);
-            setErrorNumeroRemision('');
+            aplicarPedido(pedidoInicial);
+            limpiarDialogosRevision();
+            setCargandoEnvio(false);
         }
     }, [abierto, pedidoInicial?.id]);
 
     useEffect(() => {
-        if (!abierto || !pedidoInicial?.id) return undefined;
-        if (pedidoInicial?.estatus?.fase_ciclo !== 'PENDIENTE_AUXILIAR') return undefined;
-        const url = route('control_pedidos.auditar.revision_en_curso', pedidoInicial.id);
+        if (!abierto || !pedido?.id) return undefined;
+        if (pedido?.estatus?.fase_ciclo !== 'PENDIENTE_AUXILIAR') return undefined;
+        const url = route('control_pedidos.auditar.revision_en_curso', pedido.id);
         const ping = () => axios.post(url).catch(() => {});
         const soltar = () => {
             const token = document.querySelector('meta[name="csrf-token"]')?.content;
@@ -184,20 +197,48 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             window.removeEventListener('pagehide', soltar);
             soltar();
         };
-    }, [abierto, pedidoInicial?.id, pedidoInicial?.estatus?.fase_ciclo]);
+    }, [abierto, pedido?.id, pedido?.estatus?.fase_ciclo]);
 
-    const cerrar = () => { if (!procesando) onClose(); };
+    const cerrar = () => { if (!procesando && !cargandoEnvio) onClose(); };
     const cerrarRechazo = () => { if (!procesando) setRechazoPagos({ abierto: false, ids: [], motivo: '' }); };
-    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: cerrar, bloqueado: procesando });
+    const dialog = usePedidoDialog({ abierto: abierto && Boolean(pedido), onClose: cerrar, bloqueado: procesando || cargandoEnvio });
     const dialogRechazo = usePedidoDialog({ abierto: abierto && rechazoPagos.abierto, onClose: cerrarRechazo, bloqueado: procesando });
-    const capturaAuditoria = procesando
-        || numeroRemision !== (pedido?.numero_remision || '')
-        || fechaEmisionRemision !== fechaInicialRemision(pedido || {})
-        || rechazoPagos.abierto
-        || motivoAnexoAbierto
-        || errorDatosAbierto
-        || liberarCapturaAbierto
-        || Boolean(confirmacion);
+    const capturaPendiente = hayCapturaPendienteAuditoria({
+        numeroRemision,
+        numeroGuardado: pedido?.numero_remision || '',
+        fechaEmision: fechaEmisionRemision,
+        fechaGuardada: fechaInicialRemision(pedido || {}),
+        rechazoAbierto: rechazoPagos.abierto,
+        motivoAnexoAbierto,
+        errorDatosAbierto,
+        liberarCapturaAbierto,
+        confirmacion,
+    });
+    const capturaAuditoria = procesando || cargandoEnvio || capturaPendiente;
+
+    const cargarEnvio = async (id) => {
+        if (!id || id === pedido?.id) return;
+        const seq = ++cargaEnvioSeq.current;
+        setCargandoEnvio(true);
+        try {
+            const { data } = await axios.get(route('control_pedidos.auditar.detalle', id));
+            if (seq !== cargaEnvioSeq.current) return;
+            const actualizado = data?.pedido;
+            if (!actualizado?.id) throw new Error('detalle');
+            aplicarPedido(actualizado);
+            limpiarDialogosRevision();
+        } catch {
+            if (seq !== cargaEnvioSeq.current) return;
+            setAlerta({
+                abierto: true,
+                tipo: 'error',
+                titulo: 'No se pudo abrir el envío',
+                mensaje: 'Ese envío no está disponible para revisión. Se conserva el expediente actual.',
+            });
+        } finally {
+            if (seq === cargaEnvioSeq.current) setCargandoEnvio(false);
+        }
+    };
     useActualizacionesPedidos({
         activo: Boolean(abierto && pedido?.id),
         pedidoId: pedido?.id,
@@ -206,15 +247,15 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             axios.get(route('control_pedidos.auditar.detalle', pedido.id)).then((respuesta) => {
                 const actualizado = respuesta.data?.pedido;
                 if (!actualizado || actualizado.id !== pedido.id) return;
-                setPedido(actualizado);
-                setNumeroRemision(actualizado.numero_remision || '');
-                setFechaEmisionRemision(fechaInicialRemision(actualizado));
+                aplicarPedido(actualizado);
             }).catch(() => {});
         },
     });
 
     if (!abierto || !pedido) return null;
 
+    const esGrupo = esGrupoMultienvio(pedido);
+    const visitaGrupo = { preserveScroll: true, ...(esGrupo ? { preserveState: true } : {}) };
     const fase = pedido.estatus?.fase_ciclo;
     const badge = badgeAuditoriaRevision(pedido) || badgeAuditoriaSemantico(fase, pedido.es_resguardo);
     const badgeHito = badgeHitoAuditoria(pedido.hito_auditoria);
@@ -267,15 +308,23 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
     const recargarPedido = async (mensajeExito = null, page = null) => {
         if (falloRespuesta(page)) return;
         try {
-            // El pedido puede salir de la pestaña filtrada al cambiar su remisión.
-            const actualizado = page?.props?.pedidos?.data?.find((p) => p.id === pedido.id)
-                || (await axios.get(route('control_pedidos.auditar.detalle', pedido.id))).data.pedido;
-            setPedido(actualizado);
-            setNumeroRemision(actualizado.numero_remision || '');
+            const { data } = await axios.get(route('control_pedidos.auditar.detalle', pedido.id));
+            const actualizado = data?.pedido;
+            if (!actualizado || actualizado.id !== pedido.id) throw new Error('detalle');
+            aplicarPedido(actualizado);
             if (mensajeExito) setAlerta({ abierto: true, tipo: 'success', titulo: '', mensaje: mensajeExito });
         } catch {
             setAlerta({ abierto: true, tipo: 'error', titulo: 'Actualización pendiente', mensaje: 'No se pudo actualizar el detalle. Cierra y vuelve a abrir el pedido para consultar su estado actual.' });
         }
+    };
+
+    const solicitarEnvio = (id) => {
+        if (!id || id === pedido.id || procesando || cargandoEnvio) return;
+        if (capturaPendiente) {
+            setConfirmacion({ accion: 'cambiar_envio', destinoId: id });
+            return;
+        }
+        void cargarEnvio(id);
     };
 
     const validarPago = () => {
@@ -290,7 +339,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         }
         setProcesando(true);
         router.post(route('control_pedidos.auditar.validar_pago', pedido.id), {}, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onSuccess: (page) => recargarPedido('Pago validado correctamente.', page),
             onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.message || 'No se pudo validar el pago.' }),
             onFinish: () => setProcesando(false),
@@ -305,7 +354,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             causa,
             decision_auditoria: true,
         }, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onSuccess: (page) => {
                 const error = page.props.flash?.error;
                 if (error) {
@@ -336,11 +385,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             pago_ids: rechazoPagos.ids,
             motivo: rechazoPagos.motivo.trim(),
         }, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onSuccess: (page) => {
                 if (falloRespuesta(page)) return;
                 setRechazoPagos({ abierto: false, ids: [], motivo: '' });
-                onClose();
+                if (esGrupo) recargarPedido('Exhibiciones rechazadas.', page);
+                else onClose();
             },
             onError: (errors) => setAlerta({
                 abierto: true,
@@ -359,7 +409,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         const fechaEmision = pedido.solicitud_preparacion?.remision_tienda?.emitida_at?.slice(0, 10) || fechaEmisionRemision;
         if (fechaEmision) formData.append('fecha_emision', fechaEmision);
         router.post(route('control_pedidos.auditar.remision.store', pedido.id), formData, {
-            preserveScroll: true,
+            ...visitaGrupo,
             forceFormData: true,
             onSuccess: (page) => recargarPedido('Remisión adjuntada correctamente.', page),
             onError: (errors) => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: errors?.fecha_emision || errors?.remision || 'No se pudo adjuntar la remisión.' }),
@@ -388,7 +438,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         router.put(route('control_pedidos.auditar.numero_remision.update', pedido.id), {
             numero_remision: preparacion.numero,
         }, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onSuccess: (page) => {
                 if (falloRespuesta(page)) {
                     setProcesando(false);
@@ -417,7 +467,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         router.put(route('control_pedidos.auditar.numero_remision.update', pedido.id), {
             numero_remision: limpio,
         }, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onFinish: () => setProcesando(false),
             onSuccess: (page) => recargarPedido('Número de remisión actualizado.', page),
             onError: (errors) => setAlerta({
@@ -438,7 +488,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             }),
             { nota: 'Revisado en auditoría; se continúa con la observación registrada.' },
             {
-                preserveScroll: true,
+                ...visitaGrupo,
                 onFinish: () => setProcesando(false),
                 onSuccess: () => {
                     setPedido((prev) => ({
@@ -454,12 +504,18 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
 
     const ejecutarConfirmacion = () => {
         const accion = confirmacion?.accion;
+        const destinoId = confirmacion?.destinoId;
         setConfirmacion(null);
+
+        if (accion === 'cambiar_envio') {
+            void cargarEnvio(destinoId);
+            return;
+        }
 
         if (accion === 'eliminar_remision') {
             setProcesando(true);
             router.delete(route('control_pedidos.auditar.remision.destroy', pedido.id), {
-                preserveScroll: true,
+                ...visitaGrupo,
                 onSuccess: (page) => recargarPedido('Remisión eliminada.', page),
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo eliminar la remisión.' }),
                 onFinish: () => setProcesando(false),
@@ -471,9 +527,11 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             if (!puedeAprobar) return;
             setProcesando(true);
             router.post(route('control_pedidos.auditar.aprobar', pedido.id), {}, {
-                preserveScroll: true,
+                ...visitaGrupo,
                 onSuccess: (page) => {
-                    if (!falloRespuesta(page)) onClose();
+                    if (falloRespuesta(page)) return;
+                    if (esGrupo) recargarPedido('Pedido aprobado.', page);
+                    else onClose();
                 },
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo aprobar el pedido.' }),
                 onFinish: () => setProcesando(false),
@@ -485,7 +543,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             setProcesando(true);
             // El resguardo municipal no pide guía, peso ni domicilio; envía la versión del conjunto que vio la persona auxiliar.
             router.post(route('control_pedidos.auditar.liberar_resguardo', pedido.id), resguardoMunicipal ? { huella_conjunto: resguardoMunicipal.huella_conjunto } : {}, {
-                preserveScroll: true,
+                ...visitaGrupo,
                 onSuccess: (page) => recargarPedido('Resguardo liberado correctamente.', page),
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo liberar el resguardo.' }),
                 onFinish: () => setProcesando(false),
@@ -496,7 +554,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         if (accion === 'aprobar_anexo') {
             setProcesando(true);
             router.post(route('control_pedidos.auditar.anexo_envio.aprobar', pedido.id), {}, {
-                preserveScroll: true,
+                ...visitaGrupo,
                 onSuccess: (page) => recargarPedido('Anexo de envío aprobado.', page),
                 onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo aprobar el anexo.' }),
                 onFinish: () => setProcesando(false),
@@ -508,7 +566,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
         setMotivoAnexoAbierto(false);
         setProcesando(true);
         router.post(route('control_pedidos.auditar.anexo_envio.rechazar', pedido.id), { motivo }, {
-            preserveScroll: true,
+            ...visitaGrupo,
             onSuccess: (page) => recargarPedido('Anexo de envío rechazado.', page),
             onError: () => setAlerta({ abierto: true, tipo: 'error', titulo: 'Error', mensaje: 'No se pudo rechazar el anexo.' }),
             onFinish: () => setProcesando(false),
@@ -541,6 +599,12 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
             mensaje: '¿Aprobar el pago de envío y actualizar el costo del pedido?',
             etiquetaConfirmar: 'Aprobar anexo',
             variante: 'primary',
+        },
+        cambiar_envio: {
+            titulo: 'Cambiar de envío',
+            mensaje: `Hay cambios sin guardar en el envío ${pedido.multienvio?.orden ?? ''}. Al cambiar se descartan.`,
+            etiquetaConfirmar: 'Descartar y cambiar',
+            variante: 'danger',
         },
     };
 
@@ -728,11 +792,13 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         badgeRemision={badgeRemision}
                         pagoValidado={pagoValidado}
                         avisoAprobacion={avisoAprobacion}
-                        procesando={procesando}
+                        procesando={procesando || cargandoEnvio}
+                        cargandoEnvio={cargandoEnvio}
+                        onSeleccionarEnvio={solicitarEnvio}
                         onClose={cerrar}
                         acciones={
                             <BarraAccionesRevision
-                                procesando={procesando}
+                                procesando={procesando || cargandoEnvio}
                                 puedeLiberarResguardo={puedeLiberarResguardo}
                                 esPendiente={esPendiente}
                                 muestraAprobar={muestraAprobar}
@@ -763,8 +829,16 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                         { id: 'auditoria-compartido', label: 'Pedido compartido' },
                         (anexoPendiente || puedeAnexar || (pedido.anexos_envio || []).length > 0) && { id: 'auditoria-anexo', label: 'Anexo de envío' },
                     ]} />}
-                    <div className="gelia-modal-body p-4 md:p-5">
-                        <div className={fichaTienda ? 'flex min-h-0 flex-1 flex-col' : 'gelia-pedidos-auditoria-grid'}>
+                    <div className="gelia-modal-body p-4 md:p-5 relative" aria-busy={cargandoEnvio || undefined}>
+                        {cargandoEnvio && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl theme-element" role="status">
+                                <p className="m-0 text-sm font-semibold theme-text-main inline-flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                                    Cargando envío…
+                                </p>
+                            </div>
+                        )}
+                        <div key={pedido.id} className={fichaTienda ? 'flex min-h-0 flex-1 flex-col' : 'gelia-pedidos-auditoria-grid'}>
                             {!fichaTienda && <aside className="gelia-pedidos-auditoria-panel gelia-pedidos-auditoria-cobertura space-y-4" aria-label="Cobertura y pedido compartido">
                                 <section id="auditoria-cobertura" tabIndex={-1} className={SECCION_WRAP}>
                                     <h3 className="gelia-pedidos-seccion-titulo">Cobertura</h3>
@@ -821,7 +895,7 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                                     <PanelResguardoMunicipalAuditoria resguardo={resguardoMunicipal} />
                                     <AvisoComprobanteCompartido pedido={pedido} />
                                     <SeccionPagosExhibicion
-                                        key={creditoTienda ? pedido.pago_validado_at : undefined}
+                                        key={`${pedido.id}-${creditoTienda ? pedido.pago_validado_at : ''}`}
                                         pedidoId={pedido.id}
                                         bancos={bancos}
                                         puedeRegistrar={false}
@@ -1026,7 +1100,10 @@ export default function ModalRevisarPedido({ abierto, onClose, pedido: pedidoIni
                 origen="auditar"
                 onClose={() => {
                     setErrorDatosAbierto(false);
-                    onClose();
+                    if (!esGrupo) onClose();
+                }}
+                onSuccess={() => {
+                    if (esGrupo) recargarPedido('Error de datos reportado.');
                 }}
             />
             <ModalMotivoRechazo
