@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pdv_pantalla_publicidades', function (Blueprint $table) {
-            $table->unsignedTinyInteger('rotacion')->default(0)->after('ajuste');
+            $table->unsignedSmallInteger('rotacion')->default(0)->after('ajuste');
         });
     }
 

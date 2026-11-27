@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronDown, FileText, Paperclip, Store } from 'lucide-react';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
-import HermanosMultienvio from '../../Partials/HermanosMultienvio';
+import SelectorEnviosAuditoria, { esGrupoMultienvio } from './SelectorEnviosAuditoria';
 import { formatearFechaHoraAuditoria, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 
 export function indicacionRevisionPedido({ reRevision, esRechazado, pagoValidado, badgeRemision }) {
@@ -12,15 +12,27 @@ export function indicacionRevisionPedido({ reRevision, esRechazado, pagoValidado
     return 'Revisa que los comprobantes vigentes cubran el total del pedido.';
 }
 
-export default function EncabezadoRevisionPedido({ pedido, badge, badgeHito, badgeRemision, pagoValidado, avisoAprobacion, procesando, onClose, acciones }) {
+export default function EncabezadoRevisionPedido({
+    pedido, badge, badgeHito, badgeRemision, pagoValidado, avisoAprobacion, procesando, onClose, acciones,
+    onSeleccionarEnvio = null, cargandoEnvio = false,
+}) {
     const IconoAviso = pagoValidado ? Paperclip : AlertTriangle;
+    const esGrupo = esGrupoMultienvio(pedido);
     return (
         <header className="gelia-pedidos-revision-cabecera border-b theme-border">
             <div className="gelia-pedidos-revision-folio min-w-0">
-                <h2 id="auditoria-revision-titulo" className="text-xs font-semibold theme-text-muted m-0 mb-1">Revisión de pedido</h2>
+                <h2 id="auditoria-revision-titulo" className="text-xs font-semibold theme-text-muted m-0 mb-1">
+                    {esGrupo ? 'Revisión de multipedido' : 'Revisión de pedido'}
+                </h2>
                 <EncabezadoFolioPedido pedido={pedido} size="lg" mostrarInterno={false} />
-                <HermanosMultienvio pedido={pedido} className="mt-2" />
             </div>
+            {esGrupo && (
+                <SelectorEnviosAuditoria
+                    pedido={pedido}
+                    onSeleccionar={onSeleccionarEnvio}
+                    disabled={procesando || cargandoEnvio}
+                />
+            )}
             <div className="gelia-pedidos-revision-cliente min-w-0">
                 <p className="text-base sm:text-lg font-bold theme-text-main m-0">{pedido.cliente?.nombre || 'Sin cliente'}</p>
                 {pedido.es_resguardo && <p className="text-xs theme-text-info m-0 mt-1">En resguardo · mercancía bloqueada en almacén</p>}

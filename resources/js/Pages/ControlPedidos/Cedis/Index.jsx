@@ -2,11 +2,11 @@ import useActualizacionesPedidos from '../Partials/useActualizacionesPedidos';
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Warehouse, Clock, Package, Loader2, PackageOpen, Store, Truck } from 'lucide-react';
+import { Warehouse, Clock, Package, Loader2, PackageOpen, Printer, Store, Truck } from 'lucide-react';
 import AppLayout from '../../../Layouts/AppLayout';
 import GeliaPageShell from '../../../Components/GeliaPageShell';
 import GeliaPaginacion from '../../../Components/GeliaPaginacion';
-import { geliaCardClass } from '../../../utils/geliaTheme';
+import { geliaCardClass, THEME_BTN_PRIMARY } from '../../../utils/geliaTheme';
 import useFiltrosOperacion from '../Partials/useFiltrosOperacion';
 import { IndicadoresOperacion } from '../Partials/FiltrosBandejaOperativa';
 import FiltrosCedis from './Partials/FiltrosCedis';
@@ -21,6 +21,8 @@ import ModalLiberarMercancia from '../Partials/ModalLiberarMercancia';
 import PanelRespuestaDisponibilidad from '../Partials/PanelRespuestaDisponibilidad';
 import useListadoDiscreto from '../Partials/useListadoDiscreto';
 import { lecturaConsultaVigente } from '../Partials/vigenciaConsultaPedido';
+import DrawerImpresionGuias from './Partials/DrawerImpresionGuias';
+import useImpresionGuiasCedis from './Partials/useImpresionGuiasCedis';
 
 const KPI_CONFIG = [
     { id: '', label: 'Todos', icon: Package },
@@ -42,6 +44,7 @@ export default function Index({
     can: canProps = {},
 }) {
     const { flash } = usePage().props;
+    const colaImpresion = useImpresionGuiasCedis(Boolean(canProps.impresion_guias));
     const puedeVerBitacora = canProps.bitacora ?? ((auth?.user?.permissions || []).includes('control_pedidos.cedis.bitacora') || auth?.user?.roles?.includes('Super Admin'));
     const {
         pedidos: pedidosVista,
@@ -179,8 +182,9 @@ export default function Index({
     return (
         <AppLayout auth={auth}>
             <Head title="Gestión de pedidos CEDIS | GELIANV" />
-            <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-3 md:space-y-6">
-                <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-3 md:p-6`}>
+            <GeliaPageShell className="gelia-pedidos-bma gelia-pedidos-cedis space-y-3 md:space-y-6"
+                style={colaImpresion.abierto ? { filter: 'blur(4px)' } : undefined}>
+                <header className={`${geliaCardClass()} gelia-pedidos-encabezado p-3 md:p-6 ${canProps.impresion_guias ? 'flex flex-wrap items-center justify-between gap-3' : ''}`}>
                     <div className="flex items-center gap-3">
                         <span className="gelia-pedidos-icono !w-10 !h-10 md:!w-12 md:!h-12" aria-hidden="true"><Warehouse className="w-5 h-5 md:w-6 md:h-6" /></span>
                         <div className="min-w-0">
@@ -189,6 +193,17 @@ export default function Index({
                             <a className="inline-flex items-center min-h-[44px] sm:min-h-0 text-primario underline text-sm" href={route('traspasos.abastecimiento.index')}>Abastecimiento a preparación en PDV</a>
                         </div>
                     </div>
+                    {canProps.impresion_guias && (
+                        <button type="button" aria-haspopup="dialog" aria-expanded={colaImpresion.abierto}
+                            className={`${THEME_BTN_PRIMARY} inline-flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl px-4! py-2! text-sm! font-bold normal-case! tracking-normal!`}
+                            onClick={() => colaImpresion.setAbierto(true)}>
+                            <Printer size={19} aria-hidden="true" /> Imprimir guías
+                            {colaImpresion.pendientes && (
+                                <span className="rounded-full bg-white/20 px-2 tabular-nums"
+                                    aria-label={`${colaImpresion.pendientes.pedidos} pedidos pendientes`}>{colaImpresion.pendientes.pedidos}</span>
+                            )}
+                        </button>
+                    )}
                 </header>
 
                 <div className={`${geliaCardClass()} p-3 sm:p-5 space-y-3 sm:space-y-4`}>
@@ -258,6 +273,10 @@ export default function Index({
                     <GeliaPaginacion paginator={tabActiva === 'LIBERACIONES' ? liberaciones : pedidosVista} onIrAPagina={onIrAPagina} embedded />
                 </div>
             </GeliaPageShell>
+
+            {canProps.impresion_guias && colaImpresion.abierto && (
+                <DrawerImpresionGuias cola={colaImpresion} onClose={() => colaImpresion.setAbierto(false)} />
+            )}
 
             <ModalLiberarMercancia
                 abierto={modalLiberar.abierto}

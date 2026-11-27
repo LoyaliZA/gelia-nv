@@ -207,6 +207,7 @@ export default function ModalReportarErrorDatos({ abierto, onClose, onSuccess, p
             detalle: detalle.trim() || null,
         }, {
             preserveScroll: true,
+            preserveState: true,
             onSuccess: () => {
                 onSuccess?.();
                 onClose();
