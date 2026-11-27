@@ -129,7 +129,7 @@ class AsignarGuiaPedidoBmaService
                     $corrigeRastreo ? AccionesHistorialPedidoBma::ACTUALIZAR_GUIA : AccionesHistorialPedidoBma::ASIGNACION_GUIA
                 );
 
-                $this->registrarImpresion($pedido, $documentosConfirmados, $registrarImpresionCedis);
+                $this->registrarImpresion($pedido, $usuarioId, $documentosConfirmados, $registrarImpresionCedis);
                 $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
 
                 $this->notificarService->ejecutar(
@@ -165,7 +165,7 @@ class AsignarGuiaPedidoBmaService
                 AccionesHistorialPedidoBma::ASIGNACION_GUIA
             );
 
-            $this->registrarImpresion($pedido, $documentosConfirmados, $registrarImpresionCedis);
+            $this->registrarImpresion($pedido, $usuarioId, $documentosConfirmados, $registrarImpresionCedis);
             return $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos', 'origen']);
         });
     }
@@ -201,17 +201,17 @@ class AsignarGuiaPedidoBmaService
         return $avances;
     }
 
-    private function registrarImpresion(PedidoBma $pedido, ?Collection $documentos, bool $solicitada): void
+    private function registrarImpresion(PedidoBma $pedido, int $usuarioId, ?Collection $documentos, bool $solicitada): void
     {
-        if (! $solicitada || ! config('impresion_guias_cedis.activa')) {
+        if (! $solicitada) {
             return;
         }
 
         $registro = app(RegistrarGuiasComunicadasCedis::class);
         if ($documentos !== null) {
-            $registro->porCaja($pedido, $documentos);
+            $registro->porCaja($pedido, $usuarioId, $documentos);
         } else {
-            $registro->general($pedido);
+            $registro->general($pedido, $usuarioId);
         }
     }
 

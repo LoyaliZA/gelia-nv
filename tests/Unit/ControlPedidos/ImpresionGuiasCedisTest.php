@@ -2,7 +2,6 @@
 
 namespace Tests\Unit\ControlPedidos;
 
-use App\Models\ControlPedidos\ImpresionGuiaCedis;
 use App\Models\ControlPedidos\PedidoBmaCaja;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
 use App\Services\ControlPedidos\ColaImpresionGuiasCedis;
@@ -17,7 +16,6 @@ class ImpresionGuiasCedisTest extends TestCase
     public function test_solo_admite_el_pdf_confirmado_y_vigente_de_la_caja_del_pedido(): void
     {
         $cola = new ColaImpresionGuiasCedis;
-        $version = new ImpresionGuiaCedis(['pedido_bma_id' => 5, 'pedido_bma_caja_id' => 2]);
         $pdf = new PedidoBmaDocumento([
             'pedido_bma_id' => 5,
             'pedido_bma_caja_id' => 2,
@@ -26,29 +24,29 @@ class ImpresionGuiasCedisTest extends TestCase
             'relacion_tipo' => GuiasPdfPorCaja::AVANCE,
         ]);
         $caja = new PedidoBmaCaja(['pedido_bma_id' => 5, 'estado_operativo' => PedidoBmaCaja::ESTADO_ACTIVA]);
-        $version->setRelation('documento', $pdf)->setRelation('caja', $caja);
+        $pdf->setRelation('caja', $caja);
 
-        $this->assertFalse($cola->vigente($version));
+        $this->assertFalse($cola->vigente($pdf, 5, 2));
         $pdf->relacion_tipo = GuiasPdfPorCaja::CONFIRMADA;
-        $this->assertTrue($cola->vigente($version));
+        $this->assertTrue($cola->vigente($pdf, 5, 2));
         $pdf->pedido_bma_caja_id = 3;
-        $this->assertFalse($cola->vigente($version));
+        $this->assertFalse($cola->vigente($pdf, 5, 2));
         $pdf->pedido_bma_caja_id = 2;
         $caja->estado_operativo = PedidoBmaCaja::ESTADO_RETIRADA;
-        $this->assertFalse($cola->vigente($version));
+        $this->assertFalse($cola->vigente($pdf, 5, 2));
         $caja->estado_operativo = PedidoBmaCaja::ESTADO_ACTIVA;
         $pdf->activo = false;
-        $this->assertFalse($cola->vigente($version));
+        $this->assertFalse($cola->vigente($pdf, 5, 2));
     }
 
     public function test_la_version_general_historica_conserva_su_copia_privada(): void
     {
-        $version = new ImpresionGuiaCedis(['pedido_bma_id' => 5, 'ruta_copia' => 'impresion_guias_cedis/5/original.pdf']);
-        $version->setRelation('documento', null);
         $cola = new ColaImpresionGuiasCedis;
 
-        $this->assertFalse($cola->vigente($version));
-        $this->assertSame(['local', 'impresion_guias_cedis/5/original.pdf'], $cola->archivo($version));
+        $this->assertFalse($cola->vigente(null, 5, null));
+        $this->assertSame(['local', 'impresion_guias_cedis/5/4.pdf'], $cola->archivo([
+            'copia' => 'impresion_guias_cedis/5/4.pdf',
+        ]));
     }
 
     public function test_qpdf_copia_paginas_en_orden_sin_cambiar_formatos_ni_originales(): void

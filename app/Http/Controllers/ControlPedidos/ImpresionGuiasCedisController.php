@@ -4,14 +4,17 @@ namespace App\Http\Controllers\ControlPedidos;
 
 use App\Events\ImpresionGuiasCedisActualizada;
 use App\Http\Controllers\Controller;
-use App\Models\ControlPedidos\ImpresionGuiaCedis;
+use App\Models\ControlPedidos\PedidoBma;
 use App\Services\ControlPedidos\ColaImpresionGuiasCedis;
 use App\Services\ControlPedidos\CombinarPdfGuiasCedis;
+use App\Services\ControlPedidos\RegistrarHistorialPedidoService;
 use App\Services\ControlPedidos\ServirArchivoPedidoService;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class ImpresionGuiasCedisController extends Controller
@@ -20,65 +23,62 @@ class ImpresionGuiasCedisController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        abort_unless(config('impresion_guias_cedis.activa'), 404);
         $datos = $request->validate([
             'tab' => 'in:pendientes,historial',
             'q' => 'nullable|string|max:100',
             'resumen' => 'boolean',
             'manifiesto' => 'boolean',
         ]);
-        $usuario = $request->user();
-        $base = $this->cola->consulta($usuario);
-        $pendientes = (clone $base)->whereNull('impresion_confirmada_at')->latest('comunicada_at')->get()
-            ->filter(fn (ImpresionGuiaCedis $guia) => $this->cola->vigente($guia) && $this->cola->visible($usuario, $guia));
+        $guias = $this->cola->consultar($request->user());
+        $pendientes = $guias->where('vigente', true)->where('abierta', false);
         $totales = [
-            'pedidos' => $pendientes->pluck('pedido_bma_id')->unique()->count(),
+            'pedidos' => $pendientes->pluck('pedido.id')->unique()->count(),
             'guias' => $pendientes->count(),
         ];
         if ($request->boolean('manifiesto')) {
-            $ordenadas = $pendientes->sortBy([['pedido_bma_id', 'asc'], ['orden_caja', 'asc']])->values();
+            $ordenadas = $pendientes->sortBy([['pedido.id', 'asc'], ['orden', 'asc']]);
 
-            return response()->json(['pendientes' => $totales + ['ids' => $ordenadas->modelKeys()]]);
+            return response()->json(['pendientes' => $totales + ['ids' => $ordenadas->keys()->values()]]);
         }
         if ($request->boolean('resumen')) {
             return response()->json(['pendientes' => $totales]);
         }
 
-        $guias = ($datos['tab'] ?? 'pendientes') === 'historial'
-            ? $base->whereNotNull('impresion_confirmada_at')->latest('impresion_confirmada_at')->get()
-                ->filter(fn (ImpresionGuiaCedis $guia) => $this->cola->visible($usuario, $guia))
+        $listado = ($datos['tab'] ?? 'pendientes') === 'historial'
+            ? $guias->where('abierta', true)->sortByDesc('apertura_id')
             : $pendientes;
 
         return response()->json([
-            'pedidos' => $this->cola->agrupar($guias, trim($datos['q'] ?? '')),
+            'pedidos' => $this->cola->agrupar($listado, trim($datos['q'] ?? '')),
             'pendientes' => $totales,
         ]);
     }
 
     public function archivo(Request $request, int $guia, ServirArchivoPedidoService $archivos): BinaryFileResponse
     {
-        abort_unless(config('impresion_guias_cedis.activa'), 404);
-        $guia = $this->cola->consulta($request->user())->findOrFail($guia);
-        abort_unless($this->cola->visible($request->user(), $guia), 404);
-        abort_unless($guia->impresion_confirmada_at || $this->cola->vigente($guia), 409, 'La guía dejó de estar vigente.');
+        $guia = $this->cola->consultar($request->user(), $guia)->get($guia);
+        abort_unless($guia, 404);
+        abort_unless($guia['abierta'] || $guia['vigente'], 409, 'La guía dejó de estar vigente.');
         [$disco, $ruta] = $this->cola->archivo($guia);
 
-        return $archivos->responder($request, $disco, $ruta, $guia->nombre_pdf, 'application/pdf');
+        $pdf = $archivos->responder($request, $disco, $ruta, $guia['nombre'], 'application/pdf');
+        if ($request->boolean('preparar')) {
+            $this->habilitarRegistro($pdf, $request, [$guia['id']]);
+        }
+
+        return $pdf;
     }
 
     public function lote(Request $request, CombinarPdfGuiasCedis $combinar): BinaryFileResponse|JsonResponse
     {
-        abort_unless(config('impresion_guias_cedis.activa'), 404);
         $ids = $this->ids($request);
-        $usuario = $request->user();
-        $guias = $this->cola->consulta($usuario)->whereKey($ids)->whereNull('impresion_confirmada_at')->get()->keyBy('id');
-        abort_unless($guias->count() === count($ids), 409, 'Los pendientes cambiaron. Actualice el lote e intente nuevamente.');
+        $guias = $this->cola->consultar($request->user())->only($ids)->where('vigente', true)->where('abierta', false);
+        abort_unless($guias->count() === count($ids), 409, 'Los pendientes cambiaron. Actualiza el lote e intenta de nuevo.');
+
         $archivos = [];
         foreach ($ids as $id) {
-            $guia = $guias->get($id);
-            abort_unless($this->cola->visible($usuario, $guia) && $this->cola->vigente($guia), 409, 'Los pendientes cambiaron. Actualice el lote e intente nuevamente.');
-            [$disco, $ruta] = $this->cola->archivo($guia);
-            abort_unless(Storage::disk($disco)->exists($ruta), 409, 'Falta el PDF de una guía. Imprima las guías disponibles individualmente.');
+            [$disco, $ruta] = $this->cola->archivo($guias->get($id));
+            abort_unless(Storage::disk($disco)->exists($ruta), 409, 'Falta el PDF de una guía. Abre las guías disponibles individualmente.');
             $archivos[] = Storage::disk($disco)->path($ruta);
         }
 
@@ -90,32 +90,60 @@ class ImpresionGuiasCedisController extends Controller
             return response()->json(['message' => $error->getMessage()], 503);
         }
 
-        return response()->file($lote, ['Content-Type' => 'application/pdf', 'Cache-Control' => 'private, no-store'])
+        $pdf = response()->file($lote, ['Content-Type' => 'application/pdf', 'Cache-Control' => 'private, no-store'])
             ->setContentDisposition('inline', 'guias-cedis.pdf')->deleteFileAfterSend();
+        $this->habilitarRegistro($pdf, $request, $ids);
+
+        return $pdf;
     }
 
-    public function confirmar(Request $request): JsonResponse
+    public function registrarApertura(Request $request, RegistrarHistorialPedidoService $historial): JsonResponse
     {
-        abort_unless(config('impresion_guias_cedis.activa'), 404);
         $ids = $this->ids($request);
         $usuario = $request->user();
-        DB::transaction(function () use ($ids, $usuario) {
-            $guias = $this->cola->consulta($usuario)->whereKey($ids)->orderBy('id')->lockForUpdate()->get();
+        abort_unless(URL::hasValidSignature($request, absolute: false)
+            && (int) $request->query('usuario') === (int) $usuario->id
+            && $request->query('lote') === hash('sha256', implode(',', $ids)), 403);
+        $guias = $this->cola->consultar($usuario)->only($ids);
+        abort_unless($guias->count() === count($ids), 404);
+        $pedidoIds = $guias->pluck('pedido.id')->unique()->values()->all();
+
+        DB::transaction(function () use ($usuario, $ids, $pedidoIds, $historial) {
+            PedidoBma::query()->whereKey($pedidoIds)->orderBy('id')->lockForUpdate()->get(['id']);
+            $guias = $this->cola->consultar($usuario, pedidoIds: $pedidoIds)->only($ids);
             abort_unless($guias->count() === count($ids), 404);
-            foreach ($guias as $guia) {
-                abort_unless($this->cola->visible($usuario, $guia), 404);
-                abort_unless($guia->impresion_confirmada_at || $this->cola->vigente($guia), 409, 'Los pendientes cambiaron. Revise las guías antes de confirmar.');
+
+            // Una reapertura o un reintento conserva la primera apertura en Historial.
+            $pendientes = $guias->where('abierta', false);
+            foreach ($pendientes->groupBy('pedido.id') as $grupo) {
+                $pedido = $grupo->first()['pedido'];
+                $historial->ejecutar(
+                    $pedido->id,
+                    $usuario->id,
+                    $pedido->catalogo_estatus_pedido_id,
+                    $pedido->catalogo_estatus_pedido_id,
+                    'Abrió el PDF de guías desde Imprimir guías.',
+                    AccionesHistorialPedidoBma::ABRIR_GUIAS_CEDIS,
+                    snapshot: ['documentos' => $grupo->pluck('id')->all()],
+                );
             }
-            $confirmadas = ImpresionGuiaCedis::query()->whereKey($ids)->whereNull('impresion_confirmada_at')->update([
-                'impresion_confirmada_at' => now(),
-                'impresion_confirmada_por_id' => $usuario->id,
-            ]);
-            if ($confirmadas > 0) {
+            if ($pendientes->isNotEmpty()) {
                 ImpresionGuiasCedisActualizada::dispatch();
             }
         });
 
         return response()->json(['ok' => true]);
+    }
+
+    /** @param list<int> $ids */
+    private function habilitarRegistro(BinaryFileResponse $pdf, Request $request, array $ids): void
+    {
+        $url = URL::temporarySignedRoute('control_pedidos.cedis.impresion_guias.apertura', now()->addMinutes(5), [
+            'usuario' => $request->user()->id,
+            'lote' => hash('sha256', implode(',', $ids)),
+        ], absolute: false);
+        $pdf->headers->set('X-Gelia-Apertura', $url);
+        $pdf->headers->set('Cache-Control', 'private, no-store');
     }
 
     /** @return list<int> */

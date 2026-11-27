@@ -3,41 +3,40 @@
 namespace App\Services\ControlPedidos;
 
 use App\Events\ImpresionGuiasCedisActualizada;
-use App\Models\ControlPedidos\ImpresionGuiaCedis;
 use App\Models\ControlPedidos\PedidoBma;
 use App\Models\ControlPedidos\PedidoBmaDocumento;
+use App\Support\ControlPedidos\AccionesHistorialPedidoBma;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class RegistrarGuiasComunicadasCedis
 {
-    public function porCaja(PedidoBma $pedido, iterable $documentos): void
+    public function __construct(private RegistrarHistorialPedidoService $historial) {}
+
+    public function porCaja(PedidoBma $pedido, int $usuarioId, iterable $documentos): void
     {
-        $huboCambios = false;
+        $guias = [];
         foreach ($documentos as $documento) {
             $caja = $pedido->cajas->firstWhere('id', $documento->pedido_bma_caja_id);
-            $version = ImpresionGuiaCedis::query()->firstOrCreate(['documento_id' => $documento->id], [
-                'pedido_bma_id' => $pedido->id,
-                'pedido_bma_caja_id' => $caja->id,
-                'orden_caja' => $caja->orden,
-                'nombre_caja' => $caja->tipoCaja?->nombre,
-                'nombre_pdf' => $documento->nombre_original,
-                'comunicada_at' => now(),
-            ]);
-            $huboCambios = $huboCambios || $version->wasRecentlyCreated;
+            $guias[$documento->id] = [
+                'caja_id' => $caja->id,
+                'orden' => $caja->orden,
+                'caja' => $caja->tipoCaja?->nombre ?: 'Caja '.($caja->orden + 1),
+                'nombre' => $documento->nombre_original,
+            ];
         }
-        if ($huboCambios) {
-            ImpresionGuiasCedisActualizada::dispatch();
+        if ($guias !== []) {
+            $this->registrar($pedido, $usuarioId, $guias);
         }
     }
 
-    public function general(PedidoBma $pedido): void
+    public function general(PedidoBma $pedido, int $usuarioId): void
     {
         $guia = $pedido->documentos()->vigente()
             ->where('tipo', PedidoBmaDocumento::TIPO_GUIA)->whereNull('pedido_bma_caja_id')
             ->reorder('id', 'desc')->first();
         if (! $guia || ! str_contains(strtolower((string) $guia->mime_type), 'pdf')
-            || ImpresionGuiaCedis::query()->where('documento_id', $guia->id)->exists()) {
+            || $pedido->historial()->where('accion', AccionesHistorialPedidoBma::GUIAS_COMUNICADAS_CEDIS)
+                ->whereJsonContains('snapshot_json->documentos', $guia->id)->exists()) {
             return;
         }
 
@@ -49,19 +48,21 @@ class RegistrarGuiasComunicadasCedis
         if (! is_resource($archivo)) {
             throw new \RuntimeException('No se pudo conservar el PDF comunicado a CEDIS. Intente nuevamente.');
         }
-        $ruta = 'impresion_guias_cedis/'.$pedido->id.'/'.Str::uuid().'.pdf';
+        // Las guías generales pueden perder el original al ser reemplazadas.
+        $ruta = "impresion_guias_cedis/{$pedido->id}/{$guia->id}.pdf";
         try {
             if (! Storage::disk('local')->put($ruta, $archivo)) {
                 throw new \RuntimeException('No se pudo conservar el PDF comunicado a CEDIS. Intente nuevamente.');
             }
-            ImpresionGuiaCedis::query()->create([
-                'pedido_bma_id' => $pedido->id,
-                'documento_id' => $guia->id,
-                'nombre_pdf' => $guia->nombre_original,
-                'ruta_copia' => $ruta,
-                'comunicada_at' => now(),
+            $this->registrar($pedido, $usuarioId, [
+                $guia->id => [
+                    'caja_id' => null,
+                    'orden' => null,
+                    'caja' => 'Guía general',
+                    'nombre' => $guia->nombre_original,
+                    'copia' => $ruta,
+                ],
             ]);
-            ImpresionGuiasCedisActualizada::dispatch();
         } catch (\Throwable $error) {
             Storage::disk('local')->delete($ruta);
             throw $error;
@@ -70,5 +71,19 @@ class RegistrarGuiasComunicadasCedis
                 fclose($archivo);
             }
         }
+    }
+
+    private function registrar(PedidoBma $pedido, int $usuarioId, array $guias): void
+    {
+        $this->historial->ejecutar(
+            $pedido->id,
+            $usuarioId,
+            $pedido->catalogo_estatus_pedido_id,
+            $pedido->catalogo_estatus_pedido_id,
+            'Comunicó los PDF de guía a CEDIS.',
+            AccionesHistorialPedidoBma::GUIAS_COMUNICADAS_CEDIS,
+            snapshot: ['documentos' => array_keys($guias), 'guias' => $guias],
+        );
+        ImpresionGuiasCedisActualizada::dispatch();
     }
 }
