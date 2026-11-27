@@ -14,7 +14,7 @@ Route::middleware(['can:control_pedidos.cedis'])
             Route::get('/', 'index')->name('index');
             Route::get('/{guia}/archivo', 'archivo')->whereNumber('guia')->name('archivo');
             Route::post('/lote', 'lote')->name('lote');
-            Route::post('/confirmar', 'confirmar')->name('confirmar');
+            Route::post('/apertura', 'registrarApertura')->name('apertura');
         });
         Route::post('/{pedidoBma}/marcar-empacado', [PedidoBmaCedisController::class, 'marcarEmpacado'])->name('marcar_empacado');
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');

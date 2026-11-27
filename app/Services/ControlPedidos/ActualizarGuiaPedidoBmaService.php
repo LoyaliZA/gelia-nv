@@ -73,8 +73,8 @@ class ActualizarGuiaPedidoBmaService
                 AccionesHistorialPedidoBma::ACTUALIZAR_GUIA
             );
 
-            if ($registrarImpresionCedis && config('impresion_guias_cedis.activa')) {
-                app(RegistrarGuiasComunicadasCedis::class)->general($pedido);
+            if ($registrarImpresionCedis) {
+                app(RegistrarGuiasComunicadasCedis::class)->general($pedido, $usuarioId);
             }
 
             $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos']);

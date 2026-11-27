@@ -4,7 +4,6 @@ import axios from 'axios';
 import { CalendarDays, ChevronDown, Download, Eye, FileText, Printer, Search, Truck, X } from 'lucide-react';
 import ModalVistaPreviaDocumento from '../../Partials/ModalVistaPreviaDocumento';
 import usePedidoDialog from '../../Partials/usePedidoDialog';
-import { BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 import { THEME_BTN_PRIMARY } from '../../../../utils/geliaTheme';
 
 const tabs = [
@@ -13,39 +12,8 @@ const tabs = [
 ];
 const boton = 'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 text-sm font-bold';
 const principal = `${THEME_BTN_PRIMARY} ${boton} px-3! py-2! text-sm! normal-case! tracking-normal!`;
-const secundario = `${BTN_SECONDARY} ${boton}`;
 const iconoBoton = 'theme-border theme-text-main grid size-11 shrink-0 place-items-center rounded-lg border hover:border-[var(--color-primario)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primario)]';
 const acentoSuave = 'theme-text-primario bg-[color-mix(in_srgb,var(--color-primario)_12%,transparent)]';
-
-function mostrarDialogoImpresion(url, contenedor, signal) {
-    return new Promise((resolve, reject) => {
-        const iframe = document.createElement('iframe');
-        const limpiar = () => {
-            clearTimeout(temporizador);
-            signal.removeEventListener('abort', limpiar);
-            iframe.remove();
-            reject(new Error());
-        };
-        const temporizador = setTimeout(limpiar, 10000);
-        iframe.title = 'PDF para imprimir';
-        iframe.setAttribute('aria-hidden', 'true');
-        iframe.tabIndex = -1;
-        iframe.className = 'pointer-events-none absolute size-px opacity-0';
-        iframe.onload = () => {
-            clearTimeout(temporizador);
-            try {
-                iframe.contentWindow.focus();
-                iframe.contentWindow.print();
-                resolve();
-            } catch (error) {
-                reject(error);
-            }
-        };
-        signal.addEventListener('abort', limpiar, { once: true });
-        iframe.src = url;
-        contenedor.appendChild(iframe);
-    });
-}
 
 async function mensajeError(error, mensaje) {
     const dato = error.response?.data;
@@ -64,28 +32,26 @@ export default function DrawerImpresionGuias({ cola, onClose }) {
     const dialog = usePedidoDialog({ abierto: true, onClose });
     const [previa, setPrevia] = useState(null);
     const [procesando, setProcesando] = useState(false);
-    const [intento, setIntento] = useState(null);
-    const [alternativa, setAlternativa] = useState(null);
     const [aviso, setAviso] = useState('');
     const operacion = useRef(null);
-    const urlActiva = useRef(null);
     const botonesTab = useRef({});
 
-    const limpiarPdf = () => {
-        operacion.current?.abort();
-        if (urlActiva.current) URL.revokeObjectURL(urlActiva.current);
-        urlActiva.current = null;
-    };
-    useEffect(() => limpiarPdf, []);
+    useEffect(() => () => operacion.current?.abort(), []);
 
     const imprimir = async ({ guia, ids = [], lote = false }) => {
-        if (procesando || intento) return;
-        limpiarPdf();
-        setAlternativa(null);
+        if (operacion.current) return;
         setAviso('');
+        const visor = window.open('about:blank', '_blank');
+        if (!visor) {
+            setAviso('Permite abrir pestañas nuevas para ver el PDF e intenta de nuevo.');
+            return;
+        }
+        visor.opener = null;
         setProcesando(true);
         const controller = new AbortController();
         operacion.current = controller;
+        let abierto = false;
+        let url;
         const opciones = { responseType: 'blob', signal: controller.signal, headers: { Accept: 'application/json, application/pdf' } };
         try {
             if (lote) {
@@ -101,53 +67,37 @@ export default function DrawerImpresionGuias({ cola, onClose }) {
                     return;
                 }
             }
-            const { data } = lote
+            const { data, headers } = lote
                 ? await axios.post(route('control_pedidos.cedis.impresion_guias.lote'), { ids }, opciones)
-                : await axios.get(guia.url, opciones);
+                : await axios.get(guia.url, ids.length > 0 ? { ...opciones, params: { preparar: 1 } } : opciones);
             if (controller.signal.aborted) return;
-            if (!data.type.includes('application/pdf')) throw new Error();
-            const url = URL.createObjectURL(data);
-            urlActiva.current = url;
-            const detalle = ids.length > 0 ? { ids, url } : null;
-            try {
-                await mostrarDialogoImpresion(url, dialog.ref.current, controller.signal);
-                if (!controller.signal.aborted) setIntento(detalle);
-            } catch {
-                if (!controller.signal.aborted) {
-                    setAlternativa({ url, detalle });
-                    setAviso('Abre el PDF en el visor del navegador para imprimirlo.');
-                }
+            if (data.type !== 'application/pdf' || !data.size || visor.closed) throw new Error();
+            const registro = headers?.['x-gelia-apertura'];
+            if (ids.length > 0 && !registro) throw new Error();
+            url = URL.createObjectURL(data);
+            visor.location.replace(url);
+            abierto = true;
+            if (ids.length > 0) {
+                await axios.post(registro, { ids }, {
+                    headers: { Accept: 'application/json' },
+                });
+                actualizar();
             }
         } catch (fallo) {
             if (!controller.signal.aborted) {
-                setAviso(await mensajeError(fallo, 'No se pudo preparar la impresión. Intenta de nuevo.'));
+                setAviso(abierto
+                    ? 'El PDF se abrió. Vuelve a usar Imprimir para registrar la apertura.'
+                    : await mensajeError(fallo, 'No se pudo abrir el PDF. Intenta de nuevo.'));
                 if (fallo.response?.status === 409) actualizar();
             }
         } finally {
-            if (!controller.signal.aborted) setProcesando(false);
-        }
-    };
-
-    const confirmar = async () => {
-        if (procesando || !intento) return;
-        setAviso('');
-        setProcesando(true);
-        try {
-            await axios.post(route('control_pedidos.cedis.impresion_guias.confirmar'), { ids: intento.ids }, {
-                headers: { Accept: 'application/json' },
-            });
-            setIntento(null);
-            limpiarPdf();
-            actualizar();
-        } catch (fallo) {
-            setAviso(await mensajeError(fallo, 'No se pudo registrar la confirmación. Intenta de nuevo.'));
-            if (fallo.response?.status === 409) {
-                setIntento(null);
-                limpiarPdf();
-                actualizar();
+            if (!abierto) visor.close();
+            if (url) {
+                if (abierto) setTimeout(() => URL.revokeObjectURL(url), 60000);
+                else URL.revokeObjectURL(url);
             }
-        } finally {
-            setProcesando(false);
+            operacion.current = null;
+            if (!controller.signal.aborted) setProcesando(false);
         }
     };
 
@@ -207,7 +157,7 @@ export default function DrawerImpresionGuias({ cola, onClose }) {
                     {error && <p role="alert" className="theme-text-peligro text-sm">No se pudieron actualizar las guías. <button type="button" className="underline" onClick={actualizar}>Reintentar</button></p>}
                     {!pedidos && !error && <p role="status" className="theme-text-muted text-sm">Cargando guías…</p>}
                     {pedidos?.length === 0 && <p className="theme-text-muted text-sm">
-                        {busqueda ? 'No se encontraron guías para este folio.' : tab === 'pendientes' ? 'No hay guías pendientes de impresión.' : 'Aún no hay impresiones confirmadas.'}
+                        {busqueda ? 'No se encontraron guías para este folio.' : tab === 'pendientes' ? 'No hay guías pendientes de impresión.' : 'Aún no hay guías abiertas para imprimir.'}
                     </p>}
                     {pedidos?.map(pedido => (
                         <details key={pedido.id} className="theme-border theme-surface group rounded-xl border">
@@ -228,7 +178,7 @@ export default function DrawerImpresionGuias({ cola, onClose }) {
                                     <div className="ml-auto flex flex-wrap gap-2">
                                         <button type="button" className={iconoBoton} aria-label={`Ver ${guia.nombre_original}`} title="Ver PDF" onClick={() => setPrevia(guia)}><Eye size={18} aria-hidden="true" /></button>
                                         <a className={iconoBoton} href={guia.url} download={guia.nombre_original} aria-label={`Descargar ${guia.nombre_original}`} title="Descargar PDF"><Download size={18} aria-hidden="true" /></a>
-                                        <button type="button" className={principal} disabled={procesando || Boolean(intento)}
+                                        <button type="button" className={principal} disabled={procesando}
                                             aria-label={`Imprimir ${guia.nombre_original}`}
                                             onClick={() => imprimir({ guia, ids: tab === 'pendientes' ? [guia.id] : [] })}>
                                             <Printer size={17} aria-hidden="true" /> Imprimir
@@ -239,20 +189,13 @@ export default function DrawerImpresionGuias({ cola, onClose }) {
                         </details>
                     ))}
                 </div>
-                {(tab === 'pendientes' || aviso || procesando || intento || alternativa) && (
+                {(tab === 'pendientes' || aviso || procesando) && (
                     <footer className="theme-border shrink-0 space-y-2 border-t p-4 sm:p-5">
                         {aviso && <p role="alert" className="theme-text-peligro m-0 text-sm">{aviso}</p>}
-                        {alternativa && <a className={secundario} href={alternativa.url} target="_blank" rel="noreferrer"
-                            onClick={() => { setIntento(alternativa.detalle); setAlternativa(null); setAviso(''); }}>Abrir PDF para imprimir</a>}
-                        {procesando && <p role="status" className="theme-text-muted m-0 text-sm">Procesando impresión…</p>}
-                        {intento && <div className="flex flex-wrap items-center gap-2">
-                            <p className="m-0 w-full text-sm">Confirma solo si se imprimieron {intento.ids.length === 1 ? 'la guía' : `las ${intento.ids.length} guías`}.</p>
-                            <button type="button" className={principal} disabled={procesando} onClick={confirmar}>Confirmar impresión</button>
-                            <button type="button" className={secundario} disabled={procesando} onClick={() => { setIntento(null); setAviso(''); limpiarPdf(); }}>Mantener pendientes</button>
-                        </div>}
+                        {procesando && <p role="status" className="theme-text-muted m-0 text-sm">Preparando PDF…</p>}
                         {tab === 'pendientes' && <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="m-0 text-sm font-semibold">{pendientes?.pedidos ?? 0} pedidos · {pendientes?.guias ?? 0} guías</p>
-                            <button type="button" className={principal} disabled={procesando || Boolean(intento) || error || !pendientes?.guias}
+                            <button type="button" className={principal} disabled={procesando || error || !pendientes?.guias}
                                 onClick={() => imprimir({ lote: true })}>
                                 <Printer size={18} aria-hidden="true" /> Imprimir todas ({pendientes?.guias ?? 0})
                             </button>

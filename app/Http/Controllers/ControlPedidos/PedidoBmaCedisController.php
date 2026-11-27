@@ -73,7 +73,7 @@ class PedidoBmaCedisController extends Controller
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre']),
             'can' => [
-                'impresion_guias' => (bool) config('impresion_guias_cedis.activa'),
+                'impresion_guias' => Auth::user()?->can('control_pedidos.cedis') ?? false,
                 'liberar' => Auth::user()?->can('control_pedidos.cedis.liberar') ?? false,
                 'bitacora' => \App\Support\ControlPedidos\BitacoraCedis::puedeVer(Auth::user()),
             ],

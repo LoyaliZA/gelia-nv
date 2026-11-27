@@ -11,5 +11,7 @@ final class LimitesAdjuntosFactura
     /** Kilobytes (Laravel `max` rule). */
     public const MAX_KB_POR_ARCHIVO = 5120;
 
+    public const MAX_KB_ZIP_COMPROBANTE = 10240;
+
     public const MAX_BYTES_POR_ARCHIVO = self::MAX_KB_POR_ARCHIVO * 1024;
 }

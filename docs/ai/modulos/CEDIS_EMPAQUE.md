@@ -11,7 +11,7 @@
 - [verificado] Bultos requieren evidencia cuando la variante lo exige: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:63`.
 - [verificado] En Nacional 2.0 sin seguro con guías de Delegado, **Marcar enviado** en el detalle registra todas las cajas activas pendientes. Los demás flujos mantienen la selección parcial: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php`.
 - [verificado] Destino municipal muestra consignatario, teléfono y dos carátulas (con/sin identificación), vista previa e impresión; el PDF es a demanda y no exige sucursal destino: `SeccionCaratulaMunicipalCedis.jsx`, `control_pedidos.cedis.caratula_municipal`.
-- [verificado en código] **Imprimir guías** usa una cola propia con alcance CEDIS. Solo contiene respuestas registradas desde la activación. Abrir el diálogo, cancelar, ver o descargar conserva Pendientes. Confirmar tras imprimir registra la versión en Historial. Imprimir todas combina en un PDF temporal los pendientes vigentes con qpdf.
+- [verificado en código] **Imprimir guías** consulta las versiones comunicadas por Delegado en el historial del pedido y aplica el alcance CEDIS. **Ver** y **Descargar** conservan Pendientes. **Imprimir** abre el PDF y registra la apertura en Historial, desde donde se puede volver a abrir la misma versión. **Imprimir todas** combina los pendientes vigentes en un PDF temporal con qpdf. Una preparación fallida conserva Pendientes.
 
 ## Reglas que no se rompen
 - [verificado] Alcance CEDIS depende de departamentos del vendedor, salvo administrador/ver_todos: `app/Support/ControlPedidos/VisibilidadPedidoBma.php:115`.
@@ -37,4 +37,4 @@
 - [verificado] `check_cedis_responder_pesaje_ui.php` inspecciona cadenas de archivos; no prueba interacción real: `tests/Unit/ControlPedidos/check_cedis_responder_pesaje_ui.php:15`.
 - [inferido] Cambiar un estado del grupo desde una sola tarjeta puede afectar complementos; revisar atomicidad antes de ajustar botones: `app/Services/ControlPedidos/MarcarEmpacadoPedidoBmaService.php:43`.
 
-- Última verificación: 2026-11-27, árbol de trabajo sobre 8080a66c. La impresión rápida usa `CEDIS_IMPRESION_GUIAS_ACTIVA`, desactivada por defecto. Activación e integración contra la tabla real pendientes de autorización. Probar el diálogo nativo en los navegadores y las impresoras de CEDIS.
+- Última verificación: 2026-11-27, árbol de trabajo sobre 361f5337. Queda pendiente verificar el recorrido completo en el navegador con los assets publicados y cuentas de prueba.

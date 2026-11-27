@@ -28,6 +28,8 @@ final class AccionesHistorialPedidoBma
     public const ASIGNACION_GUIA = 'asignacion_guia';
     public const CARGA_GUIA_CLIENTE = 'carga_guia_cliente';
     public const ACTUALIZAR_GUIA = 'actualizar_guia';
+    public const GUIAS_COMUNICADAS_CEDIS = 'guias_comunicadas_cedis';
+    public const ABRIR_GUIAS_CEDIS = 'abrir_guias_cedis';
     public const CARGA_GUIA_PDF = 'carga_guia_pdf';
     public const ELIMINA_GUIA_PDF = 'elimina_guia_pdf';
     public const INVALIDAR_GUIA = 'invalidar_guia';
@@ -133,6 +135,8 @@ final class AccionesHistorialPedidoBma
         self::ASIGNACION_GUIA => 'Asignación de guía',
         self::CARGA_GUIA_CLIENTE => 'Carga de guía del cliente',
         self::ACTUALIZAR_GUIA => 'Corrección de guía',
+        self::GUIAS_COMUNICADAS_CEDIS => 'Guías comunicadas a CEDIS',
+        self::ABRIR_GUIAS_CEDIS => 'PDF de guías abierto desde CEDIS',
         self::CARGA_GUIA_PDF => 'Carga de PDF de guía',
         self::ELIMINA_GUIA_PDF => 'Eliminación de PDF de guía',
         self::INVALIDAR_GUIA => 'Invalidación de guía',
