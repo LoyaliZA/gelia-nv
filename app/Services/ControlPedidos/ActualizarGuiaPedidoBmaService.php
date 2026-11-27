@@ -15,7 +15,7 @@ class ActualizarGuiaPedidoBmaService
         private AvanzarColaErroresPedidoBmaService $colaErroresService,
     ) {}
 
-    public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId): PedidoBma
+    public function ejecutar(PedidoBma $pedido, string $numeroRastreo, int $usuarioId, bool $registrarImpresionCedis = false): PedidoBma
     {
         \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
         if (\App\Support\ControlPedidos\Nacional\GuiasPdfPorCaja::aplica($pedido)) {
@@ -36,7 +36,7 @@ class ActualizarGuiaPedidoBmaService
             throw new \RuntimeException('El pedido no tiene guía asignada para corregir.');
         }
 
-        return DB::transaction(function () use ($pedido, $guia, $usuarioId) {
+        return DB::transaction(function () use ($pedido, $guia, $usuarioId, $registrarImpresionCedis) {
             if (\App\Support\ControlPedidos\Nacional\CapturaNacional::es($pedido)) {
                 $pedido = PedidoBma::query()->lockForUpdate()->findOrFail($pedido->id);
                 \App\Support\ControlPedidos\Nacional\CoberturaEnvioNacional::assertDespacho($pedido);
@@ -72,6 +72,10 @@ class ActualizarGuiaPedidoBmaService
                 "Guía de rastreo corregida (provoca retraso): {$anterior} → {$guia}",
                 AccionesHistorialPedidoBma::ACTUALIZAR_GUIA
             );
+
+            if ($registrarImpresionCedis && config('impresion_guias_cedis.activa')) {
+                app(RegistrarGuiasComunicadasCedis::class)->general($pedido);
+            }
 
             $pedido = $pedido->fresh(['cliente', 'paqueteria', 'estatus', 'vendedor', 'documentos']);
 

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ControlPedidos\PedidoBmaCedisController;
+use App\Http\Controllers\ControlPedidos\ImpresionGuiasCedisController;
 
 Route::middleware(['can:control_pedidos.cedis'])
     ->prefix('control-pedidos/cedis')
@@ -9,6 +10,12 @@ Route::middleware(['can:control_pedidos.cedis'])
     ->group(function () {
         Route::get('/', [PedidoBmaCedisController::class, 'index'])->name('index');
         Route::get('/listado', [PedidoBmaCedisController::class, 'listado'])->name('listado');
+        Route::prefix('impresion-guias')->name('impresion_guias.')->controller(ImpresionGuiasCedisController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{guia}/archivo', 'archivo')->whereNumber('guia')->name('archivo');
+            Route::post('/lote', 'lote')->name('lote');
+            Route::post('/confirmar', 'confirmar')->name('confirmar');
+        });
         Route::post('/{pedidoBma}/marcar-empacado', [PedidoBmaCedisController::class, 'marcarEmpacado'])->name('marcar_empacado');
         Route::post('/{pedidoBma}/marcar-enviado', [PedidoBmaCedisController::class, 'marcarEnviado'])->name('marcar_enviado');
         Route::post('/{pedidoBma}/reabrir-envio', [PedidoBmaCedisController::class, 'reabrirEnvio'])->name('reabrir_envio');

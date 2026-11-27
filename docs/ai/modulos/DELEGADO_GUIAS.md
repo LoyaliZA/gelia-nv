@@ -20,6 +20,7 @@
 ## Dependencias con otros módulos
 - [CEDIS](CEDIS_EMPAQUE.md) confirma recolección; [Direcciones](DIRECCIONES.md) invalida guía al cambiar destino.
 - [verificado] Número de rastreo y PDF tienen endpoints separados: `routes/web/modules/control-pedidos/delegado.php:14`.
+- [verificado en código] Con impresión CEDIS activa, las respuestas individuales **Asignar** y **Corregir** registran el PDF general vigente o los PDFs por caja recién confirmados en la transacción de la respuesta. Cargar, reemplazar, retirar y vincular PDF previo siguen siendo acciones separadas. La importación de rastreos conserva su recorrido.
 
 ## Cómo probar
 - [PRUEBAS](../PRUEBAS.md): asignación antes/después de empacar, importación mixta y documentos de guía.
@@ -29,4 +30,4 @@
 - [inferido] Un archivo importado puede quedar aplicado parcialmente; revisar contadores/errores antes de reintentar el lote: `app/Services/ControlPedidos/ImportarGuiasPedidoService.php:27` y `:63`.
 - [verificado] No confundir las fases de guía propia del cliente con la cola normal de Delegado: `app/Support/ControlPedidos/MaquinaEstadosPedidoBma.php:213`.
 
-- Última verificación: 2026-11-27, árbol de trabajo sobre 0e5be6cb.
+- Última verificación: 2026-11-27, árbol de trabajo sobre 8080a66c.

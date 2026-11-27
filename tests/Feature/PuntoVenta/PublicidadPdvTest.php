@@ -518,6 +518,37 @@ class PublicidadPdvTest extends TestCase
         $this->assertSame(90, $pieza['rotacion_kiosko']);
     }
 
+    public function test_rotacion_270_se_guarda_en_sala_y_kiosko(): void
+    {
+        $medio = Medio::factory()->create();
+        $item = PdvPantallaPublicidad::factory()->video()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'ruta' => $medio->ruta_local ?? $medio->object_key,
+            'activa' => true,
+            'rotacion' => 0,
+            'rotacion_kiosko' => null,
+        ]);
+
+        $this->actingAs($this->autorizado)
+            ->patchJson(route('punto_venta.publicidad.update', $item->id), [
+                'sucursal_id' => $this->sucursal->id,
+                'rotacion' => 270,
+                'rotacion_kiosko' => 270,
+            ])
+            ->assertOk()
+            ->assertJsonPath('items.0.rotacion', 270)
+            ->assertJsonPath('items.0.rotacion_kiosko', 270);
+
+        $this->assertSame(270, $item->fresh()->rotacion);
+        $this->assertSame(270, (int) $item->fresh()->rotacion_kiosko);
+
+        $payload = app(ConsultaEstadoSalaPdvService::class)->payload($this->sucursal->id, now());
+        $pieza = collect($payload['publicidad'])->firstWhere('id', $item->id);
+        $this->assertSame(270, $pieza['rotacion']);
+        $this->assertSame(270, $pieza['rotacion_kiosko']);
+    }
+
     public function test_rotacion_kiosko_independiente_no_altera_sala(): void
     {
         $medio = Medio::factory()->create();

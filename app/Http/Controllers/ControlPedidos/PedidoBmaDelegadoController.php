@@ -79,7 +79,8 @@ class PedidoBmaDelegadoController extends Controller
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
                 $request->validated('numero_rastreo'),
-                Auth::id()
+                Auth::id(),
+                registrarImpresionCedis: true,
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
@@ -97,7 +98,8 @@ class PedidoBmaDelegadoController extends Controller
             $service->ejecutar(
                 $pedidoBma->load('estatus'),
                 $request->validated('numero_rastreo'),
-                Auth::id()
+                Auth::id(),
+                registrarImpresionCedis: true,
             );
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             return redirect()->back()->with('error', $e->getMessage());
