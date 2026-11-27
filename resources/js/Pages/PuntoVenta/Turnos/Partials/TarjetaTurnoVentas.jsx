@@ -245,11 +245,6 @@ export default function TarjetaTurnoVentas({
                         alerta={atencion.prorroga_activa}
                     />
                 )}
-                {atencion?.atencion_habilitada_desde && (
-                    <p className="text-xs font-semibold theme-text-muted m-0 sm:col-span-2">
-                        La atención inicia al terminar la cuenta.
-                    </p>
-                )}
                 {atencion?.prorroga_activa && (
                     <div className="flex items-center gap-2 rounded-xl px-3 py-2 bg-amber-500/15 sm:col-span-2">
                         <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" aria-hidden />

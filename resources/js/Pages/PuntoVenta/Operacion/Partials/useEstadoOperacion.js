@@ -72,11 +72,18 @@ export default function useEstadoOperacion({
 
     useEffect(() => {
         const personas = [estado, ...(estado?.equipo ?? [])];
-        const esperas = new Set(personas
-            .filter((persona) => persona?.estado_vendedor === 'en_espera'
-                && persona.cronometro?.modo === 'restante')
-            .map((persona) => persona.cronometro.referencia_at)
-            .filter(Boolean));
+        const esperas = new Set();
+        for (const persona of personas) {
+            if (persona?.estado_vendedor === 'en_espera'
+                && persona.cronometro?.modo === 'restante'
+                && persona.cronometro.referencia_at) {
+                esperas.add(persona.cronometro.referencia_at);
+            }
+            const atencion = persona?.atencion_actual;
+            if (atencion && !atencion.atencion_en_curso && atencion.atencion_habilitada_desde) {
+                esperas.add(atencion.atencion_habilitada_desde);
+            }
+        }
         const revisadas = esperasActualizadasRef.current;
         for (const espera of revisadas) {
             if (!esperas.has(espera)) revisadas.delete(espera);

@@ -31,6 +31,16 @@ describe('pdvRealtimeMatrix', () => {
             PDV_VISTA_REALTIME.recepcion,
             envelope({ tipo: 'turno.reatencion' }),
         )).toBe(false);
+
+        expect(debeRefrescarVistaPdv(
+            PDV_VISTA_REALTIME.gerencia,
+            envelope({ tipo: 'atencion.iniciada' }),
+        )).toBe(true);
+
+        expect(debeRefrescarVistaPdv(
+            PDV_VISTA_REALTIME.recepcion,
+            envelope({ tipo: 'atencion.iniciada' }),
+        )).toBe(false);
     });
 
     it('filtra eventos de operación al vendedor afectado', () => {
@@ -44,6 +54,18 @@ describe('pdvRealtimeMatrix', () => {
         expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, pausa, { userId: 8 })).toBe(false);
         expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.gerencia, pausa)).toBe(true);
         expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.recepcion, pausa)).toBe(true);
+    });
+
+    it('refresca gerencia y vendedor al iniciar atención', () => {
+        const iniciada = envelope({
+            tipo: 'atencion.iniciada',
+            audiencia: 'sucursal',
+            datos: { atencion: { user_id: 3 } },
+        });
+
+        expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.gerencia, iniciada)).toBe(true);
+        expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, iniciada, { userId: 3 })).toBe(true);
+        expect(debeRefrescarVistaPdv(PDV_VISTA_REALTIME.vendedor, iniciada, { userId: 9 })).toBe(false);
     });
 
     it('refresca vendedor con eventos personales de turnos', () => {

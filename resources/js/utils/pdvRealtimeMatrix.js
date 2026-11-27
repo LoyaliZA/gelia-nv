@@ -11,6 +11,7 @@ const TIPOS_TURNO_GERENCIA = new Set([
     'turno.transferido',
     'turno.reatencion',
     'turno.ventana_reatencion_vencida',
+    'atencion.iniciada',
     'atencion.cerrada',
     'atencion.prorroga',
 ]);
@@ -19,6 +20,7 @@ const TIPOS_TURNO_VENDEDOR_USUARIO = new Set([
     'turno.asignado',
     'turno.transferido',
     'turno.reatencion',
+    'atencion.iniciada',
     'atencion.cerrada',
     'atencion.prorroga',
 ]);

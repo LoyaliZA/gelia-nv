@@ -14,6 +14,10 @@ export const PDV_ESTADO_CONEXION = {
     degradado: 'degradado',
 };
 
+const TIPOS_SILENCIOSOS = new Set([
+    'atencion.iniciada',
+]);
+
 const ETIQUETAS_EVENTO = {
     'turno.alta': 'Nuevo turno en cola',
     'turno.asignado': 'Turno asignado',
@@ -79,6 +83,10 @@ export function ordenarColaPdv(alertas) {
 export function encolarAlertaPdv(colaActual, idsVistos, envelope, ahoraMs = Date.now()) {
     const normalizado = normalizarEnvelopePdv(envelope);
     if (!normalizado) {
+        return { cola: colaActual, idsVistos, encolado: false };
+    }
+
+    if (TIPOS_SILENCIOSOS.has(normalizado.tipo)) {
         return { cola: colaActual, idsVistos, encolado: false };
     }
 

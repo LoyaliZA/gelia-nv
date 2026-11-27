@@ -131,6 +131,57 @@ class ReatencionGerencialPdvTest extends TestCase
         Event::assertNotDispatched(TurnoReatencion::class);
     }
 
+    public function test_clave_idempotente_de_una_ventana_previa_no_se_reusa_en_silencio(): void
+    {
+        Event::fake([TurnoReatencion::class]);
+
+        $this->activarVendedor($this->vendedorDestino);
+        $turno = $this->crearTurnoEnReatencion($this->vendedorAnterior);
+        $clavePrevia = 'pdv:reatencion:'.$turno->id.':'.$this->vendedorDestino->id;
+
+        $this->actingAs($this->gerente)->postJson(
+            route('punto_venta.turnos.asignar_reatencion', $turno),
+            [
+                'version' => $turno->version,
+                'destino_user_id' => $this->vendedorDestino->id,
+                'idempotency_key' => $clavePrevia,
+            ],
+        )->assertOk();
+
+        $this->actingAs($this->vendedorDestino)->postJson(
+            route('punto_venta.turnos.cerrar_atencion', $turno->fresh()),
+            [
+                'version' => $turno->fresh()->version,
+                'idempotency_key' => 'pdv:cerrar:reatencion-clave-previa',
+                'motivo' => MotivosCierreAtencionTurnoPdv::VENTA,
+            ],
+        )->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_EN_REATENCION);
+
+        $turno = $turno->fresh();
+
+        $this->actingAs($this->gerente)->postJson(
+            route('punto_venta.turnos.asignar_reatencion', $turno),
+            [
+                'version' => $turno->version,
+                'destino_user_id' => $this->vendedorDestino->id,
+                'idempotency_key' => $clavePrevia,
+            ],
+        )->assertUnprocessable()
+            ->assertJsonValidationErrors(['idempotency_key']);
+
+        $this->actingAs($this->gerente)->postJson(
+            route('punto_venta.turnos.asignar_reatencion', $turno),
+            [
+                'version' => $turno->version,
+                'destino_user_id' => $this->vendedorDestino->id,
+                'idempotency_key' => 'pdv:reatencion:'.$turno->id.':'.$turno->version.':'.$this->vendedorDestino->id,
+            ],
+        )->assertOk()
+            ->assertJsonPath('turno.estado', TurnoPdv::ESTADO_ASIGNADO)
+            ->assertJsonPath('atencion.user_id', $this->vendedorDestino->id);
+    }
+
     public function test_gerente_asigna_a_otro_vendedor_disponible(): void
     {
         Event::fake([TurnoReatencion::class]);
