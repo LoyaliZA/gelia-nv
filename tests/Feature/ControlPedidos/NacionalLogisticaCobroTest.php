@@ -435,6 +435,45 @@ class NacionalLogisticaCobroTest extends TestCase
         $this->assertSame('0.00', number_format((float) $actual->costo_seguro, 2, '.', ''));
     }
 
+    public function test_delegado_actualiza_el_pdf_de_una_caja_con_respuesta_json(): void
+    {
+        Storage::fake('local');
+        $pedido = $this->pedido(CatalogoEstatusPedido::FASE_PENDIENTE_DE_GUIA);
+        $primera = $this->caja($pedido, ['orden' => 1, 'peso_real_kg' => 1]);
+        $segunda = $this->caja($pedido, ['orden' => 2, 'peso_real_kg' => 1]);
+        $carga = route('control_pedidos.delegado.guia_pdf.store', $pedido);
+        $retiro = route('control_pedidos.delegado.guia_pdf.destroy', $pedido);
+        $archivo = fn (string $nombre) => UploadedFile::fake()->create($nombre, 1, 'application/pdf');
+
+        $this->actingAs(User::factory()->create())->deleteJson($retiro, ['caja_id' => $segunda->id])->assertForbidden();
+        $this->usuario->givePermissionTo(Permission::findOrCreate('control_pedidos.delegado', 'web'));
+        $this->actingAs($this->usuario);
+        $this->guardarPdfCaja($pedido, $primera);
+        $this->postJson($carga, ['caja_id' => $segunda->id, 'guia_pdf' => UploadedFile::fake()->image('foto.jpg')])
+            ->assertUnprocessable()->assertJsonValidationErrors('guia_pdf');
+
+        $guia = $this->post($carga, ['caja_id' => $segunda->id, 'guia_pdf' => $archivo('guia.pdf')], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('guia.pedido_bma_caja_id', $segunda->id)
+            ->assertJsonPath('guia.nombre_original', 'guia.pdf')
+            ->assertJsonPath('guia.relacion_tipo', GuiasPdfPorCaja::AVANCE)
+            ->json('guia');
+        $this->get($guia['url'])->assertOk();
+
+        $reemplazo = $this->post($carga, ['caja_id' => $segunda->id, 'guia_pdf' => $archivo('reemplazo.pdf')], ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('guia.nombre_original', 'reemplazo.pdf')->json('guia.id');
+        $this->assertNotSame($guia['id'], $reemplazo);
+        $this->assertDatabaseHas('pedido_bma_documentos', ['id' => $guia['id'], 'activo' => false]);
+
+        $this->deleteJson($retiro, ['caja_id' => $segunda->id])->assertOk()->assertExactJson([
+            'guia' => null,
+            'message' => 'PDF de guía eliminado.',
+        ]);
+        $this->assertDatabaseHas('pedido_bma_documentos', ['id' => $reemplazo, 'activo' => false]);
+        $this->assertSame([$primera->id], GuiasPdfPorCaja::vigentes($pedido->fresh())->pluck('pedido_bma_caja_id')->all());
+        $this->deleteJson($retiro, ['caja_id' => $segunda->id + 1])->assertUnprocessable()->assertJsonStructure(['message']);
+    }
+
     public function test_cedis_confirma_todas_las_cajas_pendientes_con_las_guias_de_delegado(): void
     {
         Storage::fake('local');

@@ -142,6 +142,7 @@ export default function TablaDelegado({
     busqueda = '',
     cargando = false,
     onModalAbierto,
+    onPdfCajaGuardado,
     onIrAPagina,
     onLimpiarBusqueda,
     mensajeFiltroVacio = null,
@@ -303,6 +304,7 @@ export default function TablaDelegado({
                 pedido={pedidoDetalle}
                 onClose={cerrarDetalle}
                 onPedidoActualizado={setPedidoDetalle}
+                onPdfCajaGuardado={onPdfCajaGuardado}
                 onReportarError={(p) => setPedidoError(p)}
             />
             <ModalBitacoraPedido

@@ -7,6 +7,7 @@ import {
     X, Check, Upload, Eye, Trash2, AlertTriangle, User, Clock, FileText, Loader2, FileCheck, CheckCircle2,
 } from 'lucide-react';
 import { THEME_INPUT } from '../../../../utils/geliaTheme';
+import { reportarExitoOperacion } from '../../../../utils/geliaToast';
 import {
     badgeEstatusPedido,
     pedidoRequiereLogistica,
@@ -327,9 +328,12 @@ function CampoSubirGuiaPdf({ pedido, onVerPdf, soloLectura = false, onDone }) {
     );
 }
 
-function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onDone }) {
+function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onDone, onPdfActualizado }) {
     const archivo = useRef(null);
+    const botonCargar = useRef(null);
+    const botonRetirar = useRef(null);
     const [guardando, setGuardando] = useState(false);
+    const [error, setError] = useState('');
     const etiqueta = `caja ${indice + 1}`;
     const endpoint = route('control_pedidos.delegado.guia_pdf.store', pedido.id);
     const opciones = {
@@ -338,16 +342,38 @@ function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onD
         onSuccess: onDone,
         onFinish: () => setGuardando(false),
     };
-    const guardar = (datos) => {
+    const actualizarPdf = async (pdf) => {
+        if (guardando) return;
+        if (!pdf && !window.confirm(`¿Retirar el PDF de la ${etiqueta}?`)) return;
+
         setGuardando(true);
-        router.post(endpoint, { ...datos, caja_id: caja.id }, opciones);
-    };
-    const retirar = () => {
-        if (!window.confirm(`¿Retirar el PDF de la ${etiqueta}?`)) return;
-        setGuardando(true);
-        router.delete(route('control_pedidos.delegado.guia_pdf.destroy', pedido.id), {
-            ...opciones, data: { caja_id: caja.id },
-        });
+        setError('');
+        const headers = { Accept: 'application/json' };
+        try {
+            let respuesta;
+            if (pdf) {
+                const datos = new FormData();
+                datos.append('guia_pdf', pdf);
+                datos.append('caja_id', String(caja.id));
+                respuesta = await axios.post(endpoint, datos, { headers });
+            } else {
+                respuesta = await axios.delete(route('control_pedidos.delegado.guia_pdf.destroy', pedido.id), {
+                    headers, data: { caja_id: caja.id },
+                });
+                if (botonRetirar.current === document.activeElement) {
+                    botonCargar.current?.focus({ preventScroll: true });
+                }
+            }
+            onPdfActualizado(caja.id, respuesta.data.guia);
+            reportarExitoOperacion(respuesta.data.message);
+        } catch (fallo) {
+            const respuesta = fallo.response;
+            setError(respuesta?.status === 422
+                ? respuesta.data.message
+                : 'No se pudo confirmar el cambio del PDF. Revisa el documento y vuelve a intentarlo.');
+        } finally {
+            setGuardando(false);
+        }
     };
     const boton = `${BTN_SECONDARY} min-h-[44px] px-2 text-xs inline-flex items-center gap-1.5 whitespace-nowrap`;
 
@@ -369,19 +395,25 @@ function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onD
                         <input type="file" accept=".pdf,application/pdf" ref={archivo} hidden onChange={(event) => {
                             const pdf = event.target.files?.[0];
                             event.target.value = '';
-                            if (pdf && !guardando) guardar({ guia_pdf: pdf });
+                            if (pdf) actualizarPdf(pdf);
                         }} />
-                        <button type="button" className={boton} disabled={guardando} aria-label={`${guia ? 'Reemplazar' : 'Cargar'} PDF de la ${etiqueta}`} onClick={() => archivo.current?.click()}>
+                        <button type="button" ref={botonCargar} className={boton} aria-disabled={guardando}
+                            aria-label={`${guia ? 'Reemplazar' : 'Cargar'} PDF de la ${etiqueta}`}
+                            onClick={() => { if (!guardando) archivo.current?.click(); }}>
                             <Upload size={14} aria-hidden="true" /> {guardando ? 'Guardando…' : guia ? 'Reemplazar' : 'Cargar'}
                         </button>
                         {guia && (
-                            <button type="button" className={boton} disabled={guardando} aria-label={`Retirar PDF de la ${etiqueta}`} onClick={retirar}>
+                            <button type="button" ref={botonRetirar} className={boton} aria-disabled={guardando}
+                                aria-label={`Retirar PDF de la ${etiqueta}`} onClick={() => actualizarPdf(null)}>
                                 <Trash2 size={14} aria-hidden="true" /> Retirar
                             </button>
                         )}
                         {!guia && general && (
                             <button type="button" className={boton} disabled={guardando} aria-label={`Vincular PDF previo a la ${etiqueta}`} onClick={() => {
-                                if (window.confirm(`¿Vincular el PDF previo a la ${etiqueta}?`)) guardar({ guia_general_id: general.id });
+                                if (window.confirm(`¿Vincular el PDF previo a la ${etiqueta}?`)) {
+                                    setGuardando(true);
+                                    router.post(endpoint, { guia_general_id: general.id, caja_id: caja.id }, opciones);
+                                }
                             }}>
                                 <FileText size={14} aria-hidden="true" /> Vincular PDF previo
                             </button>
@@ -389,13 +421,14 @@ function GuiaPdfCaja({ pedido, caja, indice, guia, general, editable, onVer, onD
                     </>
                 )}
             </div>
+            {error && <p role="alert" className="m-0 text-xs theme-text-peligro">{error}</p>}
             {!guia && !editable && <span className="text-xs theme-text-muted">Sin PDF</span>}
         </div>
     );
 }
 
 export default function ModalDetalleDelegado({
-    abierto, onClose, pedido: pedidoInicial, onReportarError, onPedidoActualizado,
+    abierto, onClose, pedido: pedidoInicial, onReportarError, onPedidoActualizado, onPdfCajaGuardado,
 }) {
     const [pedido, setPedido] = useState(pedidoInicial);
     const [docPreview, setDocPreview] = useState(null);
@@ -443,6 +476,17 @@ export default function ModalDetalleDelegado({
     const codigoDir = codigoDireccionCliente(pedido.cliente?.numero_cliente, dir?.numero_direccion);
     const direccionTexto = textoDireccionParaGuia(dir, pedido.domicilio_entrega);
     const domicilioCompleto = textoDomicilioCompleto(dir, pedido.domicilio_entrega, pedido.codigo_postal);
+
+    const actualizarPdfCaja = (cajaId, guia) => {
+        setPedido((actual) => {
+            if (actual?.id !== pedido.id) return actual;
+            const documentos = (actual.documentos || []).filter((doc) => !(
+                doc.tipo === 'guia' && doc.activo && Number(doc.pedido_bma_caja_id) === Number(cajaId)
+            ));
+            return { ...actual, documentos: guia ? [...documentos, guia] : documentos };
+        });
+        onPdfCajaGuardado?.();
+    };
 
     /** Refresca el pedido sin cerrar el modal (puede haber salido del tab filtrado). */
     const recargarPedido = async () => {
@@ -574,6 +618,7 @@ export default function ModalDetalleDelegado({
                                                         <td className="px-3 py-2">
                                                             <GuiaPdfCaja pedido={pedido} caja={caja} indice={indice} guia={guiaDeCaja(caja)}
                                                                 general={guiaGeneral} onVer={setDocPreview} onDone={recargarPedido}
+                                                                onPdfActualizado={actualizarPdfCaja}
                                                                 editable={puedeGestionarCajas && caja.estatus_recoleccion !== 'recolectada'} />
                                                         </td>
                                                     )}

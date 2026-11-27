@@ -8,6 +8,7 @@
 - [verificado] La opción de Node evita la interferencia de Web Storage nativo en este entorno: `gestion-pedidos-docs/M01_REFINAMIENTO_CAPTURA_MUNICIPAL_CODEX.md:94`.
 - [verificado] PHPUnit fuerza SQLite en memoria, broadcast null y cola sync: `phpunit.xml:27` y `:29` y `:32`.
 - [verificado] Concurrencia MySQL requiere habilitación explícita y base exclusiva; normalmente se omite: `tests/Feature/ControlPedidos/InstruccionRegistrarConcurrenciaMysqlTest.php:13`.
+- [ejecutado 2026-11-27: 2/2 en verde en las 2 corridas finales consecutivas, espera real de bloqueo ~1,7 s; migraciones revertidas al terminar] Concurrencia MySQL de Multienvío (`MultienvioNacionalConcurrenciaMysqlTest`, script `tests/Support/ControlPedidos/multienvio_nacional_concurrencia.php`): se omite salvo `MULTIENVIO_MYSQL=1`; usa la MySQL de desarrollo del `.env` (host `mysql`) y exige aplicar antes solo `2026_11_27_100000` y `2026_11_27_100100` con `--path` (y revertirlas después). Crea solo filas `MULTIENVIO-TEST-<aleatorio>` (usuario, paquetería, tipo de caja, pedido, cajas, documentos, dirección; el servicio añade grupo, envíos, historial y referencias) y siempre las borra por id; copias de archivos en `/tmp`. Comando: `docker exec -u sail -e MULTIENVIO_MYSQL=1 -e APP_CONFIG_CACHE=/tmp/gelia-test-config.php -e APP_ROUTES_CACHE=/tmp/gelia-test-routes.php gelianv-laravel.test-1 php artisan test --filter=MultienvioNacionalConcurrenciaMysqlTest`.
 - Para concurrencia, revisar primero el preparador y [contrato de aislamiento](../../gestion-pedidos-docs/TIENDA_DECISIONES_VIGENTES.md#215--criterios-de-verificación); no apuntar a la base operativa ni ejecutar preparadores por rutina.
 - Build solo cuando se cambie interfaz y se requiera publicarla: `./vendor/bin/sail npm run build`; no aplica a esta entrega documental. Reglas del entorno en `AGENTS.md:27`.
 
@@ -17,6 +18,7 @@
 | Captura/consulta | `ConcurrenciaCapturaPedidoTest`, `SolicitudRegistrarTiendaTest`, `useActualizacionesPedidos.test.jsx` |
 | Municipal | `MunicipalOrdinarioM01Test`, `ConversionMotorATest`, `ConversionModalidadM02Test`, `ResguardoMunicipalOla1Test`, `ResguardoMunicipalOla2Test`, `Municipal/registroMunicipal.test.jsx` |
 | Conversión P0 | `ConversionModalidadM02Test` caso 10: GET pendiente 150, pago bloqueado con consulta abierta, cierre municipal, exhibición cubre solo transporte |
+| Multienvío nacional | `MultienvioNacionalModeloTest`, `…EvaluarTest`, `…DecisionTest`, `…BorradorTest`, `…HechosPreviosTest`, `…ConfirmarTest`, `…HttpTest` (filtro `MultienvioNacional`) y `MobileEspejoRutasTest`; concurrencia MySQL en `MultienvioNacionalConcurrenciaMysqlTest` (ver abajo) |
 | Pago/remisión | `ImportesPagoTiendaTest`, `RemisionAuditoriaTest`, `BlindarPagoTotalPedidoTest` |
 | Tienda/custodia | `InstruccionEntregaVigenteTest`, `TransferenciaTiendaTest`, `RecorridoTiendaIntegralTest` |
 | CEDIS/guías | `EmpaqueBultosCedisTest`, `ControlPedidosFase22Test`, `ControlPedidosActualizarGuiasTest` |

@@ -24,6 +24,7 @@ import ModalEliminarRegistroPedido from './Partials/ModalEliminarRegistroPedido'
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
 import ModalAnexoExtraordinario from './Nacional/ModalAnexoExtraordinario';
+import { firmaMultienvio } from './Partials/EtiquetaMultienvio';
 import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import useListadoDiscreto from './Partials/useListadoDiscreto';
@@ -167,7 +168,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 && fresco.consulta_cerrada_at === m.pedido.consulta_cerrada_at
                 && JSON.stringify(fresco.solicitud_preparacion ?? null) === JSON.stringify(m.pedido.solicitud_preparacion ?? null)
                 && Number(fresco.peso_real_kg) === Number(m.pedido.peso_real_kg)
-                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas);
+                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas)
+                && (fresco.multienvio_nacional_id ?? null) === (m.pedido.multienvio_nacional_id ?? null)
+                && (fresco.multienvio_orden ?? null) === (m.pedido.multienvio_orden ?? null)
+                && firmaMultienvio(fresco) === firmaMultienvio(m.pedido);
             if (mismo) return m;
             return { ...m, pedido: fresco };
         };

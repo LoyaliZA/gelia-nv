@@ -105,6 +105,8 @@ final class AccionesHistorialPedidoBma
 
     public const DEVOLUCION_PDV = 'devolucion_pdv';
 
+    public const MULTIENVIO_CONFIRMADO = 'multienvio_confirmado';
+
     /** @var array<string, string> */
     public const ETIQUETAS = [
         self::CREACION_BORRADOR => 'Creación del borrador',
@@ -201,6 +203,7 @@ final class AccionesHistorialPedidoBma
         self::ERROR_ADMIN_REPORTE_PAGO => 'Error reportado por Administración (pagos)',
         self::ENTREGA_PDV => 'Entrega presencial en sucursal (Punto de venta)',
         self::DEVOLUCION_PDV => 'Devolución física confirmada en sucursal (Punto de venta)',
+        self::MULTIENVIO_CONFIRMADO => 'Multienvío confirmado',
     ];
 
     public static function etiqueta(?string $accion): ?string

@@ -1,6 +1,7 @@
 # Mapa — Gestión de pedidos (Logística)
 
 - [Registro y compatibilidad](modulos/REGISTRO_PEDIDOS.md): captura comercial, propiedad y formularios actuales/legados.
+- Multienvío nacional (backend Fase 1, sin UI): sección «Multienvío nacional» de [Registro y compatibilidad](modulos/REGISTRO_PEDIDOS.md); servicios en `app/Services/ControlPedidos/Nacional/Multienvio/`.
 - [Consultas y sincronización](modulos/CONSULTAS_DISPONIBILIDAD.md): excepciones, ajustes, cierre y lectura entre actores.
 - [Envío municipal](modulos/ENVIO_MUNICIPAL.md): terminal, expediente, transporte conocido/diferido, conversión P0, resguardo de envío (M-04 a M-10) y recorrido físico CEDIS→PDV con carátula y salida a terminal, piezas adicionales (M-03b), cambio a recolección en sucursal (M-07) y saldo de envío (S-06).
 - [Auditoría y pagos](modulos/AUDITORIA_PAGOS.md): exhibiciones, SAF, revisión, crédito y remisión.

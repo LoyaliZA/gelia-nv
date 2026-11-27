@@ -4,6 +4,8 @@ import { Truck } from 'lucide-react';
 import ContinuacionEnvioNacional from './ContinuacionEnvioNacional';
 import SeguimientoSolicitudNacional from './SeguimientoSolicitudNacional';
 import ModalAnexoExtraordinario from './ModalAnexoExtraordinario';
+import PanelMultienvioNacional, { multienvioBloqueaCotizacion } from './PanelMultienvioNacional';
+import useMultienvioNacional from './useMultienvioNacional';
 import SelectorProducto from '../../../Components/Almacenes/SelectorProducto';
 import GaleriaEvidenciasPedido from '../Partials/GaleriaEvidenciasPedido';
 import { uuidSolicitud } from '../../../utils/uuidSolicitud';
@@ -77,9 +79,10 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
     const mercanciaGuardada = solicitud.piezas_nacionales_vigentes || solicitud.piezas_nacionales || [];
     const mercancia = !enviada && mercanciaEditada ? piezas : mercanciaGuardada;
     const capturaIncompleta = Boolean(producto || descripcionCaptura.trim() || archivoCaptura.length);
+    const [multienvioSucio, setMultienvioSucio] = useState(false);
     useEffect(() => {
-        onDirtyChange?.(!enviada && (mercanciaEditada || paqueteriaEditada || salidaEditada || capturaIncompleta));
-    }, [enviada, mercanciaEditada, paqueteriaEditada, salidaEditada, capturaIncompleta, onDirtyChange]);
+        onDirtyChange?.(multienvioSucio || (!enviada && (mercanciaEditada || paqueteriaEditada || salidaEditada || capturaIncompleta)));
+    }, [enviada, mercanciaEditada, paqueteriaEditada, salidaEditada, capturaIncompleta, multienvioSucio, onDirtyChange]);
     useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
     useEffect(() => {
         if (!paqueteriaEditada) setPaqueteriaId(String(pedido?.catalogo_paqueteria_id || ''));
@@ -94,6 +97,27 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
         || (actual?.cajas || []).some((caja) => caja.estatus_recoleccion === 'recolectada' || caja.recolectada_at);
     const puedeCambiarPaqueteria = cerrada && !yaSalio && !cambio && elegida?.nombre === 'PAQ. PENDIENTE';
     const guiaInvalidada = actual?.invalidacion_guia || solicitud.invalidacion_guia;
+    // Multienvío: solo con la consulta cerrada y dos o más cajas activas, o si el pedido ya pertenece a un grupo.
+    const cajasActivas = (actual?.cajas || []).filter((caja) => !['retirada', 'cancelada'].includes(caja.estado_operativo));
+    const resumenMultienvio = actual?.multienvio || null;
+    const multienvioHabilitado = Boolean(actual?.id) && cerrada && !cambio && (cajasActivas.length >= 2 || Boolean(resumenMultienvio));
+    const multienvio = useMultienvioNacional({
+        pedidoId: actual?.id,
+        habilitado: multienvioHabilitado,
+        clave: [actual?.consulta_cerrada_at, resumenMultienvio?.estado, resumenMultienvio?.n_total, cajasActivas.map((caja) => caja.uuid_operativo).join(',')].join('|'),
+        // Al repartirse, el origen queda como envío 1 con su propia caja e importe: se relee la consulta y se adopta.
+        onConfirmado: async () => {
+            try {
+                const { data } = await axios.get(`/control-pedidos/${actual.id}/consulta-nacional`, { headers: { Accept: 'application/json' } });
+                if (data) adoptar(data);
+            } catch (fallo) {
+                setError(mensajeDe(fallo, 'El multienvío se confirmó, pero no se pudo actualizar el pedido. Cierra y vuelve a abrirlo.'));
+            }
+        },
+    });
+    const cotizacionRetenida = multienvioBloqueaCotizacion({
+        habilitado: multienvioHabilitado, multienvio, resumen: resumenMultienvio, cajasActivas: cajasActivas.length,
+    });
 
     const adoptar = (lectura) => {
         const siguiente = { ...actual, ...lectura };
@@ -438,7 +462,10 @@ export default function FormularioRegistrarNacional({ pedido, catalogos = {}, gu
                     </button>
                 </section>
             )}
-            {cerrada && !yaSalio && !cambio && actual?.pesaje_respondido_at && elegida && (
+            {multienvioHabilitado && (
+                <PanelMultienvioNacional pedido={actual} multienvio={multienvio} onDirtyChange={setMultienvioSucio} onVer={onVer} bloqueado={bloqueado} />
+            )}
+            {cerrada && !yaSalio && !cambio && actual?.pesaje_respondido_at && elegida && !cotizacionRetenida && (
                 <ContinuacionEnvioNacional
                     key={`${actual.id}-${elegida.id}`}
                     pedido={actual} catalogos={catalogos}

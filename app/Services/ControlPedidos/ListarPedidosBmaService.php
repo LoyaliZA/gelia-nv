@@ -11,6 +11,7 @@ use App\Services\ControlPedidos\Municipal\EtiquetaConsultaMunicipal;
 use App\Support\ControlPedidos\ConsultaMunicipal;
 use App\Support\ControlPedidos\ContextoDepartamentoPedido;
 use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
+use App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio;
 use App\Support\ControlPedidos\RespuestaPreparacionTienda;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
@@ -35,17 +36,26 @@ class ListarPedidosBmaService
         $this->aplicarFiltros($query, $filtros, $usuario);
 
         if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
+            $pedidos = $query->get();
+            if ($usuario) {
+                ResumenGrupoMultienvio::paraPagina($pedidos, $usuario);
+            }
+
+            return $pedidos->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
         }
 
-        return $query->paginate(max(1, $porPagina))->withQueryString()->through(
-            fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario)
-        );
+        $paginador = $query->paginate(max(1, $porPagina))->withQueryString();
+        if ($usuario) {
+            ResumenGrupoMultienvio::paraPagina($paginador->getCollection(), $usuario);
+        }
+
+        return $paginador->through(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
     }
 
     public function presentar(PedidoBma $pedido, User $usuario): PedidoBma
     {
         $pedido->load($this->relacionesConsulta());
+        ResumenGrupoMultienvio::paraPagina(collect([$pedido]), $usuario);
 
         return $this->anexarFlagsVista($pedido, $usuario);
     }

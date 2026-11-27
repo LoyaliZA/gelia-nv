@@ -6,6 +6,7 @@ use App\Models\Cliente;
 use App\Models\ClienteDireccion;
 use App\Models\EnlaceDireccion;
 use App\Models\SolicitudDireccion;
+use App\Support\Clientes\Direcciones\ResolverAccionEnlaceDireccion;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -24,7 +25,7 @@ class GenerarEnlaceDireccionService
      */
     public function ejecutar(Cliente $cliente, array $opciones = []): array
     {
-        $accion = $opciones['accion'] ?? null;
+        $accion = ResolverAccionEnlaceDireccion::paraCliente($cliente, $opciones['accion'] ?? null);
         $direccionId = isset($opciones['direccion_id']) ? (int) $opciones['direccion_id'] : null;
 
         if ($accion === SolicitudDireccion::ACCION_ACTUALIZAR) {

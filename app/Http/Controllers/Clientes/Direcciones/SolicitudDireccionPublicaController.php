@@ -8,6 +8,7 @@ use App\Models\ClienteDireccion;
 use App\Models\SolicitudDireccion;
 use App\Services\Clientes\Direcciones\AplicarDireccionPublicaDesdeEnlaceService;
 use App\Services\Clientes\Direcciones\ValidarEnlaceDireccionService;
+use App\Support\Clientes\Direcciones\ResolverAccionEnlaceDireccion;
 use App\Support\ControlPedidos\CodigoDireccionCliente;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -57,13 +58,7 @@ class SolicitudDireccionPublicaController extends Controller
             ]);
         }
 
-        if (! filled($enlace->accion_permitida)) {
-            return $this->vistaConfirmacion([
-                'aplicado' => false,
-                'enlace_invalido' => true,
-                'motivo' => 'sin_accion',
-            ]);
-        }
+        $accionPermitida = ResolverAccionEnlaceDireccion::desdeEnlace($enlace);
 
         try {
             $enlace = $validador->ejecutar($token);
@@ -101,10 +96,10 @@ class SolicitudDireccionPublicaController extends Controller
             'modo_simplificado' => true,
             'cliente' => $clienteResumen,
             'direcciones' => $direcciones,
-            'accion_permitida' => $enlace->accion_permitida,
+            'accion_permitida' => $accionPermitida,
             'acciones' => [[
-                'value' => $enlace->accion_permitida,
-                'label' => match ($enlace->accion_permitida) {
+                'value' => $accionPermitida,
+                'label' => match ($accionPermitida) {
                     SolicitudDireccion::ACCION_PRIMERA => 'Registrar primera dirección',
                     SolicitudDireccion::ACCION_ACTUALIZAR => 'Actualizar dirección',
                     default => 'Añadir dirección adicional',

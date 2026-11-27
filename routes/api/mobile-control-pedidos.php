@@ -14,6 +14,7 @@ use App\Http\Controllers\ControlPedidos\DireccionesAuxiliarController;
 use App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController;
 use App\Http\Controllers\ControlPedidos\DocumentoPreparacionController;
 use App\Http\Controllers\ControlPedidos\MovimientosTiendaController;
+use App\Http\Controllers\ControlPedidos\MultienvioNacionalController;
 use App\Http\Controllers\ControlPedidos\Municipal\CambioATiendaMunicipalController;
 use App\Http\Controllers\ControlPedidos\Municipal\ComplementoMunicipalController;
 use App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController;
@@ -53,6 +54,7 @@ Route::get('mobile/control-pedidos/{pedidoBma}/consulta-nacional', [PedidoBmaCon
 Route::get('mobile/control-pedidos/{pedidoBma}/conversion-modalidad', [ConversionModalidadController::class, 'show'])->middleware(['can:control_pedidos.crear']);
 Route::get('mobile/control-pedidos/{pedidoBma}/disponibilidad-tienda', [DisponibilidadTiendaController::class, 'show'])->middleware([]);
 Route::get('mobile/control-pedidos/{pedidoBma}/movimientos-tienda', [MovimientosTiendaController::class, 'show'])->middleware([]);
+Route::get('mobile/control-pedidos/{pedidoBma}/multienvio', [MultienvioNacionalController::class, 'show'])->middleware([]);
 Route::get('mobile/control-pedidos/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->middleware(['can:control_pedidos.crear']);
 Route::get('mobile/control-pedidos/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->middleware(['can:control_pedidos.auditar']);
 Route::get('mobile/control-pedidos/{pedidoBma}/transferencia-tienda', [TransferenciaTiendaController::class, 'show'])->middleware([]);
@@ -94,6 +96,9 @@ Route::post('mobile/control-pedidos/{pedidoBma}/cancelacion-nacional', [PedidoBm
 Route::post('mobile/control-pedidos/{pedidoBma}/cancelar', [PedidoBmaController::class, 'cancelar'])->middleware(['can:control_pedidos.cancelar']);
 Route::post('mobile/control-pedidos/{pedidoBma}/cargar-guia-cliente', [PedidoBmaController::class, 'cargarGuiaCliente'])->middleware(['can:control_pedidos.crear']);
 Route::post('mobile/control-pedidos/{pedidoBma}/cerrar-consulta', [PedidoBmaController::class, 'cerrarConsulta'])->middleware(['can:control_pedidos.crear']);
+Route::post('mobile/control-pedidos/{pedidoBma}/multienvio/confirmar', [MultienvioNacionalController::class, 'confirmar'])->middleware(['can:control_pedidos.crear']);
+Route::post('mobile/control-pedidos/{pedidoBma}/multienvio/decision', [MultienvioNacionalController::class, 'decision'])->middleware(['can:control_pedidos.crear']);
+Route::put('mobile/control-pedidos/{pedidoBma}/multienvio/borrador', [MultienvioNacionalController::class, 'borrador'])->middleware(['can:control_pedidos.crear']);
 Route::post('mobile/control-pedidos/{pedidoBma}/cobertura-tienda', [PedidoBmaController::class, 'coberturaTienda'])->middleware(['can:control_pedidos.crear']);
 Route::post('mobile/control-pedidos/{pedidoBma}/completar-envio-resguardo', [PedidoBmaController::class, 'completarEnvioResguardo'])->middleware(['can:control_pedidos.crear']);
 Route::post('mobile/control-pedidos/{pedidoBma}/confirmar-pedido-tienda', [PedidoBmaController::class, 'confirmarPedidoTienda'])->middleware(['can:control_pedidos.crear']);
