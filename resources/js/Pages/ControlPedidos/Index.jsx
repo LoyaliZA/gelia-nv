@@ -1,5 +1,6 @@
 import useActualizacionesPedidos from './Partials/useActualizacionesPedidos';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Head, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
@@ -308,8 +309,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
         if (!destino) return;
         document.body.classList.add('gelia-cambio-envio');
         setTimeout(() => document.body.classList.remove('gelia-cambio-envio'), 400);
-        setModalForm((m) => ({ ...m, pedido: destino, instancia: `mev-${destino.multienvio_nacional_id}-${destino.id}` }));
         const restaurar = () => { const el = contenedorDesplazable(); if (el) el.scrollTop = posicion; };
+        // flushSync: el cambio y la posición se aplican en el mismo cuadro, antes de pintar.
+        flushSync(() => setModalForm((m) => ({ ...m, pedido: { ...destino, __precargado: true }, instancia: `mev-${destino.multienvio_nacional_id}-${destino.id}` })));
+        restaurar();
         requestAnimationFrame(() => { restaurar(); requestAnimationFrame(restaurar); });
     };
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });

@@ -364,7 +364,7 @@ export default function FormularioRegistrarTienda({
     const [saldoFavor, setSaldoFavor] = useState(Number(pedido?.saldo_a_favor || 0) > 0 ? pedido.saldo_a_favor : '');
     const [safAplicaciones, setSafAplicaciones] = useState(() => aplicacionesDe(pedido));
     const [safTocado, setSafTocado] = useState(false);
-    const [lecturaOperativaLista, setLecturaOperativaLista] = useState(!pedidoInicial?.id);
+    const [lecturaOperativaLista, setLecturaOperativaLista] = useState(!pedidoInicial?.id || Boolean(pedidoInicial?.__precargado));
     const [revisionLecturaOperativa, setRevisionLecturaOperativa] = useState(0);
     const [solicitudViva, setSolicitudViva] = useState(solicitud);
     const solicitudVivaRef = useRef(solicitud); solicitudVivaRef.current = solicitudViva;
@@ -904,7 +904,7 @@ export default function FormularioRegistrarTienda({
         if (!abierto || !pedidoId || resultadoConversion) return;
         let vigente = true;
         const baseAlLeer = baseRef.current;
-        setLecturaOperativaLista(false);
+        if (!pedidoInicial?.__precargado) setLecturaOperativaLista(false);
         const lectura = deseadaRef.current === 'nacional' ? 'consulta-nacional' : 'disponibilidad-tienda';
         axios.get(`/control-pedidos/${pedidoId}/${lectura}`, { headers: cabeceras() }).then(({ data }) => {
             if (vigente && data?.id === pedidoId) {
