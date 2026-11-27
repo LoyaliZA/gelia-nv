@@ -1307,6 +1307,7 @@ export default function ModalFormFactura({ onClose, onExito, onBorradorCreado, m
                         </div>
                     <div className={`space-y-2 ${wrapCampoFactura('vouchers', camposIncorrectos, factura)}`}>
                     <ZonaAdjuntoVoucher
+                        permitirZip={!esReparacion}
                         vouchers={vouchers}
                         onChange={setVouchers}
                         disabled={processing || generandoEnlace}

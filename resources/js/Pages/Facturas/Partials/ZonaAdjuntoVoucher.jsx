@@ -2,9 +2,9 @@ import React, { useEffect, useId, useRef, useState } from 'react';
 import { Upload, Trash2, FileText, ExternalLink, Loader2 } from 'lucide-react';
 import { compressImageToWebp, validateImageSource } from '../../../utils/compressImage';
 import EvidenciaSolicitud from '@/Components/Solicitudes/EvidenciaSolicitud';
-import { MAX_VOUCHERS, archivoExcedeLimite, mensajeLimiteArchivo } from './limitesAdjuntosFactura';
+import { MAX_VOUCHERS, MAX_BYTES_ZIP_COMPROBANTE, esZipComprobante, archivoExcedeLimite, mensajeLimiteArchivo } from './limitesAdjuntosFactura';
 
-export default function ZonaAdjuntoVoucher({ vouchers, onChange, error, existentes = [], onQuitarExistente, maxTotal = MAX_VOUCHERS, disabled = false, onBusyChange }) {
+export default function ZonaAdjuntoVoucher({ vouchers, onChange, error, existentes = [], onQuitarExistente, maxTotal = MAX_VOUCHERS, disabled = false, onBusyChange, permitirZip = false }) {
     const id = useId();
     const [previews, setPreviews] = useState(new Map());
     const [errorLocal, setErrorLocal] = useState('');
@@ -12,10 +12,10 @@ export default function ZonaAdjuntoVoucher({ vouchers, onChange, error, existent
     const busyRef = useRef(false);
     const total = existentes.length + vouchers.length;
     useEffect(() => {
-        const urls = new Map(vouchers.map((file) => [file, URL.createObjectURL(file)]));
+        const urls = new Map(vouchers.filter((file) => !permitirZip || !esZipComprobante(file)).map((file) => [file, URL.createObjectURL(file)]));
         setPreviews(urls);
         return () => urls.forEach((url) => URL.revokeObjectURL(url));
-    }, [vouchers]);
+    }, [vouchers, permitirZip]);
 
     const agregar = async (files) => {
         if (disabled || busyRef.current) return;
@@ -26,10 +26,11 @@ export default function ZonaAdjuntoVoucher({ vouchers, onChange, error, existent
         try {
             for (const file of lista) {
                 if (actuales.length + existentes.length >= maxTotal) { problemas.add(`Puedes adjuntar hasta ${maxTotal} comprobantes.`); continue; }
-                if (archivoExcedeLimite(file)) { problemas.add(`${file.name}: ${mensajeLimiteArchivo()}`); continue; }
+                const esZip = permitirZip && esZipComprobante(file);
+                if (esZip ? file.size > MAX_BYTES_ZIP_COMPROBANTE : archivoExcedeLimite(file)) { problemas.add(`${file.name}: ${esZip ? 'Cada archivo ZIP debe pesar máximo 10 MB.' : mensajeLimiteArchivo()}`); continue; }
                 if (actuales.some((v) => v.name === file.name && v.size === file.size && v.lastModified === file.lastModified)) { problemas.add(`${file.name} ya está adjunto.`); continue; }
-                if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) { actuales.push(file); continue; }
-                if (!file.type.startsWith('image/')) { problemas.add(`${file.name}: selecciona una imagen JPG, PNG, WebP o un PDF.`); continue; }
+                if (esZip || file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) { actuales.push(file); continue; }
+                if (!file.type.startsWith('image/')) { problemas.add(`${file.name}: selecciona una imagen JPG, PNG, WebP o un PDF${permitirZip ? ' o ZIP' : ''}.`); continue; }
                 const problema = validateImageSource(file, 'Comprobante');
                 if (problema) { problemas.add(problema); continue; }
                 try { actuales.push(await compressImageToWebp(file)); }
@@ -59,9 +60,11 @@ export default function ZonaAdjuntoVoucher({ vouchers, onChange, error, existent
             </div>)}
             {total < maxTotal && <label className={`gelia-adjunto-control w-full py-4 ${disabled || busy ? 'opacity-50' : ''}`}>
                 {busy ? <Loader2 className="w-5 h-5 animate-spin" aria-hidden="true" /> : <Upload className="w-5 h-5" aria-hidden="true" />}{busy ? 'Preparando archivos…' : 'Agregar comprobantes'}
-                <input type="file" className="sr-only" aria-label="Agregar comprobantes de pago" accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf" multiple disabled={disabled || busy} onChange={(event) => { agregar(event.target.files); event.target.value = ''; }} />
+                <input type="file" className="sr-only" aria-label="Agregar comprobantes de pago" accept={`.jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf${permitirZip ? ',.zip,application/zip,application/x-zip-compressed' : ''}`} multiple disabled={disabled || busy} onChange={(event) => { agregar(event.target.files); event.target.value = ''; }} />
             </label>}
-            <p className="text-xs theme-text-muted m-0">Arrastra archivos, selecciona imágenes o PDFs, o pega una captura. Hasta {maxTotal} comprobantes de 5 MB cada uno.</p>
+            <p className="text-xs theme-text-muted m-0">{permitirZip
+                ? `Arrastra archivos, selecciona imágenes, PDFs o ZIP, o pega una captura. Hasta ${maxTotal} comprobantes. JPG, JPEG, PNG, WebP y PDF: máximo 5 MB por archivo. ZIP: máximo 10 MB por archivo.`
+                : `Arrastra archivos, selecciona imágenes o PDFs, o pega una captura. Hasta ${maxTotal} comprobantes de 5 MB cada uno.`}</p>
         </div>
         <p className="sr-only" role="status">{busy ? 'Preparando archivos. Espera antes de guardar.' : `${total} comprobantes adjuntos`}</p>
         {(error || errorLocal) && <p role="alert" className="text-sm theme-text-peligro m-0">{error || errorLocal}</p>}
