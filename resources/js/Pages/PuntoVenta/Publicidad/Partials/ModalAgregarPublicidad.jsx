@@ -2,7 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { ImagePlus, Pause, Play, RotateCcw } from 'lucide-react';
-import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODAL_SHELL } from '@/utils/geliaTheme';
+import {
+    THEME_BTN_PRIMARY,
+    THEME_BTN_SECONDARY,
+    THEME_MODAL_BODY,
+    THEME_MODAL_FOOTER,
+    THEME_MODAL_OVERLAY,
+    THEME_MODAL_SHELL,
+} from '@/utils/geliaTheme';
 import { formatearDuracionSeg, formatearTamanoBytes } from '@/utils/estadoPublicidadPdv';
 import { reportarExitoOperacion, reportarMensajeOperacion } from '@/utils/geliaToast';
 import { subirMedioDirecto } from '@/utils/medios/mediaUploader';
@@ -63,6 +70,7 @@ const FORMULARIO_INICIAL = {
     alcance: 'sucursal',
     ajuste: 'cover',
     rotacion: 0,
+    rotacion_kiosko: null,
     publicacion: 'ahora',
     duracion_seg: 10,
     aplicar_duracion_todas: true,
@@ -142,6 +150,7 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                 alcance: form.alcance,
                 ajuste: form.ajuste,
                 rotacion: form.rotacion ?? 0,
+                rotacion_kiosko: form.rotacion_kiosko,
                 activa: form.publicacion !== 'deshabilitada',
                 ...(archivo.tipo === 'imagen' ? { duracion_seg: duracionImagen } : {}),
                 vigente_desde: form.publicacion === 'programar' ? (form.vigente_desde || null) : null,
@@ -193,10 +202,13 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="agregar-publicidad-titulo"
-                className={`${THEME_MODAL_SHELL} max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 md:p-6 space-y-4`}
+                className={`${THEME_MODAL_SHELL} max-w-2xl w-full`}
                 onClick={(event) => event.stopPropagation()}
             >
-                <h2 id="agregar-publicidad-titulo" className="text-lg font-black italic uppercase tracking-tighter theme-text-main m-0">Agregar publicidad</h2>
+                <header className="shrink-0 px-4 pt-4 md:px-6 md:pt-6">
+                    <h2 id="agregar-publicidad-titulo" className="text-lg font-black italic uppercase tracking-tighter theme-text-main m-0">Agregar publicidad</h2>
+                </header>
+                <div className={`${THEME_MODAL_BODY} px-4 py-3 md:px-6 space-y-4`}>
                 <label
                     className="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed theme-border p-4 text-center"
                     onDragOver={(event) => event.preventDefault()}
@@ -274,8 +286,10 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                         url={archivos.find((archivo) => archivo.previewUrl)?.previewUrl}
                         tipo={archivos.find((archivo) => archivo.previewUrl)?.tipo || tipoFormulario}
                         rotacion={form.rotacion}
+                        rotacionKiosko={form.rotacion_kiosko}
                         ajuste={form.ajuste}
                         onRotacionChange={(rotacion) => setForm((actual) => ({ ...actual, rotacion }))}
+                        onRotacionKioskoChange={(rotacion_kiosko) => setForm((actual) => ({ ...actual, rotacion_kiosko }))}
                     />
                 ) : null}
                 <FormularioPublicidad
@@ -287,7 +301,8 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                     mostrarAplicarDuracion={hayImagenes && archivos.filter((archivo) => archivo.tipo === 'imagen').length > 1}
                 />
                 <p className="text-sm theme-text-muted m-0">{resumen}</p>
-                <div className="flex justify-end gap-2">
+                </div>
+                <div className={`${THEME_MODAL_FOOTER} flex justify-end gap-2 px-4 py-3 md:px-6`}>
                     <button type="button" className={THEME_BTN_SECONDARY} disabled={enviando} onClick={onClose}>Cerrar</button>
                     <button type="button" className={THEME_BTN_PRIMARY} disabled={enviando || !archivos.some((archivo) => archivo.estado !== 'completado')} onClick={confirmar}>
                         {enviando ? 'Agregando…' : 'Agregar a la playlist'}

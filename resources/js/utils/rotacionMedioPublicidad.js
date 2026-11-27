@@ -13,6 +13,14 @@ export function girarRotacionPublicidad(actual, sentido) {
     return (actualNorm + paso + 360) % 360;
 }
 
+export function rotacionParaPantalla(item, superficie) {
+    if (superficie === 'kiosko') {
+        return normalizarRotacionPublicidad(item?.rotacion_kiosko ?? item?.rotacion);
+    }
+
+    return normalizarRotacionPublicidad(item?.rotacion);
+}
+
 export function estiloCapaRotada(rotacion, anchoPadre, altoPadre) {
     const grados = normalizarRotacionPublicidad(rotacion);
     const ancho = Number(anchoPadre) || 0;

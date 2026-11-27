@@ -49,6 +49,7 @@ class PdvPantallaPublicidad extends Model
         'duracion_seg',
         'ajuste',
         'rotacion',
+        'rotacion_kiosko',
         'volumen_pct',
         'orden',
         'activa',

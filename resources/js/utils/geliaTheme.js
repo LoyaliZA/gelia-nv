@@ -23,6 +23,8 @@ export const THEME_BTN_PRIMARY = 'theme-btn-primary';
 export const THEME_BTN_SECONDARY = 'theme-btn-secondary';
 export const THEME_MODAL_OVERLAY = 'gelia-modal-overlay animate-fade-in';
 export const THEME_MODAL_SHELL = 'gelia-modal-shell';
+export const THEME_MODAL_BODY = 'gelia-modal-body';
+export const THEME_MODAL_FOOTER = 'gelia-modal-footer';
 
 /** Diferir cierre de modal para evitar que el clic atraviese al overlay padre. */
 export const deferModalAction = (fn, ms = 50) => {

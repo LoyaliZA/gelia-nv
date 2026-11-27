@@ -5,6 +5,7 @@ import {
     estiloEscenarioKiosko,
     girarRotacionPublicidad,
     normalizarRotacionPublicidad,
+    rotacionParaPantalla,
     urlKioskoConDisposicion,
 } from './rotacionMedioPublicidad';
 
@@ -50,6 +51,12 @@ describe('rotacionMedioPublicidad', () => {
 
         const automatico = estiloEscenarioKiosko('auto', 1920, 1080);
         expect(automatico.transform).toBeUndefined();
+    });
+
+    it('usa rotacion propia del kiosko o hereda la de sala', () => {
+        expect(rotacionParaPantalla({ rotacion: 0, rotacion_kiosko: 90 }, 'kiosko')).toBe(90);
+        expect(rotacionParaPantalla({ rotacion: 180, rotacion_kiosko: null }, 'kiosko')).toBe(180);
+        expect(rotacionParaPantalla({ rotacion: 90, rotacion_kiosko: 270 }, 'sala')).toBe(90);
     });
 
     it('añade disposicion vertical a la URL del kiosko', () => {
