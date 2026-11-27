@@ -122,6 +122,7 @@ export default function Index({
                 alcance: form.alcance,
                 ajuste: form.ajuste,
                 rotacion: form.rotacion,
+                rotacion_kiosko: form.rotacion_kiosko,
                 duracion_seg: item.tipo === 'imagen' ? form.duracion_seg : undefined,
                 vigente_desde: form.vigente_desde || null,
                 vigente_hasta: form.vigente_hasta || null,

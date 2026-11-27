@@ -69,7 +69,7 @@ export default function ModalReatencionDesdeVendedorGerencia({
                 {
                     version: turnoSeleccionado.version,
                     destino_user_id: Number(persona.id),
-                    idempotency_key: `pdv:reatencion:${turnoSeleccionado.id}:${persona.id}`,
+                    idempotency_key: `pdv:reatencion:${turnoSeleccionado.id}:${turnoSeleccionado.version}:${persona.id}`,
                 },
             );
             await onActualizado?.(data);

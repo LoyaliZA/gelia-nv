@@ -14,6 +14,8 @@ class TurnoPdvEvento extends Model
 
     public const TIPO_BAJA_COLA = 'turno.baja_cola';
 
+    public const TIPO_ATENCION_INICIADA = 'atencion.iniciada';
+
     public const TIPO_ATENCION_CERRADA = 'atencion.cerrada';
 
     public const TIPO_TRANSFERIDO = 'turno.transferido';

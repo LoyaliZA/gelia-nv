@@ -50,6 +50,30 @@ describe('nombre visible de un tercero', () => {
         expect(contenedor.textContent).toContain('Cuenta: Cliente Titular');
     });
 
+    it('no muestra el recuento de reatención ni el aviso de cuenta', () => {
+        const contenedor = montar(
+            <MetricasAtencionCompacta
+                prominente
+                servidorAt={servidorAt}
+                atencion={{
+                    folio: 'R-0001',
+                    folio_visible: 'R-0001',
+                    cliente: 'Persona en atención',
+                    marca_atencion: 'reatencion',
+                    numero_reatencion: 3,
+                    atencion_habilitada_desde: '2026-10-31T18:00:00.000Z',
+                    atencion_en_curso: false,
+                    espera_inicial_vencida: false,
+                }}
+            />,
+        );
+
+        expect(contenedor.textContent).toContain('R-0001');
+        expect(contenedor.textContent).toContain('Persona en atención');
+        expect(contenedor.textContent).not.toContain('Reatención 3');
+        expect(contenedor.textContent).not.toContain('La atención inicia al terminar la cuenta.');
+    });
+
     it('un cliente titular no lleva distintivo de tercero', () => {
         const contenedor = montar(
             <MetricasAtencionCompacta

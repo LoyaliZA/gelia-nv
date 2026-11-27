@@ -73,4 +73,13 @@ describe('pdvAlertQueueUtils', () => {
         expect(etiquetaConexionTiempoRealPdv(PDV_ESTADO_CONEXION.desconectado)).toBe('Sin conexión');
         expect(mensajeAlertaPdv(envelopeBase())).toContain('turno');
     });
+
+    it('no encola el inicio automático de atención', () => {
+        const resultado = encolarAlertaPdv([], new Set(), envelopeBase({
+            tipo: 'atencion.iniciada',
+        }));
+
+        expect(resultado.encolado).toBe(false);
+        expect(resultado.cola).toEqual([]);
+    });
 });

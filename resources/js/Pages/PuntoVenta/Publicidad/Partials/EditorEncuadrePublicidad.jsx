@@ -11,6 +11,7 @@ function MarcoEncuadre({
     tipo = 'imagen',
     rotacion = 0,
     ajuste = 'cover',
+    acciones = null,
 }) {
     const objectFit = ajuste === 'contain' ? 'contain' : 'cover';
     const marcoClase = ratio === '9:16'
@@ -18,7 +19,7 @@ function MarcoEncuadre({
         : 'aspect-video w-full';
 
     return (
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0 space-y-2">
             <p className="text-[10px] font-black uppercase tracking-widest theme-text-muted m-0">{etiqueta}</p>
             <div className={`overflow-hidden rounded-2xl bg-black ${marcoClase}`}>
                 {url ? (
@@ -43,6 +44,35 @@ function MarcoEncuadre({
                     </div>
                 )}
             </div>
+            {acciones}
+        </div>
+    );
+}
+
+function BotonesGiro({ grados, onGirar, etiquetaCorta }) {
+    return (
+        <div className="flex flex-wrap gap-2">
+            <button
+                type="button"
+                className={`${THEME_BTN_SECONDARY} inline-flex min-h-[44px] items-center justify-center gap-2`}
+                onClick={() => onGirar('izquierda')}
+                aria-label={`Girar a la izquierda${etiquetaCorta ? ` (${etiquetaCorta})` : ''}`}
+            >
+                <RotateCcw className="h-4 w-4" aria-hidden />
+                Girar a la izquierda
+            </button>
+            <button
+                type="button"
+                className={`${THEME_BTN_SECONDARY} inline-flex min-h-[44px] items-center justify-center gap-2`}
+                onClick={() => onGirar('derecha')}
+                aria-label={`Girar a la derecha${etiquetaCorta ? ` (${etiquetaCorta})` : ''}`}
+            >
+                <RotateCw className="h-4 w-4" aria-hidden />
+                Girar a la derecha
+            </button>
+            <p className="self-center text-xs font-bold theme-text-muted m-0">
+                Rotación{etiquetaCorta ? ` ${etiquetaCorta}` : ''}: {grados}°
+            </p>
         </div>
     );
 }
@@ -51,12 +81,33 @@ export default function EditorEncuadrePublicidad({
     url = null,
     tipo = 'imagen',
     rotacion = 0,
+    rotacionKiosko = null,
     ajuste = 'cover',
     onRotacionChange,
+    onRotacionKioskoChange,
 }) {
-    const grados = normalizarRotacionPublicidad(rotacion);
-    const girar = (sentido) => {
-        onRotacionChange?.(girarRotacionPublicidad(grados, sentido));
+    const gradosSala = normalizarRotacionPublicidad(rotacion);
+    const compartido = rotacionKiosko === null || rotacionKiosko === undefined;
+    const gradosKiosko = compartido ? gradosSala : normalizarRotacionPublicidad(rotacionKiosko);
+
+    const girarSala = (sentido) => {
+        const siguiente = girarRotacionPublicidad(gradosSala, sentido);
+        onRotacionChange?.(siguiente);
+        if (compartido) {
+            onRotacionKioskoChange?.(null);
+        }
+    };
+
+    const girarKiosko = (sentido) => {
+        onRotacionKioskoChange?.(girarRotacionPublicidad(gradosKiosko, sentido));
+    };
+
+    const alternarCompartido = () => {
+        if (compartido) {
+            onRotacionKioskoChange?.(gradosSala);
+            return;
+        }
+        onRotacionKioskoChange?.(null);
     };
 
     return (
@@ -65,47 +116,51 @@ export default function EditorEncuadrePublicidad({
             <p className="text-sm theme-text-muted m-0">
                 Gira la pieza si el archivo subió de lado. El archivo no se reescribe; el giro se aplica al reproducir.
             </p>
+            <div className="flex items-start justify-between gap-3 rounded-2xl border theme-border p-3">
+                <div className="space-y-1 min-w-0">
+                    <p className="text-sm font-bold theme-text-main m-0">Mismo giro en TV y kiosko</p>
+                    <p className="text-xs theme-text-muted m-0">
+                        La TV de turnos es 16:9 y el kiosko 9:16. Desactiva esto para girar cada pantalla por separado.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    className="gelia-switch shrink-0"
+                    data-active={compartido}
+                    aria-pressed={compartido}
+                    aria-label={compartido ? 'Usar giro distinto por pantalla' : 'Usar el mismo giro en TV y kiosko'}
+                    onClick={alternarCompartido}
+                >
+                    <span className="gelia-switch-thumb" />
+                </button>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
                 <MarcoEncuadre
-                    etiqueta="Marco 16:9"
+                    etiqueta="TV de turnos 16:9"
                     ratio="16:9"
                     url={url}
                     tipo={tipo}
-                    rotacion={grados}
+                    rotacion={gradosSala}
                     ajuste={ajuste}
+                    acciones={!compartido ? (
+                        <BotonesGiro grados={gradosSala} onGirar={girarSala} etiquetaCorta="TV" />
+                    ) : null}
                 />
                 <MarcoEncuadre
-                    etiqueta="Marco 9:16"
+                    etiqueta="Pantalla de publicidad 9:16"
                     ratio="9:16"
                     url={url}
                     tipo={tipo}
-                    rotacion={grados}
+                    rotacion={gradosKiosko}
                     ajuste={ajuste}
+                    acciones={!compartido ? (
+                        <BotonesGiro grados={gradosKiosko} onGirar={girarKiosko} etiquetaCorta="kiosko" />
+                    ) : null}
                 />
             </div>
-            <div className="flex flex-wrap gap-2">
-                <button
-                    type="button"
-                    className={`${THEME_BTN_SECONDARY} inline-flex min-h-[44px] items-center justify-center gap-2`}
-                    onClick={() => girar('izquierda')}
-                    aria-label="Girar a la izquierda"
-                >
-                    <RotateCcw className="h-4 w-4" aria-hidden />
-                    Girar a la izquierda
-                </button>
-                <button
-                    type="button"
-                    className={`${THEME_BTN_SECONDARY} inline-flex min-h-[44px] items-center justify-center gap-2`}
-                    onClick={() => girar('derecha')}
-                    aria-label="Girar a la derecha"
-                >
-                    <RotateCw className="h-4 w-4" aria-hidden />
-                    Girar a la derecha
-                </button>
-                <p className="self-center text-xs font-bold theme-text-muted m-0">
-                    Rotación: {grados}°
-                </p>
-            </div>
+            {compartido ? (
+                <BotonesGiro grados={gradosSala} onGirar={girarSala} />
+            ) : null}
         </div>
     );
 }

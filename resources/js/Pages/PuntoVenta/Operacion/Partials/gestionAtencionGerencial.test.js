@@ -127,7 +127,7 @@ describe('gestión de atención desde Operación General', () => {
         expect(axios.post).toHaveBeenCalledWith('punto_venta.turnos.asignar_reatencion/12', {
             version: 8,
             destino_user_id: 4,
-            idempotency_key: 'pdv:reatencion:12:4',
+            idempotency_key: 'pdv:reatencion:12:8:4',
         });
         expect(onActualizado).toHaveBeenCalledOnce();
     });

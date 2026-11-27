@@ -10,6 +10,7 @@ import {
 } from '@/utils/geliaTheme';
 import { formatearDuracionSeg } from '@/utils/estadoPublicidadPdv';
 import CapaMediaRotada from '@/Pages/PuntoVenta/Pantallas/Partials/CapaMediaRotada';
+import { rotacionParaPantalla } from '@/utils/rotacionMedioPublicidad';
 import useModalPublicidad from '../useModalPublicidad';
 
 export default function VistaPreviaPublicidad({ items = [], indiceInicial = 0, onClose }) {
@@ -62,7 +63,7 @@ export default function VistaPreviaPublicidad({ items = [], indiceInicial = 0, o
                 </div>
                 {actual ? (
                     <div className={`overflow-hidden rounded-2xl bg-black ${marco === '9:16' ? 'aspect-[9/16] mx-auto w-full max-w-xs' : 'aspect-video'}`}>
-                        <CapaMediaRotada rotacion={actual.rotacion}>
+                        <CapaMediaRotada rotacion={rotacionParaPantalla(actual, marco === '9:16' ? 'kiosko' : 'sala')}>
                             {actual.tipo === 'video' ? (
                                 <video key={actual.id || actual.url} src={actual.url} controls className="h-full w-full" style={{ objectFit }} />
                             ) : (

@@ -21,6 +21,7 @@ class PdvPantallaPublicidadFactory extends Factory
             'duracion_seg' => 10,
             'ajuste' => PdvPantallaPublicidad::AJUSTE_COVER,
             'rotacion' => 0,
+            'rotacion_kiosko' => null,
             'orden' => 0,
             'activa' => true,
             'vigente_desde' => null,

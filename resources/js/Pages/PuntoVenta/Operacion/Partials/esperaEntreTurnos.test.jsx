@@ -103,6 +103,44 @@ describe('cuenta regresiva entre turnos', () => {
         expect(contenedor.textContent).not.toContain('Volverá a la cola');
     });
 
+    it('consulta al vencer el inicio de reatención sin esperar el intervalo de 30 segundos', async () => {
+        const personaAtencion = {
+            id: 4,
+            nombre: 'Vendedor',
+            estado_vendedor: 'atendiendo',
+            atencion_actual: {
+                folio: 'R-0003',
+                folio_visible: 'R-0003',
+                atencion_en_curso: false,
+                atencion_habilitada_desde: referenciaAt,
+                atencion_inicio_at: null,
+                espera_inicial_vencida: false,
+            },
+        };
+        axios.get.mockResolvedValue({
+            data: {
+                servidor_at: referenciaAt,
+                equipo: [{
+                    ...personaAtencion,
+                    atencion_actual: {
+                        ...personaAtencion.atencion_actual,
+                        atencion_en_curso: true,
+                        atencion_habilitada_desde: null,
+                        atencion_inicio_at: referenciaAt,
+                    },
+                }],
+            },
+        });
+        montar(<Operacion estado={{ servidor_at: servidorAt, equipo: [personaAtencion] }} />);
+        expect(contenedor.textContent).toContain('Inicio');
+        expect(contenedor.textContent).toContain('00:10');
+        await act(async () => vi.advanceTimersByTime(9000));
+        expect(axios.get).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTime(1000));
+        expect(axios.get).toHaveBeenCalledTimes(1);
+        expect(contenedor.textContent).toContain('Atención');
+    });
+
     it('agrupa esperas simultáneas y evita consultar cada segundo si falla la actualización', async () => {
         axios.get.mockRejectedValue(new Error('Sin conexión'));
         montar(<Operacion estado={{ servidor_at: servidorAt, equipo: [persona, { ...persona, id: 5 }] }} />);

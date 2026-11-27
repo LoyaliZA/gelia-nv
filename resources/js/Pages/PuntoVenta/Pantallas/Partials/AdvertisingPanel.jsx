@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import GeliaLogo from '@/Components/GeliaLogo';
 import { volumenAudioVideoPublicidad, VOLUMEN_PUBLICIDAD_SALA_DEFECTO } from '@/utils/volumenPublicidadPdv';
+import { rotacionParaPantalla } from '@/utils/rotacionMedioPublicidad';
 import CapaMediaRotada from './CapaMediaRotada';
 
 function MediaProgress({ items, index, progress }) {
@@ -194,6 +195,7 @@ export default function AdvertisingPanel({
     const objectFit = actual?.ajuste === 'contain' ? 'contain' : 'cover';
     const siguienteVideo = playlist[(index + 1) % playlist.length];
     const esKiosko = variante === 'kiosko';
+    const rotacion = rotacionParaPantalla(actual, esKiosko ? 'kiosko' : 'sala');
 
     return (
         <section
@@ -207,10 +209,10 @@ export default function AdvertisingPanel({
             {!actual ? (
                 <FallbackInstitucional />
             ) : (
-                <CapaMediaRotada rotacion={actual.rotacion}>
+                <CapaMediaRotada rotacion={rotacion}>
                     {actual.tipo === 'video' ? (
                         <video
-                            key={`${actual.id}:${actual.rotacion ?? 0}`}
+                            key={`${actual.id}:${rotacion}`}
                             ref={videoRef}
                             className="h-full w-full"
                             style={{ objectFit }}
@@ -229,7 +231,7 @@ export default function AdvertisingPanel({
                         />
                     ) : (
                         <img
-                            key={`${actual.id}:${actual.rotacion ?? 0}`}
+                            key={`${actual.id}:${rotacion}`}
                             src={actual.url}
                             alt=""
                             className="h-full w-full"

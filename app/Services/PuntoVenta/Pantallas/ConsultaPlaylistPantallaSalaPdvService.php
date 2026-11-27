@@ -71,6 +71,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
             'rotacion' => (int) $item->rotacion,
+            'rotacion_kiosko' => $item->rotacion_kiosko === null ? null : (int) $item->rotacion_kiosko,
             'volumen_pct' => $item->volumen_pct,
             'orden' => $item->orden,
             'activa' => $item->activa,
@@ -99,6 +100,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
             'rotacion' => (int) $item->rotacion,
+            'rotacion_kiosko' => (int) ($item->rotacion_kiosko ?? $item->rotacion),
             'volumen_pct' => $item->volumen_pct,
         ];
     }

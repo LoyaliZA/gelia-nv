@@ -14,6 +14,11 @@ final class PayloadTurnoPdvBroadcast
         return 'turnos:'.$evento->tipo_evento.':'.$evento->id;
     }
 
+    public static function eventIdAtencionIniciada(TurnoPdvAtencion $atencion): string
+    {
+        return 'turnos:atencion.iniciada:'.$atencion->id;
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -5,8 +5,8 @@
 - TV de turnos: `GET /sala-turnos/t/{token}` (permanente) y `GET /s/{codigo}` (corto). → `PuntoVenta/Pantallas/Sala`.
 - Kiosko: `GET /sala-publicidad/t/{token}` y `GET /k/{codigo}`. Query `disposicion=auto|vertical`.
 - Enlace: un token y un `codigo_corto` de 6 (mayúsculas, sin 0/O/1/I) por sucursal. JSON: `url`, `url_kiosko`, `url_corta`, `url_kiosko_corta`, `codigo_corto`. Activar/desactivar apaga ambas. El token largo no se recambia.
-- Archivos: disco `public` `pdv/pantalla-publicidad/`. Sin recodificar ni ffmpeg. `ajuste` = `cover|contain`. `rotacion` = `0|90|180|270` (CSS).
-- Playlist pública: `id`, `tipo`, `url`, `duracion_seg`, `ajuste`, `rotacion`, `volumen_pct`.
+- Archivos: disco `public` `pdv/pantalla-publicidad/`. Sin recodificar ni ffmpeg. `ajuste` = `cover|contain`. `rotacion` = TV 16:9; `rotacion_kiosko` null hereda, o 0|90|180|270 propio.
+- Playlist pública: `id`, `tipo`, `url`, `duracion_seg`, `ajuste`, `rotacion`, `rotacion_kiosko` (efectiva), `volumen_pct`.
 - Mini editor: `EditorEncuadrePublicidad.jsx` (marcos 16:9 y 9:16). Reproductor: `CapaMediaRotada.jsx`.
 - Acceso: `GET /punto-venta/pantalla-sala`. Permiso `pdv.pantalla_sala.abrir`.
 - Pruebas: `PublicidadPdvTest`, `PantallaSalaPdvTest`, `EnlacePantallaSalaPdvTest`; `rotacionMedioPublicidad.test.js`.
@@ -17,6 +17,7 @@
 - [verificado] `/s/{codigo}` y `/k/{codigo}` resuelven el mismo registro; minúsculas se aceptan.
 - [verificado] `disposicion=vertical` rota el escenario si el viewport es apaisado.
 - [verificado] Piezas globales y de sucursal se mezclan; vigencia y depuración no cambian.
+- [verificado] Modal de edición: `gelia-modal-body` + footer fijo para poder guardar. Giro compartido o por pantalla.
 - Fuera de alcance: recodificar videos, playlists distintas, segundo token.
 
 ## Reglas que no se rompen

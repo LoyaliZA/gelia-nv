@@ -65,6 +65,12 @@ class AsignarReatencionTurnoPdvService
                 $atencion = TurnoPdvAtencion::query()->find($snapshot['atencion_id'] ?? $reintento['evento']->atencion_id);
                 $persona = User::query()->find($snapshot['user_id'] ?? $atencion?->user_id);
 
+                if (! $this->reintentoReatencionSigueVigente($reintento['turno'], $atencion)) {
+                    throw ValidationException::withMessages([
+                        'idempotency_key' => 'La clave de idempotencia ya fue utilizada en otra operación.',
+                    ]);
+                }
+
                 return [
                     'turno' => $reintento['turno'],
                     'persona' => $persona ?? new User,
@@ -232,6 +238,17 @@ class AsignarReatencionTurnoPdvService
                 'evento' => $evento,
             ];
         });
+    }
+
+    private function reintentoReatencionSigueVigente(TurnoPdv $turno, ?TurnoPdvAtencion $atencion): bool
+    {
+        if (! $atencion instanceof TurnoPdvAtencion) {
+            return false;
+        }
+
+        return $turno->estado === TurnoPdv::ESTADO_ASIGNADO
+            && (int) $turno->atencion_actual_id === (int) $atencion->id
+            && $atencion->fin_at === null;
     }
 
     private function aceptaDestinoReatencion(User $user, int $sucursalId): bool
