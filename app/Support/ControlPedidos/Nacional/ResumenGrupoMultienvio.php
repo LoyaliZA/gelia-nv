@@ -4,6 +4,7 @@ namespace App\Support\ControlPedidos\Nacional;
 
 use App\Models\ControlPedidos\MultienvioNacional;
 use App\Models\ControlPedidos\PedidoBma;
+use App\Models\SaldosAFavor\PedidoBmaPago;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -44,7 +45,7 @@ final class ResumenGrupoMultienvio
         $miembros = PedidoBma::query()
             ->whereIn('multienvio_nacional_id', $grupos->pluck('id')->all())
             ->select(['id', 'folio', 'folio_remision', 'multienvio_nacional_id', 'multienvio_orden', 'numero_remision', 'numero_rastreo',
-                'pago_validado_at', 'catalogo_estatus_pedido_id', 'vendedor_id', 'estatus_envio', 'solicitud_preparacion_json'])
+                'pago_validado_at', 'total_a_cobrar', 'catalogo_estatus_pedido_id', 'vendedor_id', 'estatus_envio', 'solicitud_preparacion_json'])
             ->with(['estatus', 'vendedor.departamentos', 'cajas' => fn ($q) => $q->activas()->select(['id', 'pedido_bma_id', 'numero_rastreo'])])
             ->withCount([
                 'guiaPdf as guias_pdf' => fn ($q) => $q->where('activo', true),
@@ -60,6 +61,7 @@ final class ResumenGrupoMultienvio
             ->filter(fn (PedidoBma $m) => ($m->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'nacional' && $visibilidad->puede($m))
             ->groupBy('multienvio_nacional_id');
         $totales = $miembros->groupBy('multienvio_nacional_id')->map->count();
+        $compartidos = self::referenciasCompartidas($miembros, $visibilidad);
         $porId = $grupos->keyBy('id');
         $porOrigen = $grupos->whereIn('estado', self::ESTADOS_ORIGEN)->keyBy('pedido_origen_id');
 
@@ -75,6 +77,8 @@ final class ResumenGrupoMultienvio
                 'n_total' => $lista->count(),
                 'estado' => $grupo->estado,
                 'parcial' => $lista->count() < (int) $totales->get($grupo->id, 0),
+                'total_operacion' => round((float) $lista->sum('total_a_cobrar'), 2),
+                'comprobantes_compartidos' => $compartidos[$grupo->id][$pedido->id] ?? [],
                 'hermanos' => $lista->map(fn (PedidoBma $m) => [
                     'id' => $m->id,
                     'orden' => (int) $m->multienvio_orden,
@@ -89,6 +93,44 @@ final class ResumenGrupoMultienvio
                 ])->values()->all(),
             ]);
         }
+    }
+
+    /**
+     * Referencias de pago que se repiten en exhibiciones de varios envíos visibles del mismo grupo (transferencia
+     * compartida). Solo informativo: no concilia ni bloquea; la suma es la de las partes registradas en esos envíos.
+     *
+     * @return array<int, array<int, list<array{referencia: string, envios: list<int>, suma: float}>>>  grupo => pedido => avisos
+     */
+    private static function referenciasCompartidas(Collection $miembros, VisibilidadMiembrosMultienvio $visibilidad): array
+    {
+        $visibles = $miembros->filter(fn (PedidoBma $m) => ($m->solicitud_preparacion_json['modalidad_entrega'] ?? null) === 'nacional' && $visibilidad->puede($m))->keyBy('id');
+        if ($visibles->count() < 2) {
+            return [];
+        }
+        $pagos = PedidoBmaPago::query()
+            ->whereIn('pedido_bma_id', $visibles->keys()->all())
+            ->where('activo_para_cobertura', true)
+            ->whereNotNull('referencia')->where('referencia', '!=', '')
+            ->get(['id', 'pedido_bma_id', 'referencia', 'monto']);
+
+        $salida = [];
+        foreach ($pagos->groupBy(fn ($p) => $visibles[$p->pedido_bma_id]->multienvio_nacional_id.'|'.mb_strtolower(trim($p->referencia))) as $clave => $filas) {
+            $pedidosConRef = $filas->pluck('pedido_bma_id')->unique();
+            if ($pedidosConRef->count() < 2) {
+                continue;
+            }
+            $grupoId = (int) explode('|', $clave)[0];
+            $aviso = [
+                'referencia' => trim($filas->first()->referencia),
+                'envios' => $pedidosConRef->map(fn ($id) => (int) $visibles[$id]->multienvio_orden)->sort()->values()->all(),
+                'suma' => round((float) $filas->sum('monto'), 2),
+            ];
+            foreach ($pedidosConRef as $id) {
+                $salida[$grupoId][$id][] = $aviso;
+            }
+        }
+
+        return $salida;
     }
 
     /** Resumen del propio pedido (para `LecturaConsultaNacional`); null si no pertenece a un grupo. */

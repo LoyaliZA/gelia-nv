@@ -70,6 +70,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'url' => $item->urlPublica(),
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
+            'rotacion' => (int) $item->rotacion,
             'volumen_pct' => $item->volumen_pct,
             'orden' => $item->orden,
             'activa' => $item->activa,
@@ -97,6 +98,7 @@ final class ConsultaPlaylistPantallaSalaPdvService
             'url' => $item->urlPublica(),
             'duracion_seg' => $item->duracion_seg,
             'ajuste' => $item->ajuste,
+            'rotacion' => (int) $item->rotacion,
             'volumen_pct' => $item->volumen_pct,
         ];
     }

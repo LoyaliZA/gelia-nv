@@ -50,6 +50,21 @@ class FormPublicUrl
         return self::salaTurnosShow($token).'/estado';
     }
 
+    public static function salaPublicidadShow(string $token): string
+    {
+        return self::appBase().'/sala-publicidad/t/'.ltrim($token, '/');
+    }
+
+    public static function salaTurnosCorta(string $codigo): string
+    {
+        return self::appBase().'/s/'.strtoupper(ltrim($codigo, '/'));
+    }
+
+    public static function salaPublicidadCorta(string $codigo): string
+    {
+        return self::appBase().'/k/'.strtoupper(ltrim($codigo, '/'));
+    }
+
     public static function host(): ?string
     {
         $host = parse_url(self::base(), PHP_URL_HOST);

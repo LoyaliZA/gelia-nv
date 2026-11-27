@@ -190,3 +190,9 @@
 .sidebar-mount {
     animation: sidebarMount var(--gelia-sidebar-mount-ms, 420ms) var(--gelia-sidebar-ease, cubic-bezier(0.22, 1, 0.36, 1)) forwards;
 }
+
+/* Cambio de envío dentro de un multienvío: el modal se vuelve a montar sin repetir la animación de entrada. */
+.gelia-cambio-envio [data-gelia-modal],
+.gelia-cambio-envio [data-gelia-modal] * {
+    animation: none !important;
+}

@@ -4,11 +4,13 @@ import { THEME_BTN_PRIMARY, THEME_BTN_SECONDARY, THEME_MODAL_OVERLAY, THEME_MODA
 import { textoEliminacion } from '@/utils/estadoPublicidadPdv';
 import useModalPublicidad from '../useModalPublicidad';
 import FormularioPublicidad from './FormularioPublicidad';
+import EditorEncuadrePublicidad from './EditorEncuadrePublicidad';
 
 function formularioDesde(item) {
     return {
         alcance: item.alcance,
         ajuste: item.ajuste || 'cover',
+        rotacion: item.rotacion ?? 0,
         duracion_seg: item.duracion_seg ?? 10,
         vigente_desde: item.vigente_desde || '',
         vigente_hasta: item.vigente_hasta || '',
@@ -49,6 +51,13 @@ export default function ModalEditarPublicidad({ item, onClose, onGuardar }) {
                 <h2 id="editar-publicidad-titulo" className="text-lg font-black italic uppercase tracking-tighter theme-text-main m-0">
                     Editar {item.nombre_original || 'pieza'}
                 </h2>
+                <EditorEncuadrePublicidad
+                    url={item.url}
+                    tipo={item.tipo}
+                    rotacion={form.rotacion}
+                    ajuste={form.ajuste}
+                    onRotacionChange={(rotacion) => setForm((actual) => ({ ...actual, rotacion }))}
+                />
                 <FormularioPublicidad
                     valor={form}
                     onChange={setForm}

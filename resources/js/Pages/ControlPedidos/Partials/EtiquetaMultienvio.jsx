@@ -7,6 +7,7 @@ import { Layers } from 'lucide-react';
  */
 export function textoMultienvio(multienvio) {
     if (!multienvio || typeof multienvio !== 'object') return null;
+    if (multienvio.agrupado && multienvio.n_total) return `Multienvío · ${multienvio.n_total} envíos`;
     const orden = Number(multienvio.orden);
     if (Number.isInteger(orden) && orden > 0) {
         return multienvio.parcial || !multienvio.n_total ? `Envío ${orden}` : `Envío ${orden} de ${multienvio.n_total}`;
@@ -24,7 +25,7 @@ export function firmaMultienvio(pedido) {
     if (!grupo || typeof grupo !== 'object') return '';
 
     return JSON.stringify([
-        grupo.id, grupo.orden, grupo.n_total, grupo.estado, Boolean(grupo.parcial),
+        grupo.id, grupo.orden, grupo.n_total, grupo.estado, Boolean(grupo.parcial), Boolean(grupo.agrupado),
         (grupo.hermanos || []).map((h) => [h.id, h.orden, h.folio_remision, h.estatus_fase, h.pago_validado, h.tiene_remision, h.tiene_guia]),
     ]);
 }

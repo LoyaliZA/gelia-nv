@@ -1,3 +1,4 @@
+import { useCambiarEnvio } from './CambiarEnvioContext';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     AlertTriangle, CheckCircle2, CircleDot, Clock, Layers, Package, Receipt, RefreshCw, ShieldCheck, Truck,
@@ -383,14 +384,54 @@ const TEXTO_PAGO = { validado: 'Pago validado', capturado: 'Pago capturado', sin
 function Activo({ pedido, datos }) {
     const envios = datos?.envios || [];
     const progreso = datos?.progreso || {};
+    const cambiarEnvio = useCambiarEnvio();
+    const total = envios.length;
 
     return (
         <div className="space-y-3">
             <p className="m-0 text-sm theme-text-main">
                 {datos?.parcial
                     ? 'Este pedido forma parte de un multienvío. Solo ves los envíos a los que tienes acceso.'
-                    : `Este pedido se repartió en ${envios.length} envíos. Cada envío sigue su propio flujo de cotización, pago y remisión.`}
+                    : `Esta compra se repartió en ${total} envíos. Elige un envío para ver su cotización, pago y remisión.`}
             </p>
+            <ol className="m-0 grid list-none gap-2 p-0 sm:grid-cols-3" aria-label="Envíos del multienvío">
+                {envios.map((envio) => {
+                    const Icono = iconoEnvio(envio);
+                    const propio = envio.id === pedido?.id;
+                    const pago = TEXTO_PAGO[envio.estado_pago] || 'Sin pago';
+                    const interior = (
+                        <>
+                            <span className="flex w-full items-center justify-between gap-2">
+                                <span className="inline-flex items-center gap-1 font-bold theme-text-main">
+                                    <Layers className="w-4 h-4 shrink-0" aria-hidden="true" />
+                                    Envío {envio.orden} de {total}
+                                </span>
+                                {propio && <span className="rounded-md px-1.5 py-0.5 text-[11px] font-bold" style={{ background: 'var(--color-primario)', color: 'var(--color-on-primario, #fff)' }}>Aquí estás</span>}
+                            </span>
+                            <span className="text-xs theme-text-muted">Folio Wizerp {envio.folio_remision || '—'}</span>
+                            <span className="inline-flex items-center gap-1 text-xs theme-text-main">
+                                <Icono className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                                {pago}{envio.estatus ? ` · ${envio.estatus}` : ''}
+                            </span>
+                        </>
+                    );
+                    const clases = `flex min-h-[44px] w-full flex-col items-start gap-1 rounded-xl border px-3 py-2 text-left text-sm ${propio ? 'theme-border-strong' : 'theme-border'}`;
+                    const estilo = propio ? { borderColor: 'var(--color-primario)', boxShadow: '0 0 0 1px var(--color-primario)' } : undefined;
+
+                    return (
+                        <li key={envio.id}>
+                            {propio || !cambiarEnvio ? (
+                                <div className={clases} style={estilo} aria-current={propio ? 'true' : undefined}>{interior}</div>
+                            ) : (
+                                <button type="button" className={`${clases} theme-element`} onClick={() => cambiarEnvio(envio.id, pedido.id)}
+                                    title={`Ir al Envío ${envio.orden}`}>
+                                    {interior}
+                                </button>
+                            )}
+                        </li>
+                    );
+                })}
+            </ol>
             {envios.length > 0 && (
                 <ul className="m-0 flex flex-wrap gap-2 list-none p-0" aria-label="Avance del multienvío">
                     {[
@@ -399,37 +440,13 @@ function Activo({ pedido, datos }) {
                         ['guias', 'Guías', Receipt],
                         ['enviados', 'Enviados', Truck],
                     ].filter(([clave]) => progreso[clave]).map(([clave, texto, Icono]) => (
-                        <li key={clave} className="inline-flex items-center gap-1 rounded-lg border theme-border px-2.5 py-1 text-xs font-semibold theme-text-main">
+                        <li key={clave} className="inline-flex items-center gap-1 text-xs theme-text-muted">
                             <Icono className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                             {texto} {progreso[clave].replace('/', ' de ')}
                         </li>
                     ))}
                 </ul>
             )}
-            <ol className="m-0 grid list-none gap-2 p-0" aria-label="Envíos del multienvío">
-                {envios.map((envio) => {
-                    const Icono = iconoEnvio(envio);
-                    const propio = envio.id === pedido?.id;
-
-                    return (
-                        <li key={envio.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border theme-border px-3 py-2 text-sm"
-                            aria-current={propio ? 'true' : undefined}>
-                            <span className="inline-flex items-center gap-1 font-bold theme-text-main">
-                                <Layers className="w-4 h-4 shrink-0" aria-hidden="true" />
-                                Envío {envio.orden}
-                            </span>
-                            <span className="min-w-0 break-words theme-text-main">Folio Wizerp: {envio.folio_remision || '—'}</span>
-                            <span className="min-w-0 break-words text-xs theme-text-muted">{envio.folio}</span>
-                            <span className="inline-flex items-center gap-1 theme-text-main">
-                                <Icono className="w-4 h-4 shrink-0" aria-hidden="true" />
-                                {envio.estatus || TEXTO_PAGO[envio.estado_pago] || 'En proceso'}
-                            </span>
-                            <span className="text-xs theme-text-muted">{TEXTO_PAGO[envio.estado_pago]}</span>
-                            {propio && <span className="text-xs font-semibold theme-text-muted">Este pedido</span>}
-                        </li>
-                    );
-                })}
-            </ol>
         </div>
     );
 }
@@ -484,7 +501,7 @@ export default function PanelMultienvioNacional({ pedido, multienvio, onDirtyCha
         <section className="registrar-tienda-panel space-y-3" aria-labelledby="multienvio-nacional-titulo" data-panel-multienvio={estado || 'pendiente'}>
             <div className="registrar-tienda-seccion-titulo">
                 <Layers size={18} aria-hidden="true" />
-                <h3 id="multienvio-nacional-titulo">Multienvío</h3>
+                <h3 id="multienvio-nacional-titulo">{estado === 'activo' ? 'Envíos de esta compra' : 'Multienvío'}</h3>
             </div>
             {avisoRevision && (
                 <AvisoOperativoPedido tono="info" icon={RefreshCw}>

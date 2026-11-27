@@ -15,10 +15,10 @@ export default function Acceso({
     return (
         <AppLayout auth={auth}>
             <Head title="Pantalla de sala | Punto de venta" />
-            <GeliaPageShell>
+            <GeliaPageShell className="space-y-4">
                 <GeliaTituloCard
                     title="Pantalla de sala"
-                    description="Enlace permanente por sucursal para la TV de turnos, sin iniciar sesión. Activa o desactiva la pantalla sin cambiar la URL."
+                    description="Prepara el código de la TV y abre la de turnos o la de publicidad."
                     icon={Monitor}
                 >
                     <SelectorSucursalActivaPdv

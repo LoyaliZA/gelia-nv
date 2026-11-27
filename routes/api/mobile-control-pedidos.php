@@ -55,6 +55,7 @@ Route::get('mobile/control-pedidos/{pedidoBma}/conversion-modalidad', [Conversio
 Route::get('mobile/control-pedidos/{pedidoBma}/disponibilidad-tienda', [DisponibilidadTiendaController::class, 'show'])->middleware([]);
 Route::get('mobile/control-pedidos/{pedidoBma}/movimientos-tienda', [MovimientosTiendaController::class, 'show'])->middleware([]);
 Route::get('mobile/control-pedidos/{pedidoBma}/multienvio', [MultienvioNacionalController::class, 'show'])->middleware([]);
+Route::get('mobile/control-pedidos/{pedidoBma}/multienvio/envios/{envio}', [MultienvioNacionalController::class, 'envio'])->middleware([]);
 Route::get('mobile/control-pedidos/{pedidoBma}/pagos', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->middleware(['can:control_pedidos.crear']);
 Route::get('mobile/control-pedidos/{pedidoBma}/pagos-auditoria', [PedidoBmaSaldosPagosController::class, 'resumenPago'])->middleware(['can:control_pedidos.auditar']);
 Route::get('mobile/control-pedidos/{pedidoBma}/transferencia-tienda', [TransferenciaTiendaController::class, 'show'])->middleware([]);

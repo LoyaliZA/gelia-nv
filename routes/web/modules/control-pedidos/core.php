@@ -35,6 +35,7 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
     // Lectura: el acceso lo decide VisibilidadPedidoBma::puedeConsultar (el grupo no concede permiso).
     Route::get('/{pedidoBma}/multienvio', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'show'])->name('multienvio.show');
+    Route::get('/{pedidoBma}/multienvio/envios/{envio}', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'envio'])->name('multienvio.envio');
     Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');
     Route::post('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'update'])->name('disponibilidad_tienda.update');
     Route::post('/{pedidoBma}/disponibilidad-tienda/alternativa', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'alternativa'])->name('disponibilidad_tienda.alternativa');

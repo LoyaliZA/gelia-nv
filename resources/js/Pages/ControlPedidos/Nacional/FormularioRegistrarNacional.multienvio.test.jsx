@@ -97,7 +97,7 @@ it('al confirmar relee la consulta nacional, la adopta y muestra los envíos', a
     expect(axios.post).toHaveBeenCalledWith('/control-pedidos/9/multienvio/confirmar', { revision: 'rev-1' }, expect.anything());
     expect(axios.get).toHaveBeenCalledWith('/control-pedidos/9/consulta-nacional', expect.anything());
     expect(onPedido).toHaveBeenLastCalledWith(expect.objectContaining({ total_mercancia: '600.00', multienvio: expect.objectContaining({ estado: 'activo' }) }));
-    expect(host.textContent).toContain('Folio Wizerp: WZ-3');
+    expect(host.textContent).toContain('Folio Wizerp WZ-3');
     expect(host.textContent).toContain('Cotización y pago');
 });
 

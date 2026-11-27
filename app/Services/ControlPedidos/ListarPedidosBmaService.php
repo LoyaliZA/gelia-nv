@@ -34,11 +34,13 @@ class ListarPedidosBmaService
         }
 
         $this->aplicarFiltros($query, $filtros, $usuario);
+        $this->colapsarMultienvios($query);
 
         if (! $paginar) {
             $pedidos = $query->get();
             if ($usuario) {
                 ResumenGrupoMultienvio::paraPagina($pedidos, $usuario);
+                $this->marcarAgrupados($pedidos);
             }
 
             return $pedidos->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
@@ -47,15 +49,47 @@ class ListarPedidosBmaService
         $paginador = $query->paginate(max(1, $porPagina))->withQueryString();
         if ($usuario) {
             ResumenGrupoMultienvio::paraPagina($paginador->getCollection(), $usuario);
+            $this->marcarAgrupados($paginador->getCollection());
         }
 
         return $paginador->through(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
+    }
+
+    /**
+     * Un multienvío se muestra como una sola operación: se omiten los envíos 2..N cuando el envío 1 es de la misma
+     * vendedora y está en el listado. Quien solo ve un envío suelto (otro alcance) lo sigue viendo.
+     */
+    /** En el listado de Ventas el grupo es una sola fila: el envío 1 (o el origen en configuración) lo representa. */
+    private function marcarAgrupados(\Illuminate\Support\Collection $pedidos): void
+    {
+        foreach ($pedidos as $pedido) {
+            $grupo = $pedido->getAttributes()['multienvio'] ?? null;
+            if (is_array($grupo) && ($pedido->multienvio_orden === null || (int) $pedido->multienvio_orden === 1) && ($grupo['estado'] ?? null) === 'activo') {
+                $grupo['agrupado'] = true;
+                $pedido->setAttribute('multienvio', $grupo);
+            }
+        }
+    }
+
+    private function colapsarMultienvios(Builder $query): void
+    {
+        $query->where(function (Builder $q) {
+            $q->whereNull('pedidos_bma.multienvio_orden')
+                ->orWhere('pedidos_bma.multienvio_orden', '<=', 1)
+                ->orWhereNotExists(function ($sub) {
+                    $sub->selectRaw('1')->from('pedidos_bma as primero')
+                        ->whereColumn('primero.multienvio_nacional_id', 'pedidos_bma.multienvio_nacional_id')
+                        ->where('primero.multienvio_orden', 1)
+                        ->whereColumn('primero.vendedor_id', 'pedidos_bma.vendedor_id');
+                });
+        });
     }
 
     public function presentar(PedidoBma $pedido, User $usuario): PedidoBma
     {
         $pedido->load($this->relacionesConsulta());
         ResumenGrupoMultienvio::paraPagina(collect([$pedido]), $usuario);
+        $this->marcarAgrupados(collect([$pedido]));
 
         return $this->anexarFlagsVista($pedido, $usuario);
     }
@@ -385,6 +419,7 @@ class ListarPedidosBmaService
                     ->orWhere('contacto_nombre_snapshot', 'like', "%{$termino}%")
                     ->orWhere('contacto_telefono_snapshot', 'like', "%{$termino}%")
                     ->orWhereHas('referencias', fn (Builder $r) => $r->where('folio', 'like', "%{$termino}%"))
+                    ->orWhere(fn (Builder $g) => \App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio::orHermano($g, $termino))
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");

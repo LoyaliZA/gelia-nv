@@ -55,10 +55,11 @@ class ProvisionPantallaSalaPdvCommand extends Command
                 ->first();
 
             $this->line(sprintf(
-                'Sucursal #%d (%s): %s',
+                'Sucursal #%d (%s): %s · %s',
                 $sucursal->id,
                 $sucursal->nombre,
-                (string) ($resultado['url'] ?? 'sin URL'),
+                (string) ($resultado['url_corta'] ?? $resultado['url'] ?? 'sin URL'),
+                (string) ($resultado['url'] ?? ''),
             ));
         }
 

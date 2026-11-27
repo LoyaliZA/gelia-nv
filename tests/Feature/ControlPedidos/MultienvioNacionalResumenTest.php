@@ -298,7 +298,7 @@ class MultienvioNacionalResumenTest extends TestCase
         $this->assertNull($sin['multienvio']);
     }
 
-    public function test_listado_ventas_lleva_multienvio_en_los_miembros(): void
+    public function test_listado_ventas_muestra_el_multienvio_como_una_sola_fila(): void
     {
         $m = $this->confirmadoConFases(['PESAJE_RESPONDIDO', 'PESAJE_RESPONDIDO', 'PESAJE_RESPONDIDO']);
         $suelto = $this->pedidoNacional();
@@ -306,11 +306,27 @@ class MultienvioNacionalResumenTest extends TestCase
         $r = $this->actingAs($this->ventas)->getJson('/control-pedidos/listado')->assertOk();
         $filas = collect($r->json('pedidos.data'))->keyBy('id');
 
-        foreach ($m as $orden => $miembro) {
-            $this->assertSame($orden, $filas[$miembro->id]['multienvio']['orden']);
-            $this->assertSame(3, $filas[$miembro->id]['multienvio']['n_total']);
-            $this->assertCount(3, $filas[$miembro->id]['multienvio']['hermanos']);
-        }
+        $this->assertTrue($filas->has($m[1]->id));
+        $this->assertFalse($filas->has($m[2]->id));
+        $this->assertFalse($filas->has($m[3]->id));
+        $this->assertSame(1, $filas[$m[1]->id]['multienvio']['orden']);
+        $this->assertSame(3, $filas[$m[1]->id]['multienvio']['n_total']);
+        $this->assertTrue($filas[$m[1]->id]['multienvio']['agrupado']);
+        $this->assertCount(3, $filas[$m[1]->id]['multienvio']['hermanos']);
         $this->assertArrayNotHasKey('multienvio', $filas[$suelto->id]);
+
+        // Buscar por el folio de un envío oculto encuentra la fila del grupo.
+        $q = $this->actingAs($this->ventas)->getJson('/control-pedidos/listado?q='.urlencode($m[3]->folio_remision))->assertOk();
+        $this->assertContains($m[1]->id, collect($q->json('pedidos.data'))->pluck('id')->all());
+    }
+
+    public function test_un_envio_hermano_se_abre_sin_cerrar_el_modal_y_solo_dentro_del_grupo(): void
+    {
+        $m = $this->confirmadoConFases(['PESAJE_RESPONDIDO', 'PESAJE_RESPONDIDO', 'PESAJE_RESPONDIDO']);
+        $ajeno = $this->pedidoNacional();
+
+        $this->actingAs($this->ventas)->getJson("/control-pedidos/{$m[1]->id}/multienvio/envios/{$m[3]->id}")
+            ->assertOk()->assertJsonPath('pedido.id', $m[3]->id)->assertJsonPath('pedido.multienvio.orden', 3);
+        $this->actingAs($this->ventas)->getJson("/control-pedidos/{$m[1]->id}/multienvio/envios/{$ajeno->id}")->assertNotFound();
     }
 }

@@ -8,6 +8,7 @@ import { reportarExitoOperacion, reportarMensajeOperacion } from '@/utils/geliaT
 import { subirMedioDirecto } from '@/utils/medios/mediaUploader';
 import useModalPublicidad from '../useModalPublicidad';
 import FormularioPublicidad from './FormularioPublicidad';
+import EditorEncuadrePublicidad from './EditorEncuadrePublicidad';
 
 const ACCEPT = 'image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime';
 const ESPERA_MEDIO_MS = 2000;
@@ -61,6 +62,7 @@ async function duracionDeArchivo(file) {
 const FORMULARIO_INICIAL = {
     alcance: 'sucursal',
     ajuste: 'cover',
+    rotacion: 0,
     publicacion: 'ahora',
     duracion_seg: 10,
     aplicar_duracion_todas: true,
@@ -98,7 +100,7 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                 nombre: file.name,
                 tipo: esVideo ? 'video' : 'imagen',
                 tamano: file.size,
-                previewUrl: esVideo ? null : URL.createObjectURL(file),
+                previewUrl: URL.createObjectURL(file),
                 duracionSeg: await duracionDeArchivo(file),
                 estado: 'preparando',
                 pct: 0,
@@ -139,6 +141,7 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                 medio_id: medio.media_id,
                 alcance: form.alcance,
                 ajuste: form.ajuste,
+                rotacion: form.rotacion ?? 0,
                 activa: form.publicacion !== 'deshabilitada',
                 ...(archivo.tipo === 'imagen' ? { duracion_seg: duracionImagen } : {}),
                 vigente_desde: form.publicacion === 'programar' ? (form.vigente_desde || null) : null,
@@ -220,10 +223,10 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                     <ul className="space-y-2 m-0 p-0 list-none">
                         {archivos.map((archivo) => (
                             <li key={archivo.key} className="flex gap-3 rounded-xl border theme-border p-2">
-                                {archivo.previewUrl ? (
-                                    <img src={archivo.previewUrl} alt="" className="h-14 w-24 rounded-lg object-cover" />
+                                {archivo.tipo === 'video' ? (
+                                    <video src={archivo.previewUrl || undefined} muted playsInline preload="metadata" className="h-14 w-24 rounded-lg object-cover" />
                                 ) : (
-                                    <div className="flex h-14 w-24 items-center justify-center rounded-lg bg-black text-[10px] font-bold text-white">Video</div>
+                                    <img src={archivo.previewUrl} alt="" className="h-14 w-24 rounded-lg object-cover" />
                                 )}
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-bold theme-text-main m-0 truncate">{archivo.nombre}</p>
@@ -265,6 +268,15 @@ export default function ModalAgregarPublicidad({ sucursalId, onClose, onItems })
                         {pausado ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
                         {pausado ? 'Reanudar cargas' : 'Pausar cargas'}
                     </button>
+                ) : null}
+                {archivos.length ? (
+                    <EditorEncuadrePublicidad
+                        url={archivos.find((archivo) => archivo.previewUrl)?.previewUrl}
+                        tipo={archivos.find((archivo) => archivo.previewUrl)?.tipo || tipoFormulario}
+                        rotacion={form.rotacion}
+                        ajuste={form.ajuste}
+                        onRotacionChange={(rotacion) => setForm((actual) => ({ ...actual, rotacion }))}
+                    />
                 ) : null}
                 <FormularioPublicidad
                     valor={form}

@@ -21,13 +21,20 @@ class ListarPedidosDelegadoService
         $this->aplicarFiltros($query, $filtros);
         $this->aplicarOrden($query, $filtros);
 
+        $usuario = auth()->user();
+
         if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $pedido) => $this->presentar($pedido));
+            $pedidos = $query->get();
+            $usuario && \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina($pedidos, $usuario);
+
+            return $pedidos->each(fn (PedidoBma $pedido) => $this->presentar($pedido));
         }
 
         $page = max(1, (int) ($filtros['page'] ?? 1));
+        $paginador = $query->paginate(15, ['*'], 'page', $page)->withQueryString();
+        $usuario && \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina($paginador->getCollection(), $usuario);
 
-        return $query->paginate(15, ['*'], 'page', $page)->withQueryString()->through(fn (PedidoBma $pedido) => $this->presentar($pedido));
+        return $paginador->through(fn (PedidoBma $pedido) => $this->presentar($pedido));
     }
 
     private function presentar(PedidoBma $pedido): PedidoBma

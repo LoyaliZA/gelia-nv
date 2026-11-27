@@ -490,6 +490,50 @@ class PublicidadPdvTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_rotacion_de_pieza_se_guarda_y_llega_a_playlist_sala(): void
+    {
+        $medio = Medio::factory()->create();
+        $item = PdvPantallaPublicidad::factory()->video()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'ruta' => $medio->ruta_local ?? $medio->object_key,
+            'activa' => true,
+            'rotacion' => 0,
+        ]);
+
+        $this->actingAs($this->autorizado)
+            ->patchJson(route('punto_venta.publicidad.update', $item->id), [
+                'sucursal_id' => $this->sucursal->id,
+                'rotacion' => 90,
+            ])
+            ->assertOk()
+            ->assertJsonPath('items.0.rotacion', 90);
+
+        $this->assertSame(90, $item->fresh()->rotacion);
+
+        $payload = app(ConsultaEstadoSalaPdvService::class)->payload($this->sucursal->id, now());
+        $pieza = collect($payload['publicidad'])->firstWhere('id', $item->id);
+        $this->assertNotNull($pieza);
+        $this->assertSame(90, $pieza['rotacion']);
+    }
+
+    public function test_rotacion_invalida_se_rechaza(): void
+    {
+        $medio = Medio::factory()->create();
+        $item = PdvPantallaPublicidad::factory()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'medio_id' => $medio->id,
+            'rotacion' => 0,
+        ]);
+
+        $this->actingAs($this->autorizado)->patchJson(route('punto_venta.publicidad.update', $item->id), [
+            'sucursal_id' => $this->sucursal->id,
+            'rotacion' => 45,
+        ])->assertUnprocessable();
+
+        $this->assertSame(0, $item->fresh()->rotacion);
+    }
+
     /**
      * @param  list<string>|null  $permisos
      */

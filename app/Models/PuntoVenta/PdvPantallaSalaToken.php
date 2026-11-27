@@ -20,6 +20,7 @@ class PdvPantallaSalaToken extends Model
     protected $fillable = [
         'sucursal_id',
         'token_publico',
+        'codigo_corto',
         'token_hash',
         'estado',
         'expira_en',

@@ -234,8 +234,8 @@ it('doble clic en confirmar envía una sola vez', async () => {
         progreso: { pagos_validados: '1/3', remisiones: '0/3', guias: '0/3', enviados: '0/3' },
         cajas_resumen: null,
     }) }));
-    expect(host.textContent).toContain('Este pedido se repartió en 3 envíos');
-    expect(host.textContent).toContain('Folio Wizerp: WZ-2');
+    expect(host.textContent).toContain('Esta compra se repartió en 3 envíos');
+    expect(host.textContent).toContain('Folio Wizerp WZ-2');
     expect(host.textContent).toContain('Pagos validados 1 de 3');
     expect(host.querySelector('[aria-current="true"]').textContent).toContain('Envío 1');
 });

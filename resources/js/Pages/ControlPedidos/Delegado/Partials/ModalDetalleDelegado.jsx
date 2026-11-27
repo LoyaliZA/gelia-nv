@@ -29,6 +29,7 @@ import {
     LABELS_ESTATUS_POR_FASE,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import { codigoDireccionCliente } from '../../Partials/codigoDireccionCliente';
 import ModalVistaPreviaDocumento, { MiniaturaDocumento } from '../../Partials/ModalVistaPreviaDocumento';
 import BotonCopiar from '../../Partials/BotonCopiar';
@@ -520,6 +521,7 @@ export default function ModalDetalleDelegado({
                         <div className="min-w-0">
                             <p className="text-[10px] font-black uppercase theme-text-muted m-0 mb-1">Detalle guía</p>
                             <EncabezadoFolioPedido pedido={pedido} size="lg" />
+                            <HermanosMultienvio pedido={pedido} className="mt-2" />
                             {pedido.vendedor?.name && (
                                 <p className="text-xs font-bold theme-text-muted mt-2 m-0 flex items-center gap-1">
                                     <User className="w-3.5 h-3.5" /> {pedido.vendedor.name}

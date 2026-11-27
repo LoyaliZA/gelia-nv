@@ -29,6 +29,17 @@ class MultienvioNacionalController extends Controller
         return $this->responder($pedidoBma);
     }
 
+    /** Otro envío del mismo multienvío, con la forma del listado de Ventas, para cambiar de envío sin cerrar el modal. */
+    public function envio(PedidoBma $pedidoBma, PedidoBma $envio, \App\Services\ControlPedidos\ListarPedidosBmaService $listar): JsonResponse
+    {
+        $usuario = Auth::user();
+        VisibilidadPedidoBma::assertPuedeConsultar($usuario, $pedidoBma);
+        abort_unless($pedidoBma->multienvio_nacional_id !== null && $pedidoBma->multienvio_nacional_id === $envio->multienvio_nacional_id, 404);
+        VisibilidadPedidoBma::assertPuedeConsultar($usuario, $envio);
+
+        return response()->json(['pedido' => $listar->presentar($envio, $usuario)]);
+    }
+
     public function decision(Request $request, PedidoBma $pedidoBma, RegistrarDecisionMultienvio $servicio): JsonResponse
     {
         VisibilidadPedidoBma::assertPuedeMutarComoVendedora(Auth::user(), $pedidoBma);

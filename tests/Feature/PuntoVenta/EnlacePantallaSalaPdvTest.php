@@ -10,6 +10,7 @@ use App\Models\Sucursal;
 use App\Models\User;
 use App\Services\PuntoVenta\AlcancePdv;
 use App\Services\PuntoVenta\Pantallas\GestionarEnlacePantallaSalaPdvService;
+use App\Services\PuntoVenta\Pantallas\ResolverTokenPantallaSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
@@ -64,11 +65,17 @@ class EnlacePantallaSalaPdvTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('sucursal_id', $this->sucursal->id)
             ->assertJsonPath('enlace_activo', true)
-            ->assertJsonStructure(['url']);
+            ->assertJsonStructure(['url', 'url_kiosko', 'url_corta', 'url_kiosko_corta', 'codigo_corto']);
 
         $url = (string) $response->json('url');
+        $urlKiosko = (string) $response->json('url_kiosko');
         $this->assertStringStartsWith('https://gelianv.neobash.site/sala-turnos/t/', $url);
+        $this->assertStringStartsWith('https://gelianv.neobash.site/sala-publicidad/t/', $urlKiosko);
+        $codigo = $this->codigoDesdeUrlCorta((string) $response->json('url_corta'), 's');
+        $this->assertSame($codigo, $response->json('codigo_corto'));
+        $this->assertSame('https://gelianv.neobash.site/k/'.$codigo, $response->json('url_kiosko_corta'));
         $this->assertStringNotContainsString('form.neobash.site', $url);
+        $this->assertStringNotContainsString('form.neobash.site', $urlKiosko);
         $this->assertDoesNotMatchRegularExpression(
             '#/sala-turnos/'.$this->sucursal->id.'(?:/|$)#',
             $url,
@@ -93,6 +100,8 @@ class EnlacePantallaSalaPdvTest extends TestCase
         )->assertOk();
 
         $this->assertSame($primero->json('url'), $segundo->json('url'));
+        $this->assertSame($primero->json('url_corta'), $segundo->json('url_corta'));
+        $this->assertSame($primero->json('codigo_corto'), $segundo->json('codigo_corto'));
         $this->assertSame(1, PdvPantallaSalaToken::query()->where('sucursal_id', $this->sucursal->id)->count());
     }
 
@@ -108,7 +117,7 @@ class EnlacePantallaSalaPdvTest extends TestCase
         )
             ->assertOk()
             ->assertJsonPath('enlace_activo', true)
-            ->assertJsonStructure(['url']);
+            ->assertJsonStructure(['url', 'url_kiosko', 'url_corta', 'url_kiosko_corta', 'codigo_corto']);
     }
 
     public function test_usuario_sin_permiso_no_obtiene_enlace(): void
@@ -259,6 +268,158 @@ class EnlacePantallaSalaPdvTest extends TestCase
             ->assertJsonPath('sucursal.id', fn ($id) => $id !== $this->otraSucursal->id);
     }
 
+    public function test_kiosko_token_renderiza_componente_sin_reemplazar_sala(): void
+    {
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
+        $token = $coincidencias[1] ?? '';
+        $this->assertNotSame('', $token);
+        $this->assertStringStartsWith('https://gelianv.neobash.site/sala-publicidad/t/', (string) $resultado['url_kiosko']);
+
+        $this->get(route('sala_turnos.publica.token.show', ['token' => $token]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/Sala', false));
+
+        $this->get(route('sala_publicidad.publica.token.show', [
+            'token' => $token,
+            'disposicion' => 'vertical',
+        ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Pantallas/Kiosko', false)
+                ->where('sucursal_id', $this->sucursal->id)
+                ->where('disposicion', 'vertical')
+                ->has('estado_inicial.publicidad'));
+    }
+
+    public function test_kiosko_inactivo_muestra_pantalla_desactivada(): void
+    {
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
+        $token = $coincidencias[1] ?? '';
+
+        app(GestionarEnlacePantallaSalaPdvService::class)->desactivar(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        $this->get(route('sala_publicidad.publica.token.show', ['token' => $token]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/SalaInactiva', false));
+    }
+
+    public function test_codigo_corto_abre_sala_y_kiosko_sin_alterar_token(): void
+    {
+        $this->crearLlamadoActivo('V-0600', 'Cliente Corto', 'Ana Vendedora');
+
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        $codigo = (string) $resultado['codigo_corto'];
+        $this->assertMatchesRegularExpression('/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$/', $codigo);
+        $this->assertStringStartsWith('https://gelianv.neobash.site/sala-turnos/t/', (string) $resultado['url']);
+
+        preg_match('#/sala-turnos/t/([A-Za-z0-9]+)#', (string) $resultado['url'], $coincidencias);
+        $token = $coincidencias[1] ?? '';
+
+        $this->get(route('sala_turnos.publica.corto.show', ['codigo' => $codigo]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Pantallas/Sala', false)
+                ->where('sucursal_id', $this->sucursal->id)
+                ->has('estado_inicial.llamados', 1));
+
+        $this->get('/s/'.strtolower($codigo))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/Sala', false));
+
+        $this->get(route('sala_publicidad.publica.corto.show', [
+            'codigo' => $codigo,
+            'disposicion' => 'vertical',
+        ]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('PuntoVenta/Pantallas/Kiosko', false)
+                ->where('sucursal_id', $this->sucursal->id)
+                ->where('disposicion', 'vertical'));
+
+        $this->getJson(route('sala_turnos.publica.corto.estado', ['codigo' => $codigo]))
+            ->assertOk()
+            ->assertJsonPath('llamados.0.folio', 'V-0600');
+
+        $this->get(route('sala_turnos.publica.token.show', ['token' => $token]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/Sala', false));
+    }
+
+    public function test_codigo_corto_inactivo_muestra_pantalla_desactivada(): void
+    {
+        $resultado = app(GestionarEnlacePantallaSalaPdvService::class)->obtenerEnlace(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+        $codigo = (string) $resultado['codigo_corto'];
+
+        app(GestionarEnlacePantallaSalaPdvService::class)->desactivar(
+            $this->autorizado,
+            $this->sucursal->id,
+            now(),
+        );
+
+        $this->get(route('sala_turnos.publica.corto.show', ['codigo' => $codigo]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/SalaInactiva', false));
+
+        $this->get(route('sala_publicidad.publica.corto.show', ['codigo' => $codigo]))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->component('PuntoVenta/Pantallas/SalaInactiva', false));
+    }
+
+    public function test_codigo_corto_desconocido_falla_de_forma_segura(): void
+    {
+        $this->get(route('sala_turnos.publica.corto.show', ['codigo' => 'AAAAAA']))
+            ->assertNotFound();
+
+        $this->getJson(route('sala_turnos.publica.corto.estado', ['codigo' => 'AAAAAA']))
+            ->assertNotFound();
+    }
+
+    public function test_consultar_asigna_codigo_corto_a_enlace_existente(): void
+    {
+        $generado = app(ResolverTokenPantallaSalaPdvService::class)->generarTokenPlano();
+        PdvPantallaSalaToken::query()->create([
+            'sucursal_id' => $this->sucursal->id,
+            'token_publico' => $generado['token'],
+            'token_hash' => $generado['hash'],
+            'estado' => PdvPantallaSalaToken::ESTADO_ACTIVA,
+            'creado_por' => $this->autorizado->id,
+        ]);
+
+        $response = $this->actingAs($this->autorizado)->getJson(
+            route('punto_venta.pantalla_sala.enlace.estado', ['sucursal_id' => $this->sucursal->id]),
+        )->assertOk();
+
+        $codigo = $this->codigoDesdeUrlCorta((string) $response->json('url_corta'), 's');
+        $this->assertSame($generado['token'], PdvPantallaSalaToken::query()->where('sucursal_id', $this->sucursal->id)->value('token_publico'));
+        $this->assertSame($codigo, PdvPantallaSalaToken::query()->where('sucursal_id', $this->sucursal->id)->value('codigo_corto'));
+        $this->assertStringStartsWith('https://gelianv.neobash.site/sala-turnos/t/'.$generado['token'], (string) $response->json('url'));
+    }
+
     public function test_pagina_acceso_requiere_permiso(): void
     {
         $this->actingAs($this->autorizado)->get(route('punto_venta.pantalla_sala.index'))
@@ -296,6 +457,18 @@ class EnlacePantallaSalaPdvTest extends TestCase
         $turno->update(['atencion_actual_id' => $atencion->id]);
 
         return $turno->fresh();
+    }
+
+    private function codigoDesdeUrlCorta(string $url, string $prefijo): string
+    {
+        $this->assertMatchesRegularExpression(
+            '#^https://gelianv\.neobash\.site/'.$prefijo.'/[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$#',
+            $url,
+        );
+
+        preg_match('#/'.$prefijo.'/([A-Z0-9]+)$#', $url, $coincidencias);
+
+        return $coincidencias[1] ?? '';
     }
 
     private function activarModulo(): void

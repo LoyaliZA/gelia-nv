@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, AlertTriangle, CheckCircle2, ChevronDown, FileText, Paperclip, Store } from 'lucide-react';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import { formatearFechaHoraAuditoria, BTN_SECONDARY } from '../../Partials/pedidosBmaStyles';
 
 export function indicacionRevisionPedido({ reRevision, esRechazado, pagoValidado, badgeRemision }) {
@@ -18,6 +19,7 @@ export default function EncabezadoRevisionPedido({ pedido, badge, badgeHito, bad
             <div className="gelia-pedidos-revision-folio min-w-0">
                 <h2 id="auditoria-revision-titulo" className="text-xs font-semibold theme-text-muted m-0 mb-1">Revisión de pedido</h2>
                 <EncabezadoFolioPedido pedido={pedido} size="lg" mostrarInterno={false} />
+                <HermanosMultienvio pedido={pedido} className="mt-2" />
             </div>
             <div className="gelia-pedidos-revision-cliente min-w-0">
                 <p className="text-base sm:text-lg font-bold theme-text-main m-0">{pedido.cliente?.nombre || 'Sin cliente'}</p>
