@@ -27,9 +27,13 @@ final class LecturaConsultaNacional
             }
         }
 
+        $usuario = request()->user() ?? auth()->user();
+
         return [
             'id' => $pedido->id,
             'folio' => $pedido->folio,
+            // Resumen del propio grupo para que la UI lo conserve tras `adoptar` (solo hermanos visibles al usuario).
+            'multienvio' => $usuario ? ResumenGrupoMultienvio::de($pedido, $usuario) : null,
             'revision_registro' => (int) $pedido->revision_registro,
             'base_captura' => $pedido->base_captura,
             'solicitud_preparacion' => $pedido->solicitud_preparacion,

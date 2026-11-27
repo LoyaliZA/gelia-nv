@@ -24,6 +24,7 @@ import {
 } from '../pedidosBmaStyles';
 import DetallePedidoDato, { DetallePedidoDatos, DetallePedidoResumen } from './DetallePedidoDato';
 import DetallePedidoSeccion from './DetallePedidoSeccion';
+import SeccionMultienvioDetalle from './SeccionMultienvioDetalle';
 import { etiquetaRespuestaDetalle, textoPagosPedido } from './resolverModalidadDetalle';
 
 function kg(valor) {
@@ -147,6 +148,7 @@ export default function CuerpoDetalleNacional({
                     <DetallePedidoDato icon={Wallet} label="Total a cobrar" value={formatearMoneda(pedido.total_a_cobrar)} obligatorio />
                 </DetallePedidoDatos>
             </DetallePedidoSeccion>
+            <SeccionMultienvioDetalle pedido={pedido} />
             {cajas.length > 0 && (
                 <DetallePedidoSeccion icon={Package} titulo="Envíos y pesaje">
                     {cajas.map((c, idx) => (

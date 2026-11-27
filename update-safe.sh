@@ -179,9 +179,8 @@ confirmar_recreacion() {
 }
 
 recargar_nginx() {
-    log "Recargando Nginx sin cortar conexiones..."
-    docker exec -i "$WEB_CONTAINER" nginx -s reload
-    ok "Nginx recargado."
+    log "Renderizando vhosts de Nginx desde APP_URL y FORM_PUBLIC_URL..."
+    "${SCRIPT_DIR}/reload-nginx.sh"
 }
 
 graceful_php_fpm_reload() {

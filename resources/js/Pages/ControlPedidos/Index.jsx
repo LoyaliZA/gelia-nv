@@ -13,6 +13,7 @@ import ModalMovimientosTienda from './Partials/ModalMovimientosTienda';
 import ModalPiezasAdicionales from './Partials/ModalPiezasAdicionales';
 import ModalCambioATiendaMunicipal from './Partials/ModalCambioATiendaMunicipal';
 import ModalFormPedido from './Partials/ModalFormPedido';
+import { CambiarEnvioContext } from './Nacional/CambiarEnvioContext';
 import ModalSeleccionarModalidad from './Partials/ModalSeleccionarModalidad';
 import ModalDetallePedido from './Partials/ModalDetallePedido';
 import ModalBitacoraPedido from './Partials/ModalBitacoraPedido';
@@ -24,6 +25,7 @@ import ModalEliminarRegistroPedido from './Partials/ModalEliminarRegistroPedido'
 import ModalGenerarLinkDireccion from './Partials/ModalGenerarLinkDireccion';
 import ModalAnexarPagoEnvio from './Partials/ModalAnexarPagoEnvio';
 import ModalAnexoExtraordinario from './Nacional/ModalAnexoExtraordinario';
+import { firmaMultienvio } from './Partials/EtiquetaMultienvio';
 import ModalCargarGuiaCliente from './Partials/ModalCargarGuiaCliente';
 import ModalLiberarResguardoAbierto from './Auditar/Partials/ModalLiberarResguardoAbierto';
 import useListadoDiscreto from './Partials/useListadoDiscreto';
@@ -167,7 +169,10 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                 && fresco.consulta_cerrada_at === m.pedido.consulta_cerrada_at
                 && JSON.stringify(fresco.solicitud_preparacion ?? null) === JSON.stringify(m.pedido.solicitud_preparacion ?? null)
                 && Number(fresco.peso_real_kg) === Number(m.pedido.peso_real_kg)
-                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas);
+                && Number(fresco.numero_cajas) === Number(m.pedido.numero_cajas)
+                && (fresco.multienvio_nacional_id ?? null) === (m.pedido.multienvio_nacional_id ?? null)
+                && (fresco.multienvio_orden ?? null) === (m.pedido.multienvio_orden ?? null)
+                && firmaMultienvio(fresco) === firmaMultienvio(m.pedido);
             if (mismo) return m;
             return { ...m, pedido: fresco };
         };
@@ -265,6 +270,47 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             instancia: `conv-${pedido.id}`,
             intencion: 'conversion',
         });
+    };
+    // Multienvío: un solo modal. Los envíos hermanos se precargan al abrir y el cambio es inmediato, sin red,
+    // conservando la posición de desplazamiento (se remonta solo el formulario, no se vuelve a abrir el modal).
+    const enviosCache = useRef(new Map());
+    const idActualForm = modalForm.abierto ? modalForm.pedido?.id : null;
+    const hermanosActuales = modalForm.abierto ? modalForm.pedido?.multienvio : null;
+    useEffect(() => {
+        if (!idActualForm || hermanosActuales?.estado !== 'activo') return undefined;
+        let cancelado = false;
+        (hermanosActuales.hermanos || []).filter((h) => h.id !== idActualForm).forEach((h) => {
+            axios.get(route('control_pedidos.multienvio.envio', { pedidoBma: idActualForm, envio: h.id }))
+                .then(({ data }) => { if (!cancelado && data?.pedido) enviosCache.current.set(h.id, data.pedido); })
+                .catch(() => {});
+        });
+        return () => { cancelado = true; };
+    }, [idActualForm, hermanosActuales?.estado, hermanosActuales?.hermanos?.length]);
+    useEffect(() => { if (!modalForm.abierto) enviosCache.current.clear(); }, [modalForm.abierto]);
+
+    const contenedorDesplazable = () => {
+        const modal = document.querySelector('.registrar-tienda-modal');
+        if (!modal) return null;
+        return [modal, ...modal.querySelectorAll('*')].find((el) => el.scrollHeight > el.clientHeight + 4 && /(auto|scroll)/.test(getComputedStyle(el).overflowY)) || null;
+    };
+    const cambiarEnvio = async (id, desdeId) => {
+        const posicion = contenedorDesplazable()?.scrollTop ?? 0;
+        let destino = enviosCache.current.get(id);
+        if (!destino) {
+            try {
+                const { data } = await axios.get(route('control_pedidos.multienvio.envio', { pedidoBma: desdeId, envio: id }));
+                destino = data?.pedido;
+            } catch {
+                setAlerta({ abierto: true, tipo: 'error', titulo: 'No se pudo abrir el envío', mensaje: 'Vuelve a intentarlo en unos segundos.' });
+                return;
+            }
+        }
+        if (!destino) return;
+        document.body.classList.add('gelia-cambio-envio');
+        setTimeout(() => document.body.classList.remove('gelia-cambio-envio'), 400);
+        setModalForm((m) => ({ ...m, pedido: destino, instancia: `mev-${destino.multienvio_nacional_id}-${destino.id}` }));
+        const restaurar = () => { const el = contenedorDesplazable(); if (el) el.scrollTop = posicion; };
+        requestAnimationFrame(() => { restaurar(); requestAnimationFrame(restaurar); });
     };
     const abrirVer = (pedido) => setModalDetalle({ abierto: true, pedido });
     const abrirBitacora = (pedido) => setModalBitacora({ abierto: true, pedido });
@@ -375,6 +421,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
             </GeliaPageShell>
 
             {modalForm.abierto ? (
+                <CambiarEnvioContext.Provider value={cambiarEnvio}>
                 <ModalFormPedido
                     key={modalForm.instancia ?? (modalForm.recuperarBorrador ? 'new-draft' : 'new-clean')}
                     abierto
@@ -402,6 +449,7 @@ export default function Index({ auth, pedidos, metricas = {}, filtros = {}, cata
                         refrescarListado();
                     }}
                 />
+                </CambiarEnvioContext.Provider>
             ) : null}
             <ModalAnexarPagoEnvio
                 abierto={modalAnexo.abierto}

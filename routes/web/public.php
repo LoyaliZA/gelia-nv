@@ -49,6 +49,23 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::get('/sala-turnos/{sucursal}/estado', [PantallaSalaPdvController::class, 'estado'])
         ->whereNumber('sucursal')
         ->name('sala_turnos.publica.estado');
+
+    Route::get('/sala-publicidad/t/{token}', [PantallaSalaPdvController::class, 'showKioskoPorToken'])
+        ->where('token', '[A-Za-z0-9]{16,64}')
+        ->name('sala_publicidad.publica.token.show');
+    Route::get('/sala-publicidad/{sucursal}', [PantallaSalaPdvController::class, 'showKiosko'])
+        ->whereNumber('sucursal')
+        ->name('sala_publicidad.publica.show');
+
+    Route::get('/s/{codigo}', [PantallaSalaPdvController::class, 'showPorCodigoCorto'])
+        ->where('codigo', '[A-Za-z0-9]{6}')
+        ->name('sala_turnos.publica.corto.show');
+    Route::get('/s/{codigo}/estado', [PantallaSalaPdvController::class, 'estadoPorCodigoCorto'])
+        ->where('codigo', '[A-Za-z0-9]{6}')
+        ->name('sala_turnos.publica.corto.estado');
+    Route::get('/k/{codigo}', [PantallaSalaPdvController::class, 'showKioskoPorCodigoCorto'])
+        ->where('codigo', '[A-Za-z0-9]{6}')
+        ->name('sala_publicidad.publica.corto.show');
 });
 
 Route::middleware(['throttle:30,1', HardenSolicitudDireccionPublica::class])->group(function () {

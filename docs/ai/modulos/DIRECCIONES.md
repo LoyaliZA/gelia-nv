@@ -11,6 +11,7 @@
 - [verificado] Snapshot conserva versión propia y proyecta el domicilio del pedido: `app/Services/ControlPedidos/Direcciones/CrearSnapshotDireccionPedido.php:35` y `:89`.
 - [verificado] Se admite origen normalizado y legado; snapshot manual vigente puede conservarse: `app/Services/ControlPedidos/Direcciones/CrearSnapshotDireccionPedido.php:22` y `:73`.
 - [verificado] Continuación nacional elige la dirección principal verificada, muestra nombre de quien recibe y domicilio, y permite alta adicional (N-07/N-09) sin mutar el catálogo al cotizar: `ContinuacionEnvioNacional.jsx`.
+- [verificado] Un enlace público sin `accion_permitida` infiere primera dirección si el cliente no tiene activas, o adicional si ya las tiene: `ResolverAccionEnlaceDireccion.php`. El botón «Generar enlace» no envía acción; el servicio la rellena.
 
 ## Reglas que no se rompen
 - [verificado] Cambio tras remisión o guía requiere permisos adicionales; enviado/entregado bloquea cambio: `app/Services/ControlPedidos/Direcciones/CambiarDireccionPedido.php:32`.
@@ -29,4 +30,4 @@
 - [verificado] La salida no acepta un PDF de guía si ninguno quedó activo: `app/Services/ControlPedidos/MarcarEnviadoPedidoBmaService.php`.
 - [verificado] La documentación describe flag para normalizadas; valor efectivo del despliegue queda por confirmar sin leer configuración operativa: `docs/control-pedidos/pase-3-cierre.md:8`.
 
-- Última verificación: 2026-11-24, working tree, sin commit.
+- Última verificación: 2026-11-27, working tree, sin commit.

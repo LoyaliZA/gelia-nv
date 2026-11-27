@@ -121,6 +121,7 @@ export default function Index({
                 sucursal_id: sucursalId,
                 alcance: form.alcance,
                 ajuste: form.ajuste,
+                rotacion: form.rotacion,
                 duracion_seg: item.tipo === 'imagen' ? form.duracion_seg : undefined,
                 vigente_desde: form.vigente_desde || null,
                 vigente_hasta: form.vigente_hasta || null,
@@ -198,7 +199,7 @@ export default function Index({
             <GeliaPageShell className="space-y-4">
                 <GeliaTituloCard
                     title="Publicidad de sala"
-                    description="Playlist de la TV de turnos. El orden de arriba hacia abajo es el de reproducción."
+                    description="Playlist de la TV de turnos y de la pantalla de publicidad. El orden de arriba hacia abajo es el de reproducción."
                     icon={Images}
                 >
                     {sucursalId ? (

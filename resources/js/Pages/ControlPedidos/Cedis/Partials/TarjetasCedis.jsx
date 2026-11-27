@@ -32,6 +32,7 @@ import {
 } from '../../Partials/pedidosBmaStyles';
 import { pedidoEsTrasladoInternoPdv } from '../../Partials/destinoSucursalPedido';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import RutaPedidoTienda from '../../Partials/RutaPedidoTienda';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import ModalConfirmarAccion from '../../Partials/ModalConfirmarAccion';
@@ -121,6 +122,7 @@ function TarjetaPedido({
             <div className="gelia-pedidos-tarjeta-cabecera flex flex-col gap-3">
                 <div className="min-w-0">
                     <EncabezadoFolioPedido pedido={pedido} size="lg" etiquetaPrincipal="Folio" internoCompacto />
+                    <HermanosMultienvio pedido={pedido} className="mt-1" />
                     <p className="gelia-cedis-cliente">Cliente: {pedido.cliente?.nombre || pedido.cliente?.nombre_comercial || pedido.contacto_nombre_snapshot || 'Cliente por confirmar'}</p>
                     <div className="gelia-cedis-solicitud">
                         {pedido.vendedor?.name && <span className="gelia-cedis-solicitante" aria-label={`Solicitó ${pedido.vendedor.name}`}><User size={15} aria-hidden />{pedido.vendedor.name}</span>}

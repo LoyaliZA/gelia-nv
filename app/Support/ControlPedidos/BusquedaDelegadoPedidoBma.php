@@ -59,6 +59,7 @@ class BusquedaDelegadoPedidoBma
                 self::CAMPO_FOLIO => $q->where(function (Builder $f) use ($termino) {
                     $f->where('folio', 'like', "%{$termino}%")
                         ->orWhereHas('principal', fn (Builder $p) => $p->where('folio', 'like', "%{$termino}%"));
+                    \App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio::orHermano($f, $termino, ['folio']);
                 }),
                 self::CAMPO_GUIA => $q->where('numero_rastreo', 'like', "%{$termino}%"),
                 self::CAMPO_CLIENTE => $q->whereHas('cliente', function (Builder $c) use ($termino) {
@@ -80,6 +81,8 @@ class BusquedaDelegadoPedidoBma
                 $c->where('nombre', 'like', "%{$termino}%")
                     ->orWhere('numero_cliente', 'like', "%{$termino}%");
             });
+
+        \App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio::orHermano($q, $termino, ['folio', 'folio_remision', 'numero_remision', 'numero_rastreo']);
 
         if (ctype_digit($termino)) {
             $q->orWhere('id', (int) $termino);

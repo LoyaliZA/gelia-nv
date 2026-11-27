@@ -66,6 +66,7 @@ class GestionarPublicidadPdvService
             'ruta' => $medio->ruta_local,
             'duracion_seg' => $this->duracionPara($tipo, $datos['duracion_seg'] ?? $medio->duracion_seg),
             'ajuste' => $datos['ajuste'] ?? PdvPantallaPublicidad::AJUSTE_COVER,
+            'rotacion' => $this->normalizarRotacion($datos['rotacion'] ?? 0),
             'orden' => $maxOrden + 1,
             'activa' => array_key_exists('activa', $datos)
                 ? filter_var($datos['activa'], FILTER_VALIDATE_BOOLEAN)
@@ -99,6 +100,9 @@ class GestionarPublicidadPdvService
         }
         if (array_key_exists('ajuste', $datos) && $datos['ajuste']) {
             $item->ajuste = $datos['ajuste'];
+        }
+        if (array_key_exists('rotacion', $datos)) {
+            $item->rotacion = $this->normalizarRotacion($datos['rotacion']);
         }
         if (array_key_exists('volumen_pct', $datos) && $tipo === PdvPantallaPublicidad::TIPO_VIDEO) {
             $item->volumen_pct = $this->normalizarVolumenPieza($datos['volumen_pct']);
@@ -255,6 +259,13 @@ class GestionarPublicidadPdvService
         }
 
         return 30;
+    }
+
+    private function normalizarRotacion(mixed $valor): int
+    {
+        $grados = (int) $valor;
+
+        return in_array($grados, PdvPantallaPublicidad::ROTACIONES, true) ? $grados : 0;
     }
 
     private function normalizarVolumenPieza(mixed $valor): ?int

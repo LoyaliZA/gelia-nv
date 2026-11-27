@@ -165,9 +165,23 @@ export default function ContinuacionEnvioNacional({ pedido, catalogos, pendiente
         });
     };
 
+    const grupoEnvios = pedido?.multienvio;
+    const envioMultienvio = grupoEnvios?.estado === 'activo' && grupoEnvios.orden && grupoEnvios.n_total && !grupoEnvios.parcial
+        ? { orden: grupoEnvios.orden, n_total: grupoEnvios.n_total }
+        : null;
+
     return (
         <section className="registrar-tienda-panel space-y-3" aria-label="Cotización y pago">
-            <h3 className="m-0 text-base">{pendiente ? 'Pago de mercancía' : 'Cotización y pago'}</h3>
+            <h3 className="m-0 text-base">
+                {pendiente ? 'Pago de mercancía' : 'Cotización y pago'}
+                {envioMultienvio && <span className="theme-text-muted font-semibold"> · Envío {envioMultienvio.orden} de {envioMultienvio.n_total}{pedido.folio_remision ? ` (Folio Wizerp ${pedido.folio_remision})` : ''}</span>}
+            </h3>
+            {envioMultienvio && (
+                <p className="m-0 text-sm theme-text-muted" data-ayuda-pago-compartido>
+                    Registra aquí solo lo que corresponde a este envío. Si el cliente pagó varios envíos con una sola transferencia,
+                    adjunta el mismo comprobante, captura la parte de este envío y escribe «Transferencia compartida»; después elige otro envío arriba.
+                </p>
+            )}
             {mercanciaPagada && <p className="m-0 text-sm" role="status">Mercancía pagada. Se conservan las exhibiciones verificadas.</p>}
             {puedeCotizar && (
                 <details className="space-y-3" open={!cotizada || undefined}>

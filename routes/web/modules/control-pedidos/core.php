@@ -33,6 +33,9 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
     Route::post('/municipal/{pedidoBma}/disponibilidad', [\App\Http\Controllers\ControlPedidos\Municipal\ConsultaMunicipalController::class, 'responder'])->name('municipal.disponibilidad');
     Route::get('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'show'])->name('cambio_cobertura_tienda.show');
     Route::post('/{pedidoBma}/cambio-cobertura-tienda', [\App\Http\Controllers\ControlPedidos\CambioCoberturaTiendaController::class, 'update'])->name('cambio_cobertura_tienda.update');
+    // Lectura: el acceso lo decide VisibilidadPedidoBma::puedeConsultar (el grupo no concede permiso).
+    Route::get('/{pedidoBma}/multienvio', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'show'])->name('multienvio.show');
+    Route::get('/{pedidoBma}/multienvio/envios/{envio}', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'envio'])->name('multienvio.envio');
     Route::get('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'show'])->name('disponibilidad_tienda.show');
     Route::post('/{pedidoBma}/disponibilidad-tienda', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'update'])->name('disponibilidad_tienda.update');
     Route::post('/{pedidoBma}/disponibilidad-tienda/alternativa', [\App\Http\Controllers\ControlPedidos\DisponibilidadTiendaController::class, 'alternativa'])->name('disponibilidad_tienda.alternativa');
@@ -88,6 +91,9 @@ Route::prefix('control-pedidos')->name('control_pedidos.')->group(function () {
         Route::post('/{pedidoBma}/anexo-extraordinario', [PedidoBmaController::class, 'anexoExtraordinario'])->name('anexo_extraordinario');
         Route::post('/{pedidoBma}/paqueteria-nacional', [PedidoBmaController::class, 'paqueteriaNacional'])->name('paqueteria_nacional');
         Route::post('/{pedidoBma}/cotizacion-nacional/vista-previa', [PedidoBmaController::class, 'vistaPreviaCotizacionNacional'])->name('vista_previa_cotizacion_nacional');
+        Route::post('/{pedidoBma}/multienvio/decision', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'decision'])->name('multienvio.decision');
+        Route::put('/{pedidoBma}/multienvio/borrador', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'borrador'])->name('multienvio.borrador');
+        Route::post('/{pedidoBma}/multienvio/confirmar', [\App\Http\Controllers\ControlPedidos\MultienvioNacionalController::class, 'confirmar'])->name('multienvio.confirmar');
         Route::post('/{pedidoBma}/custodia-nacional', [PedidoBmaController::class, 'custodiaNacional'])->name('custodia_nacional');
         Route::post('/{pedidoBma}/remision-caja', [PedidoBmaController::class, 'remisionCajaNacional'])->name('remision_caja_nacional');
         Route::post('/{pedidoBma}/cambio-tienda-nacional', [PedidoBmaController::class, 'cambioTiendaNacional'])->name('cambio_tienda_nacional');

@@ -13,6 +13,7 @@ import {
     LABELS_ESTATUS_POR_FASE,
 } from '../../Partials/pedidosBmaStyles';
 import EncabezadoFolioPedido from '../../Partials/EncabezadoFolioPedido';
+import HermanosMultienvio from '../../Partials/HermanosMultienvio';
 import BloqueVendedorPedido from '../../Partials/BloqueVendedorPedido';
 import BotonAccionCubico from '../../Partials/BotonAccionCubico';
 import ModalDetalleDelegado from './ModalDetalleDelegado';
@@ -98,6 +99,7 @@ function CardPedidoDelegado({ pedido, onAbrir, onBitacora }) {
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                         <EncabezadoFolioPedido pedido={pedido} size="sm" />
+                        <HermanosMultienvio pedido={pedido} className="mt-1" />
                         <p className="text-sm font-bold theme-text-main m-0 mt-1 truncate">{pedido.cliente?.nombre || '—'}</p>
                         <BloqueVendedorPedido pedido={pedido} variante="nombre" className="mt-1" />
                     </div>
@@ -142,6 +144,7 @@ export default function TablaDelegado({
     busqueda = '',
     cargando = false,
     onModalAbierto,
+    onPdfCajaGuardado,
     onIrAPagina,
     onLimpiarBusqueda,
     mensajeFiltroVacio = null,
@@ -303,6 +306,7 @@ export default function TablaDelegado({
                 pedido={pedidoDetalle}
                 onClose={cerrarDetalle}
                 onPedidoActualizado={setPedidoDetalle}
+                onPdfCajaGuardado={onPdfCajaGuardado}
                 onReportarError={(p) => setPedidoError(p)}
             />
             <ModalBitacoraPedido

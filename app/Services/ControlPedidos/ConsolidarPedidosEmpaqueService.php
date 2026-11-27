@@ -108,6 +108,10 @@ class ConsolidarPedidosEmpaqueService
 
     public function assertConsolidable(PedidoBma $pedido): void
     {
+        if ($pedido->multienvio_nacional_id !== null) {
+            throw new \RuntimeException("El pedido {$pedido->folio} pertenece a un multienvío con seguro; cada envío sale con su propia remisión y guía, no se consolida.");
+        }
+
         $fase = $pedido->estatus?->fase_ciclo;
         if (!in_array($fase, [
             CatalogoEstatusPedido::FASE_EN_CEDIS,

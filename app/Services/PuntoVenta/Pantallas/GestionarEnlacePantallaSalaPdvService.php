@@ -6,6 +6,7 @@ use App\Contracts\PuntoVenta\ResuelveAlcancePdv;
 use App\Models\PuntoVenta\PdvPantallaSalaToken;
 use App\Models\User;
 use App\Services\PuntoVenta\PuntoVentaModulo;
+use App\Support\FormPublicUrl;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 
@@ -61,6 +62,7 @@ class GestionarEnlacePantallaSalaPdvService
             $registro = PdvPantallaSalaToken::query()->create([
                 'sucursal_id' => $sucursalId,
                 'token_publico' => $generado['token'],
+                'codigo_corto' => $this->resolver->generarCodigoCorto(),
                 'token_hash' => $generado['hash'],
                 'estado' => PdvPantallaSalaToken::ESTADO_ACTIVA,
                 'expira_en' => null,
@@ -122,11 +124,7 @@ class GestionarEnlacePantallaSalaPdvService
             $registro = $this->registroCanonico($sucursalId, true);
 
             if (! $registro instanceof PdvPantallaSalaToken) {
-                return [
-                    'sucursal_id' => $sucursalId,
-                    'enlace_activo' => false,
-                    'url' => null,
-                ];
+                return $this->serializarRegistro(null, $sucursalId);
             }
 
             if ($registro->estado === PdvPantallaSalaToken::ESTADO_ACTIVA) {
@@ -179,15 +177,37 @@ class GestionarEnlacePantallaSalaPdvService
                 'sucursal_id' => $sucursalId,
                 'enlace_activo' => false,
                 'url' => null,
+                'url_kiosko' => null,
+                'url_corta' => null,
+                'url_kiosko_corta' => null,
+                'codigo_corto' => null,
                 'ultimo_acceso_at' => null,
             ];
         }
+
+        $registro = $this->asegurarCodigoCorto($registro);
+        $codigo = (string) $registro->codigo_corto;
 
         return [
             'sucursal_id' => (int) $registro->sucursal_id,
             'enlace_activo' => $registro->estado === PdvPantallaSalaToken::ESTADO_ACTIVA,
             'url' => $this->resolver->urlPublicaDesdeToken((string) $registro->token_publico),
+            'url_kiosko' => FormPublicUrl::salaPublicidadShow((string) $registro->token_publico),
+            'url_corta' => $codigo !== '' ? FormPublicUrl::salaTurnosCorta($codigo) : null,
+            'url_kiosko_corta' => $codigo !== '' ? FormPublicUrl::salaPublicidadCorta($codigo) : null,
+            'codigo_corto' => $codigo !== '' ? $codigo : null,
             'ultimo_acceso_at' => $registro->ultimo_acceso_at?->toIso8601String(),
         ];
+    }
+
+    private function asegurarCodigoCorto(PdvPantallaSalaToken $registro): PdvPantallaSalaToken
+    {
+        if (is_string($registro->codigo_corto) && $registro->codigo_corto !== '') {
+            return $registro;
+        }
+
+        $registro->update(['codigo_corto' => $this->resolver->generarCodigoCorto()]);
+
+        return $registro->fresh() ?? $registro;
     }
 }

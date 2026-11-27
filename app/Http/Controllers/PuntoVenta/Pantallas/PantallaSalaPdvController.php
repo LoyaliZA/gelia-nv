@@ -8,6 +8,7 @@ use App\Services\PuntoVenta\Pantallas\ConsultaEstadoSalaPdvService;
 use App\Services\PuntoVenta\Pantallas\ResolverTokenPantallaSalaPdvService;
 use App\Services\PuntoVenta\PuntoVentaModulo;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -49,6 +50,45 @@ class PantallaSalaPdvController extends Controller
         );
     }
 
+    public function showKiosko(
+        int $sucursal,
+        Request $request,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): Response {
+        $this->asegurarModuloHabilitado($modulo);
+
+        return $this->renderKiosko(
+            $sucursal,
+            $consulta,
+            route('sala_turnos.publica.estado', ['sucursal' => $sucursal], false),
+            $this->disposicionDesde($request),
+        );
+    }
+
+    public function showKioskoPorToken(
+        string $token,
+        Request $request,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): Response {
+        $this->asegurarModuloHabilitado($modulo);
+
+        try {
+            $registro = $resolver->resolver($token, now(), true);
+        } catch (PantallaSalaInactivaException $e) {
+            return $this->renderSalaInactiva($e);
+        }
+
+        return $this->renderKiosko(
+            (int) $registro->sucursal_id,
+            $consulta,
+            route('sala_turnos.publica.token.estado', ['token' => $token], false),
+            $this->disposicionDesde($request),
+        );
+    }
+
     public function estado(
         int $sucursal,
         ConsultaEstadoSalaPdvService $consulta,
@@ -79,6 +119,70 @@ class PantallaSalaPdvController extends Controller
         return response()->json($consulta->payload((int) $registro->sucursal_id, now()));
     }
 
+    public function showPorCodigoCorto(
+        string $codigo,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): Response {
+        $this->asegurarModuloHabilitado($modulo);
+
+        try {
+            $registro = $resolver->resolverPorCodigoCorto($codigo, now(), true);
+        } catch (PantallaSalaInactivaException $e) {
+            return $this->renderSalaInactiva($e);
+        }
+
+        return $this->renderSala(
+            (int) $registro->sucursal_id,
+            $consulta,
+            route('sala_turnos.publica.corto.estado', ['codigo' => $registro->codigo_corto], false),
+        );
+    }
+
+    public function showKioskoPorCodigoCorto(
+        string $codigo,
+        Request $request,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): Response {
+        $this->asegurarModuloHabilitado($modulo);
+
+        try {
+            $registro = $resolver->resolverPorCodigoCorto($codigo, now(), true);
+        } catch (PantallaSalaInactivaException $e) {
+            return $this->renderSalaInactiva($e);
+        }
+
+        return $this->renderKiosko(
+            (int) $registro->sucursal_id,
+            $consulta,
+            route('sala_turnos.publica.corto.estado', ['codigo' => $registro->codigo_corto], false),
+            $this->disposicionDesde($request),
+        );
+    }
+
+    public function estadoPorCodigoCorto(
+        string $codigo,
+        ResolverTokenPantallaSalaPdvService $resolver,
+        ConsultaEstadoSalaPdvService $consulta,
+        PuntoVentaModulo $modulo,
+    ): JsonResponse {
+        $this->asegurarModuloHabilitado($modulo);
+
+        try {
+            $registro = $resolver->resolverPorCodigoCorto($codigo, now());
+        } catch (PantallaSalaInactivaException) {
+            return response()->json([
+                'activa' => false,
+                'mensaje' => 'La pantalla de sala está desactivada.',
+            ], 403);
+        }
+
+        return response()->json($consulta->payload((int) $registro->sucursal_id, now()));
+    }
+
     private function renderSala(int $sucursalId, ConsultaEstadoSalaPdvService $consulta, string $urlEstado): Response
     {
         $estado = $consulta->payload($sucursalId, now());
@@ -88,6 +192,27 @@ class PantallaSalaPdvController extends Controller
             'sucursal_id' => $sucursalId,
             'url_estado' => $urlEstado,
         ]);
+    }
+
+    private function renderKiosko(
+        int $sucursalId,
+        ConsultaEstadoSalaPdvService $consulta,
+        string $urlEstado,
+        string $disposicion,
+    ): Response {
+        $estado = $consulta->payload($sucursalId, now());
+
+        return Inertia::render('PuntoVenta/Pantallas/Kiosko', [
+            'estado_inicial' => fn () => $estado,
+            'sucursal_id' => $sucursalId,
+            'url_estado' => $urlEstado,
+            'disposicion' => $disposicion,
+        ]);
+    }
+
+    private function disposicionDesde(Request $request): string
+    {
+        return $request->query('disposicion') === 'vertical' ? 'vertical' : 'auto';
     }
 
     private function renderSalaInactiva(PantallaSalaInactivaException $e): Response

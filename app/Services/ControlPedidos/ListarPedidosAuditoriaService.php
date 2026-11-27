@@ -11,6 +11,8 @@ use App\Support\ControlPedidos\MaquinaEstadosPedidoBma;
 use App\Support\ControlPedidos\RevisionEnCursoPedidoBma;
 use App\Support\ControlPedidos\VisibilidadPedidoBma;
 use App\Support\ControlPedidos\BitacoraCedis;
+use App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio;
+use App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio;
 use Illuminate\Database\Eloquent\Builder;
 
 class ListarPedidosAuditoriaService
@@ -34,12 +36,16 @@ class ListarPedidosAuditoriaService
         $this->aplicarOrden($query, $filtros);
 
         if (! $paginar) {
-            return $query->get()->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
+            $pedidos = $query->get();
+            $usuario && ResumenGrupoMultienvio::paraPagina($pedidos, $usuario);
+
+            return $pedidos->each(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
         }
 
-        return $query->paginate(15)->withQueryString()->through(
-            fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario)
-        );
+        $paginador = $query->paginate(15)->withQueryString();
+        $usuario && ResumenGrupoMultienvio::paraPagina($paginador->getCollection(), $usuario);
+
+        return $paginador->through(fn (PedidoBma $p) => $this->anexarFlagsVista($p, $usuario));
     }
 
     public function detalle(int $pedidoId, User $usuario): PedidoBma
@@ -210,6 +216,7 @@ class ListarPedidosAuditoriaService
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
                     ->orWhere('numero_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_rastreo', 'like', "%{$termino}%")
                     ->orWhereHas('cliente', function (Builder $c) use ($termino) {
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
@@ -217,6 +224,7 @@ class ListarPedidosAuditoriaService
                     ->orWhereHas('vendedor', function (Builder $v) use ($termino) {
                         $v->where('name', 'like', "%{$termino}%");
                     });
+                BusquedaGrupoMultienvio::orHermano($q, $termino);
             });
         }
 

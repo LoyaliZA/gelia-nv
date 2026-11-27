@@ -66,6 +66,13 @@ class ListarPedidosCedisService
             return BitacoraCedis::presentar($pedido, $usuario);
         };
 
+        if ($usuario) {
+            \App\Support\ControlPedidos\Nacional\ResumenGrupoMultienvio::paraPagina(
+                $resultado instanceof LengthAwarePaginator ? $resultado->getCollection() : $resultado,
+                $usuario
+            );
+        }
+
         if ($resultado instanceof LengthAwarePaginator) {
             $resultado->getCollection()->transform($marcar);
         } else {
@@ -250,6 +257,8 @@ class ListarPedidosCedisService
             $query->where(function (Builder $q) use ($termino) {
                 $q->where('folio', 'like', "%{$termino}%")
                     ->orWhere('folio_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_remision', 'like', "%{$termino}%")
+                    ->orWhere('numero_rastreo', 'like', "%{$termino}%")
                     ->orWhereHas('complementos', function (Builder $c) use ($termino) {
                         $c->where('folio', 'like', "%{$termino}%")
                             ->orWhere('folio_remision', 'like', "%{$termino}%");
@@ -258,6 +267,7 @@ class ListarPedidosCedisService
                         $c->where('nombre', 'like', "%{$termino}%")
                             ->orWhere('numero_cliente', 'like', "%{$termino}%");
                     });
+                \App\Support\ControlPedidos\Nacional\BusquedaGrupoMultienvio::orHermano($q, $termino, ['folio', 'folio_remision', 'numero_remision', 'numero_rastreo']);
             });
         }
 
